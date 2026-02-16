@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { openai } from "@/lib/openai";
 import { format, subDays, startOfDay, endOfDay, addDays } from "date-fns";
+import crypto from "crypto";
+
+function hashData(data: string): string {
+  return crypto.createHash("md5").update(data).digest("hex");
+}
 
 interface ProjectionPoint {
   date: string;
@@ -17,6 +22,7 @@ export async function GET(request: NextRequest) {
     const goalWaistCm = parseFloat(searchParams.get("goalWaistCm") || "0") || null;
     const calorieTarget = parseInt(searchParams.get("calorieTarget") || "2000");
     const aiLanguage = searchParams.get("aiLanguage") || "english";
+    const refreshAI = searchParams.get("refreshAI") === "true";
 
     const languageMap: Record<string, string> = {
       english: "English",
@@ -45,7 +51,7 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    // ─── Extract weight data points ───
+    // ─── Extract data points ───
     const weightPoints: Array<{ date: string; value: number }> = [];
     const waistPoints: Array<{ date: string; value: number }> = [];
     const bodyFatPoints: Array<{ date: string; value: number }> = [];
@@ -99,100 +105,34 @@ export async function GET(request: NextRequest) {
       ? Math.round((workoutLogs.length / Math.max(1, calDays.length)) * 7 * 10) / 10
       : 0;
 
-    // ─── Linear regression projection ───
-    function projectMetric(
-      points: Array<{ date: string; value: number }>,
-      goal: number | null,
-      daysAhead: number = 90
-    ): {
-      projections: ProjectionPoint[];
-      currentValue: number | null;
-      ratePerWeek: number;
-      estimatedGoalDate: string | null;
-    } {
-      if (points.length < 2) {
-        return { projections: [], currentValue: points[0]?.value ?? null, ratePerWeek: 0, estimatedGoalDate: null };
-      }
-
-      // Deduplicate by date (take latest)
-      const byDate = new Map<string, number>();
-      points.forEach((p) => byDate.set(p.date, p.value));
-      const unique = Array.from(byDate.entries())
-        .map(([date, value]) => ({ date, value }))
-        .sort((a, b) => a.date.localeCompare(b.date));
-
-      if (unique.length < 2) {
-        return { projections: [], currentValue: unique[0]?.value ?? null, ratePerWeek: 0, estimatedGoalDate: null };
-      }
-
-      // Convert dates to day indices for regression
-      const baseDate = new Date(unique[0].date + "T00:00:00");
-      const xs = unique.map((p) => {
-        return Math.round((new Date(p.date + "T00:00:00").getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24));
-      });
-      const ys = unique.map((p) => p.value);
-
-      // Simple linear regression
-      const n = xs.length;
-      const sumX = xs.reduce((a, b) => a + b, 0);
-      const sumY = ys.reduce((a, b) => a + b, 0);
-      const sumXY = xs.reduce((a, x, i) => a + x * ys[i], 0);
-      const sumX2 = xs.reduce((a, x) => a + x * x, 0);
-
-      const denom = n * sumX2 - sumX * sumX;
-      const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
-      const intercept = (sumY - slope * sumX) / n;
-
-      // Calculate residual std deviation for confidence bands
-      const predicted = xs.map((x) => intercept + slope * x);
-      const residuals = ys.map((y, i) => y - predicted[i]);
-      const residualStd = Math.sqrt(residuals.reduce((a, r) => a + r * r, 0) / Math.max(1, n - 2));
-
-      const ratePerWeek = Math.round(slope * 7 * 100) / 100;
-      const currentValue = ys[ys.length - 1];
-      const lastDayIndex = xs[xs.length - 1];
-      const lastDate = new Date(unique[unique.length - 1].date + "T00:00:00");
-
-      // Project forward
-      const projections: ProjectionPoint[] = [];
-      for (let i = 1; i <= daysAhead; i += (daysAhead <= 30 ? 1 : 3)) {
-        const futureDay = lastDayIndex + i;
-        const futureDate = format(addDays(lastDate, i), "yyyy-MM-dd");
-        const projectedValue = Math.round((intercept + slope * futureDay) * 100) / 100;
-        const confidence = residualStd * 1.5 * Math.sqrt(1 + 1 / n + Math.pow(futureDay - sumX / n, 2) / (sumX2 - sumX * sumX / n));
-
-        projections.push({
-          date: futureDate,
-          projected: Math.round(projectedValue * 10) / 10,
-          optimistic: Math.round((projectedValue - confidence) * 10) / 10,
-          pessimistic: Math.round((projectedValue + confidence) * 10) / 10,
-        });
-      }
-
-      // Estimate goal date
-      let estimatedGoalDate: string | null = null;
-      if (goal && slope !== 0) {
-        const daysToGoal = (goal - (intercept + slope * lastDayIndex)) / slope;
-        if (daysToGoal > 0 && daysToGoal < 365) {
-          estimatedGoalDate = format(addDays(lastDate, Math.round(daysToGoal)), "MMM d, yyyy");
-        } else if (daysToGoal <= 0) {
-          estimatedGoalDate = "Already at goal!";
-        }
-      }
-
-      return { projections, currentValue, ratePerWeek, estimatedGoalDate };
-    }
-
+    // ─── Linear regression projections (fast, no AI) ───
     const weightProjection = projectMetric(weightPoints, goalWeightKg);
     const waistProjection = projectMetric(waistPoints, goalWaistCm);
     const bodyFatProjection = projectMetric(bodyFatPoints, null);
     const bmiProjection = projectMetric(bmiPoints, null);
     const muscleMassProjection = projectMetric(muscleMassPoints, null);
 
-    // ─── AI 90-day outlook ───
+    // ─── AI Outlook (cached in DB, only regenerate on demand) ───
+    const dataFingerprint = `proj|w:${weightPoints.length}|wa:${waistPoints.length}|f:${calDays.length}|wo:${workoutLogs.length}|g:${goalWeightKg}|${goalWaistCm}`;
+    const dataHash = hashData(dataFingerprint);
+    const cacheKey = "projection_outlook_90d";
+
     let aiOutlook = "";
-    try {
-      const dataContext = `
+    let outlookCached = true;
+
+    // Check DB cache first
+    const cached = await prisma.aIInsightCache.findUnique({
+      where: { cacheKey },
+    });
+
+    if (cached && cached.dataHash === dataHash && !refreshAI) {
+      // Data hasn't changed and no refresh requested — use cached
+      aiOutlook = cached.insight;
+    } else if (refreshAI || !cached) {
+      // Either refresh requested, or no cache exists yet — generate new
+      outlookCached = false;
+      try {
+        const dataContext = `
 CURRENT STATUS:
 - Weight: ${weightProjection.currentValue ?? "N/A"} kg (Goal: ${goalWeightKg ?? "not set"} kg)
 - Weight rate: ${weightProjection.ratePerWeek} kg/week
@@ -213,32 +153,44 @@ HABITS (last 90 days averages):
 - Total workout sessions: ${workoutLogs.length}
 - Days with food logged: ${calDays.length}`;
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-5.2",
-        messages: [
-          {
-            role: "system",
-            content: `You are a personal fitness strategist giving a 90-day outlook. Be encouraging but realistic. Use the data to make specific predictions and actionable tips. Keep it to 4-5 sentences. Format with **bold** for key numbers and milestones. ALWAYS respond in ${responseLang}.`,
-          },
-          {
-            role: "user",
-            content: `Based on my data, give me a 90-day projection outlook. What will I achieve if I stay on track? What should I focus on to accelerate progress? Be specific with dates and numbers.\n${dataContext}`,
-          },
-        ],
-        temperature: 0.7,
-        max_completion_tokens: 300,
-      });
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: `You are a personal fitness strategist giving a 90-day outlook. Be encouraging but realistic. Use the data to make specific predictions and actionable tips. Keep it to 4-5 sentences. Format with **bold** for key numbers and milestones. ALWAYS respond in ${responseLang}.`,
+            },
+            {
+              role: "user",
+              content: `Based on my data, give me a 90-day projection outlook. What will I achieve if I stay on track? What should I focus on to accelerate progress? Be specific with dates and numbers.\n${dataContext}`,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 300,
+        });
 
-      aiOutlook = completion.choices[0].message?.content?.trim() ||
-        "Keep logging consistently to get personalized 90-day projections!";
-    } catch (err) {
-      console.error("AI outlook error:", err);
-      aiOutlook = "Keep logging consistently to get personalized 90-day projections!";
+        aiOutlook = completion.choices[0].message?.content?.trim() ||
+          "Keep logging consistently to get personalized 90-day projections!";
+
+        // Cache in DB
+        await prisma.aIInsightCache.upsert({
+          where: { cacheKey },
+          create: { cacheKey, insight: aiOutlook, dataHash },
+          update: { insight: aiOutlook, dataHash },
+        });
+      } catch (err) {
+        console.error("AI outlook error:", err);
+        // Fall back to cached version if available
+        aiOutlook = cached?.insight || "Tap refresh to generate your 90-day AI outlook.";
+      }
+    } else {
+      // Data changed but no refresh requested — return stale cache with a flag
+      aiOutlook = cached.insight;
     }
 
     return NextResponse.json({
       weight: {
-        historical: weightPoints.slice(-30), // Last 30 data points for context
+        historical: weightPoints.slice(-30),
         projections: weightProjection.projections,
         currentValue: weightProjection.currentValue,
         ratePerWeek: weightProjection.ratePerWeek,
@@ -281,9 +233,90 @@ HABITS (last 90 days averages):
         totalWorkouts: workoutLogs.length,
       },
       aiOutlook,
+      outlookCached,
     });
   } catch (error) {
     console.error("Projections error:", error);
     return NextResponse.json({ error: "Failed to generate projections" }, { status: 500 });
   }
+}
+
+// ─── Linear regression projection ────────────────────────────────────
+
+function projectMetric(
+  points: Array<{ date: string; value: number }>,
+  goal: number | null,
+  daysAhead: number = 90
+): {
+  projections: ProjectionPoint[];
+  currentValue: number | null;
+  ratePerWeek: number;
+  estimatedGoalDate: string | null;
+} {
+  if (points.length < 2) {
+    return { projections: [], currentValue: points[0]?.value ?? null, ratePerWeek: 0, estimatedGoalDate: null };
+  }
+
+  // Deduplicate by date (take latest)
+  const byDate = new Map<string, number>();
+  points.forEach((p) => byDate.set(p.date, p.value));
+  const unique = Array.from(byDate.entries())
+    .map(([date, value]) => ({ date, value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (unique.length < 2) {
+    return { projections: [], currentValue: unique[0]?.value ?? null, ratePerWeek: 0, estimatedGoalDate: null };
+  }
+
+  const baseDate = new Date(unique[0].date + "T00:00:00");
+  const xs = unique.map((p) =>
+    Math.round((new Date(p.date + "T00:00:00").getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24))
+  );
+  const ys = unique.map((p) => p.value);
+
+  const n = xs.length;
+  const sumX = xs.reduce((a, b) => a + b, 0);
+  const sumY = ys.reduce((a, b) => a + b, 0);
+  const sumXY = xs.reduce((a, x, i) => a + x * ys[i], 0);
+  const sumX2 = xs.reduce((a, x) => a + x * x, 0);
+
+  const denom = n * sumX2 - sumX * sumX;
+  const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+  const intercept = (sumY - slope * sumX) / n;
+
+  const predicted = xs.map((x) => intercept + slope * x);
+  const residuals = ys.map((y, i) => y - predicted[i]);
+  const residualStd = Math.sqrt(residuals.reduce((a, r) => a + r * r, 0) / Math.max(1, n - 2));
+
+  const ratePerWeek = Math.round(slope * 7 * 100) / 100;
+  const currentValue = ys[ys.length - 1];
+  const lastDayIndex = xs[xs.length - 1];
+  const lastDate = new Date(unique[unique.length - 1].date + "T00:00:00");
+
+  const projections: ProjectionPoint[] = [];
+  for (let i = 1; i <= daysAhead; i += (daysAhead <= 30 ? 1 : 3)) {
+    const futureDay = lastDayIndex + i;
+    const futureDate = format(addDays(lastDate, i), "yyyy-MM-dd");
+    const projectedValue = intercept + slope * futureDay;
+    const confidence = residualStd * 1.5 * Math.sqrt(1 + 1 / n + Math.pow(futureDay - sumX / n, 2) / (sumX2 - sumX * sumX / n));
+
+    projections.push({
+      date: futureDate,
+      projected: Math.round(projectedValue * 10) / 10,
+      optimistic: Math.round((projectedValue - confidence) * 10) / 10,
+      pessimistic: Math.round((projectedValue + confidence) * 10) / 10,
+    });
+  }
+
+  let estimatedGoalDate: string | null = null;
+  if (goal && slope !== 0) {
+    const daysToGoal = (goal - (intercept + slope * lastDayIndex)) / slope;
+    if (daysToGoal > 0 && daysToGoal < 365) {
+      estimatedGoalDate = format(addDays(lastDate, Math.round(daysToGoal)), "MMM d, yyyy");
+    } else if (daysToGoal <= 0) {
+      estimatedGoalDate = "Already at goal!";
+    }
+  }
+
+  return { projections, currentValue, ratePerWeek, estimatedGoalDate };
 }

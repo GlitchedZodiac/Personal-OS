@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +51,7 @@ import {
 } from "recharts";
 import { getSettings, getMacroGrams, fetchServerSettings, type BodyGoals } from "@/lib/settings";
 import { cn } from "@/lib/utils";
-import { useCachedFetch } from "@/lib/cache";
+import { useCachedFetch, setCacheEntry } from "@/lib/cache";
 import Link from "next/link";
 import { MarkdownText } from "@/components/markdown-text";
 
@@ -151,6 +151,7 @@ interface ProjectionsData {
     totalWorkouts: number;
   };
   aiOutlook: string;
+  outlookCached?: boolean;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -240,7 +241,7 @@ export default function TrendsPage() {
     useCachedFetch<{ insight: string }>(insightUrl, { ttl: 300_000 });
   const insight = insightData?.insight ?? null;
 
-  // Projections data
+  // Projections data — long TTL (24h), only re-fetched on manual refresh or new data
   const projectionsUrl = useMemo(
     () =>
       tab === "projections"
@@ -252,7 +253,30 @@ export default function TrendsPage() {
     data: projectionsData,
     loading: projectionsLoading,
     refresh: refreshProjections,
-  } = useCachedFetch<ProjectionsData>(projectionsUrl, { ttl: 300_000 });
+  } = useCachedFetch<ProjectionsData>(projectionsUrl, { ttl: 86_400_000 }); // 24 hours
+
+  // Separate AI outlook refresh — appends refreshAI=true
+  const [aiRefreshing, setAiRefreshing] = useState(false);
+  const refreshAIOutlook = useCallback(async () => {
+    if (!projectionsUrl) return;
+    setAiRefreshing(true);
+    try {
+      const res = await fetch(projectionsUrl + "&refreshAI=true");
+      if (res.ok) {
+        const newData = await res.json();
+        // Update the cached data in-place
+        if (projectionsUrl) {
+          setCacheEntry(projectionsUrl, newData);
+        }
+        // Trigger re-render by refreshing the cache hook
+        refreshProjections();
+      }
+    } catch (err) {
+      console.error("AI outlook refresh failed:", err);
+    } finally {
+      setAiRefreshing(false);
+    }
+  }, [projectionsUrl, refreshProjections]);
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr + "T00:00:00");
@@ -1064,7 +1088,9 @@ export default function TrendsPage() {
           data={projectionsData}
           loading={projectionsLoading}
           bodyGoals={bodyGoals}
-          onRefresh={refreshProjections}
+          onRefreshData={refreshProjections}
+          onRefreshAI={refreshAIOutlook}
+          aiRefreshing={aiRefreshing}
           formatDate={formatDate}
         />
       )}
@@ -1078,13 +1104,17 @@ function ProjectionsView({
   data,
   loading,
   bodyGoals,
-  onRefresh,
+  onRefreshData,
+  onRefreshAI,
+  aiRefreshing,
   formatDate,
 }: {
   data: ProjectionsData | null;
   loading: boolean;
   bodyGoals: BodyGoals;
-  onRefresh: () => void;
+  onRefreshData: () => void;
+  onRefreshAI: () => void;
+  aiRefreshing: boolean;
   formatDate: (d: string) => string;
 }) {
   if (loading) {
@@ -1119,20 +1149,37 @@ function ProjectionsView({
               <Telescope className="h-4 w-4 text-emerald-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-emerald-400 mb-1">AI 90-Day Outlook</p>
-              <div className="text-sm text-muted-foreground leading-relaxed">
-                <MarkdownText text={data.aiOutlook} />
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-medium text-emerald-400">AI 90-Day Outlook</p>
+                {data.outlookCached && (
+                  <span className="text-[9px] text-muted-foreground/50">cached</span>
+                )}
               </div>
+              {aiRefreshing ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Generating AI outlook...
+                </div>
+              ) : data.aiOutlook && !data.aiOutlook.includes("Tap refresh") ? (
+                <div className="text-sm text-muted-foreground leading-relaxed">
+                  <MarkdownText text={data.aiOutlook} />
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground/70 py-1">
+                  Tap refresh to generate your personalized 90-day AI outlook.
+                </p>
+              )}
             </div>
           </div>
           <Button
             variant="ghost"
             size="sm"
             className="mt-2 text-xs text-emerald-400 hover:text-emerald-300 h-7 px-2"
-            onClick={onRefresh}
+            onClick={onRefreshAI}
+            disabled={aiRefreshing}
           >
-            <RefreshCw className="h-3 w-3 mr-1" />
-            Refresh
+            <RefreshCw className={cn("h-3 w-3 mr-1", aiRefreshing && "animate-spin")} />
+            {aiRefreshing ? "Generating..." : "Refresh AI Outlook"}
           </Button>
         </CardContent>
       </Card>
