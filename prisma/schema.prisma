@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model FoodLog {
+  id              String   @id @default(uuid())
+  loggedAt        DateTime @default(now())
+  mealType        String   // breakfast, lunch, dinner, snack
+  foodDescription String
+  calories        Float    @default(0)
+  proteinG        Float    @default(0)
+  carbsG          Float    @default(0)
+  fatG            Float    @default(0)
+  notes           String?
+  source          String   @default("manual") // manual, voice, ai
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("food_logs")
+}
+
+model BodyMeasurement {
+  id           String   @id @default(uuid())
+  measuredAt   DateTime @default(now())
+  weightKg     Float?
+  bodyFatPct   Float?
+  waistCm      Float?
+  chestCm      Float?
+  armsCm       Float?
+  legsCm       Float?
+  hipsCm       Float?
+  shouldersCm  Float?
+  neckCm       Float?
+  forearmsCm   Float?
+  calvesCm     Float?
+  skinfoldData Json?    // { chest, abdomen, thigh, triceps, suprailiac, subscapular, midaxillary } in mm
+  notes        String?
+
+  // Smart scale fields (VeSync / body composition)
+  bmi               Float?
+  fatFreeWeightKg   Float?
+  subcutaneousFatPct Float?
+  visceralFat       Int?
+  bodyWaterPct      Float?
+  skeletalMusclePct Float?
+  muscleMassKg      Float?
+  boneMassKg        Float?
+  proteinPct        Float?
+  bmrKcal           Int?
+  metabolicAge      Int?
+  heartRateBpm      Int?
+  source            String?  // "manual", "vesync", "import"
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("body_measurements")
+}
+
+model WorkoutLog {
+  id              String   @id @default(uuid())
+  startedAt       DateTime @default(now())
+  durationMinutes Int      @default(0)
+  workoutType     String   // strength, cardio, walk, run, cycling, etc.
+  description     String?
+  caloriesBurned  Float?
+  exercises       Json?    // Array of { name, sets, reps, weight }
+  stravaActivityId String?
+  source          String   @default("manual") // manual, voice, strava
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("workout_logs")
+}
+
+model WaterLog {
+  id        String   @id @default(uuid())
+  loggedAt  DateTime @default(now())
+  amountMl  Int      @default(250) // milliliters per entry
+  createdAt DateTime @default(now())
+
+  @@map("water_logs")
+}
+
+model FavoriteFoods {
+  id              String   @id @default(uuid())
+  foodDescription String
+  mealType        String
+  calories        Float    @default(0)
+  proteinG        Float    @default(0)
+  carbsG          Float    @default(0)
+  fatG            Float    @default(0)
+  usageCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("favorite_foods")
+}
+
+model WorkoutPlan {
+  id            String   @id @default(uuid())
+  name          String   // e.g. "4-Day Push/Pull/Legs"
+  goal          String   // build_muscle, lose_weight, general_fitness, endurance
+  fitnessLevel  String   // beginner, intermediate, advanced
+  daysPerWeek   Int      @default(4)
+  schedule      Json     // Array of day schedules with exercises
+  isActive      Boolean  @default(true)
+  aiGenerated   Boolean  @default(false)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  completions   WorkoutPlanCompletion[]
+
+  @@map("workout_plans")
+}
+
+model WorkoutPlanCompletion {
+  id                String       @id @default(uuid())
+  planId            String
+  plan              WorkoutPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
+  scheduledDate     DateTime     // The date this workout was scheduled for
+  dayIndex          Int          // Which day in the plan schedule (0-based)
+  dayLabel          String       // "Day 1 - Push", "Day 2 - Pull", etc.
+  completed         Boolean      @default(false)
+  feedback          String?      // as_planned, exceeded, incomplete
+  actualExercises   Json?        // What the user actually did (with actual weights/reps)
+  caloriesBurned    Float?
+  durationMinutes   Int?
+  userNotes         String?
+  aiSuggestion      String?      // AI's adjustment suggestion after feedback
+  createdAt         DateTime     @default(now())
+
+  @@unique([planId, scheduledDate, dayIndex])
+  @@map("workout_plan_completions")
+}
+
+model Todo {
+  id          String    @id @default(uuid())
+  title       String
+  notes       String?
+  dueDate     DateTime? // optional due date
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  priority    String    @default("normal") // low, normal, high
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("todos")
+}
+
+model AIConversation {
+  id            String   @id @default(uuid())
+  userMessage   String
+  aiResponse    String
+  actionTaken   String?  // food_logged, measurement_logged, workout_logged, etc.
+  extractedData Json?
+  createdAt     DateTime @default(now())
+
+  @@map("ai_conversations")
+}
+
+model ProgressPhoto {
+  id          String   @id @default(uuid())
+  takenAt     DateTime @default(now())
+  imageData   String   // base64 encoded compressed image
+  journalNote String?  // optional journal/voice note
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("progress_photos")
+}
+
+model AIInsightCache {
+  id          String   @id @default(uuid())
+  cacheKey    String   @unique // e.g. "weekly_insight_2026-02-15"
+  insight     String
+  dataHash    String   // hash of input data to detect staleness
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("ai_insight_cache")
+}
