@@ -149,6 +149,11 @@ model Todo {
   completed   Boolean   @default(false)
   completedAt DateTime?
   priority    String    @default("normal") // low, normal, high
+  icon        String?   // emoji icon assigned by AI (e.g. 📞, 📧, 🏋️)
+  category    String    @default("manual") // manual, app, recurring
+  isRecurring Boolean   @default(false)
+  recurrence  String?   // "daily", "weekdays", "weekly", "monthly"
+  recurrenceParentId String? // links instances back to the template
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

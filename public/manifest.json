@@ -1,7 +1,7 @@
 {
-  "name": "Personal OS",
-  "short_name": "PersonalOS",
-  "description": "Your centralized personal operating system — health, fitness, todos, and AI coaching",
+  "name": "PerOps",
+  "short_name": "PerOps",
+  "description": "Your personal operating system — health, fitness, todos, and AI coaching",
   "start_url": "/health",
   "scope": "/",
   "display": "standalone",
