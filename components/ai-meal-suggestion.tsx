@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, RefreshCw, Loader2, Flame, Dumbbell } from "lucide-react";
+import { MarkdownText } from "@/components/markdown-text";
 import { getSettings, getMacroGrams } from "@/lib/settings";
 
 interface AIMealSuggestionProps {
@@ -127,9 +128,7 @@ export function AIMealSuggestion({
             Analyzing your intake & activity...
           </div>
         ) : suggestion ? (
-          <div className="text-sm leading-relaxed whitespace-pre-line">
-            {suggestion}
-          </div>
+          <MarkdownText text={suggestion} />
         ) : mealCount === 0 ? (
           <p className="text-xs text-muted-foreground">
             Log some food first and I&apos;ll suggest what to eat next!

@@ -155,9 +155,13 @@ export async function POST(request: Request) {
         exerciseData.movingTime = activity.moving_time;
         exerciseData.elapsedTime = activity.elapsed_time;
 
+        // Strava's start_date_local is already in local time but may include "Z" suffix.
+        // Strip the Z so JavaScript doesn't re-interpret it as UTC.
+        const localDateStr = (activity.start_date_local || activity.start_date).replace(/Z$/i, "");
+
         await prisma.workoutLog.create({
           data: {
-            startedAt: new Date(activity.start_date_local || activity.start_date),
+            startedAt: new Date(localDateStr),
             durationMinutes,
             workoutType,
             description,

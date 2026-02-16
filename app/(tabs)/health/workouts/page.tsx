@@ -39,10 +39,13 @@ import {
   Trophy,
   ThumbsUp,
   Route,
+  Trash2,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { VoiceInput } from "@/components/voice-input";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { RouteMap } from "@/components/route-map";
+import { WhisperButton } from "@/components/whisper-button";
 import Link from "next/link";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -323,6 +326,28 @@ export default function WorkoutsPage() {
     }
   };
 
+  const handleBulkDeleteNonStrava = async () => {
+    const manualEntries = safeEntries.filter((e) => e.source !== "strava");
+    if (manualEntries.length === 0) {
+      toast.info("No manual workouts to remove.");
+      return;
+    }
+    if (!confirm(`Delete ${manualEntries.length} non-Strava workout${manualEntries.length > 1 ? "s" : ""}? This cannot be undone.`)) return;
+
+    let deleted = 0;
+    for (const entry of manualEntries) {
+      try {
+        const res = await fetch(`/api/health/workouts?id=${entry.id}`, { method: "DELETE" });
+        if (res.ok) deleted++;
+      } catch {
+        // continue
+      }
+    }
+    toast.success(`Removed ${deleted} manual workout${deleted > 1 ? "s" : ""}`);
+    invalidateHealthCache();
+    fetchEntries();
+  };
+
   const safeEntries = entries ?? [];
   const totalMinutes = safeEntries.reduce((sum, e) => sum + e.durationMinutes, 0);
   const totalCalBurned = safeEntries.reduce(
@@ -330,6 +355,7 @@ export default function WorkoutsPage() {
     0
   );
   const stravaCount = safeEntries.filter((e) => e.source === "strava").length;
+  const manualCount = safeEntries.filter((e) => e.source !== "strava").length;
 
   // Get Strava exercise data from first exercise entry
   const getStravaData = (entry: WorkoutEntry): StravaExerciseData | null => {
@@ -414,13 +440,29 @@ export default function WorkoutsPage() {
                 </div>
               </div>
               <div>
-                <Label>Description</Label>
-                <Input
+                <Label className="flex items-center justify-between">
+                  Description
+                  <WhisperButton
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onTranscription={(text) =>
+                      setNewEntry((prev) => ({
+                        ...prev,
+                        description: prev.description
+                          ? `${prev.description}\n${text}`
+                          : text,
+                      }))
+                    }
+                  />
+                </Label>
+                <Textarea
                   value={newEntry.description}
                   onChange={(e) =>
                     setNewEntry({ ...newEntry, description: e.target.value })
                   }
-                  placeholder="e.g., Upper body - bench press, rows..."
+                  placeholder="Describe your workout — or tap the mic"
+                  rows={2}
+                  className="mt-1"
                 />
               </div>
               <Button onClick={handleAddManual} className="w-full">
@@ -504,6 +546,18 @@ export default function WorkoutsPage() {
                   </div>
                 )}
               </div>
+              {/* Bulk delete manual workouts */}
+              {manualCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={handleBulkDeleteNonStrava}
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  {manualCount} manual
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -908,12 +962,29 @@ export default function WorkoutsPage() {
               </div>
             </div>
             <div>
-              <Label>Description</Label>
-              <Input
+              <Label className="flex items-center justify-between">
+                Description
+                <WhisperButton
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onTranscription={(text) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      description: prev.description
+                        ? `${prev.description}\n${text}`
+                        : text,
+                    }))
+                  }
+                />
+              </Label>
+              <Textarea
                 value={editForm.description}
                 onChange={(e) =>
                   setEditForm({ ...editForm, description: e.target.value })
                 }
+                placeholder="Describe your workout — or tap the mic to dictate"
+                rows={3}
+                className="mt-1"
               />
             </div>
             <Button onClick={handleSaveEdit} className="w-full">

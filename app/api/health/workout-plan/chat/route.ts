@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@/lib/openai";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Conversational AI endpoint for workout planning.
@@ -195,6 +196,36 @@ export async function POST(request: NextRequest) {
       ? `\n\nUSER'S CURRENT ACTIVE PLAN:\nName: ${currentPlan.name}\nGoal: ${currentPlan.goal}\nFitness Level: ${currentPlan.fitnessLevel}\nDays/Week: ${currentPlan.daysPerWeek}\nSchedule:\n${JSON.stringify(currentPlan.schedule, null, 1)}`
       : "\n\nThe user does NOT have an active workout plan yet.";
 
+    // Fetch recent workout logs for context (last 14 days)
+    let recentWorkoutsContext = "";
+    try {
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+      const recentLogs = await prisma.workoutLog.findMany({
+        where: { startedAt: { gte: twoWeeksAgo } },
+        orderBy: { startedAt: "desc" },
+        take: 20,
+        select: {
+          startedAt: true,
+          workoutType: true,
+          durationMinutes: true,
+          description: true,
+          caloriesBurned: true,
+          source: true,
+        },
+      });
+      if (recentLogs.length > 0) {
+        const logLines = recentLogs.map((l) => {
+          const date = l.startedAt.toISOString().split("T")[0];
+          const desc = l.description ? ` — ${l.description}` : "";
+          return `  ${date}: ${l.workoutType} ${l.durationMinutes}min${l.caloriesBurned ? ` (${Math.round(l.caloriesBurned)} cal)` : ""} [${l.source}]${desc}`;
+        });
+        recentWorkoutsContext = `\n\nUSER'S RECENT WORKOUT HISTORY (last 14 days):\n${logLines.join("\n")}\n\nUse this history to understand what the user has actually been doing. If their logged workouts differ from the plan (e.g. they did a hike instead of strength day), adapt suggestions accordingly. Their descriptions contain valuable feedback — use them to fine-tune the plan.`;
+      }
+    } catch {
+      // Non-critical — continue without workout history
+    }
+
     const langMap: Record<string, string> = {
       english: "English", spanish: "Spanish (Español)",
       portuguese: "Portuguese (Português)", french: "French (Français)",
@@ -229,7 +260,7 @@ PROGRESSIVE OVERLOAD (for feedback):
 - "incomplete" / too hard → reduce weight 10%, or drop 1 set
 
 Keep responses SHORT and mobile-friendly. Be motivating and personal.
-${planContext}`;
+${planContext}${recentWorkoutsContext}`;
 
     // Build messages array with conversation history
     const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
