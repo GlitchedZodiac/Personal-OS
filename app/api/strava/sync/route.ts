@@ -128,7 +128,7 @@ export async function POST(request: Request) {
                     sufferScore: activity.suffer_score,
                   },
                 ]
-              : null,
+              : undefined,
           },
         });
 
