@@ -26,11 +26,12 @@ export async function POST(request: NextRequest) {
 
     const entry = await prisma.workoutLog.create({
       data: {
+        startedAt: body.startedAt ? new Date(body.startedAt) : new Date(),
         workoutType: body.workoutType,
         durationMinutes: body.durationMinutes || 0,
         description: body.description || null,
         caloriesBurned: body.caloriesBurned || null,
-        exercises: body.exercises || null,
+        exercises: body.exercises || undefined,
         stravaActivityId: body.stravaActivityId || null,
         source: body.source || "manual",
       },
@@ -41,6 +42,40 @@ export async function POST(request: NextRequest) {
     console.error("Workout create error:", error);
     return NextResponse.json(
       { error: "Failed to create workout" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH - Update an existing workout entry
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, ...updates } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "ID required" }, { status: 400 });
+    }
+
+    // Build update data, only include fields that were provided
+    const data: Record<string, unknown> = {};
+    if (updates.startedAt !== undefined) data.startedAt = new Date(updates.startedAt);
+    if (updates.workoutType !== undefined) data.workoutType = updates.workoutType;
+    if (updates.durationMinutes !== undefined) data.durationMinutes = updates.durationMinutes;
+    if (updates.description !== undefined) data.description = updates.description;
+    if (updates.caloriesBurned !== undefined) data.caloriesBurned = updates.caloriesBurned;
+    if (updates.exercises !== undefined) data.exercises = updates.exercises;
+
+    const entry = await prisma.workoutLog.update({
+      where: { id },
+      data,
+    });
+
+    return NextResponse.json(entry);
+  } catch (error) {
+    console.error("Workout update error:", error);
+    return NextResponse.json(
+      { error: "Failed to update workout" },
       { status: 500 }
     );
   }

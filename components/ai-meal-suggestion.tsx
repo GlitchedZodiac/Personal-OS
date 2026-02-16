@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sparkles, RefreshCw, Loader2 } from "lucide-react";
+import { Sparkles, RefreshCw, Loader2, Flame, Dumbbell } from "lucide-react";
 import { getSettings, getMacroGrams } from "@/lib/settings";
 
 interface AIMealSuggestionProps {
@@ -24,6 +24,24 @@ export function AIMealSuggestion({
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasTriedOnce, setHasTriedOnce] = useState(false);
+  const [workoutCalories, setWorkoutCalories] = useState(0);
+
+  // Fetch today's workout calories burned
+  useEffect(() => {
+    const fetchWorkoutCals = async () => {
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const res = await fetch(`/api/health/summary?date=${today}`);
+        if (res.ok) {
+          const data = await res.json();
+          setWorkoutCalories(data.caloriesBurned || 0);
+        }
+      } catch {
+        // silent
+      }
+    };
+    fetchWorkoutCals();
+  }, []);
 
   const fetchSuggestion = useCallback(async () => {
     setLoading(true);
@@ -44,6 +62,7 @@ export function AIMealSuggestion({
           carbsTargetG: macros.carbsG,
           fatTargetG: macros.fatG,
           mealCount,
+          workoutCaloriesBurned: workoutCalories,
           customInstructions: settings.aiInstructions?.health || "",
           aiLanguage: settings.aiLanguage || "english",
         }),
@@ -59,7 +78,7 @@ export function AIMealSuggestion({
       setLoading(false);
       setHasTriedOnce(true);
     }
-  }, [totalCalories, totalProtein, totalCarbs, totalFat, mealCount]);
+  }, [totalCalories, totalProtein, totalCarbs, totalFat, mealCount, workoutCalories]);
 
   // Auto-fetch once when there's food data
   useEffect(() => {
@@ -91,10 +110,21 @@ export function AIMealSuggestion({
           </Button>
         </div>
 
+        {/* Workout context badge */}
+        {workoutCalories > 0 && (
+          <div className="flex items-center gap-2 mb-2 p-2 rounded-lg bg-orange-500/5 border border-orange-500/10">
+            <Dumbbell className="h-3.5 w-3.5 text-orange-400" />
+            <span className="text-[10px] text-orange-400">
+              {Math.round(workoutCalories)} cal burned today
+            </span>
+            <Flame className="h-3 w-3 text-orange-400 ml-auto" />
+          </div>
+        )}
+
         {loading && !suggestion ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Analyzing your intake...
+            Analyzing your intake & activity...
           </div>
         ) : suggestion ? (
           <div className="text-sm leading-relaxed whitespace-pre-line">

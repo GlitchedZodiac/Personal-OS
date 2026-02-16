@@ -52,6 +52,7 @@ interface AIResponse {
     durationMinutes: number;
     description?: string;
     caloriesBurned?: number;
+    startedAt?: string | null;
     exercises?: Array<{
       name: string;
       sets?: number;

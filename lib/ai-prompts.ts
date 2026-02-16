@@ -194,6 +194,10 @@ export const WORKOUT_LOG_FUNCTION = {
         type: "string" as const,
         description: "Brief description of the workout",
       },
+      startedAt: {
+        type: "string" as const,
+        description: "ISO date string for when the workout happened. Use if the user mentions a specific date/time (e.g. 'I did a workout on Saturday at 7am'). If not mentioned, omit and it defaults to now.",
+      },
       caloriesBurned: {
         type: "number" as const,
         description: "Estimated calories burned based on activity and duration",

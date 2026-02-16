@@ -20,16 +20,61 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Clock, Flame, Dumbbell, Sparkles, RefreshCw, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Clock,
+  Flame,
+  Dumbbell,
+  Sparkles,
+  RefreshCw,
+  Loader2,
+  MapPin,
+  Heart,
+  Mountain,
+  TrendingUp,
+  Zap,
+  Timer,
+  Pencil,
+  Trophy,
+  ThumbsUp,
+  Route,
+} from "lucide-react";
 import { VoiceInput } from "@/components/voice-input";
 import { ConfirmDelete } from "@/components/confirm-delete";
+import { RouteMap } from "@/components/route-map";
 import Link from "next/link";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useCachedFetch, invalidateHealthCache } from "@/lib/cache";
+import { toast } from "sonner";
 
-interface Exercise {
-  name: string;
+// ─── Types ────────────────────────────────────────────────────────────
+interface StravaExerciseData {
+  name?: string;
+  stravaType?: string;
+  sportType?: string;
+  distance?: number;
+  distanceKm?: number;
+  distanceMi?: number;
+  elevationGain?: number;
+  elevHigh?: number;
+  elevLow?: number;
+  avgHeartrate?: number;
+  maxHeartrate?: number;
+  avgSpeed?: number;
+  maxSpeed?: number;
+  avgWatts?: number;
+  maxWatts?: number;
+  avgCadence?: number;
+  sufferScore?: number;
+  achievements?: number;
+  kudos?: number;
+  prs?: number;
+  polyline?: string;
+  movingTime?: number;
+  elapsedTime?: number;
+  // Legacy fields
   sets?: number;
   reps?: number;
   weightKg?: number;
@@ -42,75 +87,121 @@ interface WorkoutEntry {
   workoutType: string;
   description: string | null;
   caloriesBurned: number | null;
-  exercises: Exercise[] | null;
+  exercises: StravaExerciseData[] | null;
   source: string;
+  stravaActivityId: string | null;
 }
 
+// ─── Config ────────────────────────────────────────────────────────────
 const workoutConfig: Record<
   string,
-  { icon: string; color: string; bgColor: string }
+  { icon: string; color: string; bgColor: string; gradient: string }
 > = {
   strength: {
     icon: "💪",
     color: "text-blue-400",
     bgColor: "bg-blue-500/10 border-blue-500/20",
+    gradient: "from-blue-500/10 to-blue-500/5",
   },
   cardio: {
     icon: "❤️",
     color: "text-red-400",
     bgColor: "bg-red-500/10 border-red-500/20",
+    gradient: "from-red-500/10 to-red-500/5",
   },
   run: {
     icon: "🏃",
     color: "text-green-400",
     bgColor: "bg-green-500/10 border-green-500/20",
+    gradient: "from-green-500/10 to-green-500/5",
   },
   walk: {
     icon: "🚶",
     color: "text-emerald-400",
     bgColor: "bg-emerald-500/10 border-emerald-500/20",
+    gradient: "from-emerald-500/10 to-emerald-500/5",
   },
   hike: {
     icon: "🥾",
     color: "text-lime-400",
     bgColor: "bg-lime-500/10 border-lime-500/20",
+    gradient: "from-lime-500/10 to-lime-500/5",
   },
   cycling: {
     icon: "🚴",
     color: "text-amber-400",
     bgColor: "bg-amber-500/10 border-amber-500/20",
+    gradient: "from-amber-500/10 to-amber-500/5",
   },
   swimming: {
     icon: "🏊",
     color: "text-cyan-400",
     bgColor: "bg-cyan-500/10 border-cyan-500/20",
+    gradient: "from-cyan-500/10 to-cyan-500/5",
   },
   yoga: {
     icon: "🧘",
     color: "text-purple-400",
     bgColor: "bg-purple-500/10 border-purple-500/20",
+    gradient: "from-purple-500/10 to-purple-500/5",
   },
   hiit: {
     icon: "🔥",
     color: "text-orange-400",
     bgColor: "bg-orange-500/10 border-orange-500/20",
+    gradient: "from-orange-500/10 to-orange-500/5",
   },
   other: {
     icon: "⚡",
     color: "text-gray-400",
     bgColor: "bg-gray-500/10 border-gray-500/20",
+    gradient: "from-gray-500/10 to-gray-500/5",
   },
 };
 
+// ─── Helpers ────────────────────────────────────────────────────────────
+function formatPace(avgSpeedMs: number, type: string): string {
+  if (type === "run" || type === "walk" || type === "hike") {
+    const paceMinPerKm = 1000 / 60 / avgSpeedMs;
+    const paceMin = Math.floor(paceMinPerKm);
+    const paceSec = Math.round((paceMinPerKm - paceMin) * 60);
+    return `${paceMin}:${paceSec.toString().padStart(2, "0")} /km`;
+  }
+  if (type === "cycling") {
+    const speedKmh = avgSpeedMs * 3.6;
+    return `${speedKmh.toFixed(1)} km/h`;
+  }
+  return "";
+}
+
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+// ─── Component ──────────────────────────────────────────────────────────
 export default function WorkoutsPage() {
   const { data: entries, loading, refresh: fetchEntries } =
     useCachedFetch<WorkoutEntry[]>("/api/health/workouts", { ttl: 60_000 });
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<WorkoutEntry | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newEntry, setNewEntry] = useState({
     workoutType: "strength",
     durationMinutes: "",
     description: "",
     caloriesBurned: "",
+  });
+  const [editForm, setEditForm] = useState({
+    workoutType: "",
+    durationMinutes: "",
+    description: "",
+    caloriesBurned: "",
+    startedAt: "",
   });
   const [stravaConnected, setStravaConnected] = useState(false);
   const [stravaSyncing, setStravaSyncing] = useState(false);
@@ -131,12 +222,17 @@ export default function WorkoutsPage() {
         body: JSON.stringify({ fullSync: false }),
       });
       const data = await res.json();
-      if (res.ok && data.synced > 0) {
-        invalidateHealthCache();
-        fetchEntries();
+      if (res.ok) {
+        toast.success(data.message || `Synced ${data.synced} activities`);
+        if (data.synced > 0) {
+          invalidateHealthCache();
+          fetchEntries();
+        }
+      } else {
+        toast.error(data.error || "Sync failed");
       }
     } catch {
-      // silent
+      toast.error("Sync failed");
     } finally {
       setStravaSyncing(false);
     }
@@ -180,20 +276,66 @@ export default function WorkoutsPage() {
         });
         invalidateHealthCache();
         fetchEntries();
+        toast.success("Workout logged!");
       }
     } catch (error) {
       console.error("Failed to add entry:", error);
     }
   };
 
-  const safeEntries = entries ?? [];
+  const openEditDialog = (entry: WorkoutEntry) => {
+    setEditingEntry(entry);
+    setEditForm({
+      workoutType: entry.workoutType,
+      durationMinutes: entry.durationMinutes.toString(),
+      description: entry.description || "",
+      caloriesBurned: entry.caloriesBurned?.toString() || "",
+      startedAt: format(new Date(entry.startedAt), "yyyy-MM-dd'T'HH:mm"),
+    });
+  };
 
-  // Summary
+  const handleSaveEdit = async () => {
+    if (!editingEntry) return;
+    try {
+      const res = await fetch("/api/health/workouts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingEntry.id,
+          workoutType: editForm.workoutType,
+          durationMinutes: parseInt(editForm.durationMinutes) || 0,
+          description: editForm.description || null,
+          caloriesBurned: editForm.caloriesBurned
+            ? parseFloat(editForm.caloriesBurned)
+            : null,
+          startedAt: editForm.startedAt ? new Date(editForm.startedAt).toISOString() : undefined,
+        }),
+      });
+      if (res.ok) {
+        setEditingEntry(null);
+        invalidateHealthCache();
+        fetchEntries();
+        toast.success("Workout updated!");
+      }
+    } catch (error) {
+      console.error("Failed to edit:", error);
+      toast.error("Failed to update");
+    }
+  };
+
+  const safeEntries = entries ?? [];
   const totalMinutes = safeEntries.reduce((sum, e) => sum + e.durationMinutes, 0);
   const totalCalBurned = safeEntries.reduce(
     (sum, e) => sum + (e.caloriesBurned || 0),
     0
   );
+  const stravaCount = safeEntries.filter((e) => e.source === "strava").length;
+
+  // Get Strava exercise data from first exercise entry
+  const getStravaData = (entry: WorkoutEntry): StravaExerciseData | null => {
+    if (!entry.exercises || entry.exercises.length === 0) return null;
+    return entry.exercises[0];
+  };
 
   return (
     <div className="px-4 pt-12 pb-36 space-y-4">
@@ -315,7 +457,9 @@ export default function WorkoutsPage() {
               <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" fill="#FC4C02"/>
             </svg>
             <p className="text-xs text-muted-foreground flex-1">
-              Strava connected — sync your latest activities
+              {stravaCount > 0
+                ? `${stravaCount} Strava activities synced`
+                : "Strava connected — sync your latest activities"}
             </p>
             <Button
               onClick={handleStravaSync}
@@ -352,7 +496,7 @@ export default function WorkoutsPage() {
                 {totalCalBurned > 0 && (
                   <div>
                     <p className="text-2xl font-bold">
-                      {Math.round(totalCalBurned)}
+                      {Math.round(totalCalBurned).toLocaleString()}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
                       cal burned
@@ -386,66 +530,285 @@ export default function WorkoutsPage() {
           {safeEntries.map((entry) => {
             const cfg =
               workoutConfig[entry.workoutType] || workoutConfig.other;
+            const strava = getStravaData(entry);
+            const isExpanded = expandedId === entry.id;
+            const hasRoute = strava?.polyline;
+            const hasDetailedStats = strava && (strava.distance || strava.avgHeartrate || strava.elevationGain);
 
             return (
               <Card
                 key={entry.id}
                 className={cn("border overflow-hidden", cfg.bgColor)}
               >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      {/* Type & date */}
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xl">{cfg.icon}</span>
-                        <span
-                          className={cn("font-semibold capitalize", cfg.color)}
-                        >
-                          {entry.workoutType}
-                        </span>
-                        <Badge variant="outline" className="text-[10px] ml-auto">
-                          {format(new Date(entry.startedAt), "MMM d, h:mm a")}
-                        </Badge>
+                <CardContent className="p-0">
+                  {/* Main card content */}
+                  <div
+                    className="p-4 cursor-pointer"
+                    onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        {/* Type, source badge & date */}
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <span className="text-xl">{cfg.icon}</span>
+                          <span
+                            className={cn("font-semibold capitalize", cfg.color)}
+                          >
+                            {entry.workoutType}
+                          </span>
+
+                          {/* Source badges */}
+                          {entry.source === "strava" && (
+                            <Badge className="text-[9px] h-4 px-1.5 bg-orange-500/15 text-orange-400 border-orange-500/30">
+                              <svg className="h-2.5 w-2.5 mr-0.5" viewBox="0 0 24 24">
+                                <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" fill="#FC4C02"/>
+                              </svg>
+                              Strava
+                            </Badge>
+                          )}
+                          {entry.source === "ai" && (
+                            <Badge className="text-[9px] h-4 px-1.5 bg-primary/10 text-primary">
+                              AI
+                            </Badge>
+                          )}
+
+                          <Badge variant="outline" className="text-[10px] ml-auto">
+                            {format(new Date(entry.startedAt), "MMM d, h:mm a")}
+                          </Badge>
+                        </div>
+
+                        {/* Strava activity name */}
+                        {strava?.name && entry.source === "strava" && (
+                          <p className="text-sm font-medium mb-1">{strava.name}</p>
+                        )}
+
+                        {/* Quick stats row */}
+                        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="font-medium">
+                              {entry.durationMinutes} min
+                            </span>
+                          </div>
+
+                          {entry.caloriesBurned && entry.caloriesBurned > 0 && (
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <Flame className="h-3.5 w-3.5 text-orange-400" />
+                              <span className="font-medium">
+                                {Math.round(entry.caloriesBurned)} cal
+                              </span>
+                            </div>
+                          )}
+
+                          {strava?.distanceKm && strava.distanceKm > 0 && (
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <Route className="h-3.5 w-3.5 text-blue-400" />
+                              <span className="font-medium">
+                                {strava.distanceKm} km ({strava.distanceMi} mi)
+                              </span>
+                            </div>
+                          )}
+
+                          {strava?.elevationGain && strava.elevationGain > 0 && (
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <Mountain className="h-3.5 w-3.5 text-emerald-400" />
+                              <span className="font-medium">
+                                {Math.round(strava.elevationGain)}m ↑
+                              </span>
+                            </div>
+                          )}
+
+                          {strava?.avgHeartrate && (
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <Heart className="h-3.5 w-3.5 text-red-400" />
+                              <span className="font-medium">
+                                {Math.round(strava.avgHeartrate)} bpm
+                              </span>
+                            </div>
+                          )}
+
+                          {strava?.avgSpeed && strava.avgSpeed > 0 && (
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <TrendingUp className="h-3.5 w-3.5 text-cyan-400" />
+                              <span className="font-medium">
+                                {formatPace(strava.avgSpeed, entry.workoutType)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Achievements row */}
+                        {(strava?.prs || strava?.achievements || strava?.kudos) && (
+                          <div className="flex gap-3 mt-2">
+                            {strava.prs && strava.prs > 0 && (
+                              <div className="flex items-center gap-1 text-[10px] text-amber-400">
+                                <Trophy className="h-3 w-3" />
+                                {strava.prs} PR{strava.prs > 1 ? "s" : ""}
+                              </div>
+                            )}
+                            {strava.achievements && strava.achievements > 0 && (
+                              <div className="flex items-center gap-1 text-[10px] text-yellow-400">
+                                <Zap className="h-3 w-3" />
+                                {strava.achievements} achievement{strava.achievements > 1 ? "s" : ""}
+                              </div>
+                            )}
+                            {strava.kudos && strava.kudos > 0 && (
+                              <div className="flex items-center gap-1 text-[10px] text-orange-400">
+                                <ThumbsUp className="h-3 w-3" />
+                                {strava.kudos} kudo{strava.kudos > 1 ? "s" : ""}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Description (non-Strava or collapsed) */}
+                        {entry.description && !strava?.name && (
+                          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                            {entry.description}
+                          </p>
+                        )}
+
+                        {/* Expand indicator */}
+                        {(hasRoute || hasDetailedStats) && (
+                          <p className="text-[10px] text-muted-foreground/50 mt-2">
+                            {isExpanded ? "Tap to collapse ▲" : "Tap for details ▼"}
+                          </p>
+                        )}
                       </div>
 
-                      {/* Description */}
-                      {entry.description && (
-                        <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
+                      {/* Actions */}
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditDialog(entry);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <ConfirmDelete
+                          onConfirm={() => handleDelete(entry.id)}
+                          itemName={`${entry.workoutType} workout`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded details */}
+                  {isExpanded && (
+                    <div className={cn("border-t border-border/30 p-4 space-y-3 bg-gradient-to-b", cfg.gradient)}>
+                      {/* Route map */}
+                      {hasRoute && (
+                        <RouteMap
+                          polyline={strava!.polyline!}
+                          width={350}
+                          height={160}
+                          className="w-full"
+                        />
+                      )}
+
+                      {/* Detailed stats grid */}
+                      {hasDetailedStats && (
+                        <div className="grid grid-cols-2 gap-2">
+                          {strava?.movingTime && (
+                            <div className="bg-black/10 rounded-lg p-2.5">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Timer className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-[10px] text-muted-foreground">Moving Time</span>
+                              </div>
+                              <p className="text-sm font-semibold">{formatDuration(strava.movingTime)}</p>
+                            </div>
+                          )}
+
+                          {strava?.elapsedTime && strava.movingTime && strava.elapsedTime !== strava.movingTime && (
+                            <div className="bg-black/10 rounded-lg p-2.5">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Clock className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-[10px] text-muted-foreground">Elapsed</span>
+                              </div>
+                              <p className="text-sm font-semibold">{formatDuration(strava.elapsedTime)}</p>
+                            </div>
+                          )}
+
+                          {strava?.maxHeartrate && (
+                            <div className="bg-black/10 rounded-lg p-2.5">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Heart className="h-3 w-3 text-red-400" />
+                                <span className="text-[10px] text-muted-foreground">Max HR</span>
+                              </div>
+                              <p className="text-sm font-semibold">{strava.maxHeartrate} bpm</p>
+                            </div>
+                          )}
+
+                          {strava?.maxSpeed && strava.maxSpeed > 0 && (
+                            <div className="bg-black/10 rounded-lg p-2.5">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <TrendingUp className="h-3 w-3 text-cyan-400" />
+                                <span className="text-[10px] text-muted-foreground">Max Speed</span>
+                              </div>
+                              <p className="text-sm font-semibold">
+                                {formatPace(strava.maxSpeed, entry.workoutType) || `${(strava.maxSpeed * 3.6).toFixed(1)} km/h`}
+                              </p>
+                            </div>
+                          )}
+
+                          {strava?.elevHigh != null && strava.elevLow != null && (
+                            <div className="bg-black/10 rounded-lg p-2.5">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Mountain className="h-3 w-3 text-emerald-400" />
+                                <span className="text-[10px] text-muted-foreground">Elevation Range</span>
+                              </div>
+                              <p className="text-sm font-semibold">
+                                {Math.round(strava.elevLow)}m — {Math.round(strava.elevHigh)}m
+                              </p>
+                            </div>
+                          )}
+
+                          {strava?.avgWatts && (
+                            <div className="bg-black/10 rounded-lg p-2.5">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Zap className="h-3 w-3 text-yellow-400" />
+                                <span className="text-[10px] text-muted-foreground">Avg Power</span>
+                              </div>
+                              <p className="text-sm font-semibold">{Math.round(strava.avgWatts)}W</p>
+                            </div>
+                          )}
+
+                          {strava?.avgCadence && (
+                            <div className="bg-black/10 rounded-lg p-2.5">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <RefreshCw className="h-3 w-3 text-violet-400" />
+                                <span className="text-[10px] text-muted-foreground">Avg Cadence</span>
+                              </div>
+                              <p className="text-sm font-semibold">{Math.round(strava.avgCadence)} rpm</p>
+                            </div>
+                          )}
+
+                          {strava?.sufferScore && (
+                            <div className="bg-black/10 rounded-lg p-2.5">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Flame className="h-3 w-3 text-orange-400" />
+                                <span className="text-[10px] text-muted-foreground">Suffer Score</span>
+                              </div>
+                              <p className="text-sm font-semibold">{strava.sufferScore}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Full description for Strava */}
+                      {entry.description && strava?.name && (
+                        <p className="text-xs text-muted-foreground leading-relaxed">
                           {entry.description}
                         </p>
                       )}
 
-                      {/* Stats row */}
-                      <div className="flex gap-4">
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="font-medium">
-                            {entry.durationMinutes} min
-                          </span>
-                        </div>
-                        {entry.caloriesBurned && (
-                          <div className="flex items-center gap-1.5 text-xs">
-                            <Flame className="h-3.5 w-3.5 text-orange-400" />
-                            <span className="font-medium">
-                              {Math.round(entry.caloriesBurned)} cal
-                            </span>
-                          </div>
-                        )}
-                        {entry.source === "ai" && (
-                          <Badge className="text-[9px] h-4 px-1.5 bg-primary/10 text-primary">
-                            AI
-                          </Badge>
-                        )}
-                        {entry.source === "strava" && (
-                          <Badge className="text-[9px] h-4 px-1.5 bg-orange-500/10 text-orange-400">
-                            Strava
-                          </Badge>
-                        )}
-                      </div>
-
-                      {/* Exercises */}
-                      {entry.exercises && entry.exercises.length > 0 && (
-                        <div className="mt-3 space-y-1.5 pl-1 border-l-2 border-border/30">
+                      {/* Legacy exercise list (manual workouts) */}
+                      {entry.exercises && entry.source !== "strava" && entry.exercises.length > 0 && (
+                        <div className="space-y-1.5 pl-1 border-l-2 border-border/30">
                           {entry.exercises.map((ex, i) => (
                             <div
                               key={i}
@@ -470,19 +833,95 @@ export default function WorkoutsPage() {
                         </div>
                       )}
                     </div>
-
-                    {/* Delete */}
-                    <ConfirmDelete
-                      onConfirm={() => handleDelete(entry.id)}
-                      itemName={`${entry.workoutType} workout`}
-                    />
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             );
           })}
         </div>
       )}
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editingEntry} onOpenChange={(open) => !open && setEditingEntry(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Workout</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Date & Time</Label>
+              <Input
+                type="datetime-local"
+                value={editForm.startedAt}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, startedAt: e.target.value })
+                }
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Workout Type</Label>
+              <Select
+                value={editForm.workoutType}
+                onValueChange={(v) =>
+                  setEditForm({ ...editForm, workoutType: v })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(workoutConfig).map(([key, cfg]) => (
+                    <SelectItem key={key} value={key}>
+                      {cfg.icon} {key.charAt(0).toUpperCase() + key.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Duration (min)</Label>
+                <Input
+                  type="number"
+                  value={editForm.durationMinutes}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      durationMinutes: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Calories Burned</Label>
+                <Input
+                  type="number"
+                  value={editForm.caloriesBurned}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      caloriesBurned: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Input
+                value={editForm.description}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, description: e.target.value })
+                }
+              />
+            </div>
+            <Button onClick={handleSaveEdit} className="w-full">
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Voice Input */}
       <VoiceInput onDataLogged={() => { invalidateHealthCache(); fetchEntries(); }} />

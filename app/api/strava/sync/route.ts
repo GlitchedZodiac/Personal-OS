@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   fetchStravaActivities,
@@ -106,6 +107,54 @@ export async function POST(request: Request) {
           calories = durationMinutes * (calPerMin[workoutType] || 6);
         }
 
+        // Build rich exercise data with all Strava metrics
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const exerciseData: Record<string, any> = {
+          name: activity.name || activity.type,
+          stravaType: activity.type,
+          sportType: activity.sport_type,
+        };
+
+        // Distance & elevation
+        if (activity.distance > 0) {
+          exerciseData.distance = activity.distance;
+          exerciseData.distanceKm = +(activity.distance / 1000).toFixed(2);
+          exerciseData.distanceMi = +(activity.distance / 1609.34).toFixed(2);
+        }
+        if (activity.total_elevation_gain > 0) {
+          exerciseData.elevationGain = activity.total_elevation_gain;
+        }
+        if (activity.elev_high) exerciseData.elevHigh = activity.elev_high;
+        if (activity.elev_low) exerciseData.elevLow = activity.elev_low;
+
+        // Heart rate
+        if (activity.average_heartrate) exerciseData.avgHeartrate = activity.average_heartrate;
+        if (activity.max_heartrate) exerciseData.maxHeartrate = activity.max_heartrate;
+
+        // Speed & pace
+        if (activity.average_speed) exerciseData.avgSpeed = activity.average_speed;
+        if (activity.max_speed) exerciseData.maxSpeed = activity.max_speed;
+
+        // Power & cadence
+        if (activity.average_watts) exerciseData.avgWatts = activity.average_watts;
+        if (activity.max_watts) exerciseData.maxWatts = activity.max_watts;
+        if (activity.average_cadence) exerciseData.avgCadence = activity.average_cadence;
+
+        // Social & achievements
+        if (activity.suffer_score) exerciseData.sufferScore = activity.suffer_score;
+        if (activity.achievement_count) exerciseData.achievements = activity.achievement_count;
+        if (activity.kudos_count) exerciseData.kudos = activity.kudos_count;
+        if (activity.pr_count) exerciseData.prs = activity.pr_count;
+
+        // Route map polyline
+        if (activity.map?.summary_polyline) {
+          exerciseData.polyline = activity.map.summary_polyline;
+        }
+
+        // Time data
+        exerciseData.movingTime = activity.moving_time;
+        exerciseData.elapsedTime = activity.elapsed_time;
+
         await prisma.workoutLog.create({
           data: {
             startedAt: new Date(activity.start_date_local || activity.start_date),
@@ -115,20 +164,7 @@ export async function POST(request: Request) {
             caloriesBurned: calories,
             stravaActivityId: stravaId,
             source: "strava",
-            exercises: activity.distance > 0
-              ? [
-                  {
-                    name: activity.name || activity.type,
-                    distance: activity.distance,
-                    elevationGain: activity.total_elevation_gain,
-                    avgHeartrate: activity.average_heartrate,
-                    maxHeartrate: activity.max_heartrate,
-                    avgSpeed: activity.average_speed,
-                    maxSpeed: activity.max_speed,
-                    sufferScore: activity.suffer_score,
-                  },
-                ]
-              : undefined,
+            exercises: [exerciseData] as Prisma.InputJsonValue,
           },
         });
 

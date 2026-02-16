@@ -108,6 +108,7 @@ export async function POST(request: NextRequest) {
               description: args.description,
               caloriesBurned: args.caloriesBurned,
               exercises: args.exercises,
+              startedAt: args.startedAt || null,
             },
           });
 
