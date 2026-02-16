@@ -112,6 +112,53 @@ export function saveSettings(settings: Partial<AppSettings>): AppSettings {
   return updated;
 }
 
+// ── Server-synced settings (persists across devices via DB) ──
+
+/** Fetch settings from the server DB and merge into localStorage.
+ *  If the server has no settings yet, push current localStorage settings up. */
+export async function fetchServerSettings(): Promise<AppSettings> {
+  const local = getSettings();
+  try {
+    const res = await fetch("/api/settings");
+    if (!res.ok) return local;
+    const { data } = await res.json();
+    if (data && typeof data === "object") {
+      // Server has settings — use them as source of truth
+      const merged = { ...DEFAULT_SETTINGS, ...data } as AppSettings;
+      if (typeof window !== "undefined") {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      }
+      return merged;
+    } else {
+      // Server is empty — push current local settings up so other devices get them
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(local),
+      }).catch(() => {});
+      return local;
+    }
+  } catch {
+    // Fall back to localStorage
+  }
+  return local;
+}
+
+/** Save settings to both localStorage AND the server DB */
+export async function saveSettingsToServer(settings: Partial<AppSettings>): Promise<AppSettings> {
+  const updated = saveSettings(settings); // save locally first
+  try {
+    await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated),
+    });
+  } catch (err) {
+    console.error("Failed to sync settings to server:", err);
+  }
+  return updated;
+}
+
 /**
  * Compute gram targets from calorie target + macro percentages.
  * protein & carbs = 4 cal/g, fat = 9 cal/g

@@ -38,7 +38,7 @@ import { ConfirmDelete } from "@/components/confirm-delete";
 import Link from "next/link";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { getSettings, getMacroGrams } from "@/lib/settings";
+import { getSettings, getMacroGrams, fetchServerSettings } from "@/lib/settings";
 import { useCachedFetch, invalidateHealthCache } from "@/lib/cache";
 
 interface FoodEntry {
@@ -300,9 +300,14 @@ export default function FoodLogPage() {
     useCachedFetch<FoodEntry[]>(foodUrl, { ttl: 60_000 });
 
   useEffect(() => {
-    const settings = getSettings();
-    setCalTarget(settings.calorieTarget);
-    setMacroTargets(getMacroGrams(settings));
+    const local = getSettings();
+    setCalTarget(local.calorieTarget);
+    setMacroTargets(getMacroGrams(local));
+
+    fetchServerSettings().then((s) => {
+      setCalTarget(s.calorieTarget);
+      setMacroTargets(getMacroGrams(s));
+    });
   }, []);
 
   const handleDelete = async (id: string) => {

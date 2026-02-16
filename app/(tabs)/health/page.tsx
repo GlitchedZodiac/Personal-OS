@@ -20,7 +20,7 @@ import { WaterTracker } from "@/components/water-tracker";
 import { QuickFavorites } from "@/components/quick-favorites";
 import { AIMealSuggestion } from "@/components/ai-meal-suggestion";
 import { format } from "date-fns";
-import { getSettings, getMacroGrams } from "@/lib/settings";
+import { getSettings, getMacroGrams, fetchServerSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { useCachedFetch, invalidateHealthCache } from "@/lib/cache";
 
@@ -94,9 +94,15 @@ export default function HealthDashboard() {
   };
 
   useEffect(() => {
-    const settings = getSettings();
-    setCalorieTarget(settings.calorieTarget);
-    setMacroTargets(getMacroGrams(settings));
+    // Load from localStorage immediately, then override from server DB (cross-device sync)
+    const local = getSettings();
+    setCalorieTarget(local.calorieTarget);
+    setMacroTargets(getMacroGrams(local));
+
+    fetchServerSettings().then((s) => {
+      setCalorieTarget(s.calorieTarget);
+      setMacroTargets(getMacroGrams(s));
+    });
   }, []);
 
   const caloriePercent = Math.min(

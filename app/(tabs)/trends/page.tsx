@@ -44,7 +44,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { getSettings, getMacroGrams, type BodyGoals } from "@/lib/settings";
+import { getSettings, getMacroGrams, fetchServerSettings, type BodyGoals } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { useCachedFetch } from "@/lib/cache";
 import Link from "next/link";
@@ -153,11 +153,18 @@ export default function TrendsPage() {
   const [aiLanguage, setAiLanguage] = useState("english");
 
   useEffect(() => {
-    const settings = getSettings();
-    setCalorieTarget(settings.calorieTarget);
-    setMacroTargets(getMacroGrams(settings));
-    if (settings.bodyGoals) setBodyGoals(settings.bodyGoals);
-    setAiLanguage(settings.aiLanguage || "english");
+    const local = getSettings();
+    setCalorieTarget(local.calorieTarget);
+    setMacroTargets(getMacroGrams(local));
+    if (local.bodyGoals) setBodyGoals(local.bodyGoals);
+    setAiLanguage(local.aiLanguage || "english");
+
+    fetchServerSettings().then((s) => {
+      setCalorieTarget(s.calorieTarget);
+      setMacroTargets(getMacroGrams(s));
+      if (s.bodyGoals) setBodyGoals(s.bodyGoals);
+      setAiLanguage(s.aiLanguage || "english");
+    });
   }, []);
 
   const trendsUrl = useMemo(() => `/api/health/trends?range=${range}`, [range]);

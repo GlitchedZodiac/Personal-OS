@@ -42,7 +42,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { getSettings, saveSettings, getMacroGrams, type AppSettings } from "@/lib/settings";
+import { getSettings, saveSettingsToServer, getMacroGrams, fetchServerSettings, type AppSettings } from "@/lib/settings";
 import { MacroSlider } from "@/components/macro-slider";
 import Link from "next/link";
 
@@ -92,15 +92,16 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    setSettings(getSettings());
+    // Load settings from server DB (syncs across devices), then fall back to localStorage
+    fetchServerSettings().then((s) => setSettings(s));
     fetchBalance();
   }, [fetchBalance]);
 
-  // Auto-save whenever settings change (debounced 500ms)
+  // Auto-save whenever settings change (debounced 500ms) — saves to BOTH localStorage + server DB
   const autoSave = useCallback((newSettings: AppSettings) => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      saveSettings(newSettings);
+      saveSettingsToServer(newSettings);
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 1500);
     }, 500);
