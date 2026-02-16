@@ -40,6 +40,8 @@ import {
   CreditCard,
   ExternalLink,
   RefreshCw,
+  Bell,
+  BellRing,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getSettings, saveSettingsToServer, getMacroGrams, fetchServerSettings, type AppSettings } from "@/lib/settings";
@@ -60,6 +62,55 @@ interface BalanceInfo {
   message?: string;
   dashboardUrl?: string;
   error?: string;
+}
+
+function NotificationPermission() {
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+
+  useEffect(() => {
+    if (!("Notification" in window)) {
+      setPermission("unsupported");
+    } else {
+      setPermission(Notification.permission);
+    }
+  }, []);
+
+  const handleEnable = async () => {
+    if (!("Notification" in window)) return;
+    const result = await Notification.requestPermission();
+    setPermission(result);
+    if (result === "granted") {
+      toast.success("Notifications enabled! You'll get reminders on this device.");
+    }
+  };
+
+  if (permission === "unsupported") {
+    return <p className="text-xs text-muted-foreground">Notifications not supported on this browser.</p>;
+  }
+
+  if (permission === "granted") {
+    return (
+      <div className="flex items-center gap-2 text-xs text-green-400">
+        <BellRing className="h-4 w-4" />
+        <span>Notifications are enabled on this device</span>
+      </div>
+    );
+  }
+
+  if (permission === "denied") {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Notifications are blocked. Enable them in your browser/device settings.
+      </p>
+    );
+  }
+
+  return (
+    <Button onClick={handleEnable} variant="outline" size="sm" className="gap-2">
+      <Bell className="h-4 w-4" />
+      Enable Notifications
+    </Button>
+  );
 }
 
 export default function SettingsPage() {
@@ -432,6 +483,22 @@ export default function SettingsPage() {
             <ExternalLink className="h-3 w-3" />
             View on OpenAI Dashboard
           </a>
+        </CardContent>
+      </Card>
+
+      {/* Notifications */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Bell className="h-4 w-4 text-amber-500" />
+            Notifications
+          </CardTitle>
+          <p className="text-[10px] text-muted-foreground">
+            Enable push notifications for reminders and todo alerts
+          </p>
+        </CardHeader>
+        <CardContent>
+          <NotificationPermission />
         </CardContent>
       </Card>
 

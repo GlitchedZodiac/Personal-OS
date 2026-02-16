@@ -34,7 +34,7 @@ interface FoodItem {
 }
 
 interface AIResponse {
-  type: "food" | "measurement" | "workout" | "water" | "todo" | "general";
+  type: "food" | "measurement" | "workout" | "water" | "todo" | "reminder" | "general";
   message: string;
   data?: unknown;
   items?: FoodItem[];
@@ -77,6 +77,11 @@ interface AIResponse {
     dueTime?: string | null;
     priority?: string;
   }>;
+  reminder?: {
+    id: string;
+    title: string;
+    remindAt: string;
+  };
 }
 
 export function VoiceInput({ onDataLogged }: VoiceInputProps) {
@@ -358,6 +363,21 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
             return;
           }
           break;
+        case "reminder": {
+          // Reminder was already created by the AI chat endpoint, just confirm
+          toast.success("Reminder set!");
+          // Request notification permission if not already granted
+          if ("Notification" in window && Notification.permission === "default") {
+            Notification.requestPermission();
+          }
+          onDataLogged?.();
+          setIsProcessing(false);
+          setShowConfirmation(false);
+          setAiResponse(null);
+          setTextInput("");
+          setLastFailedText(null);
+          return;
+        }
         case "todo": {
           const todoItems = aiResponse.todos || (aiResponse.todo ? [aiResponse.todo] : []);
           if (todoItems.length > 0 && todoItems[0].action === "add") {
@@ -688,6 +708,19 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Reminder preview */}
+            {aiResponse.type === "reminder" && aiResponse.reminder && (
+              <div className="bg-amber-500/10 rounded-lg p-3 space-y-1">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium">🔔 Reminder Set</span>
+                </div>
+                <p className="text-xs font-medium">{aiResponse.reminder.title}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  Will notify you at {new Date(aiResponse.reminder.remindAt).toLocaleString()}
+                </p>
               </div>
             )}
 

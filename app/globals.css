@@ -83,37 +83,37 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.10 0.005 270);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.15 0.005 270);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.15 0.005 270);
+  --popover-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.85 0.15 270);
+  --primary-foreground: oklch(0.13 0.02 270);
+  --secondary: oklch(0.22 0.01 270);
+  --secondary-foreground: oklch(0.95 0 0);
+  --muted: oklch(0.22 0.01 270);
+  --muted-foreground: oklch(0.65 0 0);
+  --accent: oklch(0.22 0.01 270);
+  --accent-foreground: oklch(0.95 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.65 0.15 270);
   --chart-1: oklch(0.72 0.19 40);
   --chart-2: oklch(0.75 0.16 165);
   --chart-3: oklch(0.80 0.17 70);
   --chart-4: oklch(0.72 0.22 300);
   --chart-5: oklch(0.70 0.20 16);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: oklch(0.15 0.005 270);
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-primary: oklch(0.80 0.18 270);
+  --sidebar-primary-foreground: oklch(0.95 0 0);
+  --sidebar-accent: oklch(0.22 0.01 270);
+  --sidebar-accent-foreground: oklch(0.95 0 0);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.65 0.15 270);
 }
 
 @layer base {
@@ -128,12 +128,16 @@
   }
 }
 
-/* Safe area for iPhone notch/home indicator */
+/* ─── Safe area for iPhone notch/home indicator ─── */
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Prevent zoom on input focus on iOS */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* ─── Prevent zoom on input focus on iOS ─── */
 input[type="text"],
 input[type="number"],
 input[type="password"],
@@ -142,13 +146,13 @@ select {
   font-size: 16px;
 }
 
-/* Smooth scrolling */
+/* ─── Smooth scrolling ─── */
 html {
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Hide scrollbars on mobile */
+/* ─── Hide scrollbars on mobile ─── */
 ::-webkit-scrollbar {
   display: none;
 }
@@ -158,15 +162,15 @@ html {
   scrollbar-width: none;
 }
 
-/* Smooth page transitions */
+/* ─── Page entrance animation ─── */
 main {
-  animation: fadeIn 0.2s ease-out;
+  animation: pageIn 0.3s ease-out;
 }
 
-@keyframes fadeIn {
+@keyframes pageIn {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -174,12 +178,57 @@ main {
   }
 }
 
-/* Card hover glow effect */
+/* ─── Staggered children fade in (apply .stagger-children to parent) ─── */
+.stagger-children > * {
+  opacity: 0;
+  animation: staggerIn 0.4s ease-out forwards;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+.stagger-children > *:nth-child(9) { animation-delay: 400ms; }
+.stagger-children > *:nth-child(10) { animation-delay: 450ms; }
+
+@keyframes staggerIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ─── Card glass effect ─── */
+.glass-card {
+  background: oklch(0.15 0.005 270 / 60%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid oklch(1 0 0 / 6%);
+}
+
+/* ─── Card hover glow effect ─── */
 .card-glow:hover {
   box-shadow: 0 0 20px rgba(var(--primary), 0.1);
 }
 
-/* Pulse ring for recording */
+/* ─── Active tap feedback ─── */
+.tap-scale {
+  transition: transform 0.15s ease;
+}
+
+.tap-scale:active {
+  transform: scale(0.97);
+}
+
+/* ─── Pulse ring for recording ─── */
 @keyframes pulse-ring {
   0% {
     transform: scale(1);
@@ -198,4 +247,72 @@ main {
   border-radius: 50%;
   border: 2px solid currentColor;
   animation: pulse-ring 1.5s ease-out infinite;
+}
+
+/* ─── Gradient text ─── */
+.gradient-text {
+  background: linear-gradient(135deg, oklch(0.80 0.18 270), oklch(0.75 0.20 300));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Subtle glow behind cards ─── */
+.glow-purple {
+  box-shadow: 0 0 30px oklch(0.60 0.20 280 / 15%),
+              inset 0 0 30px oklch(0.60 0.20 280 / 3%);
+}
+
+.glow-green {
+  box-shadow: 0 0 30px oklch(0.65 0.20 150 / 15%),
+              inset 0 0 30px oklch(0.65 0.20 150 / 3%);
+}
+
+.glow-orange {
+  box-shadow: 0 0 30px oklch(0.70 0.20 45 / 15%),
+              inset 0 0 30px oklch(0.70 0.20 45 / 3%);
+}
+
+/* ─── Shimmer loading effect ─── */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(0.20 0 0) 25%,
+    oklch(0.25 0 0) 37%,
+    oklch(0.20 0 0) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ─── Number counter animation ─── */
+@keyframes countUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.count-up {
+  animation: countUp 0.5s ease-out;
+}
+
+/* ─── Standalone PWA: extra bottom padding for home indicator ─── */
+@media (display-mode: standalone) {
+  .safe-area-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
+  }
 }

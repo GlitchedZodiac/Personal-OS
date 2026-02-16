@@ -11,6 +11,7 @@ import {
   GENERAL_CHAT_FUNCTION,
   TODO_FUNCTION,
   WORKOUT_PLAN_QUERY_FUNCTION,
+  REMINDER_FUNCTION,
 } from "@/lib/ai-prompts";
 
 export async function POST(request: NextRequest) {
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
         GENERAL_CHAT_FUNCTION,
         TODO_FUNCTION,
         WORKOUT_PLAN_QUERY_FUNCTION,
+        REMINDER_FUNCTION,
       ],
       function_call: "auto",
     });
@@ -169,6 +171,27 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({
             type: "general",
             message: `Today's workout: **${todaySchedule.day}**\n\n${exerciseList}\n\nLet me know when you've finished! 🔥`,
+          });
+        }
+
+        case "set_reminder": {
+          // Create the reminder in the database
+          const reminder = await prisma.reminder.create({
+            data: {
+              title: args.title,
+              body: args.title,
+              remindAt: new Date(args.remindAt),
+              url: "/todos",
+            },
+          });
+          return NextResponse.json({
+            type: "reminder",
+            message: args.message,
+            reminder: {
+              id: reminder.id,
+              title: args.title,
+              remindAt: args.remindAt,
+            },
           });
         }
 

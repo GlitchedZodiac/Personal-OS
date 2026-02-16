@@ -54,6 +54,13 @@ WATER LOGGING:
 - If the user doesn't specify an amount, default to 1 glass (250ml)
 - If the user says "3 glasses", log amountMl = 750 and glasses = 3
 
+REMINDERS:
+- If the user wants to SET A REMINDER for a specific time (e.g. "remind me at 3pm to call mom"), use set_reminder
+- A reminder is different from a todo — reminders push a notification at a specific time
+- If the user says "remind me to..." with a specific time, use set_reminder
+- If the user just says "I need to do X" without wanting a time-based notification, use manage_todo instead
+- Parse time naturally: "in 30 minutes", "at 3pm", "at noon", "in 2 hours"
+
 TODOS:
 - If the user wants to add reminders, tasks, or todos, use manage_todo with action "add"
 - IMPORTANT: Extract ALL tasks from the message — if the user mentions 3 things to do, return 3 items in the items array
@@ -301,6 +308,29 @@ export const WATER_LOG_FUNCTION = {
       },
     },
     required: ["glasses", "amountMl", "message"],
+  },
+};
+
+export const REMINDER_FUNCTION = {
+  name: "set_reminder",
+  description: "Set a timed reminder that will push a notification at the specified time. Use when the user explicitly wants to be reminded at a certain time.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      title: {
+        type: "string" as const,
+        description: "What to remind about — e.g. 'Call mom', 'Take medicine'",
+      },
+      remindAt: {
+        type: "string" as const,
+        description: "ISO 8601 date-time string for when the reminder should fire. Convert natural language like 'in 30 minutes', 'at 3pm', 'tomorrow at 9am' into the correct datetime.",
+      },
+      message: {
+        type: "string" as const,
+        description: "Short confirmation message — e.g. 'Got it! I\\'ll remind you at 3:00 PM to call mom.'",
+      },
+    },
+    required: ["title", "remindAt", "message"],
   },
 };
 

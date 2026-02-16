@@ -1,12 +1,14 @@
 {
   "name": "Personal OS",
   "short_name": "PersonalOS",
-  "description": "Your centralized personal operating system",
-  "start_url": "/",
+  "description": "Your centralized personal operating system — health, fitness, todos, and AI coaching",
+  "start_url": "/health",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#0a0a0a",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
+  "categories": ["health", "fitness", "productivity"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -19,6 +21,26 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Log Food",
+      "short_name": "Food",
+      "url": "/health/food",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Todos",
+      "short_name": "Todos",
+      "url": "/todos",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Workouts",
+      "short_name": "Workout",
+      "url": "/health/workouts",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

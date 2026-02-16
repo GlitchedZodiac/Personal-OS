@@ -196,3 +196,16 @@ model UserSettings {
 
   @@map("user_settings")
 }
+
+model Reminder {
+  id          String    @id @default(uuid())
+  title       String
+  body        String?
+  remindAt    DateTime  // when to fire the notification
+  url         String    @default("/todos") // where to navigate on click
+  fired       Boolean   @default(false)
+  todoId      String?   // optional link to a todo
+  createdAt   DateTime  @default(now())
+
+  @@map("reminders")
+}

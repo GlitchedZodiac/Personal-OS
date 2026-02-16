@@ -45,6 +45,7 @@ import {
   type ChatMessage,
   type WorkoutChatResponse,
 } from "@/components/workout-voice-input";
+import { ActiveWorkout, estimateCaloriesBurned } from "@/components/active-workout";
 import {
   addDays,
   startOfWeek,
@@ -207,6 +208,10 @@ export default function WorkoutPlanPage() {
     totalCompletions: 0,
   });
   const [units, setUnits] = useState<"metric" | "imperial">("metric");
+  const [activeWorkout, setActiveWorkout] = useState<{
+    date: Date;
+    scheduleDay: ScheduleDay;
+  } | null>(null);
 
   // ─── Conversation state (persisted to sessionStorage) ──────────
   const CHAT_STORAGE_KEY = "workout-plan-chat";
@@ -965,18 +970,77 @@ export default function WorkoutPlanPage() {
                 <span className="text-sm font-medium">Completed!</span>
               </div>
             ) : (
-              <Button
-                className="w-full gap-2 mt-2"
-                onClick={() =>
-                  handleComplete(selectedDay.date, selectedDay.scheduleDay)
-                }
-              >
-                <Check className="h-4 w-4" />
-                Mark as Complete
-              </Button>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
+                  onClick={() => {
+                    setActiveWorkout({
+                      date: selectedDay.date,
+                      scheduleDay: selectedDay.scheduleDay,
+                    });
+                    setSelectedDay(null);
+                  }}
+                >
+                  <Zap className="h-4 w-4" />
+                  Start Workout
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() =>
+                    handleComplete(selectedDay.date, selectedDay.scheduleDay)
+                  }
+                >
+                  <Check className="h-4 w-4" />
+                  Quick Log
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Active Workout Mode */}
+      {activeWorkout && (
+        <ActiveWorkout
+          exercises={activeWorkout.scheduleDay.exercises}
+          dayLabel={activeWorkout.scheduleDay.label}
+          estimatedDuration={activeWorkout.scheduleDay.estimatedDuration}
+          estimatedCalories={activeWorkout.scheduleDay.estimatedCalories}
+          workoutType="strength"
+          personalRecords={trends.personalRecords}
+          onComplete={async (data) => {
+            if (!plan) return;
+            try {
+              const res = await fetch("/api/health/workout-plan/complete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  planId: plan.id,
+                  scheduledDate: activeWorkout.date.toISOString(),
+                  dayIndex: activeWorkout.scheduleDay.dayIndex,
+                  dayLabel: activeWorkout.scheduleDay.label,
+                  completed: true,
+                  actualExercises: data.actualExercises,
+                  caloriesBurned: data.caloriesBurned,
+                  durationMinutes: data.durationMinutes,
+                }),
+              });
+              if (res.ok) {
+                toast.success(
+                  `Workout done! ${data.durationMinutes} min • ${data.caloriesBurned} cal burned • ${data.completedSets}/${data.totalSets} sets`
+                );
+                fetchPlan();
+                fetchStreak();
+              }
+            } catch (error) {
+              console.error("Complete error:", error);
+              toast.error("Failed to save workout");
+            }
+            setActiveWorkout(null);
+          }}
+          onCancel={() => setActiveWorkout(null)}
+        />
       )}
 
       {/* Conversation history (if any messages) */}
