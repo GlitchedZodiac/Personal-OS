@@ -20,7 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Clock, Flame, Dumbbell, Sparkles } from "lucide-react";
+import { ArrowLeft, Plus, Clock, Flame, Dumbbell, Sparkles, RefreshCw, Loader2 } from "lucide-react";
 import { VoiceInput } from "@/components/voice-input";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import Link from "next/link";
@@ -70,6 +70,11 @@ const workoutConfig: Record<
     color: "text-emerald-400",
     bgColor: "bg-emerald-500/10 border-emerald-500/20",
   },
+  hike: {
+    icon: "🥾",
+    color: "text-lime-400",
+    bgColor: "bg-lime-500/10 border-lime-500/20",
+  },
   cycling: {
     icon: "🚴",
     color: "text-amber-400",
@@ -107,6 +112,35 @@ export default function WorkoutsPage() {
     description: "",
     caloriesBurned: "",
   });
+  const [stravaConnected, setStravaConnected] = useState(false);
+  const [stravaSyncing, setStravaSyncing] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/strava/status")
+      .then((r) => r.json())
+      .then((d) => setStravaConnected(d.connected))
+      .catch(() => {});
+  }, []);
+
+  const handleStravaSync = async () => {
+    setStravaSyncing(true);
+    try {
+      const res = await fetch("/api/strava/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fullSync: false }),
+      });
+      const data = await res.json();
+      if (res.ok && data.synced > 0) {
+        invalidateHealthCache();
+        fetchEntries();
+      }
+    } catch {
+      // silent
+    } finally {
+      setStravaSyncing(false);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     try {
@@ -273,6 +307,34 @@ export default function WorkoutsPage() {
         </Card>
       </Link>
 
+      {/* Strava Sync */}
+      {stravaConnected && (
+        <Card className="border-orange-500/20 bg-orange-500/5">
+          <CardContent className="p-3 flex items-center gap-3">
+            <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24">
+              <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" fill="#FC4C02"/>
+            </svg>
+            <p className="text-xs text-muted-foreground flex-1">
+              Strava connected — sync your latest activities
+            </p>
+            <Button
+              onClick={handleStravaSync}
+              disabled={stravaSyncing}
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs border-orange-500/30 text-orange-400"
+            >
+              {stravaSyncing ? (
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              ) : (
+                <RefreshCw className="h-3 w-3 mr-1" />
+              )}
+              Sync
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary bar */}
       {safeEntries.length > 0 && (
         <Card>
@@ -372,6 +434,11 @@ export default function WorkoutsPage() {
                         {entry.source === "ai" && (
                           <Badge className="text-[9px] h-4 px-1.5 bg-primary/10 text-primary">
                             AI
+                          </Badge>
+                        )}
+                        {entry.source === "strava" && (
+                          <Badge className="text-[9px] h-4 px-1.5 bg-orange-500/10 text-orange-400">
+                            Strava
                           </Badge>
                         )}
                       </div>

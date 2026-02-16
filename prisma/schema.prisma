@@ -209,3 +209,18 @@ model Reminder {
 
   @@map("reminders")
 }
+
+model StravaToken {
+  id            String   @id @default("default") // single-user app, one row
+  athleteId     Int
+  accessToken   String
+  refreshToken  String
+  expiresAt     Int      // unix timestamp
+  scope         String   @default("activity:read_all")
+  athleteName   String?
+  athletePhoto  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("strava_tokens")
+}

@@ -42,6 +42,8 @@ import {
   RefreshCw,
   Bell,
   BellRing,
+  Unplug,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getSettings, saveSettingsToServer, getMacroGrams, fetchServerSettings, type AppSettings } from "@/lib/settings";
@@ -125,6 +127,18 @@ export default function SettingsPage() {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isFirstRender = useRef(true);
 
+  // Strava state
+  const [stravaStatus, setStravaStatus] = useState<{
+    connected: boolean;
+    athleteName?: string;
+    athletePhoto?: string;
+    syncedWorkouts?: number;
+    lastSyncedAt?: string;
+    tokenExpired?: boolean;
+  } | null>(null);
+  const [stravaLoading, setStravaLoading] = useState(false);
+  const [stravaSyncing, setStravaSyncing] = useState(false);
+
   const fetchBalance = useCallback(async () => {
     setBalanceLoading(true);
     try {
@@ -142,11 +156,78 @@ export default function SettingsPage() {
     }
   }, []);
 
+  const fetchStravaStatus = useCallback(async () => {
+    setStravaLoading(true);
+    try {
+      const res = await fetch("/api/strava/status");
+      if (res.ok) {
+        const data = await res.json();
+        setStravaStatus(data);
+      }
+    } catch {
+      setStravaStatus({ connected: false });
+    } finally {
+      setStravaLoading(false);
+    }
+  }, []);
+
+  const handleStravaConnect = () => {
+    const appUrl = window.location.origin;
+    window.location.href = `/api/strava/auth?redirect=${encodeURIComponent(appUrl)}`;
+  };
+
+  const handleStravaDisconnect = async () => {
+    if (!confirm("Disconnect Strava? Your synced workouts will remain.")) return;
+    try {
+      const res = await fetch("/api/strava/status", { method: "DELETE" });
+      if (res.ok) {
+        setStravaStatus({ connected: false });
+        toast.success("Strava disconnected");
+      }
+    } catch {
+      toast.error("Failed to disconnect");
+    }
+  };
+
+  const handleStravaSync = async (fullSync = false) => {
+    setStravaSyncing(true);
+    try {
+      const res = await fetch("/api/strava/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fullSync }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || `Synced ${data.synced} activities`);
+        fetchStravaStatus(); // refresh status
+      } else {
+        toast.error(data.error || "Sync failed");
+      }
+    } catch {
+      toast.error("Sync failed — network error");
+    } finally {
+      setStravaSyncing(false);
+    }
+  };
+
   useEffect(() => {
     // Load settings from server DB (syncs across devices), then fall back to localStorage
     fetchServerSettings().then((s) => setSettings(s));
     fetchBalance();
-  }, [fetchBalance]);
+    fetchStravaStatus();
+
+    // Check for Strava callback params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("strava") === "connected") {
+      toast.success("Strava connected successfully! 🎉");
+      // Clean up URL
+      window.history.replaceState({}, "", "/settings");
+    } else if (params.get("strava") === "error") {
+      toast.error(`Strava error: ${params.get("message") || "unknown"}`);
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, [fetchBalance, fetchStravaStatus]);
 
   // Auto-save whenever settings change (debounced 500ms) — saves to BOTH localStorage + server DB
   const autoSave = useCallback((newSettings: AppSettings) => {
@@ -392,6 +473,111 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </Link>
+
+      {/* Strava Integration */}
+      <Card className="border-orange-500/20">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" fill="#FC4C02"/>
+            </svg>
+            <span className="text-orange-400">Strava</span>
+            {stravaStatus?.connected && (
+              <span className="ml-auto text-[10px] text-green-400 flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
+                Connected
+              </span>
+            )}
+          </CardTitle>
+          <p className="text-[10px] text-muted-foreground">
+            Sync your runs, rides, and workouts automatically
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {stravaLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Checking connection...
+            </div>
+          ) : stravaStatus?.connected ? (
+            <>
+              {/* Athlete info */}
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-orange-500/5 border border-orange-500/10">
+                {stravaStatus.athletePhoto && (
+                  <img
+                    src={stravaStatus.athletePhoto}
+                    alt="Strava avatar"
+                    className="h-10 w-10 rounded-full"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {stravaStatus.athleteName || "Strava Athlete"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {stravaStatus.syncedWorkouts || 0} workouts synced
+                    {stravaStatus.lastSyncedAt && (
+                      <> • Last sync: {new Date(stravaStatus.lastSyncedAt).toLocaleDateString()}</>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Sync buttons */}
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => handleStravaSync(false)}
+                  disabled={stravaSyncing}
+                  size="sm"
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  {stravaSyncing ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Sync Recent
+                </Button>
+                <Button
+                  onClick={() => handleStravaSync(true)}
+                  disabled={stravaSyncing}
+                  size="sm"
+                  variant="outline"
+                  className="border-orange-500/30 text-orange-400"
+                >
+                  Full Sync
+                </Button>
+              </div>
+
+              {/* Disconnect */}
+              <Button
+                onClick={handleStravaDisconnect}
+                variant="ghost"
+                size="sm"
+                className="w-full text-xs text-muted-foreground hover:text-red-400"
+              >
+                <Unplug className="h-3 w-3 mr-1.5" />
+                Disconnect Strava
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Connect your Strava account to automatically import your runs, rides, hikes, and other activities.
+              </p>
+              <Button
+                onClick={handleStravaConnect}
+                className="w-full bg-[#FC4C02] hover:bg-[#e54502] text-white"
+              >
+                <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="white">
+                  <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+                </svg>
+                Connect with Strava
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* OpenAI Balance */}
       <Card>
