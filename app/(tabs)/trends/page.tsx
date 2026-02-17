@@ -154,6 +154,36 @@ interface ProjectionsData {
   outlookCached?: boolean;
 }
 
+interface WeeklyReportData {
+  weekOf: string;
+  nutrition: {
+    daysLogged: number;
+    avgCalories: number;
+    avgProtein: number;
+    totalCalories: number;
+    totalProtein: number;
+    totalCarbs: number;
+    totalFat: number;
+    caloriesTrend: number | null;
+  };
+  workouts: {
+    total: number;
+    totalMinutes: number;
+    totalBurned: number;
+    workoutsTrend: number | null;
+  };
+  hydration: {
+    totalMl: number;
+    avgGlassesPerDay: number;
+    trend: number | null;
+  };
+  body: {
+    latestWeight: number | null;
+    weightChange: number | null;
+  };
+  aiSummary: string;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────
 
 const COLORS = {
@@ -192,7 +222,15 @@ const gridColor = "rgba(255,255,255,0.06)";
 // ─── Main Component ──────────────────────────────────────────────────
 
 export default function TrendsPage() {
-  const [tab, setTab] = useState<"current" | "projections">("current");
+  const [tab, setTab] = useState<"current" | "projections" | "weekly-report">(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const t = params.get("tab");
+      if (t === "weekly-report") return "weekly-report";
+      if (t === "projections") return "projections";
+    }
+    return "current";
+  });
   const [range, setRange] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("trends_range") || "30";
@@ -296,6 +334,14 @@ export default function TrendsPage() {
     }
   }, [projectionsUrl, refreshProjections]);
 
+  // Weekly report — only fetch when that tab is active
+  const weeklyReportUrl = useMemo(
+    () => (tab === "weekly-report" ? "/api/health/weekly-report" : null),
+    [tab]
+  );
+  const { data: weeklyReport, loading: weeklyReportLoading } =
+    useCachedFetch<WeeklyReportData>(weeklyReportUrl, { ttl: 3_600_000 });
+
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr + "T00:00:00");
     return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -381,6 +427,18 @@ export default function TrendsPage() {
         >
           <Telescope className="h-3.5 w-3.5" />
           Projections
+        </button>
+        <button
+          onClick={() => setTab("weekly-report")}
+          className={cn(
+            "flex-1 text-xs font-medium py-2 rounded-md transition-all flex items-center justify-center gap-1.5",
+            tab === "weekly-report"
+              ? "bg-background shadow-sm text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <CalendarClock className="h-3.5 w-3.5" />
+          Weekly
         </button>
       </div>
 
@@ -1114,6 +1172,13 @@ export default function TrendsPage() {
           formatDate={formatDate}
         />
       )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          WEEKLY REPORT TAB
+         ═══════════════════════════════════════════════════════════════ */}
+      {tab === "weekly-report" && (
+        <WeeklyReportView data={weeklyReport} loading={weeklyReportLoading} />
+      )}
     </div>
   );
 }
@@ -1546,5 +1611,219 @@ function ProjectionChart({
         </ResponsiveContainer>
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Weekly Report View Component ─────────────────────────────────────
+
+function WeeklyReportView({
+  data,
+  loading,
+}: {
+  data: WeeklyReportData | null;
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        <Card>
+          <CardContent className="p-6 flex items-center justify-center gap-2 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-sm">Generating your weekly report...</span>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center text-muted-foreground">
+          <CalendarClock className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p>No weekly data available yet.</p>
+          <p className="text-xs mt-1">
+            Log food, workouts, and measurements throughout the week.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const calTrend = data.nutrition.caloriesTrend;
+  const workoutTrend = data.workouts.workoutsTrend;
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <Card className="border-indigo-500/20 bg-gradient-to-br from-indigo-500/5 to-purple-500/5">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2.5 rounded-xl bg-indigo-500/10">
+              <CalendarClock className="h-5 w-5 text-indigo-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Weekly Report</p>
+              <p className="text-xs text-muted-foreground">{data.weekOf}</p>
+            </div>
+          </div>
+          {/* AI Summary */}
+          <div className="bg-background/50 rounded-lg p-3 mt-2">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+              <span className="text-[10px] font-medium text-indigo-400 uppercase tracking-wide">
+                AI Coach Summary
+              </span>
+            </div>
+            <div className="text-sm text-foreground/80 leading-relaxed">
+              <MarkdownText text={data.aiSummary} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Nutrition Summary */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Flame className="h-4 w-4 text-orange-500" />
+            Nutrition
+            {calTrend !== null && (
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "text-[10px] h-5 ml-auto",
+                  calTrend > 0
+                    ? "text-red-400 bg-red-500/10"
+                    : calTrend < 0
+                    ? "text-green-400 bg-green-500/10"
+                    : "text-muted-foreground"
+                )}
+              >
+                {calTrend > 0 ? "+" : ""}
+                {calTrend} cal/day vs last week
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-secondary/30 rounded-lg p-3">
+              <p className="text-[10px] text-muted-foreground">Days Logged</p>
+              <p className="text-xl font-bold">{data.nutrition.daysLogged}</p>
+              <p className="text-[10px] text-muted-foreground">/ 7 days</p>
+            </div>
+            <div className="bg-secondary/30 rounded-lg p-3">
+              <p className="text-[10px] text-muted-foreground">Avg Calories</p>
+              <p className="text-xl font-bold">{data.nutrition.avgCalories}</p>
+              <p className="text-[10px] text-muted-foreground">kcal/day</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="text-center bg-blue-500/5 rounded-lg py-2">
+              <p className="text-xs font-semibold text-blue-400">{data.nutrition.totalProtein}g</p>
+              <p className="text-[9px] text-muted-foreground">Protein</p>
+            </div>
+            <div className="text-center bg-amber-500/5 rounded-lg py-2">
+              <p className="text-xs font-semibold text-amber-400">{data.nutrition.totalCarbs}g</p>
+              <p className="text-[9px] text-muted-foreground">Carbs</p>
+            </div>
+            <div className="text-center bg-rose-500/5 rounded-lg py-2">
+              <p className="text-xs font-semibold text-rose-400">{data.nutrition.totalFat}g</p>
+              <p className="text-[9px] text-muted-foreground">Fat</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Workouts */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Dumbbell className="h-4 w-4 text-purple-500" />
+            Workouts
+            {workoutTrend !== null && (
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "text-[10px] h-5 ml-auto",
+                  workoutTrend > 0
+                    ? "text-green-400 bg-green-500/10"
+                    : workoutTrend < 0
+                    ? "text-red-400 bg-red-500/10"
+                    : "text-muted-foreground"
+                )}
+              >
+                {workoutTrend > 0 ? "+" : ""}
+                {workoutTrend} vs last week
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-secondary/30 rounded-lg p-3 text-center">
+              <p className="text-xl font-bold">{data.workouts.total}</p>
+              <p className="text-[10px] text-muted-foreground">Sessions</p>
+            </div>
+            <div className="bg-secondary/30 rounded-lg p-3 text-center">
+              <p className="text-xl font-bold">{data.workouts.totalMinutes}</p>
+              <p className="text-[10px] text-muted-foreground">Minutes</p>
+            </div>
+            <div className="bg-secondary/30 rounded-lg p-3 text-center">
+              <p className="text-xl font-bold">{data.workouts.totalBurned}</p>
+              <p className="text-[10px] text-muted-foreground">Cal Burned</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Hydration & Body */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Droplets className="h-4 w-4 text-blue-400" />
+              <span className="text-xs font-medium">Hydration</span>
+            </div>
+            <p className="text-xl font-bold">{data.hydration.avgGlassesPerDay}</p>
+            <p className="text-[10px] text-muted-foreground">glasses/day avg</p>
+            <p className="text-[9px] text-muted-foreground mt-1">
+              {Math.round(data.hydration.totalMl / 1000)}L total
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Scale className="h-4 w-4 text-blue-500" />
+              <span className="text-xs font-medium">Weight</span>
+            </div>
+            {data.body.latestWeight ? (
+              <>
+                <p className="text-xl font-bold">{data.body.latestWeight}kg</p>
+                {data.body.weightChange !== null && (
+                  <p
+                    className={cn(
+                      "text-[10px]",
+                      data.body.weightChange < 0
+                        ? "text-green-400"
+                        : data.body.weightChange > 0
+                        ? "text-red-400"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {data.body.weightChange > 0 ? "+" : ""}
+                    {data.body.weightChange}kg this month
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No weigh-ins</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }

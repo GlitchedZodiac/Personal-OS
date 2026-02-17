@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Utensils,
   Scale,
@@ -19,6 +20,9 @@ import {
   Moon,
   Sunrise,
   Bell,
+  Trophy,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { VoiceInput } from "@/components/voice-input";
 import { WaterTracker } from "@/components/water-tracker";
@@ -62,6 +66,23 @@ interface DailyBrief {
   topPriority: string | null;
 }
 
+interface Achievement {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  earned: boolean;
+  progress?: number;
+  progressLabel?: string;
+  tier: "bronze" | "silver" | "gold" | "diamond";
+}
+
+interface AchievementsData {
+  achievements: Achievement[];
+  totalEarned: number;
+  totalAvailable: number;
+}
+
 const DEFAULT_SUMMARY: DailySummary = {
   totalCalories: 0,
   totalProtein: 0,
@@ -100,12 +121,15 @@ export default function HealthDashboard() {
   }, []);
   const { data: briefData } =
     useCachedFetch<DailyBrief>(briefUrl, { ttl: 300_000 });
+  const { data: achievementsData } =
+    useCachedFetch<AchievementsData>("/api/health/achievements", { ttl: 300_000 });
 
   const summary = summaryData ?? DEFAULT_SUMMARY;
   const streak = streakData ?? DEFAULT_STREAK;
   const initialLoading = summaryLoading;
 
   const [calorieTarget, setCalorieTarget] = useState(2000);
+  const [showAchievements, setShowAchievements] = useState(false);
   const [macroTargets, setMacroTargets] = useState({ proteinG: 150, carbsG: 200, fatG: 67 });
 
   // Refresh helper for child components to call after mutations
@@ -509,10 +533,11 @@ export default function HealthDashboard() {
         </Card>
       )}
 
-      {/* ─── Streak Info ─── */}
-      {streak.totalDaysLogged > 0 && (
-        <Card className="border-orange-500/10">
-          <CardContent className="p-4">
+      {/* ─── Streaks & Achievements ─── */}
+      {(streak.totalDaysLogged > 0 || (achievementsData && achievementsData.totalEarned > 0)) && (
+        <Card className="border-orange-500/10 overflow-hidden">
+          <CardContent className="p-4 space-y-3">
+            {/* Streak row */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="text-2xl">🔥</div>
@@ -547,6 +572,122 @@ export default function HealthDashboard() {
                 ))}
               </div>
             </div>
+
+            {/* Achievements summary row */}
+            {achievementsData && (
+              <>
+                <button
+                  onClick={() => setShowAchievements(!showAchievements)}
+                  className="w-full flex items-center justify-between pt-2 border-t border-border/50"
+                >
+                  <div className="flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-amber-400" />
+                    <span className="text-sm font-medium">Achievements</span>
+                    <Badge variant="secondary" className="text-[10px] h-5 bg-amber-500/10 text-amber-400">
+                      {achievementsData.totalEarned} / {achievementsData.totalAvailable}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {/* Show last 3 earned badges */}
+                    <div className="flex -space-x-1">
+                      {achievementsData.achievements
+                        .filter((a) => a.earned)
+                        .slice(0, 4)
+                        .map((a) => (
+                          <span key={a.id} className="text-sm" title={a.title}>
+                            {a.icon}
+                          </span>
+                        ))}
+                    </div>
+                    {showAchievements ? (
+                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </div>
+                </button>
+
+                {/* Expanded achievements grid */}
+                {showAchievements && (
+                  <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                    {/* Earned badges */}
+                    {achievementsData.achievements.filter((a) => a.earned).length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium text-amber-400 uppercase tracking-wide mb-1.5">
+                          Earned
+                        </p>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {achievementsData.achievements
+                            .filter((a) => a.earned)
+                            .map((a) => (
+                              <div
+                                key={a.id}
+                                className={cn(
+                                  "flex items-center gap-2 rounded-lg px-2.5 py-2 border",
+                                  a.tier === "diamond"
+                                    ? "bg-cyan-500/10 border-cyan-500/20"
+                                    : a.tier === "gold"
+                                    ? "bg-amber-500/10 border-amber-500/20"
+                                    : a.tier === "silver"
+                                    ? "bg-slate-400/10 border-slate-400/20"
+                                    : "bg-orange-800/10 border-orange-800/20"
+                                )}
+                              >
+                                <span className="text-lg">{a.icon}</span>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium truncate">{a.title}</p>
+                                  <p className="text-[9px] text-muted-foreground truncate">
+                                    {a.description}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* In-progress badges */}
+                    {achievementsData.achievements.filter((a) => !a.earned).length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                          In Progress
+                        </p>
+                        <div className="space-y-1.5">
+                          {achievementsData.achievements
+                            .filter((a) => !a.earned && (a.progress || 0) > 0)
+                            .sort((a, b) => (b.progress || 0) - (a.progress || 0))
+                            .slice(0, 5)
+                            .map((a) => (
+                              <div
+                                key={a.id}
+                                className="flex items-center gap-2 rounded-lg px-2.5 py-2 bg-secondary/30"
+                              >
+                                <span className="text-base opacity-50">{a.icon}</span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs font-medium truncate text-muted-foreground">
+                                      {a.title}
+                                    </p>
+                                    <span className="text-[9px] text-muted-foreground shrink-0 ml-2">
+                                      {a.progressLabel}
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-1 rounded-full bg-secondary mt-1 overflow-hidden">
+                                    <div
+                                      className="h-full bg-amber-500/50 rounded-full transition-all duration-700"
+                                      style={{ width: `${a.progress || 0}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
       )}

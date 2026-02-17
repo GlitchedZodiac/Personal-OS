@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
 
+// Allow up to 60s for AI generation (Vercel Pro)
+export const maxDuration = 60;
+
 // POST - Submit workout feedback and get AI adjustment suggestions
 export async function POST(request: NextRequest) {
   try {

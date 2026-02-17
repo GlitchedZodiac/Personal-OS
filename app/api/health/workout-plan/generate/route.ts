@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@/lib/openai";
 
+// Allow up to 60s for AI generation (Vercel Pro)
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const {

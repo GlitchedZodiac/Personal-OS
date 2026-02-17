@@ -4,6 +4,9 @@ import { openai } from "@/lib/openai";
 import { format, subDays, startOfDay, endOfDay, addDays } from "date-fns";
 import crypto from "crypto";
 
+// Allow up to 60s for AI generation (Vercel Pro)
+export const maxDuration = 60;
+
 function hashData(data: string): string {
   return crypto.createHash("md5").update(data).digest("hex");
 }
@@ -154,7 +157,7 @@ HABITS (last 90 days averages):
 - Days with food logged: ${calDays.length}`;
 
         const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+          model: "gpt-5.2",
           messages: [
             {
               role: "system",
@@ -166,7 +169,7 @@ HABITS (last 90 days averages):
             },
           ],
           temperature: 0.7,
-          max_tokens: 300,
+          max_completion_tokens: 300,
         });
 
         aiOutlook = completion.choices[0].message?.content?.trim() ||

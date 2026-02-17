@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// POST - Create multiple food entries at once (used by AI)
+// POST - Create multiple food entries at once (used by AI voice + photo)
 export async function POST(request: NextRequest) {
   try {
-    const { items } = await request.json();
+    const body = await request.json();
+    const { items, source: batchSource } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
         carbsG: number;
         fatG: number;
         notes?: string;
+        source?: string;
       }) =>
         prisma.foodLog.create({
           data: {
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest) {
             carbsG: item.carbsG || 0,
             fatG: item.fatG || 0,
             notes: item.notes || null,
-            source: "voice",
+            source: item.source || batchSource || "voice",
           },
         })
       )

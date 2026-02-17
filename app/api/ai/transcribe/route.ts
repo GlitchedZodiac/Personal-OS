@@ -4,6 +4,9 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
+// Allow up to 60s for Whisper transcription (Vercel Pro)
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   let tempPath: string | null = null;
   try {

@@ -33,6 +33,8 @@ import {
   ChevronUp,
   Star,
   Pencil,
+  Zap,
+  X,
 } from "lucide-react";
 import { VoiceInput } from "@/components/voice-input";
 import { ConfirmDelete } from "@/components/confirm-delete";
@@ -53,6 +55,17 @@ interface FoodEntry {
   fatG: number;
   notes: string | null;
   source: string;
+}
+
+interface FavoriteFood {
+  id: string;
+  foodDescription: string;
+  mealType: string;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  usageCount: number;
 }
 
 const mealConfig: Record<
@@ -192,13 +205,21 @@ function MealSection({
                     <span className="text-[10px] text-muted-foreground">
                       {format(new Date(entry.loggedAt), "h:mm a")}
                     </span>
-                    {entry.source === "ai" && (
+                    {(entry.source === "ai" || entry.source === "voice") && (
                       <Badge
                         variant="secondary"
                         className="text-[9px] h-4 px-1 bg-primary/10 text-primary"
                       >
                         <Mic className="h-2 w-2 mr-0.5" />
                         AI
+                      </Badge>
+                    )}
+                    {entry.source === "photo" && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[9px] h-4 px-1 bg-amber-500/10 text-amber-400"
+                      >
+                        📸 Photo
                       </Badge>
                     )}
                   </div>
@@ -296,6 +317,8 @@ export default function FoodLogPage() {
   });
   const [calTarget, setCalTarget] = useState(2000);
   const [macroTargets, setMacroTargets] = useState({ proteinG: 150, carbsG: 200, fatG: 67 });
+  const [showQuickLog, setShowQuickLog] = useState(false);
+  const [quickLogLoading, setQuickLogLoading] = useState<string | null>(null);
   const [editEntry, setEditEntry] = useState<FoodEntry | null>(null);
   const [editForm, setEditForm] = useState({
     foodDescription: "",
@@ -319,6 +342,9 @@ export default function FoodLogPage() {
 
   const { data: entries, initialLoading, refresh: fetchEntries } =
     useCachedFetch<FoodEntry[]>(foodUrl, { ttl: 60_000 });
+
+  const { data: favorites, refresh: refreshFavorites } =
+    useCachedFetch<FavoriteFood[]>("/api/health/favorites", { ttl: 300_000 });
 
   useEffect(() => {
     const local = getSettings();
@@ -470,6 +496,51 @@ export default function FoodLogPage() {
     }
   };
 
+  const handleQuickLog = async (fav: FavoriteFood) => {
+    setQuickLogLoading(fav.id);
+    try {
+      const res = await fetch("/api/health/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          foodDescription: fav.foodDescription,
+          mealType: fav.mealType,
+          calories: fav.calories,
+          proteinG: fav.proteinG,
+          carbsG: fav.carbsG,
+          fatG: fav.fatG,
+          logNow: true,
+        }),
+      });
+      if (res.ok) {
+        invalidateHealthCache();
+        fetchEntries();
+        refreshFavorites();
+        const { toast } = await import("sonner");
+        toast.success(`⚡ Logged "${fav.foodDescription}"!`);
+      }
+    } catch (error) {
+      console.error("Quick log failed:", error);
+    } finally {
+      setQuickLogLoading(null);
+    }
+  };
+
+  const handleDeleteFavorite = async (id: string) => {
+    try {
+      const res = await fetch(`/api/health/favorites?id=${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        refreshFavorites();
+        const { toast } = await import("sonner");
+        toast.success("Removed from favorites");
+      }
+    } catch (error) {
+      console.error("Failed to delete favorite:", error);
+    }
+  };
+
   const toggleMealCollapse = (mealType: string) => {
     setCollapsedMeals((prev) => ({
       ...prev,
@@ -525,6 +596,15 @@ export default function FoodLogPage() {
             {format(new Date(dateFilter), "EEEE, MMM d")}
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="icon"
+          className={cn("h-9 w-9", showQuickLog && "border-amber-500/50 text-amber-400")}
+          onClick={() => setShowQuickLog(!showQuickLog)}
+          title="Quick log favorites"
+        >
+          <Zap className="h-4 w-4" />
+        </Button>
         <Button
           variant="outline"
           size="icon"
@@ -747,6 +827,88 @@ export default function FoodLogPage() {
             />
           </div>
         </div>
+      )}
+
+      {/* Quick Log Favorites Panel */}
+      {showQuickLog && (
+        <Card className="animate-in slide-in-from-top-2 duration-200 border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-orange-500/5">
+          <CardHeader className="pb-2 pt-3 px-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Zap className="h-4 w-4 text-amber-400" />
+                Quick Log
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setShowQuickLog(false)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="px-4 pb-3">
+            {!favorites || favorites.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-3 text-center">
+                No favorites yet! Tap ⭐ on any food entry to save it.
+              </p>
+            ) : (
+              <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                {favorites.map((fav) => (
+                  <div
+                    key={fav.id}
+                    className="flex items-center gap-2 bg-background/60 rounded-lg px-3 py-2 group"
+                  >
+                    <button
+                      onClick={() => handleQuickLog(fav)}
+                      disabled={quickLogLoading === fav.id}
+                      className="flex-1 min-w-0 text-left"
+                    >
+                      <p className="text-sm font-medium truncate">
+                        {fav.foodDescription}
+                      </p>
+                      <div className="flex gap-2 text-[10px] text-muted-foreground mt-0.5">
+                        <span>{Math.round(fav.calories)} cal</span>
+                        <span className="text-blue-400">P{Math.round(fav.proteinG)}g</span>
+                        <span className="text-amber-400">C{Math.round(fav.carbsG)}g</span>
+                        <span className="text-rose-400">F{Math.round(fav.fatG)}g</span>
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {fav.usageCount > 1 && (
+                        <span className="text-[9px] text-muted-foreground">
+                          ×{fav.usageCount}
+                        </span>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                        onClick={() => handleQuickLog(fav)}
+                        disabled={quickLogLoading === fav.id}
+                      >
+                        {quickLogLoading === fav.id ? (
+                          <div className="h-3 w-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Plus className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-1.5 text-muted-foreground hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleDeleteFavorite(fav.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Meal-grouped entries */}

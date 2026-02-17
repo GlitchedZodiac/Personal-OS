@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Pencil,
   RotateCcw,
+  Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -97,6 +98,8 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const [editValues, setEditValues] = useState<FoodItem | null>(null);
   const [lastFailedText, setLastFailedText] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const activeMimeRef = useRef<string>("");
@@ -104,6 +107,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number>(0);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const startRecording = useCallback(async () => {
     try {
@@ -292,6 +296,91 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
       setIsProcessing(false);
     }
   };
+
+  // ── Photo handling ──────────────────────────────────────────────────
+  const compressImage = useCallback(
+    (file: File, maxWidth = 1024, quality = 0.8): Promise<string> =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            let w = img.width;
+            let h = img.height;
+            if (w > maxWidth) {
+              h = Math.round((h * maxWidth) / w);
+              w = maxWidth;
+            }
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return reject(new Error("Canvas not supported"));
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL("image/jpeg", quality));
+          };
+          img.onerror = () => reject(new Error("Failed to load image"));
+          img.src = reader.result as string;
+        };
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      }),
+    []
+  );
+
+  const handlePhotoSelect = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      // Reset the input so the same file can be re-selected
+      e.target.value = "";
+
+      setIsAnalyzingPhoto(true);
+      setLastFailedText(null);
+
+      try {
+        const dataUrl = await compressImage(file, 1024, 0.8);
+        setPhotoPreview(dataUrl);
+
+        const res = await fetch("/api/health/food/analyze-photo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: dataUrl }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Photo analysis failed");
+        }
+
+        const data = await res.json();
+
+        // Tag each item with source: "photo" so the batch API logs it correctly
+        const taggedItems = (data.items || []).map((item: FoodItem) => ({
+          ...item,
+          source: "photo",
+        }));
+
+        // Inject into the existing confirmation flow
+        setAiResponse({
+          type: "food",
+          message: data.message || "📸 Food photo analyzed!",
+          items: taggedItems,
+        });
+        setShowConfirmation(true);
+      } catch (error) {
+        console.error("Photo analysis failed:", error);
+        const msg =
+          error instanceof Error ? error.message : "Failed to analyze photo";
+        toast.error(msg);
+      } finally {
+        setIsAnalyzingPhoto(false);
+        setPhotoPreview(null);
+      }
+    },
+    [compressImage]
+  );
 
   const handleEditItem = (index: number) => {
     if (aiResponse?.items) {
@@ -817,6 +906,42 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
           </Card>
         )}
 
+        {/* Photo analyzing overlay */}
+        {isAnalyzingPhoto && (
+          <Card className="mb-3 shadow-lg border-amber-500/30 bg-amber-500/5">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-3">
+                {photoPreview && (
+                  <img
+                    src={photoPreview}
+                    alt="Analyzing..."
+                    className="h-12 w-12 rounded-lg object-cover"
+                  />
+                )}
+                <div className="flex-1">
+                  <p className="text-xs font-medium text-amber-400">
+                    Analyzing your meal...
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    GPT-5.2 Vision is identifying food items
+                  </p>
+                </div>
+                <Loader2 className="h-5 w-5 animate-spin text-amber-400 shrink-0" />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Hidden file input for camera */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handlePhotoSelect}
+        />
+
         {/* Main controls */}
         <div className="flex items-center justify-center gap-4">
           <Button
@@ -849,10 +974,10 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
                 isRecording
                   ? "bg-red-500 hover:bg-red-600 shadow-red-500/30"
                   : "bg-primary hover:bg-primary/90 shadow-primary/20",
-                (isProcessing || isTranscribing) && "opacity-60"
+                (isProcessing || isTranscribing || isAnalyzingPhoto) && "opacity-60"
               )}
               onClick={isRecording ? stopRecording : startRecording}
-              disabled={isProcessing || isTranscribing}
+              disabled={isProcessing || isTranscribing || isAnalyzingPhoto}
             >
               {isTranscribing ? (
                 <Loader2 className="h-7 w-7 animate-spin" />
@@ -866,7 +991,22 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
             </Button>
           </div>
 
-          <div className="w-11" />
+          <Button
+            variant="outline"
+            size="icon"
+            className={cn(
+              "h-11 w-11 rounded-full border-border/50 shadow-md",
+              isAnalyzingPhoto && "border-amber-500/50"
+            )}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isProcessing || isTranscribing || isRecording || isAnalyzingPhoto}
+          >
+            {isAnalyzingPhoto ? (
+              <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+            ) : (
+              <Camera className="h-4 w-4" />
+            )}
+          </Button>
         </div>
 
         {isRecording && (
@@ -882,6 +1022,11 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
         {isProcessing && (
           <p className="text-center text-xs text-muted-foreground mt-3">
             Processing with AI...
+          </p>
+        )}
+        {isAnalyzingPhoto && (
+          <p className="text-center text-xs text-amber-400 mt-3 animate-pulse font-medium">
+            Analyzing food photo...
           </p>
         )}
       </div>
