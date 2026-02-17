@@ -15,83 +15,85 @@ export interface Achievement {
 }
 
 // GET - Calculate achievements/badges from real data
+// Optimized: uses count/aggregate where possible, only fetches rows when needed for date logic
 export async function GET() {
   try {
     const now = new Date();
     const since365 = subDays(now, 365);
 
-    // Gather all the data we need in parallel
-    const [foodLogs, workoutLogs, bodyMeasurements, waterLogs, progressPhotos] =
-      await Promise.all([
-        prisma.foodLog.findMany({
-          where: { loggedAt: { gte: since365 } },
-          select: { loggedAt: true, calories: true, proteinG: true },
-          orderBy: { loggedAt: "desc" },
-        }),
-        prisma.workoutLog.findMany({
-          where: { startedAt: { gte: since365 } },
-          select: { startedAt: true, durationMinutes: true, workoutType: true },
-          orderBy: { startedAt: "desc" },
-        }),
-        prisma.bodyMeasurement.findMany({
-          where: { measuredAt: { gte: since365 } },
-          select: { measuredAt: true, weightKg: true },
-          orderBy: { measuredAt: "asc" },
-        }),
-        prisma.waterLog.findMany({
-          where: { loggedAt: { gte: since365 } },
-          select: { loggedAt: true, amountMl: true },
-        }),
-        prisma.progressPhoto.count(),
-      ]);
+    // Gather data in parallel — use the lightest query possible for each
+    const [
+      foodDates,        // Only need loggedAt for streak + food day count
+      workoutAgg,       // count + sum of minutes
+      bodyMeasurements, // need first/last weight (small dataset)
+      waterCount,       // just a count
+      progressPhotos,   // just a count
+      proteinData,      // loggedAt + proteinG for high-protein-day calc
+    ] = await Promise.all([
+      prisma.foodLog.findMany({
+        where: { loggedAt: { gte: since365 } },
+        select: { loggedAt: true },
+        orderBy: { loggedAt: "desc" },
+      }),
+      prisma.workoutLog.aggregate({
+        where: { startedAt: { gte: since365 } },
+        _count: true,
+        _sum: { durationMinutes: true },
+      }),
+      prisma.bodyMeasurement.findMany({
+        where: { measuredAt: { gte: since365 }, weightKg: { not: null } },
+        select: { weightKg: true },
+        orderBy: { measuredAt: "asc" },
+      }),
+      prisma.waterLog.count({
+        where: { loggedAt: { gte: since365 } },
+      }),
+      prisma.progressPhoto.count(),
+      prisma.foodLog.findMany({
+        where: { loggedAt: { gte: since365 } },
+        select: { loggedAt: true, proteinG: true },
+      }),
+    ]);
 
     // ── Derived stats ──────────────────────────────────────────────
-    const foodDates = new Set(
-      foodLogs.map((l) => format(l.loggedAt, "yyyy-MM-dd"))
-    );
-    const workoutDates = new Set(
-      workoutLogs.map((l) => format(l.startedAt, "yyyy-MM-dd"))
+    const foodDateSet = new Set(
+      foodDates.map((l) => format(l.loggedAt, "yyyy-MM-dd"))
     );
 
     // Compute food logging streak
     let streak = 0;
     let d = startOfDay(now);
     const todayStr = format(d, "yyyy-MM-dd");
-    if (foodDates.has(todayStr)) {
+    if (foodDateSet.has(todayStr)) {
       streak = 1;
       d = subDays(d, 1);
     } else {
       d = subDays(d, 1);
     }
-    while (foodDates.has(format(d, "yyyy-MM-dd"))) {
+    while (foodDateSet.has(format(d, "yyyy-MM-dd"))) {
       streak++;
       d = subDays(d, 1);
     }
 
-    const totalFoodDays = foodDates.size;
-    const totalWorkouts = workoutLogs.length;
-    const totalWorkoutMinutes = workoutLogs.reduce(
-      (sum, w) => sum + (w.durationMinutes || 0),
-      0
-    );
+    const totalFoodDays = foodDateSet.size;
+    const totalWorkouts = workoutAgg._count;
+    const totalWorkoutMinutes = workoutAgg._sum.durationMinutes ?? 0;
 
     // Weight loss progress
-    const firstWeight = bodyMeasurements.find((m) => m.weightKg)?.weightKg;
-    const lastWeight = [...bodyMeasurements]
-      .reverse()
-      .find((m) => m.weightKg)?.weightKg;
+    const firstWeight = bodyMeasurements.length > 0 ? bodyMeasurements[0].weightKg : null;
+    const lastWeight = bodyMeasurements.length > 0 ? bodyMeasurements[bodyMeasurements.length - 1].weightKg : null;
     const weightLost =
       firstWeight && lastWeight ? Math.max(firstWeight - lastWeight, 0) : 0;
 
-    // Total water glasses
-    const totalWaterGlasses = waterLogs.length;
+    // Total water glasses (from count)
+    const totalWaterGlasses = waterCount;
 
     // Protein days over 100g
     const proteinDaysMap: Record<string, number> = {};
-    foodLogs.forEach((l) => {
+    for (const l of proteinData) {
       const dateKey = format(l.loggedAt, "yyyy-MM-dd");
       proteinDaysMap[dateKey] = (proteinDaysMap[dateKey] || 0) + l.proteinG;
-    });
+    }
     const highProteinDays = Object.values(proteinDaysMap).filter(
       (p) => p >= 100
     ).length;

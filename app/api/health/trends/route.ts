@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { subDays, startOfDay, endOfDay, format, parse } from "date-fns";
+import { subDays, startOfDay, endOfDay, format } from "date-fns";
+import { parseLocalDate } from "@/lib/utils";
 
-function parseLocalDate(dateStr: string): Date {
-  return parse(dateStr, "yyyy-MM-dd", new Date());
-}
-
-// GET - Trends data for charts
+// GET - Trends data for charts (optimized: select only needed fields)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -26,23 +23,54 @@ export async function GET(request: NextRequest) {
       endDate = endOfDay(new Date());
     }
 
-    // Fetch all data in the range
+    // Fetch only the fields we need — not entire rows
     const [foodLogs, bodyMeasurements, workoutLogs] = await Promise.all([
       prisma.foodLog.findMany({
-        where: {
-          loggedAt: { gte: startDate, lte: endDate },
+        where: { loggedAt: { gte: startDate, lte: endDate } },
+        select: {
+          loggedAt: true,
+          calories: true,
+          proteinG: true,
+          carbsG: true,
+          fatG: true,
         },
         orderBy: { loggedAt: "asc" },
       }),
       prisma.bodyMeasurement.findMany({
-        where: {
-          measuredAt: { gte: startDate, lte: endDate },
+        where: { measuredAt: { gte: startDate, lte: endDate } },
+        select: {
+          measuredAt: true,
+          weightKg: true,
+          bodyFatPct: true,
+          waistCm: true,
+          chestCm: true,
+          armsCm: true,
+          legsCm: true,
+          hipsCm: true,
+          shouldersCm: true,
+          neckCm: true,
+          // Smart scale fields
+          bmi: true,
+          muscleMassKg: true,
+          fatFreeWeightKg: true,
+          bodyWaterPct: true,
+          skeletalMusclePct: true,
+          visceralFat: true,
+          subcutaneousFatPct: true,
+          boneMassKg: true,
+          proteinPct: true,
+          bmrKcal: true,
+          metabolicAge: true,
+          heartRateBpm: true,
         },
         orderBy: { measuredAt: "asc" },
       }),
       prisma.workoutLog.findMany({
-        where: {
-          startedAt: { gte: startDate, lte: endDate },
+        where: { startedAt: { gte: startDate, lte: endDate } },
+        select: {
+          startedAt: true,
+          durationMinutes: true,
+          caloriesBurned: true,
         },
         orderBy: { startedAt: "asc" },
       }),
@@ -50,7 +78,7 @@ export async function GET(request: NextRequest) {
 
     // Aggregate daily calories
     const dailyCalories: Record<string, { calories: number; protein: number; carbs: number; fat: number; count: number }> = {};
-    foodLogs.forEach((log) => {
+    for (const log of foodLogs) {
       const day = format(new Date(log.loggedAt), "yyyy-MM-dd");
       if (!dailyCalories[day]) {
         dailyCalories[day] = { calories: 0, protein: 0, carbs: 0, fat: 0, count: 0 };
@@ -60,14 +88,11 @@ export async function GET(request: NextRequest) {
       dailyCalories[day].carbs += log.carbsG;
       dailyCalories[day].fat += log.fatG;
       dailyCalories[day].count += 1;
-    });
+    }
 
     // Format daily calories as array
     const caloriesChart = Object.entries(dailyCalories)
-      .map(([date, data]) => ({
-        date,
-        ...data,
-      }))
+      .map(([date, data]) => ({ date, ...data }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
     // Weight trend
@@ -88,7 +113,7 @@ export async function GET(request: NextRequest) {
 
     // Workout summary
     const dailyWorkouts: Record<string, { count: number; minutes: number; caloriesBurned: number }> = {};
-    workoutLogs.forEach((log) => {
+    for (const log of workoutLogs) {
       const day = format(new Date(log.startedAt), "yyyy-MM-dd");
       if (!dailyWorkouts[day]) {
         dailyWorkouts[day] = { count: 0, minutes: 0, caloriesBurned: 0 };
@@ -96,13 +121,10 @@ export async function GET(request: NextRequest) {
       dailyWorkouts[day].count += 1;
       dailyWorkouts[day].minutes += log.durationMinutes;
       dailyWorkouts[day].caloriesBurned += log.caloriesBurned || 0;
-    });
+    }
 
     const workoutChart = Object.entries(dailyWorkouts)
-      .map(([date, data]) => ({
-        date,
-        ...data,
-      }))
+      .map(([date, data]) => ({ date, ...data }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
     // Macro totals for pie chart
@@ -115,7 +137,7 @@ export async function GET(request: NextRequest) {
       { protein: 0, carbs: 0, fat: 0 }
     );
 
-    // Daily macro chart (for macro adherence over time)
+    // Daily macro chart
     const macroChart = caloriesChart.map((day) => ({
       date: day.date,
       protein: Math.round(day.protein),
@@ -123,7 +145,7 @@ export async function GET(request: NextRequest) {
       fat: Math.round(day.fat),
     }));
 
-    // Circumference trends from body measurements
+    // Circumference trends
     const circumferenceChart = bodyMeasurements
       .filter(
         (m) =>
@@ -182,6 +204,10 @@ export async function GET(request: NextRequest) {
           ) / 10
         : null;
 
+    // Pre-computed summary stats
+    const totalWorkoutMinutes = workoutLogs.reduce((sum, w) => sum + w.durationMinutes, 0);
+    const totalCalBurned = workoutLogs.reduce((sum, w) => sum + (w.caloriesBurned || 0), 0);
+
     return NextResponse.json({
       caloriesChart,
       weightChart,
@@ -200,13 +226,8 @@ export async function GET(request: NextRequest) {
               )
             : 0,
         totalWorkouts: workoutLogs.length,
-        totalWorkoutMinutes: workoutLogs.reduce(
-          (sum, w) => sum + w.durationMinutes,
-          0
-        ),
-        totalCaloriesBurned: Math.round(
-          workoutLogs.reduce((sum, w) => sum + (w.caloriesBurned || 0), 0)
-        ),
+        totalWorkoutMinutes: totalWorkoutMinutes,
+        totalCaloriesBurned: Math.round(totalCalBurned),
         weightChange:
           weightChart.length >= 2
             ? Math.round(

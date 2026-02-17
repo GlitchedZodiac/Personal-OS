@@ -32,18 +32,21 @@ export async function GET(request: NextRequest) {
     const endDate = endOfDay(new Date());
     const startDate = startOfDay(subDays(new Date(), 7));
 
-    // Fetch last 7 days of data
+    // Fetch last 7 days of data (only fields needed for the AI prompt)
     const [foodLogs, bodyMeasurements, workoutLogs] = await Promise.all([
       prisma.foodLog.findMany({
         where: { loggedAt: { gte: startDate, lte: endDate } },
+        select: { loggedAt: true, calories: true, proteinG: true, carbsG: true, fatG: true },
         orderBy: { loggedAt: "asc" },
       }),
       prisma.bodyMeasurement.findMany({
         where: { measuredAt: { gte: startDate, lte: endDate } },
+        select: { measuredAt: true, weightKg: true, bodyFatPct: true, waistCm: true },
         orderBy: { measuredAt: "asc" },
       }),
       prisma.workoutLog.findMany({
         where: { startedAt: { gte: startDate, lte: endDate } },
+        select: { startedAt: true, workoutType: true, durationMinutes: true, caloriesBurned: true },
         orderBy: { startedAt: "asc" },
       }),
     ]);

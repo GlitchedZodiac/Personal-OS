@@ -118,14 +118,22 @@ export function useCachedFetch<T = unknown>(
   const [loading, setLoading] = useState(!isFresh && !skip);
   const [initialLoading, setInitialLoading] = useState(!cached && !skip);
   const [error, setError] = useState<Error | null>(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const mountedRef = useRef(true);
+
+  // Use a ref + counter for explicit refresh requests.
+  // The ref tracks whether the current render cycle needs a forced fetch
+  // without polluting the dependency array for non-refresh re-renders.
+  const [fetchTrigger, setFetchTrigger] = useState(0);
+  const explicitRefreshRef = useRef(false);
 
   // Subscribe to invalidation events
   useEffect(() => {
     if (!cacheKey) return;
 
-    const handler = () => setRefreshTrigger((n) => n + 1);
+    const handler = () => {
+      explicitRefreshRef.current = true;
+      setFetchTrigger((n) => n + 1);
+    };
 
     if (!subscribers.has(cacheKey)) {
       subscribers.set(cacheKey, new Set());
@@ -154,19 +162,26 @@ export function useCachedFetch<T = unknown>(
       return;
     }
 
-    const cachedEntry = cache.get(url) as CacheEntry<T> | undefined;
-    const isStillFresh = cachedEntry && Date.now() - cachedEntry.timestamp < ttl && !forceRefresh;
+    const isExplicitRefresh = explicitRefreshRef.current;
+    explicitRefreshRef.current = false; // consume the flag
 
-    // If fresh cache exists, use it immediately
-    if (isStillFresh && refreshTrigger === 0) {
+    const cachedEntry = cache.get(url) as CacheEntry<T> | undefined;
+    const isStillFresh =
+      cachedEntry &&
+      Date.now() - cachedEntry.timestamp < ttl &&
+      !forceRefresh &&
+      !isExplicitRefresh;
+
+    // If fresh cache exists, use it immediately — no network request
+    if (isStillFresh) {
       setData(cachedEntry!.data);
       setLoading(false);
       setInitialLoading(false);
       return;
     }
 
-    // If stale cache exists, show it while revalidating
-    if (cachedEntry && !forceRefresh) {
+    // If stale cache exists, show it while revalidating (SWR pattern)
+    if (cachedEntry && !isExplicitRefresh) {
       setData(cachedEntry.data);
       setInitialLoading(false);
     }
@@ -174,7 +189,12 @@ export function useCachedFetch<T = unknown>(
     // Deduplicate concurrent requests for the same URL
     let fetchPromise = inflight.get(url) as Promise<T> | undefined;
 
-    if (!fetchPromise) {
+    if (!fetchPromise || isExplicitRefresh) {
+      // If explicit refresh, force a new fetch even if one is inflight
+      if (isExplicitRefresh) {
+        inflight.delete(url);
+      }
+
       setLoading(true);
 
       fetchPromise = fetch(url)
@@ -188,6 +208,9 @@ export function useCachedFetch<T = unknown>(
         });
 
       inflight.set(url, fetchPromise);
+    } else {
+      // Reuse existing inflight request
+      setLoading(true);
     }
 
     fetchPromise
@@ -211,14 +234,16 @@ export function useCachedFetch<T = unknown>(
           setInitialLoading(false);
         }
       });
-  }, [url, ttl, skip, forceRefresh, refreshTrigger]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, ttl, skip, forceRefresh, fetchTrigger]);
 
   const refresh = useCallback(() => {
     if (url) {
       cache.delete(url);
       inflight.delete(url);
     }
-    setRefreshTrigger((n) => n + 1);
+    explicitRefreshRef.current = true;
+    setFetchTrigger((n) => n + 1);
   }, [url]);
 
   return { data, loading, initialLoading, error, refresh };

@@ -42,14 +42,32 @@ export async function GET(request: NextRequest) {
     const [measurements, foodLogs, workoutLogs] = await Promise.all([
       prisma.bodyMeasurement.findMany({
         where: { measuredAt: { gte: start, lte: end } },
+        select: {
+          measuredAt: true,
+          weightKg: true,
+          waistCm: true,
+          bodyFatPct: true,
+          bmi: true,
+          muscleMassKg: true,
+        },
         orderBy: { measuredAt: "asc" },
       }),
       prisma.foodLog.findMany({
         where: { loggedAt: { gte: start, lte: end } },
+        select: {
+          loggedAt: true,
+          calories: true,
+          proteinG: true,
+        },
         orderBy: { loggedAt: "asc" },
       }),
       prisma.workoutLog.findMany({
         where: { startedAt: { gte: start, lte: end } },
+        select: {
+          startedAt: true,
+          durationMinutes: true,
+          caloriesBurned: true,
+        },
         orderBy: { startedAt: "asc" },
       }),
     ]);

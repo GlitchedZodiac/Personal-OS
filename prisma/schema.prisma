@@ -22,6 +22,7 @@ model FoodLog {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@index([loggedAt])
   @@map("food_logs")
 }
 
@@ -60,6 +61,7 @@ model BodyMeasurement {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  @@index([measuredAt])
   @@map("body_measurements")
 }
 
@@ -76,6 +78,7 @@ model WorkoutLog {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@index([startedAt])
   @@map("workout_logs")
 }
 
@@ -85,6 +88,7 @@ model WaterLog {
   amountMl  Int      @default(250) // milliliters per entry
   createdAt DateTime @default(now())
 
+  @@index([loggedAt])
   @@map("water_logs")
 }
 
@@ -157,6 +161,8 @@ model Todo {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  @@index([completed, dueDate])
+  @@index([dueDate])
   @@map("todos")
 }
 
@@ -212,6 +218,7 @@ model Reminder {
   todoId      String?   // optional link to a todo
   createdAt   DateTime  @default(now())
 
+  @@index([fired, remindAt])
   @@map("reminders")
 }
 
@@ -228,4 +235,141 @@ model StravaToken {
   updatedAt     DateTime @updatedAt
 
   @@map("strava_tokens")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FINANCIAL MODULE
+// ═══════════════════════════════════════════════════════════════════════
+
+model FinancialAccount {
+  id           String   @id @default(uuid())
+  name         String   // "Bancolombia Savings", "Nequi", "Credit Card X"
+  accountType  String   // checking, savings, credit_card, cash, investment, loan
+  currency     String   @default("COP") // ISO 4217
+  balance      Float    @default(0) // current balance (updated manually or via sync)
+  creditLimit  Float?   // for credit cards
+  interestRate Float?   // for loans/credit cards (APR %)
+  institution  String?  // "Bancolombia", "Nequi", "Davivienda"
+  lastSyncedAt DateTime? // last time data was synced/imported
+  isActive     Boolean  @default(true)
+  color        String?  // hex color for UI
+  icon         String?  // emoji icon
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions FinancialTransaction[]
+
+  @@map("financial_accounts")
+}
+
+model FinancialTransaction {
+  id            String   @id @default(uuid())
+  accountId     String
+  account       FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  transactedAt  DateTime @default(now()) // when the transaction occurred
+  amount        Float    // positive = income, negative = expense
+  currency      String   @default("COP")
+  description   String   // "Éxito grocery", "Spotify subscription"
+  category      String   // food, transport, housing, entertainment, income, transfer, etc.
+  subcategory   String?  // "groceries", "dining_out", "salary", "freelance"
+  type          String   // income, expense, transfer
+  isRecurring   Boolean  @default(false) // subscription, rent, salary
+  merchant      String?  // extracted merchant name
+  reference     String?  // bank reference number
+  notes         String?
+  source        String   @default("manual") // manual, csv_import, voice, ai, belvo, email
+  tags          String?  // comma-separated tags
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([transactedAt])
+  @@index([accountId])
+  @@index([category])
+  @@map("financial_transactions")
+}
+
+model BudgetCategory {
+  id            String   @id @default(uuid())
+  name          String   // "Food & Groceries", "Transport", "Entertainment"
+  icon          String?  // emoji
+  color         String?  // hex color
+  type          String   @default("expense") // expense, income, savings
+  parentId      String?  // for subcategories
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  budgetItems   BudgetItem[]
+
+  @@map("budget_categories")
+}
+
+model Budget {
+  id          String   @id @default(uuid())
+  name        String   // "February 2026", "Monthly Budget"
+  month       Int      // 1-12
+  year        Int      // 2026
+  totalIncome Float    @default(0) // planned total income
+  totalBudget Float    @default(0) // planned total expenses
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       BudgetItem[]
+
+  @@unique([month, year])
+  @@map("budgets")
+}
+
+model BudgetItem {
+  id            String   @id @default(uuid())
+  budgetId      String
+  budget        Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  categoryId    String
+  category      BudgetCategory @relation(fields: [categoryId], references: [id])
+  planned       Float    @default(0) // desired/budgeted amount
+  isFixed       Boolean  @default(false) // rent, loan payments = fixed; food, entertainment = variable
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([budgetId, categoryId])
+  @@map("budget_items")
+}
+
+model RecurringTransaction {
+  id            String   @id @default(uuid())
+  accountId     String?
+  description   String   // "Netflix", "Rent", "Salary"
+  amount        Float
+  currency      String   @default("COP")
+  category      String
+  type          String   // income, expense
+  frequency     String   // monthly, biweekly, weekly, yearly
+  dayOfMonth    Int?     // 1-31 for monthly
+  nextDueDate   DateTime
+  isActive      Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("recurring_transactions")
+}
+
+model SavingsGoal {
+  id            String   @id @default(uuid())
+  name          String   // "Emergency Fund", "Vacation", "New Laptop"
+  targetAmount  Float
+  currentAmount Float    @default(0)
+  currency      String   @default("COP")
+  deadline      DateTime?
+  icon          String?  // emoji
+  color         String?  // hex
+  isCompleted   Boolean  @default(false)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("savings_goals")
 }

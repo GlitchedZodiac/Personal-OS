@@ -21,46 +21,63 @@ export async function GET() {
     const prevWeekStart = subDays(weekStart, 7);
     const prevWeekEnd = subDays(weekStart, 1);
 
-    // Fetch all data for the past week and previous week in parallel
+    const curDateFilter = { gte: startOfDay(weekStart), lte: endOfDay(weekEnd) };
+    const prevDateFilter = { gte: startOfDay(prevWeekStart), lte: endOfDay(prevWeekEnd) };
+
+    // Fetch current week detail + previous week AGGREGATES (not full rows)
     const [
       foodLogs,
-      prevFoodLogs,
+      prevFoodAgg,
       workoutLogs,
-      prevWorkoutLogs,
+      prevWorkoutAgg,
       bodyMeasurements,
-      waterLogs,
-      prevWaterLogs,
+      waterAgg,
+      prevWaterAgg,
     ] = await Promise.all([
+      // Current week food — we need per-day breakdown so fetch rows (but only needed fields)
       prisma.foodLog.findMany({
-        where: { loggedAt: { gte: startOfDay(weekStart), lte: endOfDay(weekEnd) } },
+        where: { loggedAt: curDateFilter },
+        select: { loggedAt: true, calories: true, proteinG: true, carbsG: true, fatG: true },
         orderBy: { loggedAt: "asc" },
       }),
-      prisma.foodLog.findMany({
-        where: { loggedAt: { gte: startOfDay(prevWeekStart), lte: endOfDay(prevWeekEnd) } },
+      // Previous week food — only need totals, so aggregate
+      prisma.foodLog.aggregate({
+        where: { loggedAt: prevDateFilter },
+        _sum: { calories: true },
+        _count: true,
       }),
+      // Current week workouts — need per-workout detail
       prisma.workoutLog.findMany({
-        where: { startedAt: { gte: startOfDay(weekStart), lte: endOfDay(weekEnd) } },
+        where: { startedAt: curDateFilter },
+        select: { startedAt: true, durationMinutes: true, caloriesBurned: true },
         orderBy: { startedAt: "asc" },
       }),
-      prisma.workoutLog.findMany({
-        where: { startedAt: { gte: startOfDay(prevWeekStart), lte: endOfDay(prevWeekEnd) } },
+      // Previous week workouts — only need count
+      prisma.workoutLog.aggregate({
+        where: { startedAt: prevDateFilter },
+        _count: true,
       }),
       prisma.bodyMeasurement.findMany({
         where: { measuredAt: { gte: subDays(now, 30) } },
+        select: { measuredAt: true, weightKg: true },
         orderBy: { measuredAt: "desc" },
         take: 10,
       }),
-      prisma.waterLog.findMany({
-        where: { loggedAt: { gte: startOfDay(weekStart), lte: endOfDay(weekEnd) } },
-      }),
-      prisma.waterLog.findMany({
-        where: { loggedAt: { gte: startOfDay(prevWeekStart), lte: endOfDay(prevWeekEnd) } },
-      }),
+      // Current week water — aggregate
+      prisma.waterLog.aggregate({
+        where: { loggedAt: curDateFilter },
+        _sum: { amountMl: true },
+      }).catch(() => ({ _sum: { amountMl: null } })),
+      // Previous week water — aggregate
+      prisma.waterLog.aggregate({
+        where: { loggedAt: prevDateFilter },
+        _sum: { amountMl: true },
+      }).catch(() => ({ _sum: { amountMl: null } })),
     ]);
 
     // ── Aggregate stats ──────────────────────────────────────────────
 
-    // Food stats
+    // Food stats (current week — from rows)
     const foodDays = new Set(foodLogs.map((l) => format(l.loggedAt, "yyyy-MM-dd")));
     const totalCalories = foodLogs.reduce((s, l) => s + l.calories, 0);
     const totalProtein = foodLogs.reduce((s, l) => s + l.proteinG, 0);
@@ -70,19 +87,21 @@ export async function GET() {
     const avgCalories = daysLogged > 0 ? Math.round(totalCalories / daysLogged) : 0;
     const avgProtein = daysLogged > 0 ? Math.round(totalProtein / daysLogged) : 0;
 
-    const prevTotalCal = prevFoodLogs.reduce((s, l) => s + l.calories, 0);
-    const prevDays = new Set(prevFoodLogs.map((l) => format(l.loggedAt, "yyyy-MM-dd"))).size;
-    const prevAvgCal = prevDays > 0 ? Math.round(prevTotalCal / prevDays) : 0;
+    // Previous week — from aggregate (count distinct days via the count of rows)
+    const prevTotalCal = prevFoodAgg._sum.calories ?? 0;
+    // Estimate prev avg: assume similar logging density
+    const prevDaysEstimate = prevFoodAgg._count > 0 ? Math.min(7, Math.max(1, Math.round(prevFoodAgg._count / Math.max(1, foodLogs.length / daysLogged)))) : 0;
+    const prevAvgCal = prevDaysEstimate > 0 ? Math.round(prevTotalCal / prevDaysEstimate) : 0;
 
     // Workout stats
     const totalWorkouts = workoutLogs.length;
     const totalWorkoutMinutes = workoutLogs.reduce((s, l) => s + (l.durationMinutes || 0), 0);
     const totalBurned = workoutLogs.reduce((s, l) => s + (l.caloriesBurned || 0), 0);
-    const prevTotalWorkouts = prevWorkoutLogs.length;
+    const prevTotalWorkouts = prevWorkoutAgg._count;
 
     // Water stats
-    const totalWaterMl = waterLogs.reduce((s, l) => s + l.amountMl, 0);
-    const prevWaterMl = prevWaterLogs.reduce((s, l) => s + l.amountMl, 0);
+    const totalWaterMl = waterAgg._sum.amountMl ?? 0;
+    const prevWaterMl = prevWaterAgg._sum.amountMl ?? 0;
 
     // Body stats
     const latestWeight = bodyMeasurements.find((m) => m.weightKg)?.weightKg ?? null;

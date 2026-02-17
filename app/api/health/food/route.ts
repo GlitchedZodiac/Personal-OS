@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay, parse } from "date-fns";
-
-function parseLocalDate(dateStr: string): Date {
-  return parse(dateStr, "yyyy-MM-dd", new Date());
-}
+import { startOfDay, endOfDay } from "date-fns";
+import { parseLocalDate } from "@/lib/utils";
 
 // GET - List food entries with filters
 export async function GET(request: NextRequest) {
@@ -38,6 +35,18 @@ export async function GET(request: NextRequest) {
 
     const entries = await prisma.foodLog.findMany({
       where,
+      select: {
+        id: true,
+        loggedAt: true,
+        mealType: true,
+        foodDescription: true,
+        calories: true,
+        proteinG: true,
+        carbsG: true,
+        fatG: true,
+        notes: true,
+        source: true,
+      },
       orderBy: { loggedAt: "desc" },
     });
 

@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay, parse } from "date-fns";
+import { startOfDay, endOfDay } from "date-fns";
+import { parseLocalDate } from "@/lib/utils";
 
-// Parse a "yyyy-MM-dd" string in LOCAL time (not UTC)
-function parseLocalDate(dateStr: string): Date {
-  return parse(dateStr, "yyyy-MM-dd", new Date());
-}
-
-// GET - Daily health summary
+// GET - Daily health summary (optimized with aggregates — no full row fetches)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -17,79 +13,65 @@ export async function GET(request: NextRequest) {
     const dayStart = startOfDay(date);
     const dayEnd = endOfDay(date);
 
-    // Food totals for the day
-    const foodLogs = await prisma.foodLog.findMany({
-      where: {
-        loggedAt: {
-          gte: dayStart,
-          lte: dayEnd,
-        },
-      },
-    });
+    const dateFilter = { gte: dayStart, lte: dayEnd };
 
-    const totalCalories = foodLogs.reduce((sum, f) => sum + f.calories, 0);
-    const totalProtein = foodLogs.reduce((sum, f) => sum + f.proteinG, 0);
-    const totalCarbs = foodLogs.reduce((sum, f) => sum + f.carbsG, 0);
-    const totalFat = foodLogs.reduce((sum, f) => sum + f.fatG, 0);
-
-    // Latest body measurement
-    const latestMeasurement = await prisma.bodyMeasurement.findFirst({
-      orderBy: { measuredAt: "desc" },
-    });
-
-    // Workouts for the day
-    const workouts = await prisma.workoutLog.findMany({
-      where: {
-        startedAt: {
-          gte: dayStart,
-          lte: dayEnd,
-        },
-      },
-    });
-
-    const workoutMinutes = workouts.reduce(
-      (sum, w) => sum + w.durationMinutes,
-      0
-    );
-    const caloriesBurned = workouts.reduce(
-      (sum, w) => sum + (w.caloriesBurned || 0),
-      0
-    );
-
-    // Water for the day (graceful if table doesn't exist yet)
-    let waterMl = 0;
-    let waterGlasses = 0;
-    try {
-      if (prisma.waterLog) {
-        const waterLogs = await prisma.waterLog.findMany({
-          where: {
-            loggedAt: {
-              gte: dayStart,
-              lte: dayEnd,
-            },
+    // Run all aggregations in parallel — DB does the math, not JS
+    const [foodAgg, latestMeasurement, workoutAgg, waterAgg] =
+      await Promise.all([
+        prisma.foodLog.aggregate({
+          where: { loggedAt: dateFilter },
+          _sum: {
+            calories: true,
+            proteinG: true,
+            carbsG: true,
+            fatG: true,
           },
-        });
-        waterMl = waterLogs.reduce((sum, w) => sum + w.amountMl, 0);
-        waterGlasses = waterLogs.length;
-      }
-    } catch {
-      // Water table might not exist yet — that's ok
-    }
+          _count: true,
+        }),
+        prisma.bodyMeasurement.findFirst({
+          where: { weightKg: { not: null } },
+          orderBy: { measuredAt: "desc" },
+          select: { weightKg: true, bodyFatPct: true },
+        }),
+        prisma.workoutLog.aggregate({
+          where: { startedAt: dateFilter },
+          _sum: {
+            durationMinutes: true,
+            caloriesBurned: true,
+          },
+          _count: true,
+        }),
+        prisma.waterLog
+          .aggregate({
+            where: { loggedAt: dateFilter },
+            _sum: { amountMl: true },
+            _count: true,
+          })
+          .catch(() => ({ _sum: { amountMl: null }, _count: 0 })),
+      ]);
+
+    const totalCalories = foodAgg._sum.calories ?? 0;
+    const totalProtein = foodAgg._sum.proteinG ?? 0;
+    const totalCarbs = foodAgg._sum.carbsG ?? 0;
+    const totalFat = foodAgg._sum.fatG ?? 0;
+    const workoutMinutes = workoutAgg._sum.durationMinutes ?? 0;
+    const caloriesBurned = workoutAgg._sum.caloriesBurned ?? 0;
+    const waterMl = waterAgg._sum.amountMl ?? 0;
 
     return NextResponse.json({
       totalCalories,
       totalProtein,
       totalCarbs,
       totalFat,
-      mealCount: foodLogs.length,
-      latestWeight: latestMeasurement?.weightKg || null,
-      latestBodyFat: latestMeasurement?.bodyFatPct || null,
-      workoutCount: workouts.length,
+      mealCount: foodAgg._count,
+      latestWeight: latestMeasurement?.weightKg ?? null,
+      latestBodyFat: latestMeasurement?.bodyFatPct ?? null,
+      workoutCount: workoutAgg._count,
       workoutMinutes,
       caloriesBurned,
       netCalories: totalCalories - caloriesBurned,
       waterMl,
-      waterGlasses,
+      waterGlasses: waterAgg._count,
     });
   } catch (error) {
     console.error("Summary error:", error);

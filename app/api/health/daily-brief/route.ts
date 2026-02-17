@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay, subDays, parse } from "date-fns";
+import { startOfDay, endOfDay, subDays } from "date-fns";
+import { parseLocalDate } from "@/lib/utils";
 
 /**
  * Daily brief API.
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     // Use client-provided date or fall back to server date
     const referenceDate = localDateStr
-      ? parse(localDateStr, "yyyy-MM-dd", new Date())
+      ? parseLocalDate(localDateStr)
       : new Date();
 
     const todayStart = startOfDay(referenceDate);

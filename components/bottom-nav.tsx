@@ -6,6 +6,7 @@ import {
   Heart,
   TrendingUp,
   CheckSquare,
+  Wallet,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,13 @@ const navItems = [
     icon: CheckSquare,
     activeColor: "text-green-400",
     activeBg: "bg-green-500/10",
+  },
+  {
+    label: "Finances",
+    href: "/finances",
+    icon: Wallet,
+    activeColor: "text-emerald-400",
+    activeBg: "bg-emerald-500/10",
   },
   {
     label: "Settings",

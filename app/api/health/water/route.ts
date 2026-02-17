@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay, parse } from "date-fns";
-
-function parseLocalDate(dateStr: string): Date {
-  return parse(dateStr, "yyyy-MM-dd", new Date());
-}
+import { startOfDay, endOfDay } from "date-fns";
+import { parseLocalDate } from "@/lib/utils";
 
 // GET - Get water logs for a date
 export async function GET(request: NextRequest) {
