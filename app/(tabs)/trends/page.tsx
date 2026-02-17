@@ -231,15 +231,33 @@ export default function TrendsPage() {
   const trendsUrl = useMemo(() => `/api/health/trends?range=${range}`, [range]);
   const { data, loading } = useCachedFetch<TrendsData>(trendsUrl, { ttl: 120_000 });
 
-  // Weekly insight
+  // Weekly insight — 1 hour TTL, server caches in DB too
   const insightUrl = useMemo(
     () =>
       `/api/health/trends/insights?calorieTarget=${calorieTarget}&proteinTargetG=${macroTargets.proteinG}&carbsTargetG=${macroTargets.carbsG}&fatTargetG=${macroTargets.fatG}&aiLanguage=${aiLanguage}`,
     [calorieTarget, macroTargets, aiLanguage]
   );
   const { data: insightData, loading: insightLoading, refresh: fetchInsight } =
-    useCachedFetch<{ insight: string }>(insightUrl, { ttl: 300_000 });
+    useCachedFetch<{ insight: string; cached?: boolean }>(insightUrl, { ttl: 3_600_000 });
   const insight = insightData?.insight ?? null;
+
+  // Force server-side AI regeneration for weekly insight
+  const [insightRefreshing, setInsightRefreshing] = useState(false);
+  const refreshInsightAI = useCallback(async () => {
+    setInsightRefreshing(true);
+    try {
+      const res = await fetch(insightUrl + "&refresh=true");
+      if (res.ok) {
+        const newData = await res.json();
+        setCacheEntry(insightUrl, newData);
+        fetchInsight();
+      }
+    } catch (err) {
+      console.error("Insight refresh failed:", err);
+    } finally {
+      setInsightRefreshing(false);
+    }
+  }, [insightUrl, fetchInsight]);
 
   // Projections data — long TTL (24h), only re-fetched on manual refresh or new data
   const projectionsUrl = useMemo(
@@ -411,9 +429,11 @@ export default function TrendsPage() {
                       variant="ghost"
                       size="sm"
                       className="mt-2 text-xs text-violet-400 hover:text-violet-300 h-7 px-2"
-                      onClick={fetchInsight}
+                      onClick={refreshInsightAI}
+                      disabled={insightRefreshing}
                     >
-                      Refresh
+                      <RefreshCw className={cn("h-3 w-3 mr-1", insightRefreshing && "animate-spin")} />
+                      {insightRefreshing ? "Generating..." : "Refresh"}
                     </Button>
                   )}
                 </CardContent>

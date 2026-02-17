@@ -135,10 +135,10 @@ ${measurementSummary || "No measurements taken"}
 Give your insight in 2-3 sentences. No bullet points, no headers.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
-      max_completion_tokens: 150,
+      max_tokens: 150,
     });
 
     const insight =

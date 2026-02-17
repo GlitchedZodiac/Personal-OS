@@ -32,6 +32,7 @@ import {
   ChevronDown,
   ChevronUp,
   Star,
+  Pencil,
 } from "lucide-react";
 import { VoiceInput } from "@/components/voice-input";
 import { ConfirmDelete } from "@/components/confirm-delete";
@@ -127,6 +128,7 @@ function MealSection({
   onDelete,
   onRelog,
   onSaveFavorite,
+  onEdit,
   collapsed,
   onToggle,
 }: {
@@ -135,6 +137,7 @@ function MealSection({
   onDelete: (id: string) => void;
   onRelog: (entry: FoodEntry) => void;
   onSaveFavorite: (entry: FoodEntry) => void;
+  onEdit: (entry: FoodEntry) => void;
   collapsed: boolean;
   onToggle: () => void;
 }) {
@@ -227,6 +230,13 @@ function MealSection({
                 </div>
                 <div className="flex gap-1">
                   <button
+                    onClick={() => onEdit(entry)}
+                    className="p-1 rounded hover:bg-blue-500/10 transition-colors"
+                    title="Edit entry"
+                  >
+                    <Pencil className="h-3 w-3 text-blue-400/70" />
+                  </button>
+                  <button
                     onClick={() => onSaveFavorite(entry)}
                     className="p-1 rounded hover:bg-amber-500/10 transition-colors"
                     title="Save to favorites"
@@ -286,6 +296,17 @@ export default function FoodLogPage() {
   });
   const [calTarget, setCalTarget] = useState(2000);
   const [macroTargets, setMacroTargets] = useState({ proteinG: 150, carbsG: 200, fatG: 67 });
+  const [editEntry, setEditEntry] = useState<FoodEntry | null>(null);
+  const [editForm, setEditForm] = useState({
+    foodDescription: "",
+    mealType: "",
+    calories: "",
+    proteinG: "",
+    carbsG: "",
+    fatG: "",
+    loggedAt: "",
+    notes: "",
+  });
 
   // Build cached fetch URL from current filters
   const foodUrl = useMemo(() => {
@@ -370,6 +391,49 @@ export default function FoodLogPage() {
       }
     } catch (error) {
       console.error("Failed to save favorite:", error);
+    }
+  };
+
+  const handleStartEdit = (entry: FoodEntry) => {
+    setEditEntry(entry);
+    setEditForm({
+      foodDescription: entry.foodDescription,
+      mealType: entry.mealType,
+      calories: String(entry.calories),
+      proteinG: String(entry.proteinG),
+      carbsG: String(entry.carbsG),
+      fatG: String(entry.fatG),
+      loggedAt: format(new Date(entry.loggedAt), "yyyy-MM-dd'T'HH:mm"),
+      notes: entry.notes || "",
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editEntry) return;
+    try {
+      const res = await fetch(`/api/health/food?id=${editEntry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          foodDescription: editForm.foodDescription,
+          mealType: editForm.mealType,
+          calories: parseFloat(editForm.calories) || 0,
+          proteinG: parseFloat(editForm.proteinG) || 0,
+          carbsG: parseFloat(editForm.carbsG) || 0,
+          fatG: parseFloat(editForm.fatG) || 0,
+          loggedAt: editForm.loggedAt ? new Date(editForm.loggedAt).toISOString() : undefined,
+          notes: editForm.notes || null,
+        }),
+      });
+      if (res.ok) {
+        setEditEntry(null);
+        invalidateHealthCache();
+        fetchEntries();
+        const { toast } = await import("sonner");
+        toast.success("Food entry updated!");
+      }
+    } catch (error) {
+      console.error("Failed to update:", error);
     }
   };
 
@@ -710,12 +774,100 @@ export default function FoodLogPage() {
               onDelete={handleDelete}
               onRelog={handleRelog}
               onSaveFavorite={handleSaveFavorite}
+              onEdit={handleStartEdit}
               collapsed={!!collapsedMeals[mealType]}
               onToggle={() => toggleMealCollapse(mealType)}
             />
           ))}
         </div>
       )}
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editEntry} onOpenChange={(open) => { if (!open) setEditEntry(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Food Entry</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Date & Time</Label>
+              <Input
+                type="datetime-local"
+                value={editForm.loggedAt}
+                onChange={(e) => setEditForm({ ...editForm, loggedAt: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Meal Type</Label>
+              <Select
+                value={editForm.mealType}
+                onValueChange={(v) => setEditForm({ ...editForm, mealType: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="breakfast">🌅 Breakfast</SelectItem>
+                  <SelectItem value="lunch">☀️ Lunch</SelectItem>
+                  <SelectItem value="dinner">🌙 Dinner</SelectItem>
+                  <SelectItem value="snack">🍿 Snack</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Food Description</Label>
+              <Input
+                value={editForm.foodDescription}
+                onChange={(e) => setEditForm({ ...editForm, foodDescription: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Calories</Label>
+                <Input
+                  type="number"
+                  value={editForm.calories}
+                  onChange={(e) => setEditForm({ ...editForm, calories: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Protein (g)</Label>
+                <Input
+                  type="number"
+                  value={editForm.proteinG}
+                  onChange={(e) => setEditForm({ ...editForm, proteinG: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Carbs (g)</Label>
+                <Input
+                  type="number"
+                  value={editForm.carbsG}
+                  onChange={(e) => setEditForm({ ...editForm, carbsG: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Fat (g)</Label>
+                <Input
+                  type="number"
+                  value={editForm.fatG}
+                  onChange={(e) => setEditForm({ ...editForm, fatG: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Notes (optional)</Label>
+              <Input
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+              />
+            </div>
+            <Button onClick={handleSaveEdit} className="w-full">
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Voice Input */}
       <VoiceInput onDataLogged={() => { invalidateHealthCache(); fetchEntries(); }} />

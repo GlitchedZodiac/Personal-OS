@@ -79,6 +79,42 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PATCH - Update a food entry
+export async function PATCH(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    const body = await request.json();
+
+    if (!id) {
+      return NextResponse.json({ error: "ID required" }, { status: 400 });
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (body.mealType !== undefined) updateData.mealType = body.mealType;
+    if (body.foodDescription !== undefined) updateData.foodDescription = body.foodDescription;
+    if (body.calories !== undefined) updateData.calories = body.calories;
+    if (body.proteinG !== undefined) updateData.proteinG = body.proteinG;
+    if (body.carbsG !== undefined) updateData.carbsG = body.carbsG;
+    if (body.fatG !== undefined) updateData.fatG = body.fatG;
+    if (body.notes !== undefined) updateData.notes = body.notes;
+    if (body.loggedAt !== undefined) updateData.loggedAt = new Date(body.loggedAt);
+
+    const entry = await prisma.foodLog.update({
+      where: { id },
+      data: updateData,
+    });
+
+    return NextResponse.json(entry);
+  } catch (error) {
+    console.error("Food log update error:", error);
+    return NextResponse.json(
+      { error: "Failed to update food log" },
+      { status: 500 }
+    );
+  }
+}
+
 // DELETE - Delete a food entry
 export async function DELETE(request: NextRequest) {
   try {

@@ -1,15 +1,27 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay, subDays } from "date-fns";
+import { startOfDay, endOfDay, subDays, parse } from "date-fns";
 
-export async function GET() {
+/**
+ * Daily brief API.
+ * Accepts ?localDate=YYYY-MM-DD&localHour=HH from the client so we
+ * always reason about the user's actual "today", not the server's UTC time.
+ */
+export async function GET(request: NextRequest) {
   try {
-    const now = new Date();
-    const todayStart = startOfDay(now);
-    const todayEnd = endOfDay(now);
-    const yesterdayStart = startOfDay(subDays(now, 1));
-    const yesterdayEnd = endOfDay(subDays(now, 1));
-    const hour = now.getHours();
+    const { searchParams } = new URL(request.url);
+    const localDateStr = searchParams.get("localDate"); // e.g. "2026-02-17"
+    const localHour = parseInt(searchParams.get("localHour") || String(new Date().getHours()));
+
+    // Use client-provided date or fall back to server date
+    const referenceDate = localDateStr
+      ? parse(localDateStr, "yyyy-MM-dd", new Date())
+      : new Date();
+
+    const todayStart = startOfDay(referenceDate);
+    const todayEnd = endOfDay(referenceDate);
+    const yesterdayStart = startOfDay(subDays(referenceDate, 1));
+    const yesterdayEnd = endOfDay(subDays(referenceDate, 1));
 
     // Fetch both today and yesterday data + todos
     const [todayFood, todayWorkouts, yesterdayFood, yesterdayWorkouts, todayTodos] =
@@ -85,7 +97,6 @@ export async function GET() {
       if (yWorkouts > 0) {
         yParts.push(`${yWorkouts} workout${yWorkouts !== 1 ? "s" : ""} (${yWorkoutMins} min, ${yCalBurned} cal burned)`);
       }
-      // Only show yesterday if we have today data OR it's early morning
       if (parts.length > 0) {
         parts.push(`Yesterday: ${yParts.join(", ")}.`);
       } else {
@@ -95,7 +106,7 @@ export async function GET() {
 
     // Fallback if no data at all
     if (parts.length === 0) {
-      if (hour < 12) {
+      if (localHour < 12) {
         parts.push("Fresh start today! Ready to crush it? 💪");
       } else {
         parts.push("Let's get some meals and activity logged today!");
@@ -118,11 +129,11 @@ export async function GET() {
       }
     }
 
-    if (!tip && tWorkouts === 0 && yWorkouts === 0 && hour < 14) {
+    if (!tip && tWorkouts === 0 && yWorkouts === 0 && localHour < 14) {
       tip = "No workout in the last day — today's a great day to move your body!";
     }
 
-    if (!tip && hour >= 17 && tCalories === 0) {
+    if (!tip && localHour >= 17 && tCalories === 0) {
       tip = "Don't forget to log what you've eaten today!";
     }
 
@@ -134,7 +145,7 @@ export async function GET() {
     const topPriority = sortedTodos[0]?.title || null;
 
     return NextResponse.json({
-      greeting: hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening",
+      greeting: localHour < 12 ? "morning" : localHour < 17 ? "afternoon" : "evening",
       summary: parts.join(" "),
       tip,
       todosToday: todayTodos.length,

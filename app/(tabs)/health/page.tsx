@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -92,8 +92,14 @@ export default function HealthDashboard() {
     useCachedFetch<DailySummary>(`/api/health/summary?date=${today}`, { ttl: 60_000 });
   const { data: streakData, refresh: refreshStreak } =
     useCachedFetch<StreakData>("/api/health/streak", { ttl: 60_000 });
+  const briefUrl = useMemo(() => {
+    const now = new Date();
+    const localDate = format(now, "yyyy-MM-dd");
+    const localHour = now.getHours();
+    return `/api/health/daily-brief?localDate=${localDate}&localHour=${localHour}`;
+  }, []);
   const { data: briefData } =
-    useCachedFetch<DailyBrief>("/api/health/daily-brief", { ttl: 300_000 });
+    useCachedFetch<DailyBrief>(briefUrl, { ttl: 300_000 });
 
   const summary = summaryData ?? DEFAULT_SUMMARY;
   const streak = streakData ?? DEFAULT_STREAK;
