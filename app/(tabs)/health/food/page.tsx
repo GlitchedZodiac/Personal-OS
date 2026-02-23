@@ -296,6 +296,7 @@ function MealSection({
 }
 
 export default function FoodLogPage() {
+  const tzOffsetMinutes = new Date().getTimezoneOffset();
   const [searchQuery, setSearchQuery] = useState("");
   const [mealFilter, setMealFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState(
@@ -335,10 +336,11 @@ export default function FoodLogPage() {
   const foodUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (dateFilter) params.set("date", dateFilter);
+    params.set("tzOffsetMinutes", String(tzOffsetMinutes));
     if (mealFilter !== "all") params.set("mealType", mealFilter);
     if (searchQuery) params.set("search", searchQuery);
     return `/api/health/food?${params.toString()}`;
-  }, [dateFilter, mealFilter, searchQuery]);
+  }, [dateFilter, mealFilter, searchQuery, tzOffsetMinutes]);
 
   const { data: entries, initialLoading, refresh: fetchEntries } =
     useCachedFetch<FoodEntry[]>(foodUrl, { ttl: 60_000 });

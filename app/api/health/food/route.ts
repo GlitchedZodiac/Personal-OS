@@ -1,21 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { startOfDay, endOfDay } from "date-fns";
-import { parseLocalDate } from "@/lib/utils";
+import { getUtcDayBounds, parseLocalDate } from "@/lib/utils";
 
 // GET - List food entries with filters
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date");
+    const tzOffsetMinutes = searchParams.get("tzOffsetMinutes");
     const mealType = searchParams.get("mealType");
     const search = searchParams.get("search");
 
     const where: Record<string, unknown> = {};
 
     if (date) {
-      const dayStart = startOfDay(parseLocalDate(date));
-      const dayEnd = endOfDay(parseLocalDate(date));
+      const offset = tzOffsetMinutes !== null ? Number(tzOffsetMinutes) : null;
+      const { dayStart, dayEnd } =
+        offset !== null && Number.isFinite(offset)
+          ? getUtcDayBounds(date, offset)
+          : {
+              dayStart: startOfDay(parseLocalDate(date)),
+              dayEnd: endOfDay(parseLocalDate(date)),
+            };
       where.loggedAt = {
         gte: dayStart,
         lte: dayEnd,

@@ -54,6 +54,7 @@ export function WorkoutVoiceInput({
   conversationHistory,
   onResponse,
 }: WorkoutVoiceInputProps) {
+  const floatingBottomClass = "bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)]";
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -205,7 +206,7 @@ export function WorkoutVoiceInput({
   };
 
   return (
-    <div className="fixed bottom-20 left-0 right-0 px-4 z-50 pointer-events-none">
+    <div className={cn("fixed left-0 right-0 px-4 z-50 pointer-events-none", floatingBottomClass)}>
       <div className="max-w-lg mx-auto pointer-events-auto">
         {/* Failed text recovery banner */}
         {lastFailedText && (

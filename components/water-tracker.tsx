@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Droplets, Plus, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { format } from "date-fns";
 
 interface WaterTrackerProps {
   onUpdate?: () => void;
@@ -21,8 +22,10 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
 
   const fetchWater = async () => {
     try {
-      const today = new Date().toISOString().split("T")[0];
-      const res = await fetch(`/api/health/water?date=${today}`);
+      const now = new Date();
+      const today = format(now, "yyyy-MM-dd");
+      const tzOffsetMinutes = now.getTimezoneOffset();
+      const res = await fetch(`/api/health/water?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}`);
       if (res.ok) {
         const data = await res.json();
         setTotalMl(data.totalMl);

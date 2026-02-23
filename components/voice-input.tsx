@@ -87,6 +87,7 @@ interface AIResponse {
 }
 
 export function VoiceInput({ onDataLogged }: VoiceInputProps) {
+  const floatingBottomClass = "bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)]";
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -561,7 +562,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   // Editing overlay for a food item
   if (editingIndex !== null && editValues) {
     return (
-      <div className="fixed bottom-20 left-0 right-0 px-4 z-50">
+      <div className={cn("fixed left-0 right-0 px-4 z-50", floatingBottomClass)}>
         <Card className="max-w-lg mx-auto border-primary/50 shadow-2xl">
           <CardContent className="p-4 space-y-3">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -661,7 +662,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
       aiResponse.items?.reduce((sum, item) => sum + item.calories, 0) || 0;
 
     return (
-      <div className="fixed bottom-20 left-0 right-0 px-4 z-50">
+      <div className={cn("fixed left-0 right-0 px-4 z-50", floatingBottomClass)}>
         <Card className="max-w-lg mx-auto border-primary/30 shadow-2xl backdrop-blur-sm">
           <CardContent className="p-4 space-y-3">
             <p className="text-sm leading-relaxed">{aiResponse.message}</p>
@@ -845,7 +846,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   }
 
   return (
-    <div className="fixed bottom-20 left-0 right-0 px-4 z-50 pointer-events-none">
+    <div className={cn("fixed left-0 right-0 px-4 z-50 pointer-events-none", floatingBottomClass)}>
       <div className="max-w-lg mx-auto pointer-events-auto">
         {/* Failed text recovery banner */}
         {lastFailedText && (

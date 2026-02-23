@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, RefreshCw, Loader2, Flame, Dumbbell } from "lucide-react";
 import { MarkdownText } from "@/components/markdown-text";
 import { getSettings, getMacroGrams } from "@/lib/settings";
+import { format } from "date-fns";
 
 interface AIMealSuggestionProps {
   totalCalories: number;
@@ -31,8 +32,10 @@ export function AIMealSuggestion({
   useEffect(() => {
     const fetchWorkoutCals = async () => {
       try {
-        const today = new Date().toISOString().split("T")[0];
-        const res = await fetch(`/api/health/summary?date=${today}`);
+        const now = new Date();
+        const today = format(now, "yyyy-MM-dd");
+        const tzOffsetMinutes = now.getTimezoneOffset();
+        const res = await fetch(`/api/health/summary?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}`);
         if (res.ok) {
           const data = await res.json();
           setWorkoutCalories(data.caloriesBurned || 0);

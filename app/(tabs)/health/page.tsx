@@ -109,8 +109,9 @@ const DEFAULT_STREAK: StreakData = {
 
 export default function HealthDashboard() {
   const today = format(new Date(), "yyyy-MM-dd");
+  const tzOffsetMinutes = new Date().getTimezoneOffset();
   const { data: summaryData, initialLoading: summaryLoading, refresh: refreshSummary } =
-    useCachedFetch<DailySummary>(`/api/health/summary?date=${today}`, { ttl: 60_000 });
+    useCachedFetch<DailySummary>(`/api/health/summary?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}`, { ttl: 60_000 });
   const { data: streakData, refresh: refreshStreak } =
     useCachedFetch<StreakData>("/api/health/streak", { ttl: 60_000 });
   const briefUrl = useMemo(() => {

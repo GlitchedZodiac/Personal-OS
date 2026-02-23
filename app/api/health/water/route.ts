@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { startOfDay, endOfDay } from "date-fns";
-import { parseLocalDate } from "@/lib/utils";
+import { getUtcDayBounds, parseLocalDate } from "@/lib/utils";
 
 // GET - Get water logs for a date
 export async function GET(request: NextRequest) {
@@ -12,10 +12,14 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const dateStr = searchParams.get("date");
+    const tzOffsetMinutes = searchParams.get("tzOffsetMinutes");
     const date = dateStr ? parseLocalDate(dateStr) : new Date();
 
-    const dayStart = startOfDay(date);
-    const dayEnd = endOfDay(date);
+    const parsedOffset = tzOffsetMinutes !== null ? Number(tzOffsetMinutes) : null;
+    const { dayStart, dayEnd } =
+      dateStr && parsedOffset !== null && Number.isFinite(parsedOffset)
+        ? getUtcDayBounds(dateStr, parsedOffset)
+        : { dayStart: startOfDay(date), dayEnd: endOfDay(date) };
 
     const logs = await prisma.waterLog.findMany({
       where: {
