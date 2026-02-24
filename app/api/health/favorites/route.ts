@@ -25,12 +25,13 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { foodDescription, mealType, calories, proteinG, carbsG, fatG, logNow } = body;
+    const { foodDescription, mealType, calories, proteinG, carbsG, fatG, logNow, loggedAt } = body;
 
     // Optionally also log it as a food entry right now
     if (logNow) {
       await prisma.foodLog.create({
         data: {
+          loggedAt: loggedAt ? new Date(loggedAt) : undefined,
           mealType: mealType || "snack",
           foodDescription,
           calories: calories || 0,

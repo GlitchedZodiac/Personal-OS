@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Mic, Loader2, Square } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { deactivateMicrophoneStream, getOrCreateMicrophoneStream } from "@/lib/microphone";
 
 interface WhisperButtonProps {
   onTranscription: (text: string) => void;
@@ -25,7 +26,7 @@ export function WhisperButton({ onTranscription, className, size = "icon" }: Whi
 
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getOrCreateMicrophoneStream();
 
       // Detect best MIME type
       const mimeTypes = [
@@ -51,7 +52,7 @@ export function WhisperButton({ onTranscription, className, size = "icon" }: Whi
       };
 
       recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
+        deactivateMicrophoneStream();
         const blob = new Blob(chunksRef.current, { type: selectedMime });
 
         if (blob.size < 100) {

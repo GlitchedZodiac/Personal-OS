@@ -91,12 +91,18 @@ export async function POST(request: NextRequest) {
             type: "measurement",
             message: args.message,
             measurement: {
+              measuredAt: args.measuredAt || null,
               weightKg: args.weightKg,
               bodyFatPct: args.bodyFatPct,
               waistCm: args.waistCm,
               chestCm: args.chestCm,
               armsCm: args.armsCm,
               legsCm: args.legsCm,
+              hipsCm: args.hipsCm,
+              shouldersCm: args.shouldersCm,
+              neckCm: args.neckCm,
+              forearmsCm: args.forearmsCm,
+              calvesCm: args.calvesCm,
               notes: args.notes,
             },
           });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import OpenAI from "openai";
+import { openai } from "@/lib/openai";
 import {
   startOfMonth,
   endOfMonth,
@@ -10,8 +10,6 @@ import {
 
 export const maxDuration = 60;
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 // GET /api/finance/ai-advisor — AI financial planning and insights
 export async function GET(req: NextRequest) {
   try {
@@ -20,8 +18,6 @@ export async function GET(req: NextRequest) {
     const language = searchParams.get("language") || "english";
 
     const now = new Date();
-    const monthStart = startOfMonth(now);
-    const monthEnd = endOfMonth(now);
 
     // Gather financial data for the last 3 months
     const months = Array.from({ length: 3 }, (_, i) => {

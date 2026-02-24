@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Utensils,
   Scale,
@@ -23,6 +22,7 @@ import {
   Trophy,
   ChevronDown,
   ChevronUp,
+  Droplets,
 } from "lucide-react";
 import { VoiceInput } from "@/components/voice-input";
 import { WaterTracker } from "@/components/water-tracker";
@@ -47,6 +47,8 @@ interface DailySummary {
   caloriesBurned: number;
   netCalories: number;
   waterMl: number;
+  waterMlManual?: number;
+  waterMlInferred?: number;
   waterGlasses: number;
 }
 
@@ -96,6 +98,8 @@ const DEFAULT_SUMMARY: DailySummary = {
   caloriesBurned: 0,
   netCalories: 0,
   waterMl: 0,
+  waterMlManual: 0,
+  waterMlInferred: 0,
   waterGlasses: 0,
 };
 
@@ -129,9 +133,10 @@ export default function HealthDashboard() {
   const streak = streakData ?? DEFAULT_STREAK;
   const initialLoading = summaryLoading;
 
-  const [calorieTarget, setCalorieTarget] = useState(2000);
+  const initialSettings = useMemo(() => getSettings(), []);
+  const [calorieTarget, setCalorieTarget] = useState(initialSettings.calorieTarget);
   const [showAchievements, setShowAchievements] = useState(false);
-  const [macroTargets, setMacroTargets] = useState({ proteinG: 150, carbsG: 200, fatG: 67 });
+  const [macroTargets, setMacroTargets] = useState(() => getMacroGrams(initialSettings));
 
   // Refresh helper for child components to call after mutations
   const fetchData = () => {
@@ -141,14 +146,16 @@ export default function HealthDashboard() {
   };
 
   useEffect(() => {
-    const local = getSettings();
-    setCalorieTarget(local.calorieTarget);
-    setMacroTargets(getMacroGrams(local));
-
+    let isMounted = true;
     fetchServerSettings().then((s) => {
+      if (!isMounted) return;
       setCalorieTarget(s.calorieTarget);
       setMacroTargets(getMacroGrams(s));
     });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const caloriePercent = Math.min(
@@ -452,6 +459,20 @@ export default function HealthDashboard() {
               </div>
               <span className="text-[10px] font-medium">Progress</span>
               <span className="text-base font-bold">📸</span>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/health/water">
+          <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-cyan-500/10 group-hover:bg-cyan-500/20 transition-colors">
+                <Droplets className="h-4 w-4 text-cyan-400" />
+              </div>
+              <span className="text-[10px] font-medium">Hydration</span>
+              <span className="text-base font-bold">
+                {initialLoading ? <Skeleton className="h-5 w-6" /> : `${Math.round(summary.waterMl)}ml`}
+              </span>
             </CardContent>
           </Card>
         </Link>

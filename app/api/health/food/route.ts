@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
 
     const entry = await prisma.foodLog.create({
       data: {
+        loggedAt: body.loggedAt ? new Date(body.loggedAt) : undefined,
         mealType: body.mealType,
         foodDescription: body.foodDescription,
         calories: body.calories || 0,

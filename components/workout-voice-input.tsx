@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getSettings } from "@/lib/settings";
+import { deactivateMicrophoneStream, getOrCreateMicrophoneStream } from "@/lib/microphone";
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -54,7 +55,7 @@ export function WorkoutVoiceInput({
   conversationHistory,
   onResponse,
 }: WorkoutVoiceInputProps) {
-  const floatingBottomClass = "bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)]";
+  const floatingBottomClass = "bottom-[calc(env(safe-area-inset-bottom,0px)+6.5rem)]";
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -67,7 +68,7 @@ export function WorkoutVoiceInput({
 
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getOrCreateMicrophoneStream();
 
       // Find the best supported audio format for Whisper
       const candidates = [
@@ -94,7 +95,7 @@ export function WorkoutVoiceInput({
       mediaRecorder.onstop = async () => {
         const usedMime = activeMimeRef.current || mediaRecorder.mimeType || "audio/webm";
         const blob = new Blob(chunksRef.current, { type: usedMime });
-        stream.getTracks().forEach((track) => track.stop());
+        deactivateMicrophoneStream();
 
         let ext = "webm";
         if (usedMime.includes("mp4") || usedMime.includes("m4a")) ext = "mp4";
@@ -206,7 +207,7 @@ export function WorkoutVoiceInput({
   };
 
   return (
-    <div className={cn("fixed left-0 right-0 px-4 z-50 pointer-events-none", floatingBottomClass)}>
+    <div className={cn("fixed left-0 right-0 px-4 z-[60] pointer-events-none", floatingBottomClass)}>
       <div className="max-w-lg mx-auto pointer-events-auto">
         {/* Failed text recovery banner */}
         {lastFailedText && (

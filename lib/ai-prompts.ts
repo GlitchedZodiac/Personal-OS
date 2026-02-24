@@ -29,6 +29,8 @@ FOOD LOGGING RULES:
 
 BODY MEASUREMENTS:
 - Extract weight (convert lbs to kg if needed), body fat %, and body dimensions
+- Capture as many dimensions as the user provides: neck, shoulders, chest, waist, hips, arms, forearms, thighs/legs, calves
+- If the user mentions a specific date/time for the measurement, include it
 - Always confirm the values back to the user
 - Be encouraging about progress
 
@@ -138,6 +140,10 @@ export const BODY_MEASUREMENT_FUNCTION = {
   parameters: {
     type: "object" as const,
     properties: {
+      measuredAt: {
+        type: "string" as const,
+        description: "Optional ISO date-time string if the user specifies when the measurement was taken",
+      },
       weightKg: {
         type: "number" as const,
         description: "Weight in kilograms (convert from lbs if needed)",
@@ -161,6 +167,26 @@ export const BODY_MEASUREMENT_FUNCTION = {
       legsCm: {
         type: "number" as const,
         description: "Legs measurement in cm",
+      },
+      hipsCm: {
+        type: "number" as const,
+        description: "Hips measurement in cm",
+      },
+      shouldersCm: {
+        type: "number" as const,
+        description: "Shoulders measurement in cm",
+      },
+      neckCm: {
+        type: "number" as const,
+        description: "Neck measurement in cm",
+      },
+      forearmsCm: {
+        type: "number" as const,
+        description: "Forearms measurement in cm",
+      },
+      calvesCm: {
+        type: "number" as const,
+        description: "Calves measurement in cm",
       },
       notes: {
         type: "string" as const,

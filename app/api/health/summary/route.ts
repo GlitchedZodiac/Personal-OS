@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { startOfDay, endOfDay } from "date-fns";
 import { getUtcDayBounds, parseLocalDate } from "@/lib/utils";
+import { estimateFluidMlFromFoodLogs } from "@/lib/hydration";
 
 // GET - Daily health summary (optimized with aggregates — no full row fetches)
 export async function GET(request: NextRequest) {
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
     const dateFilter = { gte: dayStart, lte: dayEnd };
 
     // Run all aggregations in parallel — DB does the math, not JS
-    const [foodAgg, latestMeasurement, workoutAgg, waterAgg] =
+    const [foodAgg, latestMeasurement, workoutAgg, waterAgg, foodLogsForHydration] =
       await Promise.all([
         prisma.foodLog.aggregate({
           where: { loggedAt: dateFilter },
@@ -52,6 +53,10 @@ export async function GET(request: NextRequest) {
             _count: true,
           })
           .catch(() => ({ _sum: { amountMl: null }, _count: 0 })),
+        prisma.foodLog.findMany({
+          where: { loggedAt: dateFilter },
+          select: { foodDescription: true, notes: true },
+        }),
       ]);
 
     const totalCalories = foodAgg._sum.calories ?? 0;
@@ -60,7 +65,9 @@ export async function GET(request: NextRequest) {
     const totalFat = foodAgg._sum.fatG ?? 0;
     const workoutMinutes = workoutAgg._sum.durationMinutes ?? 0;
     const caloriesBurned = workoutAgg._sum.caloriesBurned ?? 0;
-    const waterMl = waterAgg._sum.amountMl ?? 0;
+    const manualWaterMl = waterAgg._sum.amountMl ?? 0;
+    const inferredFluidMl = estimateFluidMlFromFoodLogs(foodLogsForHydration);
+    const waterMl = manualWaterMl + inferredFluidMl;
 
     return NextResponse.json({
       totalCalories,
@@ -75,6 +82,8 @@ export async function GET(request: NextRequest) {
       caloriesBurned,
       netCalories: totalCalories - caloriesBurned,
       waterMl,
+      waterMlManual: manualWaterMl,
+      waterMlInferred: inferredFluidMl,
       waterGlasses: waterAgg._count,
     });
   } catch (error) {

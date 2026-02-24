@@ -67,15 +67,11 @@ interface BalanceInfo {
 }
 
 function NotificationPermission() {
-  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
-
-  useEffect(() => {
-    if (!("Notification" in window)) {
-      setPermission("unsupported");
-    } else {
-      setPermission(Notification.permission);
-    }
-  }, []);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">(() => {
+    if (typeof window === "undefined") return "default";
+    if (!("Notification" in window)) return "unsupported";
+    return Notification.permission;
+  });
 
   const handleEnable = async () => {
     if (!("Notification" in window)) return;

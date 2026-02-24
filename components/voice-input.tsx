@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getSettings } from "@/lib/settings";
+import { deactivateMicrophoneStream, getOrCreateMicrophoneStream } from "@/lib/microphone";
 
 interface VoiceInputProps {
   onDataLogged?: () => void;
@@ -40,12 +41,18 @@ interface AIResponse {
   data?: unknown;
   items?: FoodItem[];
   measurement?: {
+    measuredAt?: string | null;
     weightKg?: number;
     bodyFatPct?: number;
     waistCm?: number;
     chestCm?: number;
     armsCm?: number;
     legsCm?: number;
+    hipsCm?: number;
+    shouldersCm?: number;
+    neckCm?: number;
+    forearmsCm?: number;
+    calvesCm?: number;
     notes?: string;
   };
   workout?: {
@@ -87,7 +94,7 @@ interface AIResponse {
 }
 
 export function VoiceInput({ onDataLogged }: VoiceInputProps) {
-  const floatingBottomClass = "bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)]";
+  const floatingBottomClass = "bottom-[calc(env(safe-area-inset-bottom,0px)+6.5rem)]";
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -112,7 +119,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
 
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getOrCreateMicrophoneStream();
       streamRef.current = stream;
 
       // Find the best supported audio format — prefer webm (Chrome/Firefox),
@@ -152,8 +159,8 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
 
         const usedMime = activeMimeRef.current || mediaRecorder.mimeType || "audio/webm";
         const blob = new Blob(chunksRef.current, { type: usedMime });
-        // Stop all tracks on the stream
-        streamRef.current?.getTracks().forEach((track) => track.stop());
+        // Keep permission alive for later recordings, but disable idle capture
+        deactivateMicrophoneStream();
         streamRef.current = null;
 
         console.log(`[VoiceInput] Recording done: ${blob.size} bytes, type: ${usedMime}, chunks: ${chunksRef.current.length}`);
@@ -422,7 +429,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
       switch (aiResponse.type) {
         case "food":
           endpoint = "/api/health/food/batch";
-          body = { items: aiResponse.items };
+          body = { items: aiResponse.items, loggedAt: new Date().toISOString() };
           break;
         case "measurement":
           endpoint = "/api/health/body";
@@ -562,7 +569,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   // Editing overlay for a food item
   if (editingIndex !== null && editValues) {
     return (
-      <div className={cn("fixed left-0 right-0 px-4 z-50", floatingBottomClass)}>
+      <div className={cn("fixed left-0 right-0 px-4 z-[60]", floatingBottomClass)}>
         <Card className="max-w-lg mx-auto border-primary/50 shadow-2xl">
           <CardContent className="p-4 space-y-3">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -662,7 +669,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
       aiResponse.items?.reduce((sum, item) => sum + item.calories, 0) || 0;
 
     return (
-      <div className={cn("fixed left-0 right-0 px-4 z-50", floatingBottomClass)}>
+      <div className={cn("fixed left-0 right-0 px-4 z-[60]", floatingBottomClass)}>
         <Card className="max-w-lg mx-auto border-primary/30 shadow-2xl backdrop-blur-sm">
           <CardContent className="p-4 space-y-3">
             <p className="text-sm leading-relaxed">{aiResponse.message}</p>
@@ -846,7 +853,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   }
 
   return (
-    <div className={cn("fixed left-0 right-0 px-4 z-50 pointer-events-none", floatingBottomClass)}>
+    <div className={cn("fixed left-0 right-0 px-4 z-[60] pointer-events-none", floatingBottomClass)}>
       <div className="max-w-lg mx-auto pointer-events-auto">
         {/* Failed text recovery banner */}
         {lastFailedText && (

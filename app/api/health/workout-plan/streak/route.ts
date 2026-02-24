@@ -38,7 +38,7 @@ export async function GET() {
     startOfThisWeek.setHours(0, 0, 0, 0);
 
     let currentStreak = 0;
-    let weekStart = new Date(startOfThisWeek);
+    const weekStart = new Date(startOfThisWeek);
 
     // Count consecutive weeks with at least one workout
     for (let i = 0; i < 52; i++) {

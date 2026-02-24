@@ -1,23 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Droplets, Plus, Minus } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { format } from "date-fns";
+import { Droplets, Minus, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface WaterTrackerProps {
   onUpdate?: () => void;
   compact?: boolean;
 }
 
-const WATER_TARGET_ML = 2500;
+const BASE_WATER_TARGET_ML = 2500;
 const GLASS_ML = 250;
+
+type WaterResponse = {
+  logs: Array<{ id: string; loggedAt: string; amountMl: number }>;
+  manualMl: number;
+  inferredFluidMl: number;
+  workoutAdjustmentMl: number;
+  targetMl: number;
+  totalMl: number;
+  glasses: number;
+};
 
 export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
   const [totalMl, setTotalMl] = useState(0);
+  const [manualMl, setManualMl] = useState(0);
+  const [inferredFluidMl, setInferredFluidMl] = useState(0);
   const [glasses, setGlasses] = useState(0);
+  const [targetMl, setTargetMl] = useState(BASE_WATER_TARGET_ML);
   const [loading, setLoading] = useState(true);
 
   const fetchWater = async () => {
@@ -26,11 +40,14 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
       const today = format(now, "yyyy-MM-dd");
       const tzOffsetMinutes = now.getTimezoneOffset();
       const res = await fetch(`/api/health/water?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}`);
-      if (res.ok) {
-        const data = await res.json();
-        setTotalMl(data.totalMl);
-        setGlasses(data.glasses);
-      }
+      if (!res.ok) return;
+
+      const data: Partial<WaterResponse> = await res.json();
+      setTotalMl(data.totalMl ?? 0);
+      setManualMl(data.manualMl ?? data.totalMl ?? 0);
+      setInferredFluidMl(data.inferredFluidMl ?? 0);
+      setGlasses(data.glasses ?? 0);
+      setTargetMl(data.targetMl ?? BASE_WATER_TARGET_ML);
     } catch (error) {
       console.error("Failed to fetch water:", error);
     } finally {
@@ -50,8 +67,7 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
         body: JSON.stringify({ amountMl: GLASS_ML }),
       });
       if (res.ok) {
-        setTotalMl((prev) => prev + GLASS_ML);
-        setGlasses((prev) => prev + 1);
+        await fetchWater();
         onUpdate?.();
       }
     } catch {
@@ -62,10 +78,12 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
   const removeWater = async () => {
     if (glasses <= 0) return;
     try {
-      const res = await fetch("/api/health/water", { method: "DELETE" });
+      const now = new Date();
+      const date = format(now, "yyyy-MM-dd");
+      const tzOffsetMinutes = now.getTimezoneOffset();
+      const res = await fetch(`/api/health/water?date=${date}&tzOffsetMinutes=${tzOffsetMinutes}`, { method: "DELETE" });
       if (res.ok) {
-        setTotalMl((prev) => Math.max(prev - GLASS_ML, 0));
-        setGlasses((prev) => Math.max(prev - 1, 0));
+        await fetchWater();
         onUpdate?.();
       }
     } catch {
@@ -73,10 +91,9 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
     }
   };
 
-  const pct = Math.min((totalMl / WATER_TARGET_ML) * 100, 100);
-  const targetGlasses = Math.ceil(WATER_TARGET_ML / GLASS_ML);
+  const pct = Math.min((totalMl / Math.max(targetMl, 1)) * 100, 100);
+  const targetGlasses = Math.ceil(targetMl / GLASS_ML);
 
-  // Compact mode: just a thin blue bar with +/- buttons
   if (compact) {
     return (
       <div className="mt-4 pt-3 border-t border-border/30">
@@ -89,7 +106,7 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
             />
           </div>
           <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 w-16 text-right">
-            {loading ? "..." : `${(totalMl / 1000).toFixed(1)} / ${(WATER_TARGET_ML / 1000).toFixed(1)}L`}
+            {loading ? "..." : `${(totalMl / 1000).toFixed(1)} / ${(targetMl / 1000).toFixed(1)}L`}
           </span>
           <div className="flex gap-0.5 shrink-0">
             <Button
@@ -110,17 +127,29 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
             </Button>
           </div>
         </div>
+
+        {!loading && (
+          <div className="mt-1.5 flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground">
+              {inferredFluidMl > 0
+                ? `Auto +${Math.round(inferredFluidMl)}ml from drinks and soups`
+                : "Only manual water entries counted so far"}
+            </span>
+            <Link href="/health/water" className="text-[10px] text-primary hover:underline">
+              manage
+            </Link>
+          </div>
+        )}
       </div>
     );
   }
 
-  // Full mode (legacy)
   return (
     <div className="p-4 border rounded-xl">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Droplets className="h-4 w-4 text-blue-400" />
-          <span className="text-sm font-medium">Water</span>
+          <span className="text-sm font-medium">Hydration</span>
         </div>
         <span className="text-xs text-muted-foreground">
           {loading ? "..." : `${glasses}/${targetGlasses} glasses`}
@@ -133,7 +162,7 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
             key={i}
             className={cn(
               "w-5 h-6 rounded-sm border transition-all duration-300",
-              i < glasses
+              i < Math.ceil(totalMl / GLASS_ML)
                 ? "bg-blue-400/80 border-blue-400/50"
                 : "bg-secondary/30 border-border/30"
             )}
@@ -150,8 +179,7 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
 
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
-          {loading ? "—" : `${(totalMl / 1000).toFixed(1)}L`} /{" "}
-          {(WATER_TARGET_ML / 1000).toFixed(1)}L
+          {loading ? "..." : `${(totalMl / 1000).toFixed(1)}L`} / {(targetMl / 1000).toFixed(1)}L
         </span>
         <div className="flex gap-1">
           <Button
@@ -172,6 +200,18 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
           </Button>
         </div>
       </div>
+
+      {!loading && (
+        <div className="mt-2 space-y-1">
+          <p className="text-[10px] text-muted-foreground">
+            Manual: {Math.round(manualMl)}ml
+            {inferredFluidMl > 0 ? ` • Auto inferred: ${Math.round(inferredFluidMl)}ml` : ""}
+          </p>
+          <Link href="/health/water" className="text-xs text-primary hover:underline">
+            Open hydration log
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

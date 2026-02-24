@@ -68,6 +68,72 @@ async function batchCreateWithFallback(
   }
 }
 
+type NumericLike = number | string;
+
+interface ImportFoodEntry {
+  loggedAt?: string;
+  mealType?: string;
+  foodDescription?: string;
+  name?: string;
+  food?: string;
+  calories?: NumericLike;
+  proteinG?: NumericLike;
+  protein?: NumericLike;
+  carbsG?: NumericLike;
+  carbs?: NumericLike;
+  fatG?: NumericLike;
+  fat?: NumericLike;
+  notes?: string | null;
+}
+
+interface ImportWorkoutEntry {
+  startedAt?: string;
+  durationMinutes?: NumericLike;
+  duration?: NumericLike;
+  workoutType?: string;
+  type?: string;
+  description?: string | null;
+  name?: string;
+  caloriesBurned?: NumericLike | null;
+  exercises?: unknown;
+}
+
+interface ImportMeasurementEntry {
+  measuredAt?: string;
+  weightKg?: NumericLike | null;
+  bodyFatPct?: NumericLike | null;
+  waistCm?: NumericLike | null;
+  chestCm?: NumericLike | null;
+  armsCm?: NumericLike | null;
+  legsCm?: NumericLike | null;
+  hipsCm?: NumericLike | null;
+  shouldersCm?: NumericLike | null;
+  neckCm?: NumericLike | null;
+  forearmsCm?: NumericLike | null;
+  calvesCm?: NumericLike | null;
+  skinfoldData?: unknown;
+  notes?: string | null;
+  bmi?: NumericLike | null;
+  fatFreeWeightKg?: NumericLike | null;
+  subcutaneousFatPct?: NumericLike | null;
+  visceralFat?: NumericLike | null;
+  bodyWaterPct?: NumericLike | null;
+  skeletalMusclePct?: NumericLike | null;
+  muscleMassKg?: NumericLike | null;
+  boneMassKg?: NumericLike | null;
+  proteinPct?: NumericLike | null;
+  bmrKcal?: NumericLike | null;
+  metabolicAge?: NumericLike | null;
+  heartRateBpm?: NumericLike | null;
+  source?: string;
+}
+
+interface ImportWaterEntry {
+  loggedAt?: string;
+  amountMl?: NumericLike;
+  amount?: NumericLike;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -76,14 +142,14 @@ export async function POST(request: NextRequest) {
     // ─── Food Logs ──────────────────────────────────────────────
     if (Array.isArray(body.foodLogs) && body.foodLogs.length > 0) {
       const now = new Date();
-      const mapped = body.foodLogs.map((entry: any) => ({
+      const mapped = (body.foodLogs as ImportFoodEntry[]).map((entry) => ({
         loggedAt: entry.loggedAt ? new Date(entry.loggedAt) : new Date(),
         mealType: entry.mealType || "snack",
         foodDescription: entry.foodDescription || entry.name || entry.food || "Unknown food",
-        calories: parseFloat(entry.calories) || 0,
-        proteinG: parseFloat(entry.proteinG ?? entry.protein) || 0,
-        carbsG: parseFloat(entry.carbsG ?? entry.carbs) || 0,
-        fatG: parseFloat(entry.fatG ?? entry.fat) || 0,
+        calories: Number(entry.calories) || 0,
+        proteinG: Number(entry.proteinG ?? entry.protein) || 0,
+        carbsG: Number(entry.carbsG ?? entry.carbs) || 0,
+        fatG: Number(entry.fatG ?? entry.fat) || 0,
         notes: entry.notes || null,
         source: "import",
         updatedAt: now,
@@ -101,12 +167,12 @@ export async function POST(request: NextRequest) {
     // ─── Workouts ───────────────────────────────────────────────
     if (Array.isArray(body.workouts) && body.workouts.length > 0) {
       const now = new Date();
-      const mapped = body.workouts.map((entry: any) => ({
+      const mapped = (body.workouts as ImportWorkoutEntry[]).map((entry) => ({
         startedAt: entry.startedAt ? new Date(entry.startedAt) : new Date(),
-        durationMinutes: parseInt(entry.durationMinutes ?? entry.duration) || 0,
+        durationMinutes: Number(entry.durationMinutes ?? entry.duration) || 0,
         workoutType: entry.workoutType || entry.type || "strength",
         description: entry.description || entry.name || null,
-        caloriesBurned: entry.caloriesBurned != null ? parseFloat(entry.caloriesBurned) : null,
+        caloriesBurned: entry.caloriesBurned != null ? Number(entry.caloriesBurned) : null,
         exercises: entry.exercises || null,
         source: "import",
         updatedAt: now,
@@ -124,34 +190,34 @@ export async function POST(request: NextRequest) {
     // ─── Body Measurements ──────────────────────────────────────
     if (Array.isArray(body.measurements) && body.measurements.length > 0) {
       const now = new Date();
-      const mapped = body.measurements.map((entry: any) => ({
+      const mapped = (body.measurements as ImportMeasurementEntry[]).map((entry) => ({
         measuredAt: entry.measuredAt ? new Date(entry.measuredAt) : new Date(),
-        weightKg: entry.weightKg != null ? parseFloat(entry.weightKg) : null,
-        bodyFatPct: entry.bodyFatPct != null ? parseFloat(entry.bodyFatPct) : null,
-        waistCm: entry.waistCm != null ? parseFloat(entry.waistCm) : null,
-        chestCm: entry.chestCm != null ? parseFloat(entry.chestCm) : null,
-        armsCm: entry.armsCm != null ? parseFloat(entry.armsCm) : null,
-        legsCm: entry.legsCm != null ? parseFloat(entry.legsCm) : null,
-        hipsCm: entry.hipsCm != null ? parseFloat(entry.hipsCm) : null,
-        shouldersCm: entry.shouldersCm != null ? parseFloat(entry.shouldersCm) : null,
-        neckCm: entry.neckCm != null ? parseFloat(entry.neckCm) : null,
-        forearmsCm: entry.forearmsCm != null ? parseFloat(entry.forearmsCm) : null,
-        calvesCm: entry.calvesCm != null ? parseFloat(entry.calvesCm) : null,
+        weightKg: entry.weightKg != null ? Number(entry.weightKg) : null,
+        bodyFatPct: entry.bodyFatPct != null ? Number(entry.bodyFatPct) : null,
+        waistCm: entry.waistCm != null ? Number(entry.waistCm) : null,
+        chestCm: entry.chestCm != null ? Number(entry.chestCm) : null,
+        armsCm: entry.armsCm != null ? Number(entry.armsCm) : null,
+        legsCm: entry.legsCm != null ? Number(entry.legsCm) : null,
+        hipsCm: entry.hipsCm != null ? Number(entry.hipsCm) : null,
+        shouldersCm: entry.shouldersCm != null ? Number(entry.shouldersCm) : null,
+        neckCm: entry.neckCm != null ? Number(entry.neckCm) : null,
+        forearmsCm: entry.forearmsCm != null ? Number(entry.forearmsCm) : null,
+        calvesCm: entry.calvesCm != null ? Number(entry.calvesCm) : null,
         skinfoldData: entry.skinfoldData || null,
         notes: entry.notes || null,
         // Smart scale / body composition fields
-        bmi: entry.bmi != null ? parseFloat(entry.bmi) : null,
-        fatFreeWeightKg: entry.fatFreeWeightKg != null ? parseFloat(entry.fatFreeWeightKg) : null,
-        subcutaneousFatPct: entry.subcutaneousFatPct != null ? parseFloat(entry.subcutaneousFatPct) : null,
-        visceralFat: entry.visceralFat != null ? parseInt(entry.visceralFat) : null,
-        bodyWaterPct: entry.bodyWaterPct != null ? parseFloat(entry.bodyWaterPct) : null,
-        skeletalMusclePct: entry.skeletalMusclePct != null ? parseFloat(entry.skeletalMusclePct) : null,
-        muscleMassKg: entry.muscleMassKg != null ? parseFloat(entry.muscleMassKg) : null,
-        boneMassKg: entry.boneMassKg != null ? parseFloat(entry.boneMassKg) : null,
-        proteinPct: entry.proteinPct != null ? parseFloat(entry.proteinPct) : null,
-        bmrKcal: entry.bmrKcal != null ? parseInt(entry.bmrKcal) : null,
-        metabolicAge: entry.metabolicAge != null ? parseInt(entry.metabolicAge) : null,
-        heartRateBpm: entry.heartRateBpm != null ? parseInt(entry.heartRateBpm) : null,
+        bmi: entry.bmi != null ? Number(entry.bmi) : null,
+        fatFreeWeightKg: entry.fatFreeWeightKg != null ? Number(entry.fatFreeWeightKg) : null,
+        subcutaneousFatPct: entry.subcutaneousFatPct != null ? Number(entry.subcutaneousFatPct) : null,
+        visceralFat: entry.visceralFat != null ? Number(entry.visceralFat) : null,
+        bodyWaterPct: entry.bodyWaterPct != null ? Number(entry.bodyWaterPct) : null,
+        skeletalMusclePct: entry.skeletalMusclePct != null ? Number(entry.skeletalMusclePct) : null,
+        muscleMassKg: entry.muscleMassKg != null ? Number(entry.muscleMassKg) : null,
+        boneMassKg: entry.boneMassKg != null ? Number(entry.boneMassKg) : null,
+        proteinPct: entry.proteinPct != null ? Number(entry.proteinPct) : null,
+        bmrKcal: entry.bmrKcal != null ? Number(entry.bmrKcal) : null,
+        metabolicAge: entry.metabolicAge != null ? Number(entry.metabolicAge) : null,
+        heartRateBpm: entry.heartRateBpm != null ? Number(entry.heartRateBpm) : null,
         source: entry.source || "import",
         updatedAt: now,
       }));
@@ -167,9 +233,9 @@ export async function POST(request: NextRequest) {
 
     // ─── Water Logs ─────────────────────────────────────────────
     if (Array.isArray(body.waterLogs) && body.waterLogs.length > 0) {
-      const mapped = body.waterLogs.map((entry: any) => ({
+      const mapped = (body.waterLogs as ImportWaterEntry[]).map((entry) => ({
         loggedAt: entry.loggedAt ? new Date(entry.loggedAt) : new Date(),
-        amountMl: parseInt(entry.amountMl ?? entry.amount) || 250,
+        amountMl: Number(entry.amountMl ?? entry.amount) || 250,
       }));
 
       const result = await batchCreateWithFallback(

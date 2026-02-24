@@ -9,7 +9,6 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   try {
     const {
-      planId,
       completionId,
       feedback,     // "as_planned" | "exceeded" | "incomplete"
       userNotes,    // e.g. "bench press was too easy, I could have done more"

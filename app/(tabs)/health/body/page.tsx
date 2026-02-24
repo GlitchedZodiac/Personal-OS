@@ -23,10 +23,19 @@ import {
   Crosshair,
   ChevronDown,
   ChevronUp,
+  Pencil,
 } from "lucide-react";
 import { VoiceInput } from "@/components/voice-input";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { MeasurementWizard } from "@/components/measurement-wizard";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -59,6 +68,22 @@ export default function BodyMeasurementsPage() {
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
   const [units, setUnits] = useState<"metric" | "imperial">("metric");
   const [gender, setGender] = useState<Gender | "">("");
+  const [editEntry, setEditEntry] = useState<BodyEntry | null>(null);
+  const [editForm, setEditForm] = useState({
+    measuredAt: "",
+    weight: "",
+    bodyFatPct: "",
+    neck: "",
+    shoulders: "",
+    chest: "",
+    waist: "",
+    hips: "",
+    arms: "",
+    forearms: "",
+    thighs: "",
+    calves: "",
+    notes: "",
+  });
 
   const isImperial = units === "imperial";
 
@@ -77,6 +102,76 @@ export default function BodyMeasurementsPage() {
       }
     } catch (error) {
       console.error("Failed to delete:", error);
+    }
+  };
+
+  const toUiLength = (cm: number | null): string =>
+    cm == null ? "" : String(isImperial ? Math.round((cm / 2.54) * 10) / 10 : cm);
+  const fromUiLength = (value: string): number | null => {
+    if (!value) return null;
+    const parsed = parseFloat(value);
+    if (!Number.isFinite(parsed)) return null;
+    return isImperial ? Math.round(parsed * 2.54 * 10) / 10 : parsed;
+  };
+  const toUiWeight = (kg: number | null): string =>
+    kg == null ? "" : String(isImperial ? Math.round(kg * 2.205 * 10) / 10 : kg);
+  const fromUiWeight = (value: string): number | null => {
+    if (!value) return null;
+    const parsed = parseFloat(value);
+    if (!Number.isFinite(parsed)) return null;
+    return isImperial ? Math.round((parsed / 2.205) * 10) / 10 : parsed;
+  };
+
+  const startEdit = (entry: BodyEntry) => {
+    setEditEntry(entry);
+    setEditForm({
+      measuredAt: format(new Date(entry.measuredAt), "yyyy-MM-dd'T'HH:mm"),
+      weight: toUiWeight(entry.weightKg),
+      bodyFatPct: entry.bodyFatPct != null ? String(entry.bodyFatPct) : "",
+      neck: toUiLength(entry.neckCm),
+      shoulders: toUiLength(entry.shouldersCm),
+      chest: toUiLength(entry.chestCm),
+      waist: toUiLength(entry.waistCm),
+      hips: toUiLength(entry.hipsCm),
+      arms: toUiLength(entry.armsCm),
+      forearms: toUiLength(entry.forearmsCm),
+      thighs: toUiLength(entry.legsCm),
+      calves: toUiLength(entry.calvesCm),
+      notes: entry.notes || "",
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editEntry) return;
+    try {
+      const res = await fetch(`/api/health/body?id=${editEntry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          measuredAt: editForm.measuredAt ? new Date(editForm.measuredAt).toISOString() : undefined,
+          weightKg: fromUiWeight(editForm.weight),
+          bodyFatPct: editForm.bodyFatPct ? parseFloat(editForm.bodyFatPct) : null,
+          neckCm: fromUiLength(editForm.neck),
+          shouldersCm: fromUiLength(editForm.shoulders),
+          chestCm: fromUiLength(editForm.chest),
+          waistCm: fromUiLength(editForm.waist),
+          hipsCm: fromUiLength(editForm.hips),
+          armsCm: fromUiLength(editForm.arms),
+          forearmsCm: fromUiLength(editForm.forearms),
+          legsCm: fromUiLength(editForm.thighs),
+          calvesCm: fromUiLength(editForm.calves),
+          notes: editForm.notes || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to update measurement");
+      }
+      setEditEntry(null);
+      invalidateHealthCache();
+      fetchEntries();
+    } catch (error) {
+      console.error("Failed to update body measurement:", error);
     }
   };
 
@@ -370,19 +465,29 @@ export default function BodyMeasurementsPage() {
                           {entry.waistCm != null ? formatCm(entry.waistCm) : "—"}
                         </TableCell>
                         <TableCell className="text-right">
-                          <ConfirmDelete
-                            onConfirm={() => handleDelete(entry.id)}
-                            itemName="this measurement"
-                            trigger={
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                              >
-                                <Trash2 className="h-3 w-3 text-destructive" />
-                              </Button>
-                            }
-                          />
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => startEdit(entry)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <ConfirmDelete
+                              onConfirm={() => handleDelete(entry.id)}
+                              itemName="this measurement"
+                              trigger={
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                >
+                                  <Trash2 className="h-3 w-3 text-destructive" />
+                                </Button>
+                              }
+                            />
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -393,6 +498,97 @@ export default function BodyMeasurementsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!editEntry} onOpenChange={(open) => !open && setEditEntry(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Measurement</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Date & Time</Label>
+              <Input
+                type="datetime-local"
+                value={editForm.measuredAt}
+                onChange={(e) => setEditForm({ ...editForm, measuredAt: e.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Weight ({isImperial ? "lbs" : "kg"})</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={editForm.weight}
+                  onChange={(e) => setEditForm({ ...editForm, weight: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Body Fat (%)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={editForm.bodyFatPct}
+                  onChange={(e) => setEditForm({ ...editForm, bodyFatPct: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Neck ({isImperial ? "in" : "cm"})</Label>
+                <Input type="number" step="0.1" value={editForm.neck} onChange={(e) => setEditForm({ ...editForm, neck: e.target.value })} />
+              </div>
+              <div>
+                <Label>Shoulders ({isImperial ? "in" : "cm"})</Label>
+                <Input type="number" step="0.1" value={editForm.shoulders} onChange={(e) => setEditForm({ ...editForm, shoulders: e.target.value })} />
+              </div>
+              <div>
+                <Label>Chest ({isImperial ? "in" : "cm"})</Label>
+                <Input type="number" step="0.1" value={editForm.chest} onChange={(e) => setEditForm({ ...editForm, chest: e.target.value })} />
+              </div>
+              <div>
+                <Label>Waist ({isImperial ? "in" : "cm"})</Label>
+                <Input type="number" step="0.1" value={editForm.waist} onChange={(e) => setEditForm({ ...editForm, waist: e.target.value })} />
+              </div>
+              <div>
+                <Label>Hips ({isImperial ? "in" : "cm"})</Label>
+                <Input type="number" step="0.1" value={editForm.hips} onChange={(e) => setEditForm({ ...editForm, hips: e.target.value })} />
+              </div>
+              <div>
+                <Label>Arms ({isImperial ? "in" : "cm"})</Label>
+                <Input type="number" step="0.1" value={editForm.arms} onChange={(e) => setEditForm({ ...editForm, arms: e.target.value })} />
+              </div>
+              <div>
+                <Label>Forearms ({isImperial ? "in" : "cm"})</Label>
+                <Input type="number" step="0.1" value={editForm.forearms} onChange={(e) => setEditForm({ ...editForm, forearms: e.target.value })} />
+              </div>
+              <div>
+                <Label>Thighs ({isImperial ? "in" : "cm"})</Label>
+                <Input type="number" step="0.1" value={editForm.thighs} onChange={(e) => setEditForm({ ...editForm, thighs: e.target.value })} />
+              </div>
+              <div>
+                <Label>Calves ({isImperial ? "in" : "cm"})</Label>
+                <Input type="number" step="0.1" value={editForm.calves} onChange={(e) => setEditForm({ ...editForm, calves: e.target.value })} />
+              </div>
+            </div>
+
+            <div>
+              <Label>Notes</Label>
+              <Input
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                placeholder="Optional notes"
+              />
+            </div>
+
+            <Button className="w-full" onClick={saveEdit}>
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Measurement Wizard */}
       <MeasurementWizard

@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import OpenAI from "openai";
+import { openai } from "@/lib/openai";
 
 export const maxDuration = 60;
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Default category mapping for common transaction types
 const CATEGORY_KEYWORDS: Record<string, { category: string; subcategory?: string }> = {

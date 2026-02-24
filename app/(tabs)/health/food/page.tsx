@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,8 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Star,
   Pencil,
   Zap,
@@ -39,7 +41,7 @@ import {
 import { VoiceInput } from "@/components/voice-input";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import Link from "next/link";
-import { format } from "date-fns";
+import { addDays, format, isToday, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getSettings, getMacroGrams, fetchServerSettings } from "@/lib/settings";
 import { useCachedFetch, invalidateHealthCache } from "@/lib/cache";
@@ -359,6 +361,21 @@ export default function FoodLogPage() {
     });
   }, []);
 
+  const getLoggedAtForSelectedDate = () => {
+    const now = new Date();
+    const [year, month, day] = dateFilter.split("-").map(Number);
+    if (!year || !month || !day) return now.toISOString();
+    return new Date(
+      year,
+      month - 1,
+      day,
+      now.getHours(),
+      now.getMinutes(),
+      now.getSeconds(),
+      now.getMilliseconds()
+    ).toISOString();
+  };
+
   const handleDelete = async (id: string) => {
     try {
       const res = await fetch(`/api/health/food?id=${id}`, {
@@ -379,6 +396,7 @@ export default function FoodLogPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          loggedAt: getLoggedAtForSelectedDate(),
           mealType: entry.mealType,
           foodDescription: entry.foodDescription,
           calories: entry.calories,
@@ -471,6 +489,7 @@ export default function FoodLogPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          loggedAt: getLoggedAtForSelectedDate(),
           ...newEntry,
           calories: parseFloat(newEntry.calories) || 0,
           proteinG: parseFloat(newEntry.proteinG) || 0,
@@ -505,6 +524,7 @@ export default function FoodLogPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          loggedAt: getLoggedAtForSelectedDate(),
           foodDescription: fav.foodDescription,
           mealType: fav.mealType,
           calories: fav.calories,
@@ -582,6 +602,19 @@ export default function FoodLogPage() {
   const proteinPct = macroTargets.proteinG > 0 ? Math.min((totals.protein / macroTargets.proteinG) * 100, 100) : 0;
   const carbsBarPct = macroTargets.carbsG > 0 ? Math.min((totals.carbs / macroTargets.carbsG) * 100, 100) : 0;
   const fatBarPct = macroTargets.fatG > 0 ? Math.min((totals.fat / macroTargets.fatG) * 100, 100) : 0;
+  const selectedDate = new Date(`${dateFilter}T00:00:00`);
+
+  const goToPreviousDay = () => {
+    setDateFilter(format(subDays(selectedDate, 1), "yyyy-MM-dd"));
+  };
+
+  const goToNextDay = () => {
+    setDateFilter(format(addDays(selectedDate, 1), "yyyy-MM-dd"));
+  };
+
+  const goToToday = () => {
+    setDateFilter(format(new Date(), "yyyy-MM-dd"));
+  };
 
   return (
     <div className="px-4 pt-12 pb-36 space-y-4">
@@ -595,7 +628,7 @@ export default function FoodLogPage() {
         <div className="flex-1">
           <h1 className="text-xl font-bold">Food Log</h1>
           <p className="text-xs text-muted-foreground">
-            {format(new Date(dateFilter), "EEEE, MMM d")}
+            {format(selectedDate, "EEEE, MMM d")}
           </p>
         </div>
         <Button
@@ -722,6 +755,29 @@ export default function FoodLogPage() {
         </Dialog>
       </div>
 
+      {/* Always-visible date navigation for history */}
+      <Card className="border-border/50">
+        <CardContent className="p-3 flex items-center gap-2">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToPreviousDay}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="flex-1 h-8"
+          />
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToNextDay}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          {!isToday(selectedDate) && (
+            <Button variant="secondary" size="sm" className="h-8" onClick={goToToday}>
+              Today
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Daily Summary Card */}
       <Card className="overflow-hidden">
         <CardContent className="p-4 space-y-3">
@@ -796,29 +852,21 @@ export default function FoodLogPage() {
         </CardContent>
       </Card>
 
-      {/* Filters (collapsible) */}
+            {/* Filters (collapsible) */}
       {showFilters && (
         <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
-          <div className="flex gap-2">
-            <Input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="flex-1"
-            />
-            <Select value={mealFilter} onValueChange={setMealFilter}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Meals</SelectItem>
-                <SelectItem value="breakfast">🌅 Breakfast</SelectItem>
-                <SelectItem value="lunch">☀️ Lunch</SelectItem>
-                <SelectItem value="dinner">🌙 Dinner</SelectItem>
-                <SelectItem value="snack">🍿 Snack</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={mealFilter} onValueChange={setMealFilter}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Meals</SelectItem>
+              <SelectItem value="breakfast">Breakfast</SelectItem>
+              <SelectItem value="lunch">Lunch</SelectItem>
+              <SelectItem value="dinner">Dinner</SelectItem>
+              <SelectItem value="snack">Snack</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -1026,9 +1074,25 @@ export default function FoodLogPage() {
                 onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
               />
             </div>
-            <Button onClick={handleSaveEdit} className="w-full">
-              Save Changes
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={handleSaveEdit} className="flex-1">
+                Save Changes
+              </Button>
+              {editEntry && (
+                <ConfirmDelete
+                  onConfirm={async () => {
+                    await handleDelete(editEntry.id);
+                    setEditEntry(null);
+                  }}
+                  itemName="this food entry"
+                  trigger={
+                    <Button variant="destructive" className="px-3">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  }
+                />
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1038,3 +1102,4 @@ export default function FoodLogPage() {
     </div>
   );
 }
+

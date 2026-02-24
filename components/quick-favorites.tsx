@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Star, Plus, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -52,6 +51,7 @@ export function QuickFavorites({ onFoodLogged }: QuickFavoritesProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          loggedAt: new Date().toISOString(),
           foodDescription: fav.foodDescription,
           mealType: fav.mealType,
           calories: fav.calories,

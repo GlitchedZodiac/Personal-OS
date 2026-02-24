@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { items, source: batchSource } = body;
+    const { items, source: batchSource, loggedAt: batchLoggedAt } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
@@ -24,9 +24,15 @@ export async function POST(request: NextRequest) {
         fatG: number;
         notes?: string;
         source?: string;
+        loggedAt?: string;
       }) =>
         prisma.foodLog.create({
           data: {
+            loggedAt: item.loggedAt
+              ? new Date(item.loggedAt)
+              : batchLoggedAt
+                ? new Date(batchLoggedAt)
+                : undefined,
             mealType: item.mealType,
             foodDescription: item.foodDescription,
             calories: item.calories || 0,

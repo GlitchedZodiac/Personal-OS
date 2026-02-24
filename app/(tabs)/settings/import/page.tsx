@@ -4,7 +4,6 @@ import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   Upload,
@@ -122,7 +121,7 @@ export default function ImportPage() {
   const [vesyncResult, setVesyncResult] = useState<VeSyncResult | null>(null);
   const vesyncInputRef = useRef<HTMLInputElement>(null);
 
-  const validateJson = (text: string): { valid: boolean; data?: any; error?: string } => {
+  const validateJson = (text: string): { valid: boolean; data?: Record<string, unknown>; error?: string } => {
     if (!text.trim()) {
       return { valid: false, error: "Paste your JSON data above" };
     }
@@ -151,8 +150,9 @@ export default function ImportPage() {
       }
 
       return { valid: true, data: parsed };
-    } catch (e: any) {
-      return { valid: false, error: `Invalid JSON: ${e.message}` };
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { valid: false, error: `Invalid JSON: ${message}` };
     }
   };
 

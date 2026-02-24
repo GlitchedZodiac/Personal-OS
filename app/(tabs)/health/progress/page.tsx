@@ -17,6 +17,7 @@ import {
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { deactivateMicrophoneStream, getOrCreateMicrophoneStream } from "@/lib/microphone";
 
 interface ProgressPhoto {
   id: string;
@@ -151,7 +152,7 @@ export default function ProgressPhotosPage() {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getOrCreateMicrophoneStream();
 
       // Find the best supported audio format for Whisper
       const candidates = [
@@ -175,7 +176,7 @@ export default function ProgressPhotosPage() {
       };
 
       mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
+        deactivateMicrophoneStream();
         const usedMime = mimeType || mediaRecorder.mimeType || "audio/webm";
         const blob = new Blob(audioChunksRef.current, { type: usedMime });
         if (blob.size < 100) return;
