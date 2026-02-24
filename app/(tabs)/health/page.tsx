@@ -23,6 +23,11 @@ import {
   ChevronDown,
   ChevronUp,
   Droplets,
+  Brain,
+  HeartPulse,
+  Settings2,
+  LineChart,
+  LayoutDashboard,
 } from "lucide-react";
 import { VoiceInput } from "@/components/voice-input";
 import { WaterTracker } from "@/components/water-tracker";
@@ -402,7 +407,7 @@ export default function HealthDashboard() {
       <QuickFavorites onFoodLogged={fetchData} />
 
       {/* ─── Quick Links Grid ─── */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <Link href="/health/food">
           <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
             <CardContent className="p-3 flex flex-col items-center gap-1.5">
@@ -473,6 +478,66 @@ export default function HealthDashboard() {
               <span className="text-base font-bold">
                 {initialLoading ? <Skeleton className="h-5 w-6" /> : `${Math.round(summary.waterMl)}ml`}
               </span>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/health/command-center">
+          <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-indigo-500/10 group-hover:bg-indigo-500/20 transition-colors">
+                <LayoutDashboard className="h-4 w-4 text-indigo-400" />
+              </div>
+              <span className="text-[10px] font-medium">Command</span>
+              <span className="text-base font-bold">Day</span>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/health/coach">
+          <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-violet-500/10 group-hover:bg-violet-500/20 transition-colors">
+                <Brain className="h-4 w-4 text-violet-400" />
+              </div>
+              <span className="text-[10px] font-medium">Coach</span>
+              <span className="text-base font-bold">Week</span>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/health/recovery">
+          <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-rose-500/10 group-hover:bg-rose-500/20 transition-colors">
+                <HeartPulse className="h-4 w-4 text-rose-400" />
+              </div>
+              <span className="text-[10px] font-medium">Recovery</span>
+              <span className="text-base font-bold">Score</span>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/health/automations">
+          <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-sky-500/10 group-hover:bg-sky-500/20 transition-colors">
+                <Settings2 className="h-4 w-4 text-sky-400" />
+              </div>
+              <span className="text-[10px] font-medium">Rules</span>
+              <span className="text-base font-bold">Auto</span>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/health/outcomes">
+          <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-teal-500/10 group-hover:bg-teal-500/20 transition-colors">
+                <LineChart className="h-4 w-4 text-teal-400" />
+              </div>
+              <span className="text-[10px] font-medium">Forecast</span>
+              <span className="text-base font-bold">Trend</span>
             </CardContent>
           </Card>
         </Link>
