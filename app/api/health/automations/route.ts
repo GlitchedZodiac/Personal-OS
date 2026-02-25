@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { endOfDay, startOfDay } from "date-fns";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -9,22 +8,16 @@ import {
   type AutomationRule,
 } from "@/lib/automation";
 import { estimateFluidMlFromFoodLogs } from "@/lib/hydration";
-import { getUtcDayBounds, parseLocalDate } from "@/lib/utils";
+import { getUtcDayBounds } from "@/lib/utils";
+import {
+  getDateStringInTimeZone,
+  getHourInTimeZone,
+  getUtcDayBoundsForTimeZone,
+  zonedLocalDateTimeToUtc,
+} from "@/lib/timezone";
+import { getUserTimeZone } from "@/lib/server-timezone";
 
 type SettingsData = Record<string, unknown>;
-
-function toLocalDateTimeUtc(
-  dateStr: string,
-  hour: number,
-  minute: number,
-  tzOffsetMinutes: number
-) {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const utcMillis =
-    Date.UTC(year, month - 1, day, hour, minute, 0, 0) +
-    tzOffsetMinutes * 60_000;
-  return new Date(utcMillis);
-}
 
 async function getSettingsData() {
   const row = await prisma.userSettings.findUnique({
@@ -77,28 +70,29 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const dryRun = Boolean(body?.dryRun);
+    const timeZone = await getUserTimeZone(
+      typeof body?.timeZone === "string" ? body.timeZone : null
+    );
+    const now = new Date();
     const dateStr =
       typeof body?.date === "string" && body.date.length > 0
         ? body.date
-        : new Date().toISOString().slice(0, 10);
+        : getDateStringInTimeZone(now, timeZone);
     const localHour =
       typeof body?.localHour === "number" && Number.isFinite(body.localHour)
         ? Math.round(body.localHour)
-        : new Date().getHours();
+        : getHourInTimeZone(now, timeZone);
     const tzOffsetMinutes =
       typeof body?.tzOffsetMinutes === "number" &&
       Number.isFinite(body.tzOffsetMinutes)
         ? body.tzOffsetMinutes
-        : new Date().getTimezoneOffset();
+        : null;
 
-    const parsedOffset = Number(tzOffsetMinutes);
-    const { dayStart, dayEnd } =
-      Number.isFinite(parsedOffset)
-        ? getUtcDayBounds(dateStr, parsedOffset)
-        : {
-            dayStart: startOfDay(parseLocalDate(dateStr)),
-            dayEnd: endOfDay(parseLocalDate(dateStr)),
-          };
+    const parsedOffset =
+      tzOffsetMinutes !== null ? Number(tzOffsetMinutes) : Number.NaN;
+    const { dayStart, dayEnd } = Number.isFinite(parsedOffset)
+      ? getUtcDayBounds(dateStr, parsedOffset)
+      : getUtcDayBoundsForTimeZone(dateStr, timeZone);
 
     const [settingsData, foodAgg, foods, waterAgg, workoutAgg] = await Promise.all([
       getSettingsData(),
@@ -171,11 +165,12 @@ export async function POST(request: NextRequest) {
             where: { notes: { contains: marker } },
           });
           if (!existingTodo) {
-            const dueDate = toLocalDateTimeUtc(
+            const dueDate = zonedLocalDateTimeToUtc(
               dateStr,
+              timeZone,
               Math.min(23, rule.triggerHour + 1),
               0,
-              parsedOffset
+              0
             );
             await prisma.todo.create({
               data: {
@@ -193,11 +188,12 @@ export async function POST(request: NextRequest) {
             where: { body: { contains: marker } },
           });
           if (!existingReminder) {
-            const remindAt = toLocalDateTimeUtc(
+            const remindAt = zonedLocalDateTimeToUtc(
               dateStr,
+              timeZone,
               Math.min(23, rule.triggerHour + 1),
               0,
-              parsedOffset
+              0
             );
             await prisma.reminder.create({
               data: {
@@ -226,6 +222,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       dryRun,
+      timeZone,
       evaluatedRules: rules.length,
       triggered,
       metricSnapshot: {

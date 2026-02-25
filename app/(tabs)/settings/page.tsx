@@ -48,6 +48,7 @@ import {
 import { toast } from "sonner";
 import { getSettings, saveSettingsToServer, getMacroGrams, fetchServerSettings, type AppSettings } from "@/lib/settings";
 import { MacroSlider } from "@/components/macro-slider";
+import { COMMON_TIME_ZONES } from "@/lib/timezone";
 import Link from "next/link";
 
 interface BalanceInfo {
@@ -870,6 +871,45 @@ export default function SettingsPage() {
               />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Clock & Time Zone */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Bell className="h-4 w-4 text-cyan-500" />
+            Clock & Time Zone
+          </CardTitle>
+          <p className="text-[10px] text-muted-foreground">
+            Global time source for daily brief, coach, and date-based logs.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <Label className="text-xs text-muted-foreground">Time Zone</Label>
+          <Select
+            value={settings.timeZone || "America/Bogota"}
+            onValueChange={(v) =>
+              updateSettings({
+                ...settings,
+                timeZone: v,
+              })
+            }
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {COMMON_TIME_ZONES.map((tz) => (
+                <SelectItem key={tz} value={tz}>
+                  {tz}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground mt-2">
+            Default is America/Bogota.
+          </p>
         </CardContent>
       </Card>
 

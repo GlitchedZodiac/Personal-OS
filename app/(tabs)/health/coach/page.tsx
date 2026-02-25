@@ -1,14 +1,18 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { startOfWeek, format } from "date-fns";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Brain, CheckSquare, Target } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { invalidateHealthCache, useCachedFetch } from "@/lib/cache";
+import { fetchServerSettings, getSettings } from "@/lib/settings";
+import {
+  getDateStringInTimeZone,
+  getWeekStartDateString,
+} from "@/lib/timezone";
 
 type WeeklyCoachResponse = {
   week: { start: string; end: string };
@@ -35,27 +39,38 @@ type WeeklyCoachResponse = {
 };
 
 export default function WeeklyCoachPage() {
-  const [weekStart, setWeekStart] = useState(
-    format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd")
+  const initialTimeZone = getSettings().timeZone;
+  const [timeZone, setTimeZone] = useState(initialTimeZone);
+  const [weekStart, setWeekStart] = useState(() =>
+    getWeekStartDateString(getDateStringInTimeZone(new Date(), initialTimeZone), 1)
   );
   const [applying, setApplying] = useState(false);
 
-  const url = useMemo(
-    () => `/api/health/coach?weekStart=${weekStart}`,
-    [weekStart]
-  );
+  useEffect(() => {
+    fetchServerSettings().then((s) => {
+      setTimeZone(s.timeZone);
+      setWeekStart(getWeekStartDateString(getDateStringInTimeZone(new Date(), s.timeZone), 1));
+    });
+  }, []);
+
+  const url = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("weekStart", weekStart);
+    params.set("timeZone", timeZone);
+    return `/api/health/coach?${params.toString()}`;
+  }, [weekStart, timeZone]);
   const { data, initialLoading, refresh } = useCachedFetch<WeeklyCoachResponse>(url, {
     ttl: 60_000,
   });
 
-  const applyTasks = async () => {
+  const applyTasksWithTimeZone = async () => {
     if (!data || data.tasks.length === 0) return;
     setApplying(true);
     try {
       const response = await fetch("/api/health/coach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weekStart, tasks: data.tasks }),
+        body: JSON.stringify({ weekStart, tasks: data.tasks, timeZone }),
       });
       if (!response.ok) throw new Error("Failed to apply");
       const result: { created: number; skipped: number } = await response.json();
@@ -178,7 +193,7 @@ export default function WeeklyCoachPage() {
                   - {task}
                 </p>
               ))}
-              <Button className="w-full mt-2" onClick={applyTasks} disabled={applying}>
+              <Button className="w-full mt-2" onClick={applyTasksWithTimeZone} disabled={applying}>
                 {applying ? "Applying..." : "Apply Tasks To Todos"}
               </Button>
             </CardContent>

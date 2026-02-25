@@ -1,3 +1,5 @@
+import { DEFAULT_TIME_ZONE } from "@/lib/timezone";
+
 export interface AIInstructions {
   health: string;
   todos: string;
@@ -34,6 +36,7 @@ export interface AppSettings {
   bodyGoals: BodyGoals;
   aiInstructions: AIInstructions;
   workoutGoals: WorkoutGoals;
+  timeZone: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -64,6 +67,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     focusAreas: ["full_body"],
     injuries: "",
   },
+  timeZone: DEFAULT_TIME_ZONE,
 };
 
 const STORAGE_KEY = "personal-os-settings";
@@ -95,6 +99,9 @@ export function getSettings(): AppSettings {
         delete parsed.carbsTargetG;
         delete parsed.fatTargetG;
       }
+      if (parsed.timezone && !parsed.timeZone) {
+        parsed.timeZone = parsed.timezone;
+      }
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch {
@@ -123,8 +130,15 @@ export async function fetchServerSettings(): Promise<AppSettings> {
     if (!res.ok) return local;
     const { data } = await res.json();
     if (data && typeof data === "object") {
+      const normalizedData = { ...(data as Record<string, unknown>) };
+      if (
+        typeof normalizedData.timezone === "string" &&
+        typeof normalizedData.timeZone !== "string"
+      ) {
+        normalizedData.timeZone = normalizedData.timezone;
+      }
       // Server has settings — use them as source of truth
-      const merged = { ...DEFAULT_SETTINGS, ...data } as AppSettings;
+      const merged = { ...DEFAULT_SETTINGS, ...normalizedData } as AppSettings;
       if (typeof window !== "undefined") {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
       }

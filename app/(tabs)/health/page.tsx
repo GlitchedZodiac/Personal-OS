@@ -34,10 +34,14 @@ import { WaterTracker } from "@/components/water-tracker";
 import { QuickFavorites } from "@/components/quick-favorites";
 import { AIMealSuggestion } from "@/components/ai-meal-suggestion";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
 import { getSettings, getMacroGrams, fetchServerSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { useCachedFetch, invalidateHealthCache } from "@/lib/cache";
+import {
+  getDateStringInTimeZone,
+  getHourInTimeZone,
+  getTimeZoneOffsetMinutes,
+} from "@/lib/timezone";
 
 interface DailySummary {
   totalCalories: number;
@@ -117,20 +121,46 @@ const DEFAULT_STREAK: StreakData = {
 };
 
 export default function HealthDashboard() {
-  const today = format(new Date(), "yyyy-MM-dd");
-  const tzOffsetMinutes = new Date().getTimezoneOffset();
+  const initialSettings = useMemo(() => getSettings(), []);
+  const [timeZone, setTimeZone] = useState(initialSettings.timeZone);
+  const [clockTick, setClockTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setClockTick(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const now = useMemo(() => new Date(clockTick), [clockTick]);
+  const today = useMemo(
+    () => getDateStringInTimeZone(now, timeZone),
+    [now, timeZone]
+  );
+  const localHour = useMemo(
+    () => getHourInTimeZone(now, timeZone),
+    [now, timeZone]
+  );
+  const tzOffsetMinutes = useMemo(
+    () => getTimeZoneOffsetMinutes(now, timeZone),
+    [now, timeZone]
+  );
+  const summaryUrl = useMemo(
+    () =>
+      `/api/health/summary?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}&timeZone=${encodeURIComponent(
+        timeZone
+      )}`,
+    [today, tzOffsetMinutes, timeZone]
+  );
   const { data: summaryData, initialLoading: summaryLoading, refresh: refreshSummary } =
-    useCachedFetch<DailySummary>(`/api/health/summary?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}`, { ttl: 60_000 });
+    useCachedFetch<DailySummary>(summaryUrl, { ttl: 60_000 });
   const { data: streakData, refresh: refreshStreak } =
     useCachedFetch<StreakData>("/api/health/streak", { ttl: 60_000 });
   const briefUrl = useMemo(() => {
-    const now = new Date();
-    const localDate = format(now, "yyyy-MM-dd");
-    const localHour = now.getHours();
-    return `/api/health/daily-brief?localDate=${localDate}&localHour=${localHour}`;
-  }, []);
+    return `/api/health/daily-brief?timeZone=${encodeURIComponent(
+      timeZone
+    )}&localDate=${today}&localHour=${localHour}`;
+  }, [timeZone, today, localHour]);
   const { data: briefData } =
-    useCachedFetch<DailyBrief>(briefUrl, { ttl: 300_000 });
+    useCachedFetch<DailyBrief>(briefUrl, { ttl: 60_000 });
   const { data: achievementsData } =
     useCachedFetch<AchievementsData>("/api/health/achievements", { ttl: 300_000 });
 
@@ -138,7 +168,6 @@ export default function HealthDashboard() {
   const streak = streakData ?? DEFAULT_STREAK;
   const initialLoading = summaryLoading;
 
-  const initialSettings = useMemo(() => getSettings(), []);
   const [calorieTarget, setCalorieTarget] = useState(initialSettings.calorieTarget);
   const [showAchievements, setShowAchievements] = useState(false);
   const [macroTargets, setMacroTargets] = useState(() => getMacroGrams(initialSettings));
@@ -156,6 +185,7 @@ export default function HealthDashboard() {
       if (!isMounted) return;
       setCalorieTarget(s.calorieTarget);
       setMacroTargets(getMacroGrams(s));
+      setTimeZone(s.timeZone);
     });
 
     return () => {
@@ -181,7 +211,7 @@ export default function HealthDashboard() {
     : 0;
 
   const getGreetingIcon = () => {
-    const hour = new Date().getHours();
+    const hour = localHour;
     if (hour < 6) return <Moon className="h-5 w-5 text-indigo-400" />;
     if (hour < 12) return <Sunrise className="h-5 w-5 text-amber-400" />;
     if (hour < 17) return <Sun className="h-5 w-5 text-yellow-400" />;
@@ -189,7 +219,7 @@ export default function HealthDashboard() {
   };
 
   const greeting = () => {
-    const hour = new Date().getHours();
+    const hour = localHour;
     if (hour < 12) return "Good morning";
     if (hour < 17) return "Good afternoon";
     return "Good evening";
@@ -204,7 +234,12 @@ export default function HealthDashboard() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{greeting()}</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {format(new Date(), "EEEE, MMMM d")}
+              {new Intl.DateTimeFormat("en-US", {
+                timeZone,
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              }).format(now)}
             </p>
           </div>
         </div>

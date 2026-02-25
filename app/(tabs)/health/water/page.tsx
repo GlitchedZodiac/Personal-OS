@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ArrowLeft, Droplets, Pencil, Plus, Trash2 } from "lucide-react";
@@ -12,6 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { invalidateHealthCache, useCachedFetch } from "@/lib/cache";
+import { fetchServerSettings, getSettings } from "@/lib/settings";
+import {
+  getDateStringInTimeZone,
+  getTimeZoneOffsetMinutesForDateString,
+} from "@/lib/timezone";
 
 type WaterLog = {
   id: string;
@@ -30,8 +35,15 @@ type WaterResponse = {
 };
 
 export default function WaterLogPage() {
-  const tzOffsetMinutes = new Date().getTimezoneOffset();
-  const [dateFilter, setDateFilter] = useState(format(new Date(), "yyyy-MM-dd"));
+  const initialTimeZone = getSettings().timeZone;
+  const [timeZone, setTimeZone] = useState(initialTimeZone);
+  const [dateFilter, setDateFilter] = useState(
+    getDateStringInTimeZone(new Date(), initialTimeZone)
+  );
+  const tzOffsetMinutes = useMemo(
+    () => getTimeZoneOffsetMinutesForDateString(dateFilter, timeZone),
+    [dateFilter, timeZone]
+  );
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editEntry, setEditEntry] = useState<WaterLog | null>(null);
   const [newAmount, setNewAmount] = useState("250");
@@ -39,12 +51,20 @@ export default function WaterLogPage() {
   const [editAmount, setEditAmount] = useState("");
   const [editLoggedAt, setEditLoggedAt] = useState("");
 
+  useEffect(() => {
+    fetchServerSettings().then((s) => {
+      setTimeZone(s.timeZone);
+      setDateFilter(getDateStringInTimeZone(new Date(), s.timeZone));
+    });
+  }, []);
+
   const waterUrl = useMemo(() => {
     const params = new URLSearchParams();
     params.set("date", dateFilter);
     params.set("tzOffsetMinutes", String(tzOffsetMinutes));
+    params.set("timeZone", timeZone);
     return `/api/health/water?${params.toString()}`;
-  }, [dateFilter, tzOffsetMinutes]);
+  }, [dateFilter, tzOffsetMinutes, timeZone]);
 
   const { data, initialLoading, refresh } = useCachedFetch<WaterResponse>(waterUrl, { ttl: 30_000 });
   const logs = data?.logs ?? [];
@@ -158,7 +178,9 @@ export default function WaterLogPage() {
             />
             <Button
               variant="outline"
-              onClick={() => setDateFilter(format(new Date(), "yyyy-MM-dd"))}
+              onClick={() =>
+                setDateFilter(getDateStringInTimeZone(new Date(), timeZone))
+              }
               className="h-9"
             >
               Today
@@ -266,4 +288,3 @@ export default function WaterLogPage() {
     </div>
   );
 }
-

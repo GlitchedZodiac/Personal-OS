@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { startOfDay, endOfDay } from "date-fns";
 import { getUtcDayBounds, parseLocalDate } from "@/lib/utils";
 import { estimateFluidMlFromFoodLogs } from "@/lib/hydration";
+import { getUtcDayBoundsForTimeZone } from "@/lib/timezone";
+import { getUserTimeZone } from "@/lib/server-timezone";
 
 // GET - Daily health summary (optimized with aggregates — no full row fetches)
 export async function GET(request: NextRequest) {
@@ -10,13 +12,22 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const dateStr = searchParams.get("date");
     const tzOffsetMinutes = searchParams.get("tzOffsetMinutes");
+    const requestedTimeZone = searchParams.get("timeZone");
     const date = dateStr ? parseLocalDate(dateStr) : new Date();
 
     const parsedOffset = tzOffsetMinutes !== null ? Number(tzOffsetMinutes) : null;
-    const { dayStart, dayEnd } =
-      dateStr && parsedOffset !== null && Number.isFinite(parsedOffset)
-        ? getUtcDayBounds(dateStr, parsedOffset)
-        : { dayStart: startOfDay(date), dayEnd: endOfDay(date) };
+    let dayStart: Date;
+    let dayEnd: Date;
+
+    if (dateStr && parsedOffset !== null && Number.isFinite(parsedOffset)) {
+      ({ dayStart, dayEnd } = getUtcDayBounds(dateStr, parsedOffset));
+    } else if (dateStr) {
+      const timeZone = await getUserTimeZone(requestedTimeZone);
+      ({ dayStart, dayEnd } = getUtcDayBoundsForTimeZone(dateStr, timeZone));
+    } else {
+      dayStart = startOfDay(date);
+      dayEnd = endOfDay(date);
+    }
 
     const dateFilter = { gte: dayStart, lte: dayEnd };
 

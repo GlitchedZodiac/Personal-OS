@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { format } from "date-fns";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Play, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -16,6 +15,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { invalidateHealthCache, useCachedFetch } from "@/lib/cache";
+import { fetchServerSettings, getSettings } from "@/lib/settings";
+import {
+  getDateStringInTimeZone,
+  getHourInTimeZone,
+  getTimeZoneOffsetMinutesForDateString,
+} from "@/lib/timezone";
 
 type Metric = "proteinPct" | "hydrationPct" | "workoutMinutes";
 type Comparator = "<" | ">" | "<=" | ">=";
@@ -78,22 +83,24 @@ function metricLabel(metric: Metric) {
 }
 
 export default function AutomationsPage() {
+  const initialTimeZone = getSettings().timeZone;
   const { data, initialLoading, refresh } =
     useCachedFetch<AutomationGetResponse>("/api/health/automations", { ttl: 60_000 });
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [lastRun, setLastRun] = useState<AutomationRunResponse | null>(null);
+  const [timeZone, setTimeZone] = useState(initialTimeZone);
+
+  useEffect(() => {
+    fetchServerSettings().then((s) => setTimeZone(s.timeZone));
+  }, []);
 
   useEffect(() => {
     if (data?.rules) {
       setRules(data.rules);
     }
   }, [data]);
-
-  const localDate = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
-  const tzOffsetMinutes = useMemo(() => new Date().getTimezoneOffset(), []);
-  const localHour = useMemo(() => new Date().getHours(), []);
 
   const updateRule = (id: string, patch: Partial<AutomationRule>) => {
     setRules((prev) => prev.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule)));
@@ -122,6 +129,13 @@ export default function AutomationsPage() {
   const runRules = async (dryRun: boolean) => {
     setRunning(true);
     try {
+      const now = new Date();
+      const localDate = getDateStringInTimeZone(now, timeZone);
+      const localHour = getHourInTimeZone(now, timeZone);
+      const tzOffsetMinutes = getTimeZoneOffsetMinutesForDateString(
+        localDate,
+        timeZone
+      );
       const response = await fetch("/api/health/automations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -130,6 +144,7 @@ export default function AutomationsPage() {
           date: localDate,
           localHour,
           tzOffsetMinutes,
+          timeZone,
         }),
       });
       if (!response.ok) throw new Error("run failed");

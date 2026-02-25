@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay } from "date-fns";
-import { getUtcDayBounds, parseLocalDate } from "@/lib/utils";
+import { getUtcDayBounds } from "@/lib/utils";
+import { getUtcDayBoundsForTimeZone } from "@/lib/timezone";
+import { getUserTimeZone } from "@/lib/server-timezone";
 
 // GET - List food entries with filters
 export async function GET(request: NextRequest) {
@@ -9,6 +10,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date");
     const tzOffsetMinutes = searchParams.get("tzOffsetMinutes");
+    const requestedTimeZone = searchParams.get("timeZone");
     const mealType = searchParams.get("mealType");
     const search = searchParams.get("search");
 
@@ -16,13 +18,14 @@ export async function GET(request: NextRequest) {
 
     if (date) {
       const offset = tzOffsetMinutes !== null ? Number(tzOffsetMinutes) : null;
-      const { dayStart, dayEnd } =
-        offset !== null && Number.isFinite(offset)
-          ? getUtcDayBounds(date, offset)
-          : {
-              dayStart: startOfDay(parseLocalDate(date)),
-              dayEnd: endOfDay(parseLocalDate(date)),
-            };
+      let dayStart: Date;
+      let dayEnd: Date;
+      if (offset !== null && Number.isFinite(offset)) {
+        ({ dayStart, dayEnd } = getUtcDayBounds(date, offset));
+      } else {
+        const timeZone = await getUserTimeZone(requestedTimeZone);
+        ({ dayStart, dayEnd } = getUtcDayBoundsForTimeZone(date, timeZone));
+      }
       where.loggedAt = {
         gte: dayStart,
         lte: dayEnd,

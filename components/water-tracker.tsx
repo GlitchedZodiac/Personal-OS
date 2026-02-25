@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { format } from "date-fns";
 import { Droplets, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { fetchServerSettings, getSettings } from "@/lib/settings";
+import {
+  getDateStringInTimeZone,
+  getTimeZoneOffsetMinutesForDateString,
+} from "@/lib/timezone";
 
 interface WaterTrackerProps {
   onUpdate?: () => void;
@@ -27,6 +31,7 @@ type WaterResponse = {
 };
 
 export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
+  const [timeZone, setTimeZone] = useState(getSettings().timeZone);
   const [totalMl, setTotalMl] = useState(0);
   const [manualMl, setManualMl] = useState(0);
   const [inferredFluidMl, setInferredFluidMl] = useState(0);
@@ -37,9 +42,16 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
   const fetchWater = async () => {
     try {
       const now = new Date();
-      const today = format(now, "yyyy-MM-dd");
-      const tzOffsetMinutes = now.getTimezoneOffset();
-      const res = await fetch(`/api/health/water?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}`);
+      const today = getDateStringInTimeZone(now, timeZone);
+      const tzOffsetMinutes = getTimeZoneOffsetMinutesForDateString(
+        today,
+        timeZone
+      );
+      const res = await fetch(
+        `/api/health/water?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}&timeZone=${encodeURIComponent(
+          timeZone
+        )}`
+      );
       if (!res.ok) return;
 
       const data: Partial<WaterResponse> = await res.json();
@@ -56,8 +68,12 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
   };
 
   useEffect(() => {
-    fetchWater();
+    fetchServerSettings().then((s) => setTimeZone(s.timeZone));
   }, []);
+
+  useEffect(() => {
+    fetchWater();
+  }, [timeZone]);
 
   const addWater = async () => {
     try {
@@ -79,9 +95,14 @@ export function WaterTracker({ onUpdate, compact = false }: WaterTrackerProps) {
     if (glasses <= 0) return;
     try {
       const now = new Date();
-      const date = format(now, "yyyy-MM-dd");
-      const tzOffsetMinutes = now.getTimezoneOffset();
-      const res = await fetch(`/api/health/water?date=${date}&tzOffsetMinutes=${tzOffsetMinutes}`, { method: "DELETE" });
+      const date = getDateStringInTimeZone(now, timeZone);
+      const tzOffsetMinutes = getTimeZoneOffsetMinutesForDateString(date, timeZone);
+      const res = await fetch(
+        `/api/health/water?date=${date}&tzOffsetMinutes=${tzOffsetMinutes}&timeZone=${encodeURIComponent(
+          timeZone
+        )}`,
+        { method: "DELETE" }
+      );
       if (res.ok) {
         await fetchWater();
         onUpdate?.();

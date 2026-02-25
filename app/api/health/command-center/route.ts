@@ -2,6 +2,8 @@
 import { endOfDay, startOfDay } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { getUtcDayBounds, parseLocalDate } from "@/lib/utils";
+import { getUtcDayBoundsForTimeZone } from "@/lib/timezone";
+import { getUserTimeZone } from "@/lib/server-timezone";
 
 type TimelineEventType =
   | "food"
@@ -24,13 +26,21 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const dateStr = searchParams.get("date");
     const tzOffsetMinutes = searchParams.get("tzOffsetMinutes");
+    const requestedTimeZone = searchParams.get("timeZone");
     const date = dateStr ? parseLocalDate(dateStr) : new Date();
 
     const parsedOffset = tzOffsetMinutes !== null ? Number(tzOffsetMinutes) : null;
-    const { dayStart, dayEnd } =
-      dateStr && parsedOffset !== null && Number.isFinite(parsedOffset)
-        ? getUtcDayBounds(dateStr, parsedOffset)
-        : { dayStart: startOfDay(date), dayEnd: endOfDay(date) };
+    let dayStart: Date;
+    let dayEnd: Date;
+    if (dateStr && parsedOffset !== null && Number.isFinite(parsedOffset)) {
+      ({ dayStart, dayEnd } = getUtcDayBounds(dateStr, parsedOffset));
+    } else if (dateStr) {
+      const timeZone = await getUserTimeZone(requestedTimeZone);
+      ({ dayStart, dayEnd } = getUtcDayBoundsForTimeZone(dateStr, timeZone));
+    } else {
+      dayStart = startOfDay(date);
+      dayEnd = endOfDay(date);
+    }
 
     const [foods, workouts, waters, measurements, todos, reminders] =
       await Promise.all([

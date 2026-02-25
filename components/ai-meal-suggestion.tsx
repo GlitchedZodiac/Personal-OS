@@ -5,8 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, RefreshCw, Loader2, Flame, Dumbbell } from "lucide-react";
 import { MarkdownText } from "@/components/markdown-text";
-import { getSettings, getMacroGrams } from "@/lib/settings";
-import { format } from "date-fns";
+import { fetchServerSettings, getSettings, getMacroGrams } from "@/lib/settings";
+import {
+  getDateStringInTimeZone,
+  getTimeZoneOffsetMinutesForDateString,
+} from "@/lib/timezone";
 
 interface AIMealSuggestionProps {
   totalCalories: number;
@@ -27,15 +30,27 @@ export function AIMealSuggestion({
   const [loading, setLoading] = useState(false);
   const [hasTriedOnce, setHasTriedOnce] = useState(false);
   const [workoutCalories, setWorkoutCalories] = useState(0);
+  const [timeZone, setTimeZone] = useState(getSettings().timeZone);
+
+  useEffect(() => {
+    fetchServerSettings().then((s) => setTimeZone(s.timeZone));
+  }, []);
 
   // Fetch today's workout calories burned
   useEffect(() => {
     const fetchWorkoutCals = async () => {
       try {
         const now = new Date();
-        const today = format(now, "yyyy-MM-dd");
-        const tzOffsetMinutes = now.getTimezoneOffset();
-        const res = await fetch(`/api/health/summary?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}`);
+        const today = getDateStringInTimeZone(now, timeZone);
+        const tzOffsetMinutes = getTimeZoneOffsetMinutesForDateString(
+          today,
+          timeZone
+        );
+        const res = await fetch(
+          `/api/health/summary?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}&timeZone=${encodeURIComponent(
+            timeZone
+          )}`
+        );
         if (res.ok) {
           const data = await res.json();
           setWorkoutCalories(data.caloriesBurned || 0);
@@ -45,7 +60,7 @@ export function AIMealSuggestion({
       }
     };
     fetchWorkoutCals();
-  }, []);
+  }, [timeZone]);
 
   const fetchSuggestion = useCallback(async () => {
     setLoading(true);

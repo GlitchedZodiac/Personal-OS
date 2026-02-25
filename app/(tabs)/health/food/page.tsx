@@ -45,6 +45,11 @@ import { addDays, format, isToday, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getSettings, getMacroGrams, fetchServerSettings } from "@/lib/settings";
 import { useCachedFetch, invalidateHealthCache } from "@/lib/cache";
+import {
+  getDateStringInTimeZone,
+  getDateTimeIsoForLocalDateUsingCurrentTime,
+  getTimeZoneOffsetMinutesForDateString,
+} from "@/lib/timezone";
 
 interface FoodEntry {
   id: string;
@@ -298,11 +303,16 @@ function MealSection({
 }
 
 export default function FoodLogPage() {
-  const tzOffsetMinutes = new Date().getTimezoneOffset();
+  const initialSettings = useMemo(() => getSettings(), []);
   const [searchQuery, setSearchQuery] = useState("");
   const [mealFilter, setMealFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState(
-    format(new Date(), "yyyy-MM-dd")
+    getDateStringInTimeZone(new Date(), initialSettings.timeZone)
+  );
+  const [timeZone, setTimeZone] = useState(initialSettings.timeZone);
+  const tzOffsetMinutes = useMemo(
+    () => getTimeZoneOffsetMinutesForDateString(dateFilter, timeZone),
+    [dateFilter, timeZone]
   );
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -318,8 +328,10 @@ export default function FoodLogPage() {
     fatG: "",
     notes: "",
   });
-  const [calTarget, setCalTarget] = useState(2000);
-  const [macroTargets, setMacroTargets] = useState({ proteinG: 150, carbsG: 200, fatG: 67 });
+  const [calTarget, setCalTarget] = useState(initialSettings.calorieTarget);
+  const [macroTargets, setMacroTargets] = useState(() =>
+    getMacroGrams(initialSettings)
+  );
   const [showQuickLog, setShowQuickLog] = useState(false);
   const [quickLogLoading, setQuickLogLoading] = useState<string | null>(null);
   const [editEntry, setEditEntry] = useState<FoodEntry | null>(null);
@@ -339,10 +351,11 @@ export default function FoodLogPage() {
     const params = new URLSearchParams();
     if (dateFilter) params.set("date", dateFilter);
     params.set("tzOffsetMinutes", String(tzOffsetMinutes));
+    params.set("timeZone", timeZone);
     if (mealFilter !== "all") params.set("mealType", mealFilter);
     if (searchQuery) params.set("search", searchQuery);
     return `/api/health/food?${params.toString()}`;
-  }, [dateFilter, mealFilter, searchQuery, tzOffsetMinutes]);
+  }, [dateFilter, mealFilter, searchQuery, tzOffsetMinutes, timeZone]);
 
   const { data: entries, initialLoading, refresh: fetchEntries } =
     useCachedFetch<FoodEntry[]>(foodUrl, { ttl: 60_000 });
@@ -354,26 +367,18 @@ export default function FoodLogPage() {
     const local = getSettings();
     setCalTarget(local.calorieTarget);
     setMacroTargets(getMacroGrams(local));
+    setTimeZone(local.timeZone);
 
     fetchServerSettings().then((s) => {
       setCalTarget(s.calorieTarget);
       setMacroTargets(getMacroGrams(s));
+      setTimeZone(s.timeZone);
+      setDateFilter(getDateStringInTimeZone(new Date(), s.timeZone));
     });
   }, []);
 
   const getLoggedAtForSelectedDate = () => {
-    const now = new Date();
-    const [year, month, day] = dateFilter.split("-").map(Number);
-    if (!year || !month || !day) return now.toISOString();
-    return new Date(
-      year,
-      month - 1,
-      day,
-      now.getHours(),
-      now.getMinutes(),
-      now.getSeconds(),
-      now.getMilliseconds()
-    ).toISOString();
+    return getDateTimeIsoForLocalDateUsingCurrentTime(dateFilter, timeZone);
   };
 
   const handleDelete = async (id: string) => {
@@ -613,7 +618,7 @@ export default function FoodLogPage() {
   };
 
   const goToToday = () => {
-    setDateFilter(format(new Date(), "yyyy-MM-dd"));
+    setDateFilter(getDateStringInTimeZone(new Date(), timeZone));
   };
 
   return (

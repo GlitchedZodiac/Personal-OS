@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay, subDays } from "date-fns";
-import { parseLocalDate } from "@/lib/utils";
+import {
+  addDaysToDateString,
+  getDateStringInTimeZone,
+  getHourInTimeZone,
+  getUtcDayBoundsForTimeZone,
+} from "@/lib/timezone";
+import { getUserTimeZone } from "@/lib/server-timezone";
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Daily brief API.
@@ -11,18 +18,24 @@ import { parseLocalDate } from "@/lib/utils";
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const localDateStr = searchParams.get("localDate"); // e.g. "2026-02-17"
-    const localHour = parseInt(searchParams.get("localHour") || String(new Date().getHours()));
+    const requestedTimeZone = searchParams.get("timeZone");
+    const timeZone = await getUserTimeZone(requestedTimeZone);
+    const now = new Date();
+    const localDateParam = searchParams.get("localDate");
+    const localDateStr =
+      localDateParam && DATE_RE.test(localDateParam)
+        ? localDateParam
+        : getDateStringInTimeZone(now, timeZone);
+    const parsedHour = Number.parseInt(searchParams.get("localHour") || "", 10);
+    const localHour = Number.isFinite(parsedHour)
+      ? Math.max(0, Math.min(23, parsedHour))
+      : getHourInTimeZone(now, timeZone);
 
-    // Use client-provided date or fall back to server date
-    const referenceDate = localDateStr
-      ? parseLocalDate(localDateStr)
-      : new Date();
-
-    const todayStart = startOfDay(referenceDate);
-    const todayEnd = endOfDay(referenceDate);
-    const yesterdayStart = startOfDay(subDays(referenceDate, 1));
-    const yesterdayEnd = endOfDay(subDays(referenceDate, 1));
+    const { dayStart: todayStart, dayEnd: todayEnd } =
+      getUtcDayBoundsForTimeZone(localDateStr, timeZone);
+    const yesterdayDateStr = addDaysToDateString(localDateStr, -1);
+    const { dayStart: yesterdayStart, dayEnd: yesterdayEnd } =
+      getUtcDayBoundsForTimeZone(yesterdayDateStr, timeZone);
 
     // Fetch both today and yesterday data + todos
     const [todayFood, todayWorkouts, yesterdayFood, yesterdayWorkouts, todayTodos] =
@@ -146,6 +159,8 @@ export async function GET(request: NextRequest) {
     const topPriority = sortedTodos[0]?.title || null;
 
     return NextResponse.json({
+      timeZone,
+      localDate: localDateStr,
       greeting: localHour < 12 ? "morning" : localHour < 17 ? "afternoon" : "evening",
       summary: parts.join(" "),
       tip,

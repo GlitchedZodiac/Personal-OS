@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { format } from "date-fns";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, BatteryCharging, HeartPulse } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useCachedFetch } from "@/lib/cache";
+import { fetchServerSettings, getSettings } from "@/lib/settings";
+import {
+  getDateStringInTimeZone,
+  getTimeZoneOffsetMinutesForDateString,
+} from "@/lib/timezone";
 
 type RecoveryFactor = {
   key: string;
@@ -36,15 +40,31 @@ function scoreTone(score: number) {
 }
 
 export default function RecoveryPage() {
-  const [dateFilter, setDateFilter] = useState(format(new Date(), "yyyy-MM-dd"));
-  const tzOffsetMinutes = new Date().getTimezoneOffset();
+  const initialTimeZone = getSettings().timeZone;
+  const [timeZone, setTimeZone] = useState(initialTimeZone);
+  const [dateFilter, setDateFilter] = useState(
+    getDateStringInTimeZone(new Date(), initialTimeZone)
+  );
+
+  useEffect(() => {
+    fetchServerSettings().then((s) => {
+      setTimeZone(s.timeZone);
+      setDateFilter(getDateStringInTimeZone(new Date(), s.timeZone));
+    });
+  }, []);
+
+  const tzOffsetMinutes = useMemo(
+    () => getTimeZoneOffsetMinutesForDateString(dateFilter, timeZone),
+    [dateFilter, timeZone]
+  );
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
     params.set("date", dateFilter);
     params.set("tzOffsetMinutes", String(tzOffsetMinutes));
+    params.set("timeZone", timeZone);
     return `/api/health/recovery?${params.toString()}`;
-  }, [dateFilter, tzOffsetMinutes]);
+  }, [dateFilter, tzOffsetMinutes, timeZone]);
 
   const { data, initialLoading, refresh } =
     useCachedFetch<RecoveryResponse>(url, { ttl: 30_000 });

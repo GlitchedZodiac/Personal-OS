@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addDays, endOfWeek, format, startOfWeek } from "date-fns";
 import { prisma } from "@/lib/prisma";
-import { parseLocalDate } from "@/lib/utils";
+import {
+  addDaysToDateString,
+  dateStringDiffDays,
+  getDateStringInTimeZone,
+  getUtcDateRangeForTimeZone,
+  getWeekStartDateString,
+  zonedLocalDateTimeToUtc,
+} from "@/lib/timezone";
+import { getUserTimeZone } from "@/lib/server-timezone";
 
 type SettingsLike = {
   calorieTarget?: number;
@@ -10,6 +17,8 @@ type SettingsLike = {
     daysPerWeek?: number;
   };
 };
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function getTargetsFromSettings(settings: SettingsLike | null) {
   const calorieTarget = Number(settings?.calorieTarget ?? 2000);
@@ -58,10 +67,20 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const weekStartParam = searchParams.get("weekStart");
-    const weekStart = weekStartParam
-      ? parseLocalDate(weekStartParam)
-      : startOfWeek(new Date(), { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    const requestedTimeZone = searchParams.get("timeZone");
+    const timeZone = await getUserTimeZone(requestedTimeZone);
+
+    const todayDateStr = getDateStringInTimeZone(new Date(), timeZone);
+    const weekStartDateStr =
+      weekStartParam && DATE_RE.test(weekStartParam)
+      ? weekStartParam
+      : getWeekStartDateString(todayDateStr, 1);
+    const weekEndDateStr = addDaysToDateString(weekStartDateStr, 6);
+    const { rangeStart: weekStart, rangeEnd: weekEnd } = getUtcDateRangeForTimeZone(
+      weekStartDateStr,
+      weekEndDateStr,
+      timeZone
+    );
 
     const [settingsRow, foods, workouts, waters, completedTodos] = await Promise.all([
       prisma.userSettings.findUnique({ where: { id: "default" }, select: { data: true } }),
@@ -86,9 +105,15 @@ export async function GET(request: NextRequest) {
     const { calorieTarget, proteinTarget, plannedWorkoutDays } =
       getTargetsFromSettings(settings);
 
+    const effectiveDateForElapsed =
+      todayDateStr < weekStartDateStr
+        ? weekStartDateStr
+        : todayDateStr > weekEndDateStr
+        ? weekEndDateStr
+        : todayDateStr;
     const elapsedDays = Math.max(
       1,
-      Math.min(7, Math.floor((Date.now() - weekStart.getTime()) / 86_400_000) + 1)
+      Math.min(7, dateStringDiffDays(weekStartDateStr, effectiveDateForElapsed) + 1)
     );
 
     const totalCalories = foods.reduce((sum, item) => sum + item.calories, 0);
@@ -131,9 +156,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       week: {
-        start: format(weekStart, "yyyy-MM-dd"),
-        end: format(weekEnd, "yyyy-MM-dd"),
+        start: weekStartDateStr,
+        end: weekEndDateStr,
       },
+      timeZone,
       summary: {
         avgCalories: Math.round(avgCalories),
         calorieTarget,
@@ -178,9 +204,13 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const tasks: string[] = Array.isArray(body.tasks) ? body.tasks : [];
-    const weekStart = body.weekStart
-      ? parseLocalDate(body.weekStart)
-      : startOfWeek(new Date(), { weekStartsOn: 1 });
+    const requestedTimeZone =
+      typeof body.timeZone === "string" ? body.timeZone : null;
+    const timeZone = await getUserTimeZone(requestedTimeZone);
+    const weekStartDateStr =
+      typeof body.weekStart === "string" && DATE_RE.test(body.weekStart)
+        ? body.weekStart
+        : getWeekStartDateString(getDateStringInTimeZone(new Date(), timeZone), 1);
 
     if (tasks.length === 0) {
       return NextResponse.json({ created: 0, skipped: 0 });
@@ -196,8 +226,8 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const dueDate = addDays(weekStart, Math.min(index, 6));
-      dueDate.setHours(12, 0, 0, 0);
+      const dueDateStr = addDaysToDateString(weekStartDateStr, Math.min(index, 6));
+      const dueDate = zonedLocalDateTimeToUtc(dueDateStr, timeZone, 12, 0, 0);
 
       const existing = await prisma.todo.findFirst({
         where: {
