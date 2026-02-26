@@ -23,6 +23,7 @@ import {
   Banknote,
   BarChart3,
   Upload,
+  Inbox,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -171,6 +172,11 @@ export default function FinancesPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Link href="/finances/inbox">
+            <button className="p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-colors">
+              <Inbox className="h-4 w-4" />
+            </button>
+          </Link>
           <Link href="/finances/import">
             <button className="p-2 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors">
               <Upload className="h-4 w-4" />
@@ -347,13 +353,13 @@ export default function FinancesPage() {
                 </CardContent>
               </Card>
             </Link>
-            <Link href="/finances/import">
+            <Link href="/finances/inbox">
               <Card className="hover:bg-accent/50 transition-all cursor-pointer group tap-scale">
                 <CardContent className="p-3 flex flex-col items-center gap-1.5">
-                  <div className="p-2 rounded-xl bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
-                    <Upload className="h-4 w-4 text-purple-500" />
+                  <div className="p-2 rounded-xl bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
+                    <Inbox className="h-4 w-4 text-blue-500" />
                   </div>
-                  <span className="text-[10px] font-medium">Import</span>
+                  <span className="text-[10px] font-medium">Inbox</span>
                 </CardContent>
               </Card>
             </Link>
