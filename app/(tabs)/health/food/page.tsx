@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,8 @@ import { useCachedFetch, invalidateHealthCache } from "@/lib/cache";
 import {
   getDateStringInTimeZone,
   getDateTimeIsoForLocalDateUsingCurrentTime,
-  getTimeZoneOffsetMinutesForDateString,
+  getZonedDateParts,
+  zonedLocalDateTimeToUtc,
 } from "@/lib/timezone";
 
 interface FoodEntry {
@@ -73,6 +74,27 @@ interface FavoriteFood {
   carbsG: number;
   fatG: number;
   usageCount: number;
+}
+
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function formatIsoForDateTimeInput(isoValue: string, timeZone: string) {
+  const parts = getZonedDateParts(new Date(isoValue), timeZone);
+  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}T${pad2(parts.hour)}:${pad2(parts.minute)}`;
+}
+
+function dateTimeInputToIsoInTimeZone(value: string, timeZone: string) {
+  const [datePart, timePart] = value.split("T");
+  if (!datePart || !timePart) return null;
+
+  const [hourStr, minuteStr] = timePart.split(":");
+  const hour = Number.parseInt(hourStr || "", 10);
+  const minute = Number.parseInt(minuteStr || "", 10);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+
+  return zonedLocalDateTimeToUtc(datePart, timeZone, hour, minute, 0).toISOString();
 }
 
 const mealConfig: Record<
@@ -304,16 +326,13 @@ function MealSection({
 
 export default function FoodLogPage() {
   const initialSettings = useMemo(() => getSettings(), []);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [mealFilter, setMealFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState(
+  const initialDateRef = useRef(
     getDateStringInTimeZone(new Date(), initialSettings.timeZone)
   );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [mealFilter, setMealFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState(initialDateRef.current);
   const [timeZone, setTimeZone] = useState(initialSettings.timeZone);
-  const tzOffsetMinutes = useMemo(
-    () => getTimeZoneOffsetMinutesForDateString(dateFilter, timeZone),
-    [dateFilter, timeZone]
-  );
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [collapsedMeals, setCollapsedMeals] = useState<Record<string, boolean>>(
@@ -350,12 +369,11 @@ export default function FoodLogPage() {
   const foodUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (dateFilter) params.set("date", dateFilter);
-    params.set("tzOffsetMinutes", String(tzOffsetMinutes));
     params.set("timeZone", timeZone);
     if (mealFilter !== "all") params.set("mealType", mealFilter);
     if (searchQuery) params.set("search", searchQuery);
     return `/api/health/food?${params.toString()}`;
-  }, [dateFilter, mealFilter, searchQuery, tzOffsetMinutes, timeZone]);
+  }, [dateFilter, mealFilter, searchQuery, timeZone]);
 
   const { data: entries, initialLoading, refresh: fetchEntries } =
     useCachedFetch<FoodEntry[]>(foodUrl, { ttl: 60_000 });
@@ -373,7 +391,10 @@ export default function FoodLogPage() {
       setCalTarget(s.calorieTarget);
       setMacroTargets(getMacroGrams(s));
       setTimeZone(s.timeZone);
-      setDateFilter(getDateStringInTimeZone(new Date(), s.timeZone));
+      const todayInServerZone = getDateStringInTimeZone(new Date(), s.timeZone);
+      setDateFilter((prev) =>
+        prev === initialDateRef.current ? todayInServerZone : prev
+      );
     });
   }, []);
 
@@ -454,7 +475,7 @@ export default function FoodLogPage() {
       proteinG: String(entry.proteinG),
       carbsG: String(entry.carbsG),
       fatG: String(entry.fatG),
-      loggedAt: format(new Date(entry.loggedAt), "yyyy-MM-dd'T'HH:mm"),
+      loggedAt: formatIsoForDateTimeInput(entry.loggedAt, timeZone),
       notes: entry.notes || "",
     });
   };
@@ -462,6 +483,11 @@ export default function FoodLogPage() {
   const handleSaveEdit = async () => {
     if (!editEntry) return;
     try {
+      const editedLoggedAtIso =
+        editForm.loggedAt
+          ? dateTimeInputToIsoInTimeZone(editForm.loggedAt, timeZone)
+          : null;
+
       const res = await fetch(`/api/health/food?id=${editEntry.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -472,7 +498,7 @@ export default function FoodLogPage() {
           proteinG: parseFloat(editForm.proteinG) || 0,
           carbsG: parseFloat(editForm.carbsG) || 0,
           fatG: parseFloat(editForm.fatG) || 0,
-          loggedAt: editForm.loggedAt ? new Date(editForm.loggedAt).toISOString() : undefined,
+          loggedAt: editedLoggedAtIso || undefined,
           notes: editForm.notes || null,
         }),
       });

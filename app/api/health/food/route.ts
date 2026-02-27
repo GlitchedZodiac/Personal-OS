@@ -20,10 +20,14 @@ export async function GET(request: NextRequest) {
       const offset = tzOffsetMinutes !== null ? Number(tzOffsetMinutes) : null;
       let dayStart: Date;
       let dayEnd: Date;
-      if (offset !== null && Number.isFinite(offset)) {
+      // Prefer explicit/app timezone bounds when available.
+      if (requestedTimeZone && requestedTimeZone.trim().length > 0) {
+        const timeZone = await getUserTimeZone(requestedTimeZone);
+        ({ dayStart, dayEnd } = getUtcDayBoundsForTimeZone(date, timeZone));
+      } else if (offset !== null && Number.isFinite(offset)) {
         ({ dayStart, dayEnd } = getUtcDayBounds(date, offset));
       } else {
-        const timeZone = await getUserTimeZone(requestedTimeZone);
+        const timeZone = await getUserTimeZone(null);
         ({ dayStart, dayEnd } = getUtcDayBoundsForTimeZone(date, timeZone));
       }
       where.loggedAt = {
