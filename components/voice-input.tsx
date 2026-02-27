@@ -33,6 +33,7 @@ interface FoodItem {
   carbsG: number;
   fatG: number;
   notes?: string;
+  loggedAt?: string;
 }
 
 interface AIResponse {
@@ -277,6 +278,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
           message: text,
           customInstructions: settings.aiInstructions?.health || "",
           aiLanguage: settings.aiLanguage || "english",
+          timeZone: settings.timeZone,
         }),
       });
 

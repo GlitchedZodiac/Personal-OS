@@ -25,6 +25,10 @@ FOOD LOGGING RULES:
   * After 5pm → dinner
 - If the user mentions drinks, sides, or condiments, log each separately
 - For combination plates, break into components (e.g., bandeja paisa → rice, beans, ground beef, chicharrón, egg, plantain, arepa, avocado — each as separate items)
+- If the user mentions when they ate (e.g., yesterday, last night, this morning, at 7pm, on 2026-02-26), include loggedAt for each item as an ISO datetime in local context
+- If the user provides a date without a time, default loggedAt to 12:00 local time for that date
+- If the user provides a time without a date, assume today in local context
+- Never ignore explicit temporal phrases like "yesterday", "last night", "ayer", or "anoche"
 - In your confirmation message, show a brief per-item breakdown and the total, and be encouraging
 
 BODY MEASUREMENTS:
@@ -119,6 +123,10 @@ export const FOOD_LOG_FUNCTION = {
             notes: {
               type: "string" as const,
               description: "Portion size assumptions or other relevant notes",
+            },
+            loggedAt: {
+              type: "string" as const,
+              description: "Optional ISO datetime for when the food was eaten. Include when the user specifies timing.",
             },
           },
           required: ["mealType", "foodDescription", "calories", "proteinG", "carbsG", "fatG"],
