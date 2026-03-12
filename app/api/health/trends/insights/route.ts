@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { endOfDay, format, startOfDay, subDays } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
 import { buildCoachStyleGuide, getCoachLanguageLabel } from "@/lib/health-coach";
-import { openai } from "@/lib/openai";
+import { generateChatText } from "@/lib/openai-text";
 import { prisma } from "@/lib/prisma";
 
 // Allow up to 60s for AI generation (Vercel Pro)
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
       fatTargetG,
     ].join("|");
     const dataHash = hashData(dataFingerprint);
-    const cacheKey = `weekly_insight_${format(new Date(), "yyyy-MM-dd")}`;
+    const cacheKey = `weekly_insight_v2_${format(new Date(), "yyyy-MM-dd")}`;
 
     if (!forceRefresh) {
       const cached = await prisma.aIInsightCache.findUnique({
@@ -170,24 +170,25 @@ ${measurementSummary || "No measurements taken"}
 
 No bullet points. No headers. No invented numbers.`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
+    const completion = await generateChatText({
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.45,
-      max_completion_tokens: 150,
+      maxCompletionTokens: 220,
+      retryMaxCompletionTokens: 320,
     });
 
     const insight =
-      completion.choices[0].message?.content?.trim() ||
+      completion.text ||
       "Keep logging the basics. The next useful coaching layer comes from consistency.";
 
-    await prisma.aIInsightCache.upsert({
-      where: { cacheKey },
-      create: { cacheKey, insight, dataHash },
-      update: { insight, dataHash },
-    });
+    if (completion.text) {
+      await prisma.aIInsightCache.upsert({
+        where: { cacheKey },
+        create: { cacheKey, insight, dataHash },
+        update: { insight, dataHash },
+      });
+    }
 
-    return NextResponse.json({ insight, generated: true, cached: false });
+    return NextResponse.json({ insight, generated: Boolean(completion.text), cached: false });
   } catch (error) {
     console.error("Insights error:", error);
     return NextResponse.json({

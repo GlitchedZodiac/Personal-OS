@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { openai } from "@/lib/openai";
+import { generateChatText } from "@/lib/openai-text";
 import {
   subDays,
   startOfDay,
@@ -157,8 +157,7 @@ vs. Previous week:
 - Avg calories: ${prevAvgCal} kcal (${avgCalories - prevAvgCal > 0 ? "+" : ""}${avgCalories - prevAvgCal} change)
 - Workouts: ${prevTotalWorkouts} (${totalWorkouts - prevTotalWorkouts > 0 ? "+" : ""}${totalWorkouts - prevTotalWorkouts} change)`;
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-5.2",
+      const completion = await generateChatText({
         messages: [
           {
             role: "system",
@@ -170,11 +169,11 @@ vs. Previous week:
             content: `Write my weekly fitness recap based on this data:\n${dataContext}`,
           },
         ],
-        temperature: 0.7,
-        max_completion_tokens: 200,
+        maxCompletionTokens: 260,
+        retryMaxCompletionTokens: 360,
       });
       aiSummary =
-        completion.choices[0].message?.content?.trim() ||
+        completion.text ||
         "Great week! Keep up the consistency.";
     } catch (err) {
       console.error("Weekly report AI error:", err);

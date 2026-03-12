@@ -205,6 +205,7 @@ const COLORS = {
 };
 
 const PIE_COLORS = [COLORS.protein, COLORS.carbs, COLORS.fat];
+const COACH_CACHE_VERSION = "2";
 
 const tooltipStyle = {
   backgroundColor: "rgba(23, 23, 23, 0.95)",
@@ -272,7 +273,7 @@ export default function TrendsPage() {
   // Weekly insight — 1 hour TTL, server caches in DB too
   const insightUrl = useMemo(
     () =>
-      `/api/health/trends/insights?calorieTarget=${calorieTarget}&proteinTargetG=${macroTargets.proteinG}&carbsTargetG=${macroTargets.carbsG}&fatTargetG=${macroTargets.fatG}&aiLanguage=${aiLanguage}`,
+      `/api/health/trends/insights?coachVersion=${COACH_CACHE_VERSION}&calorieTarget=${calorieTarget}&proteinTargetG=${macroTargets.proteinG}&carbsTargetG=${macroTargets.carbsG}&fatTargetG=${macroTargets.fatG}&aiLanguage=${aiLanguage}`,
     [calorieTarget, macroTargets, aiLanguage]
   );
   const { data: insightData, loading: insightLoading, refresh: fetchInsight } =
@@ -301,7 +302,7 @@ export default function TrendsPage() {
   const projectionsUrl = useMemo(
     () =>
       tab === "projections"
-        ? `/api/health/trends/projections?goalWeightKg=${bodyGoals.goalWeightKg || ""}&goalWaistCm=${bodyGoals.goalWaistCm || ""}&calorieTarget=${calorieTarget}&aiLanguage=${aiLanguage}`
+        ? `/api/health/trends/projections?coachVersion=${COACH_CACHE_VERSION}&goalWeightKg=${bodyGoals.goalWeightKg || ""}&goalWaistCm=${bodyGoals.goalWaistCm || ""}&calorieTarget=${calorieTarget}&aiLanguage=${aiLanguage}`
         : null,
     [tab, bodyGoals, calorieTarget, aiLanguage]
   );

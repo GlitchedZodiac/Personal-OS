@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { openai } from "@/lib/openai";
+import { generateChatText } from "@/lib/openai-text";
 import { format, subDays, startOfDay, endOfDay, addDays } from "date-fns";
 import crypto from "crypto";
 
@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
     // ─── AI Outlook (cached in DB, only regenerate on demand) ───
     const dataFingerprint = `proj|w:${weightPoints.length}|wa:${waistPoints.length}|f:${calDays.length}|wo:${workoutLogs.length}|g:${goalWeightKg}|${goalWaistCm}`;
     const dataHash = hashData(dataFingerprint);
-    const cacheKey = "projection_outlook_90d";
+    const cacheKey = "projection_outlook_90d_v2";
 
     let aiOutlook = "";
     let outlookCached = true;
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
     if (cached && cached.dataHash === dataHash && !refreshAI) {
       // Data hasn't changed and no refresh requested — use cached
       aiOutlook = cached.insight;
-    } else if (refreshAI || !cached) {
+    } else {
       // Either refresh requested, or no cache exists yet — generate new
       outlookCached = false;
       try {
@@ -174,8 +174,7 @@ HABITS (last 90 days averages):
 - Total workout sessions: ${workoutLogs.length}
 - Days with food logged: ${calDays.length}`;
 
-        const completion = await openai.chat.completions.create({
-          model: "gpt-5.2",
+        const completion = await generateChatText({
           messages: [
             {
               role: "system",
@@ -186,27 +185,24 @@ HABITS (last 90 days averages):
               content: `Based on my data, give me a 90-day projection outlook. What will I achieve if I stay on track? What should I focus on to accelerate progress? Be specific with dates and numbers.\n${dataContext}`,
             },
           ],
-          temperature: 0.7,
-          max_completion_tokens: 300,
+          maxCompletionTokens: 420,
+          retryMaxCompletionTokens: 560,
         });
 
-        aiOutlook = completion.choices[0].message?.content?.trim() ||
+        aiOutlook = completion.text ||
           "Keep logging consistently to get personalized 90-day projections!";
 
-        // Cache in DB
-        await prisma.aIInsightCache.upsert({
-          where: { cacheKey },
-          create: { cacheKey, insight: aiOutlook, dataHash },
-          update: { insight: aiOutlook, dataHash },
-        });
+        if (completion.text) {
+          await prisma.aIInsightCache.upsert({
+            where: { cacheKey },
+            create: { cacheKey, insight: aiOutlook, dataHash },
+            update: { insight: aiOutlook, dataHash },
+          });
+        }
       } catch (err) {
         console.error("AI outlook error:", err);
-        // Fall back to cached version if available
         aiOutlook = cached?.insight || "Tap refresh to generate your 90-day AI outlook.";
       }
-    } else {
-      // Data changed but no refresh requested — return stale cache with a flag
-      aiOutlook = cached.insight;
     }
 
     return NextResponse.json({
