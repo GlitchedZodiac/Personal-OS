@@ -76,6 +76,10 @@ interface FavoriteFood {
   usageCount: number;
 }
 
+interface LatestFoodDateResponse {
+  date: string | null;
+}
+
 function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
@@ -354,6 +358,7 @@ export default function FoodLogPage() {
   const [showQuickLog, setShowQuickLog] = useState(false);
   const [quickLogLoading, setQuickLogLoading] = useState<string | null>(null);
   const [editEntry, setEditEntry] = useState<FoodEntry | null>(null);
+  const [autoFocusedLatestDate, setAutoFocusedLatestDate] = useState(false);
   const [editForm, setEditForm] = useState({
     foodDescription: "",
     mealType: "",
@@ -377,6 +382,12 @@ export default function FoodLogPage() {
 
   const { data: entries, initialLoading, refresh: fetchEntries } =
     useCachedFetch<FoodEntry[]>(foodUrl, { ttl: 60_000 });
+  const latestDateUrl = useMemo(
+    () => `/api/health/food?latestDateOnly=true&timeZone=${encodeURIComponent(timeZone)}`,
+    [timeZone]
+  );
+  const { data: latestFoodDate } =
+    useCachedFetch<LatestFoodDateResponse>(latestDateUrl, { ttl: 300_000 });
 
   const { data: favorites, refresh: refreshFavorites } =
     useCachedFetch<FavoriteFood[]>("/api/health/favorites", { ttl: 300_000 });
@@ -603,6 +614,32 @@ export default function FoodLogPage() {
 
   // Group entries by meal type
   const safeEntries = entries ?? [];
+  const todayInTimeZone = useMemo(
+    () => getDateStringInTimeZone(new Date(), timeZone),
+    [timeZone]
+  );
+
+  useEffect(() => {
+    if (autoFocusedLatestDate) return;
+    if (initialLoading) return;
+    if (safeEntries.length > 0) return;
+    if (mealFilter !== "all" || searchQuery.trim().length > 0) return;
+    if (dateFilter !== todayInTimeZone) return;
+    if (!latestFoodDate?.date || latestFoodDate.date === todayInTimeZone) return;
+
+    setDateFilter(latestFoodDate.date);
+    setAutoFocusedLatestDate(true);
+  }, [
+    autoFocusedLatestDate,
+    initialLoading,
+    safeEntries.length,
+    mealFilter,
+    searchQuery,
+    dateFilter,
+    todayInTimeZone,
+    latestFoodDate?.date,
+  ]);
+
   const groupedEntries = safeEntries.reduce<Record<string, FoodEntry[]>>(
     (groups, entry) => {
       const key = entry.mealType || "snack";
@@ -809,6 +846,17 @@ export default function FoodLogPage() {
           )}
         </CardContent>
       </Card>
+
+      {autoFocusedLatestDate && latestFoodDate?.date && dateFilter === latestFoodDate.date && (
+        <Card className="cockpit-card rounded-[24px] border-amber-400/20 bg-transparent">
+          <CardContent className="flex items-center justify-between gap-3 p-3 text-xs text-muted-foreground">
+            <span>Showing your latest logged food day.</span>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-amber-300" onClick={goToToday}>
+              Back to today
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Daily Summary Card */}
       <Card className="cockpit-card overflow-hidden rounded-[28px] border-white/8 bg-transparent">

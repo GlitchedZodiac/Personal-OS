@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getDateStringInTimeZone } from "@/lib/timezone";
 import { getUtcDayBounds } from "@/lib/utils";
 import { getUtcDayBoundsForTimeZone } from "@/lib/timezone";
 import { getUserTimeZone } from "@/lib/server-timezone";
@@ -13,6 +14,21 @@ export async function GET(request: NextRequest) {
     const requestedTimeZone = searchParams.get("timeZone");
     const mealType = searchParams.get("mealType");
     const search = searchParams.get("search");
+    const latestDateOnly = searchParams.get("latestDateOnly") === "true";
+
+    if (latestDateOnly) {
+      const timeZone = await getUserTimeZone(requestedTimeZone);
+      const latestEntry = await prisma.foodLog.findFirst({
+        orderBy: { loggedAt: "desc" },
+        select: { loggedAt: true },
+      });
+
+      return NextResponse.json({
+        date: latestEntry
+          ? getDateStringInTimeZone(latestEntry.loggedAt, timeZone)
+          : null,
+      });
+    }
 
     const where: Record<string, unknown> = {};
 
