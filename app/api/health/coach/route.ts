@@ -8,31 +8,10 @@ import {
   getWeekStartDateString,
   zonedLocalDateTimeToUtc,
 } from "@/lib/timezone";
+import { getCoachTargets } from "@/lib/health-coach";
 import { getUserTimeZone } from "@/lib/server-timezone";
 
-type SettingsLike = {
-  calorieTarget?: number;
-  proteinPct?: number;
-  workoutGoals?: {
-    daysPerWeek?: number;
-  };
-};
-
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function getTargetsFromSettings(settings: SettingsLike | null) {
-  const calorieTarget = Number(settings?.calorieTarget ?? 2000);
-  const proteinPct = Number(settings?.proteinPct ?? 30);
-  const proteinTarget = Math.round((calorieTarget * proteinPct) / 100 / 4);
-  const plannedWorkoutDays = Number(settings?.workoutGoals?.daysPerWeek ?? 4);
-  return {
-    calorieTarget,
-    proteinTarget,
-    plannedWorkoutDays: Number.isFinite(plannedWorkoutDays)
-      ? plannedWorkoutDays
-      : 4,
-  };
-}
 
 function getCoachTasks(input: {
   avgProtein: number;
@@ -101,9 +80,12 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const settings = (settingsRow?.data as SettingsLike | null) ?? null;
-    const { calorieTarget, proteinTarget, plannedWorkoutDays } =
-      getTargetsFromSettings(settings);
+    const settings = (settingsRow?.data as Record<string, unknown> | null) ?? null;
+    const {
+      calorieTarget,
+      proteinTargetG: proteinTarget,
+      plannedWorkoutDays,
+    } = getCoachTargets(settings);
 
     const effectiveDateForElapsed =
       todayDateStr < weekStartDateStr
@@ -177,18 +159,18 @@ export async function GET(request: NextRequest) {
       tasks,
       weeklyPlan: {
         training: remainingWorkoutSessions
-          ? `Schedule ${remainingWorkoutSessions} focused session${
+          ? `Lock ${remainingWorkoutSessions} focused session${
               remainingWorkoutSessions > 1 ? "s" : ""
-            } before week close.`
-          : "You are on top of your training schedule. Keep intensity controlled.",
+            } before week close and treat them as non-negotiable.`
+          : "Training frequency is on track. Keep effort quality high and recovery controlled.",
         nutrition:
           avgProtein < proteinTarget
-            ? `Raise protein to ${proteinTarget}g/day with one anchor meal per day.`
-            : "Protein is on track. Keep meal quality and consistency high.",
+            ? `Raise protein to ${proteinTarget}g/day and anchor every main meal around it.`
+            : "Protein is on track. Keep meal timing and meal quality tight.",
         execution:
           completedTodos < 5
-            ? "Run a 10-minute nightly review and lock tomorrow's priorities."
-            : "Execution quality is good. Keep task batching and focus blocks.",
+            ? "Run a 10-minute nightly review and lock tomorrow before the day ends."
+            : "Execution is solid. Protect focus blocks and avoid unnecessary task switching.",
       },
     });
   } catch (error) {

@@ -1,5 +1,66 @@
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+
+function toNullableNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toNullableDate(value: unknown) {
+  if (!value) return null;
+  const parsed = new Date(String(value));
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
+function buildWorkoutMutation(body: Record<string, unknown>) {
+  return {
+    startedAt: toNullableDate(body.startedAt) || new Date(),
+    endedAt: toNullableDate(body.endedAt),
+    workoutType:
+      typeof body.workoutType === "string" && body.workoutType.trim().length > 0
+        ? body.workoutType.trim()
+        : "other",
+    durationMinutes: Math.max(0, Number(body.durationMinutes || 0)),
+    description:
+      typeof body.description === "string" ? body.description : null,
+    caloriesBurned: toNullableNumber(body.caloriesBurned),
+    distanceMeters: toNullableNumber(body.distanceMeters),
+    stepCount:
+      body.stepCount === undefined || body.stepCount === null
+        ? null
+        : Math.round(Number(body.stepCount)),
+    avgHeartRateBpm:
+      body.avgHeartRateBpm === undefined || body.avgHeartRateBpm === null
+        ? null
+        : Math.round(Number(body.avgHeartRateBpm)),
+    maxHeartRateBpm:
+      body.maxHeartRateBpm === undefined || body.maxHeartRateBpm === null
+        ? null
+        : Math.round(Number(body.maxHeartRateBpm)),
+    elevationGainM: toNullableNumber(body.elevationGainM),
+    routeData: (body.routeData as Prisma.InputJsonValue) ?? undefined,
+    metricsData: (body.metricsData as Prisma.InputJsonValue) ?? undefined,
+    exercises: (body.exercises as Prisma.InputJsonValue) ?? undefined,
+    deviceType:
+      typeof body.deviceType === "string" ? body.deviceType : null,
+    externalSource:
+      typeof body.externalSource === "string" ? body.externalSource : null,
+    externalId:
+      typeof body.externalId === "string" ? body.externalId : null,
+    syncStatus:
+      typeof body.syncStatus === "string" && body.syncStatus.trim().length > 0
+        ? body.syncStatus
+        : "synced",
+    stravaActivityId:
+      typeof body.stravaActivityId === "string" ? body.stravaActivityId : null,
+    source:
+      typeof body.source === "string" && body.source.trim().length > 0
+        ? body.source
+        : "manual",
+  };
+}
 
 // GET - List workout entries
 export async function GET() {
@@ -22,19 +83,10 @@ export async function GET() {
 // POST - Create a workout entry
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown>;
 
     const entry = await prisma.workoutLog.create({
-      data: {
-        startedAt: body.startedAt ? new Date(body.startedAt) : new Date(),
-        workoutType: body.workoutType,
-        durationMinutes: body.durationMinutes || 0,
-        description: body.description || null,
-        caloriesBurned: body.caloriesBurned || null,
-        exercises: body.exercises || undefined,
-        stravaActivityId: body.stravaActivityId || null,
-        source: body.source || "manual",
-      },
+      data: buildWorkoutMutation(body),
     });
 
     return NextResponse.json(entry);
@@ -50,21 +102,17 @@ export async function POST(request: NextRequest) {
 // PATCH - Update an existing workout entry
 export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { id, ...updates } = body;
+    const body = (await request.json()) as Record<string, unknown>;
+    const id = typeof body.id === "string" ? body.id : null;
 
     if (!id) {
       return NextResponse.json({ error: "ID required" }, { status: 400 });
     }
 
-    // Build update data, only include fields that were provided
-    const data: Record<string, unknown> = {};
-    if (updates.startedAt !== undefined) data.startedAt = new Date(updates.startedAt);
-    if (updates.workoutType !== undefined) data.workoutType = updates.workoutType;
-    if (updates.durationMinutes !== undefined) data.durationMinutes = updates.durationMinutes;
-    if (updates.description !== undefined) data.description = updates.description;
-    if (updates.caloriesBurned !== undefined) data.caloriesBurned = updates.caloriesBurned;
-    if (updates.exercises !== undefined) data.exercises = updates.exercises;
+    const updates = buildWorkoutMutation(body);
+    const data = Object.fromEntries(
+      Object.entries(updates).filter(([, value]) => value !== undefined)
+    );
 
     const entry = await prisma.workoutLog.update({
       where: { id },

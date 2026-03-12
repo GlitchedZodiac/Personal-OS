@@ -648,7 +648,8 @@ export default function FoodLogPage() {
   };
 
   return (
-    <div className="px-4 pt-12 pb-36 space-y-4">
+    <div className="health-stage px-4 pt-10 pb-40">
+      <div className="stagger-children space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/health">
@@ -787,7 +788,7 @@ export default function FoodLogPage() {
       </div>
 
       {/* Always-visible date navigation for history */}
-      <Card className="border-border/50">
+      <Card className="cockpit-card rounded-[28px] border-white/8 bg-transparent">
         <CardContent className="p-3 flex items-center gap-2">
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToPreviousDay}>
             <ChevronLeft className="h-4 w-4" />
@@ -810,7 +811,7 @@ export default function FoodLogPage() {
       </Card>
 
       {/* Daily Summary Card */}
-      <Card className="overflow-hidden">
+      <Card className="cockpit-card overflow-hidden rounded-[28px] border-white/8 bg-transparent">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-end justify-between">
             <div>
@@ -912,7 +913,7 @@ export default function FoodLogPage() {
 
       {/* Quick Log Favorites Panel */}
       {showQuickLog && (
-        <Card className="animate-in slide-in-from-top-2 duration-200 border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-orange-500/5">
+        <Card className="cockpit-card animate-in slide-in-from-top-2 duration-200 rounded-[28px] border-amber-400/20 bg-transparent">
           <CardHeader className="pb-2 pt-3 px-4">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -1130,6 +1131,7 @@ export default function FoodLogPage() {
 
       {/* Voice Input */}
       <VoiceInput onDataLogged={() => { invalidateHealthCache(); fetchEntries(); }} />
+      </div>
     </div>
   );
 }

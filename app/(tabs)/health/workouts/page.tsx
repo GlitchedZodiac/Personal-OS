@@ -29,7 +29,6 @@ import {
   Sparkles,
   RefreshCw,
   Loader2,
-  MapPin,
   Heart,
   Mountain,
   TrendingUp,
@@ -364,7 +363,8 @@ export default function WorkoutsPage() {
   };
 
   return (
-    <div className="px-4 pt-12 pb-36 space-y-4">
+    <div className="health-stage px-4 pt-10 pb-40">
+      <div className="stagger-children space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/health">
@@ -475,10 +475,10 @@ export default function WorkoutsPage() {
 
       {/* AI Plan Banner */}
       <Link href="/health/workouts/plan">
-        <Card className="border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 transition-colors cursor-pointer">
+        <Card className="cockpit-card cursor-pointer rounded-[28px] border-white/8 bg-transparent transition-colors hover:border-cyan-300/18 hover:bg-white/5">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-purple-500/10">
-              <Sparkles className="h-5 w-5 text-purple-400" />
+            <div className="rounded-2xl bg-cyan-500/12 p-2">
+              <Sparkles className="h-5 w-5 text-cyan-300" />
             </div>
             <div className="flex-1">
               <p className="text-sm font-medium">AI Workout Plan</p>
@@ -486,14 +486,14 @@ export default function WorkoutsPage() {
                 Get a personalized training plan, track progress, and level up
               </p>
             </div>
-            <span className="text-xs text-purple-400">Open →</span>
+            <span className="text-xs text-cyan-300">Open</span>
           </CardContent>
         </Card>
       </Link>
 
       {/* Strava Sync */}
       {stravaConnected && (
-        <Card className="border-orange-500/20 bg-orange-500/5">
+        <Card className="cockpit-card rounded-[28px] border-orange-400/20 bg-transparent">
           <CardContent className="p-3 flex items-center gap-3">
             <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24">
               <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" fill="#FC4C02"/>
@@ -592,7 +592,7 @@ export default function WorkoutsPage() {
             return (
               <Card
                 key={entry.id}
-                className={cn("border overflow-hidden", cfg.bgColor)}
+                className={cn("cockpit-card overflow-hidden rounded-[28px] border", cfg.bgColor)}
               >
                 <CardContent className="p-0">
                   {/* Main card content */}
@@ -996,6 +996,7 @@ export default function WorkoutsPage() {
 
       {/* Voice Input */}
       <VoiceInput onDataLogged={() => { invalidateHealthCache(); fetchEntries(); }} />
+      </div>
     </div>
   );
 }

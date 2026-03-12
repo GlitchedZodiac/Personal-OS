@@ -9,7 +9,7 @@ export default function TabsLayout({
   return (
     <PinGate>
       <div className="min-h-screen bg-background">
-        <main className="pb-20 max-w-lg mx-auto">
+        <main className="mx-auto max-w-lg pb-44">
           {children}
         </main>
         <BottomNav />

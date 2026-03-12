@@ -82,6 +82,8 @@ export function AIMealSuggestion({
           fatTargetG: macros.fatG,
           mealCount,
           workoutCaloriesBurned: workoutCalories,
+          localHour: new Date().getHours(),
+          timeZone,
           customInstructions: settings.aiInstructions?.health || "",
           aiLanguage: settings.aiLanguage || "english",
         }),
@@ -97,7 +99,7 @@ export function AIMealSuggestion({
       setLoading(false);
       setHasTriedOnce(true);
     }
-  }, [totalCalories, totalProtein, totalCarbs, totalFat, mealCount, workoutCalories]);
+  }, [totalCalories, totalProtein, totalCarbs, totalFat, mealCount, workoutCalories, timeZone]);
 
   // Auto-fetch once when there's food data
   useEffect(() => {
@@ -107,11 +109,11 @@ export function AIMealSuggestion({
   }, [mealCount, hasTriedOnce, suggestion, fetchSuggestion]);
 
   return (
-    <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+    <Card className="cockpit-card overflow-hidden rounded-[28px] border-white/8 bg-transparent">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
+            <Sparkles className="h-4 w-4 text-teal-300" />
             <span className="text-sm font-medium">AI Coach</span>
           </div>
           <Button
@@ -131,7 +133,7 @@ export function AIMealSuggestion({
 
         {/* Workout context badge */}
         {workoutCalories > 0 && (
-          <div className="flex items-center gap-2 mb-2 p-2 rounded-lg bg-orange-500/5 border border-orange-500/10">
+          <div className="mb-2 flex items-center gap-2 rounded-2xl border border-orange-400/12 bg-orange-500/8 p-2.5">
             <Dumbbell className="h-3.5 w-3.5 text-orange-400" />
             <span className="text-[10px] text-orange-400">
               {Math.round(workoutCalories)} cal burned today

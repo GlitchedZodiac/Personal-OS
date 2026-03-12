@@ -95,7 +95,7 @@ interface AIResponse {
 }
 
 export function VoiceInput({ onDataLogged }: VoiceInputProps) {
-  const floatingBottomClass = "bottom-[calc(env(safe-area-inset-bottom,0px)+6.5rem)]";
+  const floatingBottomClass = "bottom-[calc(env(safe-area-inset-bottom,0px)+7.25rem)]";
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -572,7 +572,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   if (editingIndex !== null && editValues) {
     return (
       <div className={cn("fixed left-0 right-0 px-4 z-[60]", floatingBottomClass)}>
-        <Card className="max-w-lg mx-auto border-primary/50 shadow-2xl">
+        <Card className="floating-action-dock max-w-lg mx-auto rounded-[28px] border-white/10 bg-[rgba(17,20,24,0.92)] shadow-2xl">
           <CardContent className="p-4 space-y-3">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Edit Item
@@ -672,7 +672,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
 
     return (
       <div className={cn("fixed left-0 right-0 px-4 z-[60]", floatingBottomClass)}>
-        <Card className="max-w-lg mx-auto border-primary/30 shadow-2xl backdrop-blur-sm">
+        <Card className="floating-action-dock max-w-lg mx-auto rounded-[28px] border-white/10 bg-[rgba(17,20,24,0.92)] shadow-2xl backdrop-blur-sm">
           <CardContent className="p-4 space-y-3">
             <p className="text-sm leading-relaxed">{aiResponse.message}</p>
 
@@ -727,7 +727,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
                   </span>
                 )}
                 {aiResponse.measurement.bodyFatPct && (
-                  <span className="bg-purple-500/20 text-purple-400 rounded-lg px-3 py-1.5 font-medium">
+                  <span className="rounded-lg bg-cyan-500/20 px-3 py-1.5 font-medium text-cyan-300">
                     {aiResponse.measurement.bodyFatPct}% body fat
                   </span>
                 )}
@@ -741,7 +741,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
 
             {/* Workout preview */}
             {aiResponse.type === "workout" && aiResponse.workout && (
-              <div className="bg-purple-500/10 rounded-lg p-3 space-y-1">
+              <div className="space-y-1 rounded-lg bg-cyan-500/10 p-3">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="capitalize font-medium">
                     {aiResponse.workout.workoutType}
@@ -859,7 +859,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
       <div className="max-w-lg mx-auto pointer-events-auto">
         {/* Failed text recovery banner */}
         {lastFailedText && (
-          <Card className="mb-3 shadow-lg border-red-500/30 bg-red-500/5">
+          <Card className="mb-3 rounded-[24px] border-red-500/30 bg-red-500/5 shadow-lg">
             <CardContent className="p-2.5">
               <div className="flex items-start gap-2">
                 <div className="flex-1 min-w-0">
@@ -889,7 +889,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
 
         {/* Text input mode */}
         {showTextInput && (
-          <Card className="mb-3 shadow-lg border-border/50">
+          <Card className="floating-action-dock mb-3 rounded-[24px] border-white/10 bg-[rgba(17,20,24,0.9)] shadow-lg">
             <CardContent className="p-2.5 flex gap-2">
               <Input
                 value={textInput}
@@ -918,7 +918,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
 
         {/* Photo analyzing overlay */}
         {isAnalyzingPhoto && (
-          <Card className="mb-3 shadow-lg border-amber-500/30 bg-amber-500/5">
+          <Card className="mb-3 rounded-[24px] border-amber-500/30 bg-amber-500/5 shadow-lg">
             <CardContent className="p-3">
               <div className="flex items-center gap-3">
                 {photoPreview && (
@@ -953,16 +953,14 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
         />
 
         {/* Main controls */}
-        <div className="flex items-center justify-center gap-4">
+        <div className="floating-action-dock flex items-center justify-center gap-4 rounded-[32px] px-4 py-3">
           <Button
             variant="outline"
             size="icon"
-            className="h-11 w-11 rounded-full border-border/50 shadow-md"
+            className="h-11 w-11 rounded-full border-white/10 bg-white/4 shadow-md"
             onClick={() => setShowTextInput(!showTextInput)}
           >
-            <MessageSquare
-              className={cn("h-4 w-4", showTextInput && "text-primary")}
-            />
+            <MessageSquare className={cn("h-4 w-4", showTextInput && "text-teal-300")} />
           </Button>
 
           <div className="relative flex items-center justify-center">
@@ -983,7 +981,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
                 "h-16 w-16 rounded-full shadow-lg transition-all duration-200 relative z-10",
                 isRecording
                   ? "bg-red-500 hover:bg-red-600 shadow-red-500/30"
-                  : "bg-primary hover:bg-primary/90 shadow-primary/20",
+                  : "bg-teal-500 hover:bg-teal-400 shadow-teal-500/20",
                 (isProcessing || isTranscribing || isAnalyzingPhoto) && "opacity-60"
               )}
               onClick={isRecording ? stopRecording : startRecording}
@@ -1005,7 +1003,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
             variant="outline"
             size="icon"
             className={cn(
-              "h-11 w-11 rounded-full border-border/50 shadow-md",
+              "h-11 w-11 rounded-full border-white/10 bg-white/4 shadow-md",
               isAnalyzingPhoto && "border-amber-500/50"
             )}
             onClick={() => fileInputRef.current?.click()}

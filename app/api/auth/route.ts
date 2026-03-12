@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifyPin } from "@/lib/pin-auth";
 
 // POST - Verify PIN
 export async function POST(request: NextRequest) {
   try {
     const { pin } = await request.json();
-    const correctPin = process.env.APP_PIN || "1234";
 
-    if (pin === correctPin) {
+    if (typeof pin === "string" && (await verifyPin(pin))) {
       // Set a simple cookie for auth
       const response = NextResponse.json({ success: true });
       response.cookies.set("auth", "authenticated", {

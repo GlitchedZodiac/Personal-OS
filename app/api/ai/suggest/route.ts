@@ -1,91 +1,79 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@/lib/openai";
+import { buildCoachStyleGuide, getCoachLanguageLabel } from "@/lib/health-coach";
 
 // Allow up to 60s for AI generation (Vercel Pro)
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
-    const {
-      totalCalories,
-      totalProtein,
-      totalCarbs,
-      totalFat,
-      calorieTarget,
-      proteinTargetG,
-      carbsTargetG,
-      fatTargetG,
-      mealCount,
-      workoutCaloriesBurned,
-      customInstructions,
-      aiLanguage,
-    } = await request.json();
+    const body = await request.json();
+    const totalCalories = Number(body.totalCalories || 0);
+    const totalProtein = Number(body.totalProtein || 0);
+    const totalCarbs = Number(body.totalCarbs || 0);
+    const totalFat = Number(body.totalFat || 0);
+    const calorieTarget = Number(body.calorieTarget || 2000);
+    const proteinTargetG = Number(body.proteinTargetG || 150);
+    const carbsTargetG = Number(body.carbsTargetG || 200);
+    const fatTargetG = Number(body.fatTargetG || 67);
+    const mealCount = Number(body.mealCount || 0);
+    const workoutCaloriesBurned = Number(body.workoutCaloriesBurned || 0);
+    const localHour = Number(body.localHour ?? new Date().getHours());
+    const customInstructions =
+      typeof body.customInstructions === "string" ? body.customInstructions : "";
+    const responseLang = getCoachLanguageLabel(
+      typeof body.aiLanguage === "string" ? body.aiLanguage : "english"
+    );
 
-    const languageMap: Record<string, string> = {
-      english: "English",
-      spanish: "Spanish (Español)",
-      portuguese: "Portuguese (Português)",
-      french: "French (Français)",
-    };
-    const responseLang = languageMap[aiLanguage || "english"] || "English";
+    const remainingCals = calorieTarget - totalCalories;
+    const remainingProtein = proteinTargetG - totalProtein;
+    const remainingCarbs = carbsTargetG - totalCarbs;
+    const remainingFat = fatTargetG - totalFat;
+    const timeContext =
+      localHour < 12 ? "morning" : localHour < 17 ? "afternoon" : "evening";
+    const workoutAdjustedBudget = Math.max(
+      0,
+      Math.round(Math.max(remainingCals, 0) + workoutCaloriesBurned)
+    );
 
-    const remainingCals = Math.max(calorieTarget - totalCalories, 0);
-    const remainingProtein = Math.max(proteinTargetG - totalProtein, 0);
-    const remainingCarbs = Math.max(carbsTargetG - totalCarbs, 0);
-    const remainingFat = Math.max(fatTargetG - totalFat, 0);
+    const systemPrompt = [
+      buildCoachStyleGuide(responseLang),
+      "You are giving the user the next meal recommendation.",
+      "Be practical and food-specific.",
+      "Use markdown with short bullets.",
+      "Give 2 meal options max.",
+      "Each option must include a rough calorie and protein estimate.",
+      "Reference Colombian or Latin-friendly foods when appropriate.",
+      "End with one short execution note.",
+      customInstructions
+        ? `User custom instructions:\n${customInstructions}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
-    const hour = new Date().getHours();
-    let timeContext = "morning";
-    if (hour >= 12 && hour < 17) timeContext = "afternoon";
-    else if (hour >= 17) timeContext = "evening";
+    const userMessage = `Time of day: ${timeContext}
 
-    const calsBurned = workoutCaloriesBurned || 0;
-    const hasWorkout = calsBurned > 0;
+Today so far:
+- Calories: ${Math.round(totalCalories)} / ${Math.round(calorieTarget)}
+- Protein: ${Math.round(totalProtein)}g / ${Math.round(proteinTargetG)}g
+- Carbs: ${Math.round(totalCarbs)}g / ${Math.round(carbsTargetG)}g
+- Fat: ${Math.round(totalFat)}g / ${Math.round(fatTargetG)}g
+- Meals logged: ${mealCount}
+- Workout calories burned: ${Math.round(workoutCaloriesBurned)}
 
-    const systemPrompt = `You are a sharp, no-BS nutrition coach who actually cares. Think: supportive friend who happens to be a dietitian. You're embedded in a mobile health app.
+Current gaps:
+- Calories remaining to base target: ${Math.round(remainingCals)}
+- Protein remaining: ${Math.max(0, Math.round(remainingProtein))}g
+- Carbs remaining: ${Math.max(0, Math.round(remainingCarbs))}g
+- Fat remaining: ${Math.max(0, Math.round(remainingFat))}g
+- Workout-adjusted calorie budget: ${workoutAdjustedBudget}
 
-PERSONALITY:
-- Start with a SHORT motivational line (1 sentence max) — acknowledge their effort so far today. Be real, not cheesy.
-- Be direct and practical. No filler. Every word earns its place.
-- Use **bold** for food names and key numbers.
-- Use bullet points (- ) for meal options — easy to scan on mobile.
-- If they're crushing it, tell them. If they need to course-correct, say it straight but supportively.
-- End with a quick one-liner of encouragement or a practical tip.
-- You speak like a real person, not a textbook.
-
-${customInstructions ? `USER'S CUSTOM INSTRUCTIONS:\n${customInstructions}\n` : ""}
-Be culturally aware — the user eats Colombian/Latin American cuisine often (arepas, empanadas, bandeja paisa, etc.). Suggest real foods they'd actually eat right now based on the time of day.
-
-${hasWorkout ? `IMPORTANT: The user burned ${Math.round(calsBurned)} calories through exercise today. Acknowledge the workout effort! Provide TWO clearly separated options:
-
-🎯 **Option A: Stay Lean** — A meal that keeps them at their original ${calorieTarget} kcal target, ignoring exercise calories. For cutting / staying in deficit.
-
-💪 **Option B: Fuel Up** — A meal that accounts for the ${Math.round(calsBurned)} burned calories. Focus on recovery: protein + carbs to replenish glycogen + anti-inflammatory foods. Budget up to ${Math.round(remainingCals + calsBurned)} kcal.
-
-Keep each option to 2-3 bullet points max.` : `Suggest 2-3 specific, practical meal options. Use bullet points. If they've exceeded their calories, be honest but kind — suggest lighter options or just water/tea. If they're close to hitting targets, hype them up.`}
-
-FORMAT RULES:
-- Use markdown: **bold** for emphasis, bullet points with "- " for lists
-- Keep total response under 200 words
-- No greeting — jump straight into the motivational line
-
-ALWAYS respond in ${responseLang}.`;
-
-    const userMessage = `It's ${timeContext} (${hour}:00). Here's my daily intake so far:
-
-Eaten: ${Math.round(totalCalories)} kcal (${mealCount} meals)
-- Protein: ${Math.round(totalProtein)}g / ${proteinTargetG}g target
-- Carbs: ${Math.round(totalCarbs)}g / ${carbsTargetG}g target
-- Fat: ${Math.round(totalFat)}g / ${fatTargetG}g target
-
-Remaining to hit targets:
-- ${Math.round(remainingCals)} kcal
-- ${Math.round(remainingProtein)}g protein
-- ${Math.round(remainingCarbs)}g carbs
-- ${Math.round(remainingFat)}g fat
-${hasWorkout ? `\n🏋️ Exercise today: burned ${Math.round(calsBurned)} calories` : ""}
-
-What should I eat next?`;
+Rules:
+- If protein is lagging, bias the meal toward protein first.
+- If workout calories were burned, make one option more recovery-oriented.
+- If calories are already over target, suggest something lighter and say so directly.
+- Do not be generic.`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-5.2",
@@ -93,13 +81,13 @@ What should I eat next?`;
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      max_completion_tokens: hasWorkout ? 500 : 300,
-      temperature: 0.7,
+      max_completion_tokens: 250,
+      temperature: 0.5,
     });
 
     const suggestion =
       completion.choices[0]?.message?.content ||
-      "Eat a balanced meal with protein and vegetables!";
+      "Keep it simple: anchor the next meal around lean protein and vegetables.";
 
     return NextResponse.json({ suggestion });
   } catch (error) {

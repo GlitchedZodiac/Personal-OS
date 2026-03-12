@@ -166,6 +166,25 @@ export async function POST(request: Request) {
             workoutType,
             description,
             caloriesBurned: calories,
+            endedAt: new Date(
+              new Date(localDateStr).getTime() + durationMinutes * 60_000
+            ),
+            distanceMeters:
+              activity.distance > 0 ? activity.distance : null,
+            avgHeartRateBpm: activity.average_heartrate || null,
+            maxHeartRateBpm: activity.max_heartrate || null,
+            elevationGainM:
+              activity.total_elevation_gain > 0
+                ? activity.total_elevation_gain
+                : null,
+            routeData: activity.map?.summary_polyline
+              ? { summaryPolyline: activity.map.summary_polyline }
+              : undefined,
+            metricsData: exerciseData as Prisma.InputJsonValue,
+            externalSource: "strava",
+            externalId: stravaId,
+            syncStatus: "synced",
+            deviceType: "strava",
             stravaActivityId: stravaId,
             source: "strava",
             exercises: [exerciseData] as Prisma.InputJsonValue,

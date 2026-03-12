@@ -68,10 +68,22 @@ model BodyMeasurement {
 model WorkoutLog {
   id              String   @id @default(uuid())
   startedAt       DateTime @default(now())
+  endedAt         DateTime?
   durationMinutes Int      @default(0)
   workoutType     String   // strength, cardio, walk, run, cycling, etc.
   description     String?
   caloriesBurned  Float?
+  distanceMeters  Float?
+  stepCount       Int?
+  avgHeartRateBpm Int?
+  maxHeartRateBpm Int?
+  elevationGainM  Float?
+  routeData       Json?
+  metricsData     Json?
+  deviceType      String?
+  externalSource  String?
+  externalId      String?
+  syncStatus      String   @default("synced") // synced, pending_upload, pending_phone, failed
   exercises       Json?    // Array of { name, sets, reps, weight }
   stravaActivityId String?
   source          String   @default("manual") // manual, voice, strava
@@ -79,6 +91,8 @@ model WorkoutLog {
   updatedAt       DateTime @updatedAt
 
   @@index([startedAt])
+  @@index([externalSource, externalId])
+  @@index([syncStatus])
   @@map("workout_logs")
 }
 
@@ -206,6 +220,53 @@ model UserSettings {
   updatedAt DateTime @updatedAt
 
   @@map("user_settings")
+}
+
+model AuthCredential {
+  id         String   @id @default("default")
+  pinHash    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("auth_credentials")
+}
+
+model DeviceSession {
+  id               String    @id @default(uuid())
+  deviceLabel      String
+  platform         String?
+  deviceType       String?
+  tokenHash        String    @unique
+  refreshTokenHash String    @unique
+  expiresAt        DateTime
+  refreshExpiresAt DateTime
+  lastSeenAt       DateTime  @default(now())
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([expiresAt])
+  @@index([refreshExpiresAt])
+  @@index([revokedAt])
+  @@map("device_sessions")
+}
+
+model DailyHealthSnapshot {
+  id                         String   @id @default(uuid())
+  localDate                  String
+  timeZone                   String
+  steps                      Int      @default(0)
+  restingHeartRateBpm        Int?
+  activeEnergyKcal           Float?
+  walkingRunningDistanceMeters Float?
+  source                     String   @default("apple_health")
+  rawData                    Json?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@unique([localDate, timeZone, source])
+  @@index([localDate, timeZone])
+  @@map("daily_health_snapshots")
 }
 
 model Reminder {
