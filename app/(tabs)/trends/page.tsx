@@ -31,6 +31,7 @@ import {
   Telescope,
   BarChart3,
   RefreshCw,
+  Zap,
 } from "lucide-react";
 import {
   LineChart,
@@ -184,6 +185,14 @@ interface WeeklyReportData {
   aiSummary: string;
 }
 
+interface StreakData {
+  streak: number;
+  totalDaysLogged: number;
+  weekDays: number;
+  weekLogged: boolean[];
+  loggedToday: boolean;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────
 
 const COLORS = {
@@ -269,6 +278,9 @@ export default function TrendsPage() {
   // Trends data
   const trendsUrl = useMemo(() => `/api/health/trends?range=${range}`, [range]);
   const { data, loading } = useCachedFetch<TrendsData>(trendsUrl, { ttl: 120_000 });
+  const { data: streakData } = useCachedFetch<StreakData>("/api/health/streak", {
+    ttl: 60_000,
+  });
 
   // Weekly insight — 1 hour TTL, server caches in DB too
   const insightUrl = useMemo(
@@ -495,6 +507,52 @@ export default function TrendsPage() {
                       {insightRefreshing ? "Generating..." : "Refresh"}
                     </Button>
                   )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-amber-500/20 bg-amber-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-amber-500/10 shrink-0">
+                        <Zap className="h-4 w-4 text-amber-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-amber-400 mb-1">Consistency</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {streakData?.streak
+                            ? `${streakData.streak}-day streak running`
+                            : "Build your logging streak"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {(streakData?.weekDays ?? 0)}/7 days this week and{" "}
+                          {streakData?.totalDaysLogged ?? 0} total logged days
+                        </p>
+                      </div>
+                    </div>
+                    <Link
+                      href="/trends/daily-log"
+                      className="inline-flex items-center gap-1 text-xs text-amber-400 transition hover:text-amber-300"
+                    >
+                      View log
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                  <div className="mt-4 flex gap-1.5">
+                    {(streakData?.weekLogged ?? [false, false, false, false, false, false, false]).map(
+                      (logged, index) => (
+                        <div
+                          key={`trend-streak-${index}`}
+                          className={cn(
+                            "h-3 w-3 rounded-full border transition-all",
+                            logged
+                              ? "border-amber-300 bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,0.35)]"
+                              : "border-white/10 bg-white/6"
+                          )}
+                        />
+                      )
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
