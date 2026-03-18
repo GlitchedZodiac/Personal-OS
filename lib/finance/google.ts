@@ -7,7 +7,7 @@ import {
 } from "@/lib/finance/constants";
 import { ingestFinanceCandidate } from "@/lib/finance/ingestion";
 import { extractPdfText, isEncryptedPdf } from "@/lib/finance/pdf";
-import { normalizeMerchantName } from "@/lib/finance/pipeline-utils";
+import { coerceValidDate, extractDueDateFromText, normalizeMerchantName } from "@/lib/finance/pipeline-utils";
 import { getVaultSecret, upsertVaultSecret } from "@/lib/finance/vault";
 
 const GOOGLE_TOKEN_SECRET_KEY = "gmail:default:oauth-token";
@@ -193,17 +193,7 @@ function extractAmount(text: string) {
 }
 
 function extractDueDate(text: string) {
-  const dateMatch =
-    text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/) ||
-    text.match(/\b(\d{2})\/(\d{2})\/(20\d{2})\b/);
-
-  if (!dateMatch) return null;
-
-  if (dateMatch[0].includes("-")) {
-    return new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}T12:00:00`);
-  }
-
-  return new Date(`${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}T12:00:00`);
+  return coerceValidDate(extractDueDateFromText(text));
 }
 
 function looksFinancial(text: string) {
@@ -511,7 +501,9 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
   const full = await gmailFetch<GmailMessage>(accessToken, `messages/${message.id}?format=full`);
   const sender = getHeader(full.payload, "From");
   const subject = getHeader(full.payload, "Subject");
-  const receivedAt = full.internalDate ? new Date(Number(full.internalDate)) : new Date();
+  const receivedAt = coerceValidDate(
+    full.internalDate ? new Date(Number(full.internalDate)) : new Date()
+  ) || new Date();
   const text = collectTextParts(full.payload).join(" ").trim() || full.snippet || "";
   const messageExternalId = `gmail:${full.id}`;
 
@@ -717,12 +709,12 @@ export async function syncGoogleFinanceMailbox(options?: {
   }
 
   if (usedFallback || messageIds.length === 0) {
-    const afterDate = options?.dateFrom
-      ? new Date(`${options.dateFrom}T00:00:00`)
-      : subMonths(new Date(), syncLookbackMonths);
-    const beforeDate = options?.dateTo
-      ? new Date(`${options.dateTo}T00:00:00`)
-      : null;
+    const afterDate =
+      coerceValidDate(options?.dateFrom ? new Date(`${options.dateFrom}T00:00:00`) : null) ||
+      subMonths(new Date(), syncLookbackMonths);
+    const beforeDate = coerceValidDate(
+      options?.dateTo ? new Date(`${options.dateTo}T00:00:00`) : null
+    );
     const q = [
       `after:${afterDate.toISOString().slice(0, 10)}`,
       beforeDate ? `before:${beforeDate.toISOString().slice(0, 10)}` : null,
@@ -742,14 +734,25 @@ export async function syncGoogleFinanceMailbox(options?: {
   let promotedTransactions = 0;
   let reviews = 0;
   let upcoming = 0;
+  let errors = 0;
+  const failedMessageIds: string[] = [];
 
   for (const message of messageIds) {
-    const result = await processGmailMessage(accessToken, message as GmailMessage, connection.id);
-    documents += result.documents;
-    signals += result.signals;
-    promotedTransactions += result.promotedTransactions;
-    reviews += result.reviews;
-    upcoming += result.upcoming;
+    try {
+      const result = await processGmailMessage(accessToken, message as GmailMessage, connection.id);
+      documents += result.documents;
+      signals += result.signals;
+      promotedTransactions += result.promotedTransactions;
+      reviews += result.reviews;
+      upcoming += result.upcoming;
+    } catch (error) {
+      errors += 1;
+      failedMessageIds.push(message.id);
+      console.error("Finance Gmail message processing error:", {
+        messageId: message.id,
+        error,
+      });
+    }
   }
 
   const profile = await gmailFetch<{ historyId: string }>(accessToken, "profile");
@@ -760,7 +763,7 @@ export async function syncGoogleFinanceMailbox(options?: {
       syncStatus: "connected",
       lastSyncAt: new Date(),
       lastBackfillAt: usedFallback ? new Date() : connection.lastBackfillAt || null,
-      lastError: null,
+      lastError: errors > 0 ? `${errors} Gmail message(s) were skipped during sync.` : null,
       syncLookbackMonths,
       syncIntervalMinutes,
     },
@@ -773,6 +776,8 @@ export async function syncGoogleFinanceMailbox(options?: {
     promotedTransactions,
     reviews,
     upcoming,
+    errors,
+    failedMessageIds,
     usedFallback,
   };
 }

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { formatDateTimeLabel } from "@/lib/date-utils";
 import type { AppSettings } from "@/lib/settings";
 
 interface FinanceSettingsCardProps {
@@ -102,6 +103,8 @@ export function FinanceSettingsCard({
     }
   };
 
+  const lastSyncLabel = formatDateTimeLabel(googleStatus?.lastSyncAt);
+
   return (
     <>
       <Card className="border-emerald-500/20">
@@ -123,7 +126,10 @@ export function FinanceSettingsCard({
                 onChange={(event) =>
                   updateSettings({
                     ...settings,
-                    finance: { ...settings.finance, defaultCurrency: event.target.value.toUpperCase() || "COP" },
+                    finance: {
+                      ...settings.finance,
+                      defaultCurrency: event.target.value.toUpperCase() || "COP",
+                    },
                   })
                 }
                 className="mt-1"
@@ -177,7 +183,10 @@ export function FinanceSettingsCard({
                     ...settings,
                     finance: {
                       ...settings.finance,
-                      autoReviewThreshold: Math.min(1, Math.max(0.1, parseFloat(event.target.value || "0.75"))),
+                      autoReviewThreshold: Math.min(
+                        1,
+                        Math.max(0.1, parseFloat(event.target.value || "0.75"))
+                      ),
                     },
                   })
                 }
@@ -227,7 +236,7 @@ export function FinanceSettingsCard({
                 <p className="text-sm font-medium">{googleStatus.email}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Status: {googleStatus.syncStatus}
-                  {googleStatus.lastSyncAt ? ` · Last sync ${new Date(googleStatus.lastSyncAt).toLocaleString()}` : ""}
+                  {lastSyncLabel ? ` · Last sync ${lastSyncLabel}` : ""}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Every {googleStatus.syncIntervalMinutes ?? settings.finance.syncIntervalMinutes} min

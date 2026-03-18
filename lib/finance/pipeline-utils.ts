@@ -57,6 +57,28 @@ export interface FinanceClassificationResult {
   reason: string;
 }
 
+export function isValidDateValue(value?: Date | null): value is Date {
+  return value instanceof Date && Number.isFinite(value.getTime());
+}
+
+export function coerceValidDate(value?: Date | string | null) {
+  if (!value) return null;
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  return isValidDateValue(parsed) ? parsed : null;
+}
+
+function buildValidatedDate(
+  year: string | number,
+  month: string | number,
+  day: string | number
+) {
+  const parsed = new Date(
+    `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T12:00:00`
+  );
+  return isValidDateValue(parsed) ? parsed : null;
+}
+
 export function normalizeMerchantName(value?: string | null) {
   if (!value) return null;
 
@@ -154,7 +176,7 @@ export function buildSourceFingerprint(input: {
     input.source,
     input.externalId || "",
     input.amount ?? "",
-    input.transactedAt ? input.transactedAt.toISOString().slice(0, 10) : "",
+    isValidDateValue(input.transactedAt) ? input.transactedAt.toISOString().slice(0, 10) : "",
     normalizeMerchantName(input.merchant) || "",
     normalizeMerchantName(input.description) || input.description.toLowerCase(),
   ].join("|");
@@ -174,8 +196,8 @@ export function buildSignalFingerprint(input: {
     input.sourceKey,
     input.signalKind,
     input.amount ?? "",
-    input.dueDate ? input.dueDate.toISOString().slice(0, 10) : "",
-    input.transactedAt ? input.transactedAt.toISOString().slice(0, 10) : "",
+    isValidDateValue(input.dueDate) ? input.dueDate.toISOString().slice(0, 10) : "",
+    isValidDateValue(input.transactedAt) ? input.transactedAt.toISOString().slice(0, 10) : "",
     normalizeMerchantName(input.description) || input.description.toLowerCase(),
   ].join("|");
 
@@ -272,12 +294,28 @@ export function extractMoneyByLabel(text: string, labels: string[]) {
 export function extractDueDateFromText(text: string) {
   const isoMatch = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
   if (isoMatch) {
-    return new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T12:00:00`);
+    return buildValidatedDate(isoMatch[1], isoMatch[2], isoMatch[3]);
   }
 
   const slashMatch = text.match(/\b(\d{2})\/(\d{2})\/(20\d{2})\b/);
   if (slashMatch) {
-    return new Date(`${slashMatch[3]}-${slashMatch[2]}-${slashMatch[1]}T12:00:00`);
+    const [, first, second, year] = slashMatch;
+    const dayFirst = buildValidatedDate(year, second, first);
+    const monthFirst = buildValidatedDate(year, first, second);
+
+    if (dayFirst && !monthFirst) return dayFirst;
+    if (monthFirst && !dayFirst) return monthFirst;
+
+    const lower = text.toLowerCase();
+    if (/(fecha|vence|vencimiento|minimo a pagar|factura|recibo|pago)/.test(lower)) {
+      return dayFirst;
+    }
+
+    if (/(due|statement|payment|bill|invoice|receipt|charge)/.test(lower)) {
+      return monthFirst;
+    }
+
+    return dayFirst || monthFirst;
   }
 
   return null;

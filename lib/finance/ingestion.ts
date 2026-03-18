@@ -9,12 +9,14 @@ import {
   buildFinanceSourceIdentity,
   buildSignalFingerprint,
   buildSourceFingerprint,
+  coerceValidDate,
   detectPotentialFlags,
   extractDueDateFromText,
   extractMoneyByLabel,
   extractPrimaryAmount,
   guessCategoryFromText,
   inferFinanceDocumentClassification,
+  isValidDateValue,
   normalizeMerchantName,
   titleCase,
   type FinanceDocumentClassification,
@@ -506,7 +508,9 @@ async function createReviewItems(params: {
             amount: params.candidate.amount,
             merchant: params.candidate.merchant,
             source: params.candidate.source,
-            dueDate: params.candidate.dueDate?.toISOString() || null,
+            dueDate: isValidDateValue(params.candidate.dueDate)
+              ? params.candidate.dueDate.toISOString()
+              : null,
           }),
         },
       })
@@ -937,13 +941,13 @@ async function resolveDocumentContext(
 
   const document = await ensureDocument(
     {
-      source: candidate.document?.source || candidate.source,
-      externalId:
-        candidate.document?.externalId ||
-        `capture:${candidate.source}:${candidate.transactedAt?.toISOString() || Date.now()}:${candidate.description.slice(0, 24)}`,
-      documentType: candidate.document?.documentType || "captured_event",
-      ...candidate.document,
-      sourceKey:
+        source: candidate.document?.source || candidate.source,
+        externalId:
+          candidate.document?.externalId ||
+          `capture:${candidate.source}:${isValidDateValue(candidate.transactedAt) ? candidate.transactedAt.toISOString() : Date.now()}:${candidate.description.slice(0, 24)}`,
+        documentType: candidate.document?.documentType || "captured_event",
+        ...candidate.document,
+        sourceKey:
         candidate.document?.sourceKey ||
         buildFinanceSourceIdentity({
           source: candidate.source,
@@ -1059,8 +1063,8 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
     ]) ??
     extractPrimaryAmount(combinedText);
   const dueDate =
-    candidate.dueDate ||
-    (aiDecision?.dueDate ? new Date(aiDecision.dueDate) : null) ||
+    coerceValidDate(candidate.dueDate) ||
+    coerceValidDate(aiDecision?.dueDate) ||
     extractDueDateFromText(combinedText);
   const minimumDue =
     candidate.minimumDue ??
