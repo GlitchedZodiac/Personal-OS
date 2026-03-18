@@ -3,6 +3,10 @@ import { openai } from "@/lib/openai";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import {
+  enforceDemoAIBudget,
+  recordDemoAIFixedCharge,
+} from "@/lib/demo-ai-budget";
 
 // Allow up to 60s for Whisper transcription (Vercel Pro)
 export const maxDuration = 60;
@@ -35,7 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Write audio to a temp file — most reliable way to upload to OpenAI
+    // Write audio to a temp file - most reliable way to upload to OpenAI
     const arrayBuffer = await audioFile.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     tempPath = path.join(os.tmpdir(), `whisper-${Date.now()}${ext}`);
@@ -43,11 +47,17 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Transcribe] Wrote temp file: ${tempPath} (${buffer.length} bytes)`);
 
-    // Don't specify language — let Whisper auto-detect
+    const blocked = await enforceDemoAIBudget();
+    if (blocked) return blocked;
+
+    // Don't specify language - let Whisper auto-detect
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(tempPath),
       model: "whisper-1",
     });
+    await recordDemoAIFixedCharge(
+      Number(process.env.DEMO_AI_TRANSCRIPTION_COST_USD || "0.002")
+    );
 
     console.log(`[Transcribe] Success: "${transcription.text?.substring(0, 60)}..."`);
 
@@ -63,10 +73,7 @@ export async function POST(request: NextRequest) {
       ? "Audio format not supported. Please try typing your message instead."
       : errMsg;
 
-    return NextResponse.json(
-      { error: userMsg },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: userMsg }, { status: 500 });
   } finally {
     // Clean up temp file
     if (tempPath) {

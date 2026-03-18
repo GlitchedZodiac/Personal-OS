@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   PiggyBank,
   Plus,
-  Target,
   X,
   Check,
   Pencil,

@@ -5,6 +5,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/cron/finance-sync",
+      "schedule": "15 13 * * *"
+    },
+    {
       "path": "/api/cron/weekly-report",
       "schedule": "0 14 * * 0"
     }

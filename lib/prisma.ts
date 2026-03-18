@@ -1,5 +1,18 @@
 import { PrismaClient } from "@prisma/client";
 
+function cleanEnv(value: string | undefined): string | undefined {
+  if (!value) return value;
+  return value
+    .replace(/\\r\\n/g, "")
+    .replace(/\\n/g, "")
+    .replace(/\\r/g, "")
+    .trim();
+}
+
+// Guard against accidental newline artifacts in provider env vars.
+process.env.DATABASE_URL = cleanEnv(process.env.DATABASE_URL);
+process.env.DIRECT_URL = cleanEnv(process.env.DIRECT_URL);
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
+import { endOfMonth, startOfMonth } from "date-fns";
 import { prisma } from "@/lib/prisma";
-import { startOfMonth, endOfMonth } from "date-fns";
 
-// Default budget categories to seed when first budget is created
-const DEFAULT_CATEGORIES = [
+const DEFAULT_CATEGORIES: Prisma.BudgetCategoryCreateManyInput[] = [
   { name: "Housing", icon: "🏠", color: "#3b82f6", type: "expense", sortOrder: 1 },
   { name: "Food & Groceries", icon: "🛒", color: "#22c55e", type: "expense", sortOrder: 2 },
   { name: "Dining Out", icon: "🍽️", color: "#f59e0b", type: "expense", sortOrder: 3 },
@@ -21,7 +21,27 @@ const DEFAULT_CATEGORIES = [
   { name: "Freelance", icon: "💻", color: "#2563eb", type: "income", sortOrder: 15 },
   { name: "Other Income", icon: "📈", color: "#65a30d", type: "income", sortOrder: 16 },
   { name: "Other", icon: "📦", color: "#94a3b8", type: "expense", sortOrder: 99 },
-];
+] as const;
+
+const BUDGET_NAME_TO_TX_CATEGORY: Record<string, string[]> = {
+  Housing: ["housing"],
+  "Food & Groceries": ["food"],
+  "Dining Out": ["dining_out"],
+  Transport: ["transport"],
+  Utilities: ["utilities"],
+  Entertainment: ["entertainment"],
+  "Health & Fitness": ["health"],
+  Shopping: ["shopping"],
+  Education: ["education"],
+  "Personal Care": ["personal"],
+  Insurance: ["insurance"],
+  "Debt Payments": ["debt_payment"],
+  Savings: ["savings"],
+  Salary: ["income"],
+  Freelance: ["income"],
+  "Other Income": ["income"],
+  Other: ["other"],
+};
 
 async function ensureCategories() {
   const count = await prisma.budgetCategory.count();
@@ -30,36 +50,29 @@ async function ensureCategories() {
   }
 }
 
-// GET /api/finance/budgets — get budget for a given month (or current month)
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const monthParam = searchParams.get("month"); // "2026-02" format
+    const monthParam = searchParams.get("month");
     const listAll = searchParams.get("list") === "true";
 
     await ensureCategories();
 
-    // List all categories
     if (listAll) {
-      const categories = await prisma.budgetCategory.findMany({
-        orderBy: { sortOrder: "asc" },
-      });
-      const budgets = await prisma.budget.findMany({
-        orderBy: [{ year: "desc" }, { month: "desc" }],
-        take: 12,
-      });
+      const [categories, budgets] = await Promise.all([
+        prisma.budgetCategory.findMany({ orderBy: { sortOrder: "asc" } }),
+        prisma.budget.findMany({
+          orderBy: [{ year: "desc" }, { month: "desc" }],
+          take: 12,
+        }),
+      ]);
       return NextResponse.json({ categories, budgets });
     }
 
     const now = new Date();
-    const month = monthParam
-      ? parseInt(monthParam.split("-")[1])
-      : now.getMonth() + 1;
-    const year = monthParam
-      ? parseInt(monthParam.split("-")[0])
-      : now.getFullYear();
+    const month = monthParam ? parseInt(monthParam.split("-")[1], 10) : now.getMonth() + 1;
+    const year = monthParam ? parseInt(monthParam.split("-")[0], 10) : now.getFullYear();
 
-    // Get or create the budget for this month
     let budget = await prisma.budget.findUnique({
       where: { month_year: { month, year } },
       include: {
@@ -71,10 +84,12 @@ export async function GET(req: NextRequest) {
     });
 
     if (!budget) {
-      // Create a new budget for this month
       budget = await prisma.budget.create({
         data: {
-          name: `${new Date(year, month - 1).toLocaleDateString("en", { month: "long", year: "numeric" })}`,
+          name: `${new Date(year, month - 1).toLocaleDateString("en", {
+            month: "long",
+            year: "numeric",
+          })}`,
           month,
           year,
         },
@@ -87,84 +102,72 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Calculate actual spending per category for this month
     const monthStart = startOfMonth(new Date(year, month - 1));
     const monthEnd = endOfMonth(new Date(year, month - 1));
 
-    const transactions = await prisma.financialTransaction.groupBy({
-      by: ["category"],
-      where: {
-        transactedAt: { gte: monthStart, lte: monthEnd },
-      },
-      _sum: { amount: true },
-      _count: true,
-    });
+    const [transactions, categories, merchants] = await Promise.all([
+      prisma.financialTransaction.findMany({
+        where: {
+          transactedAt: { gte: monthStart, lte: monthEnd },
+          status: { notIn: ["duplicate", "ignored"] },
+          excludedFromBudget: false,
+        },
+        select: {
+          amount: true,
+          category: true,
+          merchantId: true,
+          merchantRef: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.budgetCategory.findMany({
+        orderBy: { sortOrder: "asc" },
+      }),
+      prisma.merchant.findMany({
+        orderBy: { totalSpent: "desc" },
+        take: 12,
+      }),
+    ]);
 
-    // Map category names from transactions to budget category mappings
-    const TRANSACTION_TO_BUDGET: Record<string, string> = {
-      food: "Food & Groceries",
-      dining_out: "Dining Out",
-      transport: "Transport",
-      housing: "Housing",
-      entertainment: "Entertainment",
-      health: "Health & Fitness",
-      education: "Education",
-      shopping: "Shopping",
-      personal: "Personal Care",
-      insurance: "Insurance",
-      debt_payment: "Debt Payments",
-      savings: "Savings",
-      income: "Salary",
-      other: "Other",
-    };
-
-    const categoryActuals = new Map<string, { actual: number; count: number }>();
-    for (const tx of transactions) {
-      const budgetCatName = TRANSACTION_TO_BUDGET[tx.category] || "Other";
-      const existing = categoryActuals.get(budgetCatName) || { actual: 0, count: 0 };
-      categoryActuals.set(budgetCatName, {
-        actual: existing.actual + Math.abs(tx._sum.amount || 0),
-        count: existing.count + tx._count,
-      });
-    }
-
-    // Get all categories for the response
-    const categories = await prisma.budgetCategory.findMany({
-      orderBy: { sortOrder: "asc" },
-    });
-
-    // Build response with planned vs actual per category
-    const budgetWithActuals = categories.map((cat) => {
-      const item = budget!.items.find((i) => i.categoryId === cat.id);
-      const actuals = categoryActuals.get(cat.name) || { actual: 0, count: 0 };
+    const budgetWithActuals = categories.map((category) => {
+      const budgetItem = budget!.items.find((item) => item.categoryId === category.id);
+      const matchingCategories = BUDGET_NAME_TO_TX_CATEGORY[category.name] || [category.name.toLowerCase()];
+      const actual = transactions
+        .filter((tx) => matchingCategories.includes(tx.category))
+        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+      const transactionCount = transactions.filter((tx) => matchingCategories.includes(tx.category)).length;
+      const planned = budgetItem?.planned || 0;
+      const percentUsed = planned > 0 ? Math.round((actual / planned) * 100) : 0;
 
       return {
-        categoryId: cat.id,
-        categoryName: cat.name,
-        categoryIcon: cat.icon,
-        categoryColor: cat.color,
-        categoryType: cat.type,
-        planned: item?.planned || 0,
-        actual: actuals.actual,
-        transactionCount: actuals.count,
-        isFixed: item?.isFixed || false,
-        difference: (item?.planned || 0) - actuals.actual,
-        percentUsed: item?.planned ? Math.round((actuals.actual / item.planned) * 100) : 0,
+        categoryId: category.id,
+        categoryName: category.name,
+        categoryIcon: category.icon,
+        categoryColor: category.color,
+        categoryType: category.type,
+        isTaxRelevant: category.isTaxRelevant,
+        planned,
+        actual,
+        transactionCount,
+        isFixed: budgetItem?.isFixed || false,
+        rolloverEnabled: budgetItem?.rolloverEnabled || false,
+        difference: planned - actual,
+        percentUsed,
+        status: percentUsed > 100 ? "off_track" : percentUsed > 85 ? "warning" : "on_track",
       };
     });
 
     const totalPlanned = budgetWithActuals
-      .filter((b) => b.categoryType === "expense")
-      .reduce((sum, b) => sum + b.planned, 0);
+      .filter((item) => item.categoryType === "expense")
+      .reduce((sum, item) => sum + item.planned, 0);
     const totalActual = budgetWithActuals
-      .filter((b) => b.categoryType === "expense")
-      .reduce((sum, b) => sum + b.actual, 0);
+      .filter((item) => item.categoryType === "expense")
+      .reduce((sum, item) => sum + item.actual, 0);
     const totalIncomePlanned = budgetWithActuals
-      .filter((b) => b.categoryType === "income")
-      .reduce((sum, b) => sum + b.planned, 0);
+      .filter((item) => item.categoryType === "income")
+      .reduce((sum, item) => sum + item.planned, 0);
     const totalIncomeActual = budgetWithActuals
-      .filter((b) => b.categoryType === "income")
-      .reduce((sum, b) => sum + b.actual, 0);
+      .filter((item) => item.categoryType === "income")
+      .reduce((sum, item) => sum + item.actual, 0);
 
     return NextResponse.json({
       budget: {
@@ -174,6 +177,7 @@ export async function GET(req: NextRequest) {
         year,
         totalIncome: budget.totalIncome,
         totalBudget: budget.totalBudget,
+        rolloverMode: budget.rolloverMode,
       },
       categories: budgetWithActuals,
       summary: {
@@ -185,6 +189,12 @@ export async function GET(req: NextRequest) {
         percentUsed: totalPlanned ? Math.round((totalActual / totalPlanned) * 100) : 0,
         surplus: totalIncomeActual - totalActual,
       },
+      merchantSummary: merchants.map((merchant) => ({
+        id: merchant.id,
+        name: merchant.name,
+        totalSpent: merchant.totalSpent,
+        transactionCount: merchant.transactionCount,
+      })),
     });
   } catch (error) {
     console.error("Error fetching budget:", error);
@@ -192,58 +202,56 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/finance/budgets — create or update budget items
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { month, year, items, totalIncome, totalBudget } = body;
+    const { month, year, items, totalIncome, totalBudget, rolloverMode = "none" } = body;
 
     if (!month || !year) {
-      return NextResponse.json(
-        { error: "Month and year are required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Month and year are required" }, { status: 400 });
     }
 
     await ensureCategories();
 
-    // Upsert the budget
     const budget = await prisma.budget.upsert({
       where: { month_year: { month, year } },
       create: {
-        name: `${new Date(year, month - 1).toLocaleDateString("en", { month: "long", year: "numeric" })}`,
+        name: `${new Date(year, month - 1).toLocaleDateString("en", {
+          month: "long",
+          year: "numeric",
+        })}`,
         month,
         year,
         totalIncome: totalIncome || 0,
         totalBudget: totalBudget || 0,
+        rolloverMode,
       },
       update: {
-        totalIncome: totalIncome || undefined,
-        totalBudget: totalBudget || undefined,
+        totalIncome: totalIncome ?? undefined,
+        totalBudget: totalBudget ?? undefined,
+        rolloverMode,
       },
     });
 
-    // Upsert budget items
-    if (items && Array.isArray(items)) {
+    if (Array.isArray(items)) {
       for (const item of items) {
         await prisma.budgetItem.upsert({
           where: {
-            budgetId_categoryId: {
-              budgetId: budget.id,
-              categoryId: item.categoryId,
-            },
+            budgetId_categoryId: { budgetId: budget.id, categoryId: item.categoryId },
           },
           create: {
             budgetId: budget.id,
             categoryId: item.categoryId,
             planned: item.planned || 0,
             isFixed: item.isFixed || false,
+            rolloverEnabled: item.rolloverEnabled || false,
             notes: item.notes || null,
           },
           update: {
             planned: item.planned,
-            isFixed: item.isFixed !== undefined ? item.isFixed : undefined,
-            notes: item.notes !== undefined ? item.notes : undefined,
+            isFixed: item.isFixed ?? undefined,
+            rolloverEnabled: item.rolloverEnabled ?? undefined,
+            notes: item.notes ?? undefined,
           },
         });
       }

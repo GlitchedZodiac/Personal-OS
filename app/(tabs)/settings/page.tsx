@@ -48,11 +48,15 @@ import {
 import { toast } from "sonner";
 import { getSettings, saveSettingsToServer, getMacroGrams, fetchServerSettings, type AppSettings } from "@/lib/settings";
 import { MacroSlider } from "@/components/macro-slider";
-import { COMMON_TIME_ZONES } from "@/lib/timezone";
+import { FinanceSettingsCard } from "@/components/finance-settings-card";
 import Link from "next/link";
 
 interface BalanceInfo {
   available: boolean;
+  demoMode?: boolean;
+  limitUsd?: number;
+  spentUsd?: number;
+  remainingUsd?: number;
   totalGranted?: number | null;
   totalUsed?: number | null;
   totalAvailable?: number | null;
@@ -312,9 +316,9 @@ export default function SettingsPage() {
   const macros = getMacroGrams(settings);
 
   return (
-    <div className="px-4 pt-12 pb-8 space-y-4">
+    <div className="space-y-4 px-4 pt-12 pb-8 lg:space-y-6 lg:px-0 lg:pt-10">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Settings className="h-6 w-6" />
           <h1 className="text-2xl font-bold">Settings</h1>
@@ -326,6 +330,8 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
 
       {/* Nutrition Targets */}
       <Card>
@@ -600,6 +606,35 @@ export default function SettingsPage() {
             <div className="text-xs text-muted-foreground animate-pulse">
               Checking balance...
             </div>
+          ) : balance?.demoMode ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Demo Budget</span>
+                <span className="text-lg font-bold text-amber-300">
+                  ${Number(balance.remainingUsd || 0).toFixed(3)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Spent</span>
+                <span className="text-sm font-medium">
+                  ${Number(balance.spentUsd || 0).toFixed(3)} / ${Number(balance.limitUsd || 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="h-full bg-amber-400 rounded-full transition-all"
+                  style={{
+                    width: `${Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        ((Number(balance.spentUsd || 0) / Math.max(Number(balance.limitUsd || 0), 0.0001)) * 100)
+                      )
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
           ) : balance?.available && balance.totalAvailable != null ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -685,8 +720,12 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <div className="lg:col-span-2">
+        <FinanceSettingsCard settings={settings} updateSettings={updateSettings} />
+      </div>
+
       {/* AI Behavior Instructions */}
-      <Card>
+      <Card className="lg:col-span-2">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Brain className="h-4 w-4 text-violet-500" />
@@ -874,45 +913,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Clock & Time Zone */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Bell className="h-4 w-4 text-cyan-500" />
-            Clock & Time Zone
-          </CardTitle>
-          <p className="text-[10px] text-muted-foreground">
-            Global time source for daily brief, coach, and date-based logs.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <Label className="text-xs text-muted-foreground">Time Zone</Label>
-          <Select
-            value={settings.timeZone || "America/Bogota"}
-            onValueChange={(v) =>
-              updateSettings({
-                ...settings,
-                timeZone: v,
-              })
-            }
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {COMMON_TIME_ZONES.map((tz) => (
-                <SelectItem key={tz} value={tz}>
-                  {tz}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-[10px] text-muted-foreground mt-2">
-            Default is America/Bogota.
-          </p>
-        </CardContent>
-      </Card>
-
       {/* Units */}
       <Card>
         <CardHeader className="pb-3">
@@ -1031,6 +1031,8 @@ export default function SettingsPage() {
       </Card>
 
       {/* Logout */}
+      </div>
+
       <Button
         onClick={handleLogout}
         variant="destructive"

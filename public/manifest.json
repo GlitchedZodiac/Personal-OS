@@ -2,7 +2,7 @@
   "name": "PerOps",
   "short_name": "PerOps",
   "description": "Your personal operating system — health, fitness, todos, and AI coaching",
-  "start_url": "/health",
+  "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",
@@ -24,6 +24,12 @@
     }
   ],
   "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/dashboard",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
     {
       "name": "Log Food",
       "short_name": "Food",

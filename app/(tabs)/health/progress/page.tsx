@@ -210,9 +210,9 @@ export default function ProgressPhotosPage() {
   };
 
   return (
-    <div className="px-4 pt-12 pb-36 space-y-4">
+    <div className="space-y-4 px-4 pt-12 pb-36 lg:space-y-6 lg:px-0 lg:pt-10 lg:pb-10">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Link href="/health">
           <Button variant="ghost" size="icon" className="h-8 w-8">
             <ArrowLeft className="h-4 w-4" />
@@ -225,6 +225,9 @@ export default function ProgressPhotosPage() {
           </p>
         </div>
       </div>
+
+      <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <div className="space-y-4 lg:sticky lg:top-6">
 
       {/* Upload Buttons */}
       <div className="flex gap-2">
@@ -334,9 +337,13 @@ export default function ProgressPhotosPage() {
         </Card>
       )}
 
+        </div>
+
+        <div className="space-y-4">
+
       {/* Photo Grid */}
       {loading ? (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
@@ -357,7 +364,7 @@ export default function ProgressPhotosPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
           {photos.map((photo) => (
             <button
               key={photo.id}
@@ -392,6 +399,8 @@ export default function ProgressPhotosPage() {
           ))}
         </div>
       )}
+        </div>
+      </div>
 
       {/* Full Photo Modal */}
       {selectedPhoto && (

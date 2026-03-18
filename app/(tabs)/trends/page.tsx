@@ -370,7 +370,7 @@ export default function TrendsPage() {
 
   if (loading && tab === "current") {
     return (
-      <div className="px-4 pt-12 pb-4">
+      <div className="px-4 pt-12 pb-4 lg:px-0 lg:pt-10">
         <h1 className="text-2xl font-bold mb-4">Trends</h1>
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-3" />
@@ -381,9 +381,9 @@ export default function TrendsPage() {
   }
 
   return (
-    <div className="px-4 pt-12 pb-8 space-y-4">
+    <div className="space-y-4 px-4 pt-12 pb-8 lg:space-y-6 lg:px-0 lg:pt-10">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Trends</h1>
           <p className="text-xs text-muted-foreground">

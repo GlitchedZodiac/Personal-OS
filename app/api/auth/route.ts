@@ -1,46 +1,72 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyPin } from "@/lib/pin-auth";
+import {
+  checkRateLimit,
+  clearAuthCookie,
+  getAuthCookie,
+  getConfiguredPin,
+  isPinConfigured,
+  setAuthCookie,
+  verifyAuthToken,
+} from "@/lib/auth";
 
-// POST - Verify PIN
 export async function POST(request: NextRequest) {
   try {
     const { pin } = await request.json();
 
-    if (typeof pin === "string" && (await verifyPin(pin))) {
-      // Set a simple cookie for auth
+    if (!isPinConfigured()) {
+      return NextResponse.json(
+        { error: "APP_PIN is not configured. Set one before unlocking the app." },
+        { status: 503 }
+      );
+    }
+
+    const rateLimit = checkRateLimit(request, "auth-login");
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many attempts. Try again in a few minutes." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
+    if (pin === getConfiguredPin()) {
       const response = NextResponse.json({ success: true });
-      response.cookies.set("auth", "authenticated", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-        path: "/",
-      });
+      setAuthCookie(response);
+      rateLimit.reset();
       return response;
     }
 
+    rateLimit.registerFailure();
     return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
   } catch (error) {
     console.error("Auth error:", error);
+    return NextResponse.json({ error: "Authentication failed" }, { status: 500 });
+  }
+}
+
+export async function GET(request: NextRequest) {
+  if (!isPinConfigured()) {
     return NextResponse.json(
-      { error: "Authentication failed" },
-      { status: 500 }
+      {
+        authenticated: false,
+        configured: false,
+        error: "APP_PIN is not configured.",
+      },
+      { status: 503 }
     );
   }
-}
 
-// GET - Check auth status
-export async function GET(request: NextRequest) {
-  const auth = request.cookies.get("auth");
-  if (auth?.value === "authenticated") {
-    return NextResponse.json({ authenticated: true });
+  if (verifyAuthToken(getAuthCookie(request))) {
+    return NextResponse.json({ authenticated: true, configured: true });
   }
-  return NextResponse.json({ authenticated: false }, { status: 401 });
+
+  return NextResponse.json({ authenticated: false, configured: true }, { status: 401 });
 }
 
-// DELETE - Logout
 export async function DELETE() {
   const response = NextResponse.json({ success: true });
-  response.cookies.delete("auth");
+  clearAuthCookie(response);
   return response;
 }

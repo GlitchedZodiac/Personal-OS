@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"name": "Personal-OS",
+			"path": "."
+		}
+	],
+	"settings": {
+		"github.copilot.chat.agent.autoFix": true,
+		"github.copilot.chat.copilotMemory.enabled": true
+	}
+}

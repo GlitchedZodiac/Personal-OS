@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FinanceQuickCapture } from "@/components/finance-quick-capture";
 import { useCachedFetch } from "@/lib/cache";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -13,8 +14,6 @@ import {
   TrendingDown,
   CreditCard,
   PiggyBank,
-  ArrowUpRight,
-  ArrowDownRight,
   Plus,
   Receipt,
   Target,
@@ -86,6 +85,7 @@ interface FinanceSummary {
     savings: number;
     todaySpent: number;
     todayTransactions: number;
+    pendingReviews: number;
   };
   comparison: {
     incomeChange: number;
@@ -102,6 +102,25 @@ interface FinanceSummary {
   recurringTransactions: RecurringTx[];
   savingsGoals: SavingsGoal[];
   dailySpending: DailySpending[];
+  upcomingPayments: Array<{
+    id: string;
+    description: string;
+    amount: number | null;
+    dueDate: string;
+    status: string;
+    merchantName: string | null;
+  }>;
+  topMerchants: Array<{
+    id: string;
+    name: string;
+    totalSpent: number;
+    shareOfSpend: number;
+  }>;
+  possibleSavings: Array<{
+    category: string;
+    percentUsed: number;
+    remaining: number;
+  }>;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -151,7 +170,7 @@ export default function FinancesPage() {
   const [tab, setTab] = useState<"overview" | "accounts" | "advisor">("overview");
 
   const summaryUrl = useMemo(() => "/api/finance/summary", []);
-  const { data: summary, loading, initialLoading } = useCachedFetch<FinanceSummary>(
+  const { data: summary, initialLoading } = useCachedFetch<FinanceSummary>(
     summaryUrl,
     { ttl: 120_000 }
   );
@@ -212,6 +231,8 @@ export default function FinancesPage() {
           </button>
         ))}
       </div>
+
+      <FinanceQuickCapture />
 
       {/* ═══ OVERVIEW TAB ═══ */}
       {tab === "overview" && (
@@ -322,7 +343,7 @@ export default function FinancesPage() {
           )}
 
           {/* Quick Links Grid */}
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
             <Link href="/finances/transactions">
               <Card className="hover:bg-accent/50 transition-all cursor-pointer group tap-scale">
                 <CardContent className="p-3 flex flex-col items-center gap-1.5">
@@ -360,6 +381,26 @@ export default function FinancesPage() {
                     <Inbox className="h-4 w-4 text-blue-500" />
                   </div>
                   <span className="text-[10px] font-medium">Inbox</span>
+                </CardContent>
+              </Card>
+            </Link>
+            <Link href="/finances/inbox">
+              <Card className="hover:bg-accent/50 transition-all cursor-pointer group tap-scale">
+                <CardContent className="p-3 flex flex-col items-center gap-1.5">
+                  <div className="p-2 rounded-xl bg-amber-500/10 group-hover:bg-amber-500/20 transition-colors">
+                    <Receipt className="h-4 w-4 text-amber-500" />
+                  </div>
+                  <span className="text-[10px] font-medium">Inbox</span>
+                </CardContent>
+              </Card>
+            </Link>
+            <Link href="/finances/merchants">
+              <Card className="hover:bg-accent/50 transition-all cursor-pointer group tap-scale">
+                <CardContent className="p-3 flex flex-col items-center gap-1.5">
+                  <div className="p-2 rounded-xl bg-cyan-500/10 group-hover:bg-cyan-500/20 transition-colors">
+                    <BarChart3 className="h-4 w-4 text-cyan-500" />
+                  </div>
+                  <span className="text-[10px] font-medium">Merchants</span>
                 </CardContent>
               </Card>
             </Link>
@@ -494,6 +535,58 @@ export default function FinancesPage() {
             </CardContent>
           </Card>
 
+          {summary && summary.overview.pendingReviews > 0 && (
+            <Link href="/finances/inbox">
+              <Card className="border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 transition-colors">
+                <CardContent className="p-4 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold">Review Queue</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {summary.overview.pendingReviews} finance item(s) need your attention.
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-amber-400">
+                      {summary.overview.pendingReviews}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">Open inbox</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )}
+
+          {summary && summary.topMerchants.length > 0 && (
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">Top Merchants</span>
+                  <Link href="/finances/merchants" className="text-[10px] text-emerald-400">
+                    See all
+                  </Link>
+                </div>
+                <div className="space-y-3">
+                  {summary.topMerchants.slice(0, 4).map((merchant) => (
+                    <div key={merchant.id} className="space-y-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs font-medium truncate">{merchant.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatCOP(merchant.totalSpent, true)}
+                        </span>
+                      </div>
+                      <div className="w-full bg-secondary/50 rounded-full h-1.5">
+                        <div
+                          className="h-1.5 rounded-full bg-cyan-500/70"
+                          style={{ width: `${Math.min(merchant.shareOfSpend, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Savings Goals */}
           {summary && summary.savingsGoals.length > 0 && (
             <Card>
@@ -560,6 +653,30 @@ export default function FinancesPage() {
                         rtx.type === "income" ? "text-green-400" : "text-foreground"
                       )}>
                         {formatCOP(Math.abs(rtx.amount), true)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {summary && summary.upcomingPayments.length > 0 && (
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <span className="text-xs font-medium">Detected From Gmail</span>
+                <div className="space-y-2">
+                  {summary.upcomingPayments.slice(0, 4).map((payment) => (
+                    <div key={payment.id} className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium">{payment.description}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Due {format(new Date(payment.dueDate), "MMM d")}
+                          {payment.merchantName ? ` · ${payment.merchantName}` : ""}
+                        </p>
+                      </div>
+                      <p className="text-xs font-semibold">
+                        {payment.amount ? formatCOP(payment.amount, true) : "TBD"}
                       </p>
                     </div>
                   ))}

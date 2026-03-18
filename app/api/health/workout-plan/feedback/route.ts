@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
+import {
+  capDemoCompletionTokens,
+  enforceDemoAIBudget,
+  getDemoChatModel,
+  recordDemoAISpend,
+} from "@/lib/demo-ai-budget";
 
 // Allow up to 60s for AI generation (Vercel Pro)
 export const maxDuration = 60;
@@ -60,15 +66,19 @@ ${JSON.stringify(currentDay.exercises, null, 2)}
 
 Adjust the exercises based on the feedback and return the updated plan.`;
 
+    const blocked = await enforceDemoAIBudget();
+    if (blocked) return blocked;
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: getDemoChatModel("gpt-5.2"),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
       temperature: 0.5,
-      max_completion_tokens: 2000,
+      max_completion_tokens: capDemoCompletionTokens(2000),
     });
+    await recordDemoAISpend(completion.usage);
 
     const content = completion.choices[0]?.message?.content || "";
 

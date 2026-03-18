@@ -328,6 +328,8 @@ model FinancialTransaction {
   id            String   @id @default(uuid())
   accountId     String
   account       FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  merchantId    String?
+  merchantRef   Merchant? @relation("MerchantTransactions", fields: [merchantId], references: [id], onDelete: SetNull)
   transactedAt  DateTime @default(now()) // when the transaction occurred
   amount        Float    // positive = income, negative = expense
   currency      String   @default("COP")
@@ -341,12 +343,35 @@ model FinancialTransaction {
   notes         String?
   source        String   @default("manual") // manual, csv_import, voice, ai, belvo, email
   tags          String?  // comma-separated tags
+  status        String   @default("posted") // posted, pending, refunded, duplicate, ignored
+  reviewState   String   @default("resolved") // resolved, pending_review, dismissed
+  confidence    Float?
+  subtotalAmount Float?
+  taxAmount     Float?
+  tipAmount     Float?
+  deductible    Boolean  @default(false)
+  excludedFromBudget Boolean @default(false)
+  refundOfId    String?
+  refundOf      FinancialTransaction? @relation("RefundTransaction", fields: [refundOfId], references: [id], onDelete: SetNull)
+  refunds       FinancialTransaction[] @relation("RefundTransaction")
+  duplicateOfId String?
+  duplicateOf   FinancialTransaction? @relation("DuplicateTransaction", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates    FinancialTransaction[] @relation("DuplicateTransaction")
+  sourceDocumentId String?
+  sourceDocument FinanceDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  sourceFingerprint String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  reviewItems   FinanceReviewItem[]
+  changeLogs    TransactionChangeLog[]
 
   @@index([transactedAt])
   @@index([accountId])
   @@index([category])
+  @@index([merchantId])
+  @@index([status])
+  @@index([reviewState])
+  @@index([sourceFingerprint])
   @@map("financial_transactions")
 }
 
@@ -357,6 +382,7 @@ model BudgetCategory {
   color         String?  // hex color
   type          String   @default("expense") // expense, income, savings
   parentId      String?  // for subcategories
+  isTaxRelevant Boolean  @default(false)
   sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -373,6 +399,7 @@ model Budget {
   year        Int      // 2026
   totalIncome Float    @default(0) // planned total income
   totalBudget Float    @default(0) // planned total expenses
+  rolloverMode String  @default("none") // none, category, global
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -391,6 +418,7 @@ model BudgetItem {
   category      BudgetCategory @relation(fields: [categoryId], references: [id])
   planned       Float    @default(0) // desired/budgeted amount
   isFixed       Boolean  @default(false) // rent, loan payments = fixed; food, entertainment = variable
+  rolloverEnabled Boolean @default(false)
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -433,4 +461,175 @@ model SavingsGoal {
   updatedAt     DateTime @updatedAt
 
   @@map("savings_goals")
+}
+
+model GoogleMailboxConnection {
+  id                 String   @id @default("default")
+  email              String
+  grantedScopes      String
+  syncStatus         String   @default("connected") // connected, syncing, error, disconnected
+  historyId          String?
+  lastSyncAt         DateTime?
+  lastBackfillAt     DateTime?
+  lastError          String?
+  syncLookbackMonths Int      @default(12)
+  syncIntervalMinutes Int     @default(15)
+  connectedAt        DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  documents          FinanceDocument[]
+
+  @@map("google_mailbox_connections")
+}
+
+model FinanceVaultSecret {
+  id         String   @id @default(uuid())
+  secretKey  String   @unique
+  kind       String   // gmail_token, pdf_password
+  label      String?
+  context    Json?
+  cipherText String
+  iv         String
+  authTag    String
+  algorithm  String   @default("aes-256-gcm")
+  keyVersion Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([kind])
+  @@map("finance_vault_secrets")
+}
+
+model FinanceDocument {
+  id                String   @id @default(uuid())
+  source            String   // gmail_email, gmail_attachment, receipt_photo, manual_upload
+  externalId        String?
+  documentType      String   // email, pdf, image, statement, receipt
+  status            String   @default("pending") // pending, processed, password_required, error
+  mailConnectionId  String?
+  mailConnection    GoogleMailboxConnection? @relation(fields: [mailConnectionId], references: [id], onDelete: SetNull)
+  messageId         String?
+  threadId          String?
+  attachmentId      String?
+  filename          String?
+  mimeType          String?
+  sender            String?
+  subject           String?
+  receivedAt        DateTime?
+  contentText       String?
+  extractedData     Json?
+  parseError        String?
+  requiresPassword  Boolean  @default(false)
+  passwordSecretKey String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  transactions      FinancialTransaction[]
+  reviewItems       FinanceReviewItem[]
+  upcomingPayments  UpcomingPayment[]
+
+  @@unique([source, externalId])
+  @@index([messageId])
+  @@index([threadId])
+  @@index([status])
+  @@map("finance_documents")
+}
+
+model Merchant {
+  id               String   @id @default(uuid())
+  name             String
+  normalizedName   String   @unique
+  aliases          Json?
+  categoryHint     String?
+  subcategoryHint  String?
+  transactionCount Int      @default(0)
+  totalSpent       Float    @default(0)
+  totalTax         Float    @default(0)
+  totalTip         Float    @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  transactions     FinancialTransaction[] @relation("MerchantTransactions")
+  rules            FinanceRule[]
+  upcomingPayments UpcomingPayment[]
+
+  @@map("merchants")
+}
+
+model FinanceRule {
+  id         String   @id @default(uuid())
+  name       String
+  ruleType   String   @default("merchant")
+  isActive   Boolean  @default(true)
+  priority   Int      @default(0)
+  learned    Boolean  @default(false)
+  merchantId String?
+  merchant   Merchant? @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  conditions Json
+  actions    Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([isActive, priority])
+  @@index([merchantId])
+  @@map("finance_rules")
+}
+
+model FinanceReviewItem {
+  id            String   @id @default(uuid())
+  transactionId String?
+  transaction   FinancialTransaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  documentId    String?
+  document      FinanceDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  kind          String   // low_confidence, duplicate, refund, password_required, parse_error
+  status        String   @default("pending") // pending, resolved, dismissed
+  title         String
+  detail        String?
+  suggestedData Json?
+  resolution    Json?
+  resolvedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, kind])
+  @@map("finance_review_items")
+}
+
+model UpcomingPayment {
+  id               String   @id @default(uuid())
+  sourceDocumentId String?
+  sourceDocument   FinanceDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  merchantId       String?
+  merchant         Merchant? @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  description      String
+  dueDate          DateTime
+  amount           Float?
+  minimumDue       Float?
+  statementBalance Float?
+  currency         String   @default("COP")
+  category         String?
+  source           String   @default("email")
+  status           String   @default("detected") // detected, confirmed, dismissed, paid
+  confidence       Float?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([dueDate, status])
+  @@map("upcoming_payments")
+}
+
+model TransactionChangeLog {
+  id            String   @id @default(uuid())
+  transactionId String
+  transaction   FinancialTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  action        String
+  before        Json?
+  after         Json?
+  note          String?
+  createdAt     DateTime @default(now())
+
+  @@index([transactionId, createdAt])
+  @@map("transaction_change_logs")
 }

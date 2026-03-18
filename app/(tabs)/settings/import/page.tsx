@@ -47,6 +47,8 @@ interface VeSyncResult {
   dateRange?: { from: string; to: string };
 }
 
+type ImportPayload = Partial<Record<"foodLogs" | "workouts" | "measurements" | "waterLogs", unknown[]>>;
+
 const FOOD_LOG_EXAMPLE = `{
   "foodLogs": [
     {
@@ -121,19 +123,20 @@ export default function ImportPage() {
   const [vesyncResult, setVesyncResult] = useState<VeSyncResult | null>(null);
   const vesyncInputRef = useRef<HTMLInputElement>(null);
 
-  const validateJson = (text: string): { valid: boolean; data?: Record<string, unknown>; error?: string } => {
+  const validateJson = (text: string): { valid: boolean; data?: ImportPayload; error?: string } => {
     if (!text.trim()) {
       return { valid: false, error: "Paste your JSON data above" };
     }
     try {
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(text) as unknown;
       if (typeof parsed !== "object" || parsed === null) {
         return { valid: false, error: "JSON must be an object with foodLogs, workouts, measurements, or waterLogs arrays" };
       }
+      const payload = parsed as ImportPayload;
 
-      const keys = ["foodLogs", "workouts", "measurements", "waterLogs"];
+      const keys = ["foodLogs", "workouts", "measurements", "waterLogs"] as const;
       const hasData = keys.some(
-        (k) => Array.isArray(parsed[k]) && parsed[k].length > 0
+        (k) => Array.isArray(payload[k]) && payload[k].length > 0
       );
 
       if (!hasData) {
@@ -146,12 +149,12 @@ export default function ImportPage() {
       // Count entries
       const counts: Record<string, number> = {};
       for (const k of keys) {
-        if (Array.isArray(parsed[k])) counts[k] = parsed[k].length;
+        if (Array.isArray(payload[k])) counts[k] = payload[k].length;
       }
 
-      return { valid: true, data: parsed };
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
+      return { valid: true, data: payload };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown parse error";
       return { valid: false, error: `Invalid JSON: ${message}` };
     }
   };
@@ -254,9 +257,9 @@ export default function ImportPage() {
     : [];
 
   return (
-    <div className="px-4 pt-12 pb-8 space-y-4">
+    <div className="space-y-4 px-4 pt-12 pb-8 lg:space-y-6 lg:px-0 lg:pt-10">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Link href="/settings">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />

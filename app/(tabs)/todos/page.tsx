@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Circle,
   CheckCircle2,
   Plus,
   Trash2,
@@ -25,7 +24,6 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format, isToday, isTomorrow, isPast, parseISO } from "date-fns";
-import { CATEGORY_CONFIG } from "@/lib/todo-icons";
 
 interface Todo {
   id: string;
@@ -183,10 +181,103 @@ export default function TodosPage() {
   // If no sections have items, show combined list fallback
   const allFiltered = filterTodos(regularTodos);
 
+  const renderAddCard = (className?: string) => (
+    <Card className={className}>
+      <CardContent className="space-y-3 p-4">
+        <div>
+          <p className="text-sm font-semibold">New task</p>
+          <p className="text-xs text-muted-foreground">
+            Capture one-offs or create a recurring routine.
+          </p>
+        </div>
+        <Input
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          placeholder="What do you need to do?"
+          className="text-sm"
+          onKeyDown={(e) => e.key === "Enter" && addTodo()}
+          autoFocus={showAdd}
+        />
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px]">
+          <div className="flex items-center gap-1.5">
+            <Calendar className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <Input
+              type="date"
+              value={newDueDate}
+              onChange={(e) => setNewDueDate(e.target.value)}
+              className="h-9 flex-1 text-xs"
+            />
+          </div>
+          <Select value={newRecurrence} onValueChange={setNewRecurrence}>
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper" side="bottom" sideOffset={4}>
+              <SelectItem value="none">One-time</SelectItem>
+              <SelectItem value="daily">Daily</SelectItem>
+              <SelectItem value="weekdays">Weekdays</SelectItem>
+              <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button size="sm" onClick={addTodo} disabled={!newTitle.trim()} className="w-full">
+          {newRecurrence !== "none" ? "Create Recurring Task" : "Add Todo"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+
+  const recurringTemplatesPanel = recurringTemplates.length > 0 ? (
+    <Card>
+      <CardContent className="space-y-3 p-4">
+        <button
+          onClick={() => setShowRecurringTemplates(!showRecurringTemplates)}
+          className="flex w-full items-center gap-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Repeat className="h-3.5 w-3.5" />
+          <span className="font-medium">
+            {recurringTemplates.length} recurring template{recurringTemplates.length !== 1 ? "s" : ""}
+          </span>
+          {showRecurringTemplates ? (
+            <ChevronUp className="ml-auto h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="ml-auto h-3.5 w-3.5" />
+          )}
+        </button>
+        {showRecurringTemplates && (
+          <div className="space-y-1.5">
+            {recurringTemplates.map((template) => (
+              <div
+                key={template.id}
+                className="flex items-center gap-3 rounded-xl border border-amber-500/10 bg-amber-500/5 p-3"
+              >
+                <span className="text-lg">{template.icon || "ðŸ”"}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm leading-tight">{template.title}</p>
+                  <p className="mt-0.5 flex items-center gap-1 text-[10px] capitalize text-amber-400">
+                    <Repeat className="h-2.5 w-2.5" />
+                    {template.recurrence}
+                  </p>
+                </div>
+                <button
+                  onClick={() => deleteTodo(template.id)}
+                  className="rounded-lg p-1 transition-colors hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  ) : null;
+
   return (
-    <div className="px-4 pt-12 pb-36 space-y-4">
+    <div className="space-y-4 px-4 pt-12 pb-36 lg:space-y-6 lg:px-0 lg:pt-10 lg:pb-10">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Todos</h1>
           <p className="text-xs text-muted-foreground">
@@ -202,46 +293,35 @@ export default function TodosPage() {
         </Button>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <div className="space-y-4 lg:sticky lg:top-6">
+          {renderAddCard("hidden lg:block")}
+
+          <Card className="hidden lg:block">
+            <CardContent className="grid grid-cols-3 gap-3 p-4 text-center">
+              <div className="rounded-xl bg-secondary/40 p-3">
+                <p className="text-2xl font-bold">{activeCount}</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Active</p>
+              </div>
+              <div className="rounded-xl bg-secondary/40 p-3">
+                <p className="text-2xl font-bold">{completedCount}</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Done</p>
+              </div>
+              <div className="rounded-xl bg-secondary/40 p-3">
+                <p className="text-2xl font-bold">{recurringTemplates.length}</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Routines</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="hidden lg:block">{recurringTemplatesPanel}</div>
+        </div>
+
+        <div className="space-y-4">
+
       {/* Quick add */}
       {showAdd && (
-        <Card>
-          <CardContent className="p-3 space-y-2">
-            <Input
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="What do you need to do?"
-              className="text-sm"
-              onKeyDown={(e) => e.key === "Enter" && addTodo()}
-              autoFocus
-            />
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 flex-1">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <Input
-                  type="date"
-                  value={newDueDate}
-                  onChange={(e) => setNewDueDate(e.target.value)}
-                  className="text-xs h-8 flex-1"
-                />
-              </div>
-              <Select value={newRecurrence} onValueChange={setNewRecurrence}>
-                <SelectTrigger className="w-28 h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent position="popper" side="bottom" sideOffset={4}>
-                  <SelectItem value="none">One-time</SelectItem>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="weekdays">Weekdays</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button size="sm" onClick={addTodo} disabled={!newTitle.trim()} className="w-full">
-              {newRecurrence !== "none" ? "Create Recurring Task" : "Add Todo"}
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="lg:hidden">{renderAddCard()}</div>
       )}
 
       {/* Filter tabs */}
@@ -315,7 +395,7 @@ export default function TodosPage() {
 
       {/* Recurring Templates Manager */}
       {recurringTemplates.length > 0 && (
-        <div className="pt-2">
+        <div className="pt-2 lg:hidden">
           <button
             onClick={() => setShowRecurringTemplates(!showRecurringTemplates)}
             className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
@@ -351,6 +431,8 @@ export default function TodosPage() {
           )}
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

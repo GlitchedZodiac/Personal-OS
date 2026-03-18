@@ -1,9 +1,11 @@
 import { DEFAULT_TIME_ZONE } from "@/lib/timezone";
+import { demoSpanishEnabled } from "@/lib/demo-client";
 
 export interface AIInstructions {
   health: string;
   todos: string;
   social: string;
+  finance: string;
 }
 
 export interface WorkoutGoals {
@@ -23,6 +25,14 @@ export interface BodyGoals {
 
 export type AILanguage = "english" | "spanish" | "portuguese" | "french";
 
+export interface FinanceSettings {
+  defaultCurrency: string;
+  syncIntervalMinutes: number;
+  gmailLookbackMonths: number;
+  autoReviewThreshold: number;
+  receiptRequireReview: boolean;
+}
+
 export interface AppSettings {
   calorieTarget: number;
   proteinPct: number;
@@ -37,6 +47,7 @@ export interface AppSettings {
   aiInstructions: AIInstructions;
   workoutGoals: WorkoutGoals;
   timeZone: string;
+  finance: FinanceSettings;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -48,7 +59,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   gender: "",
   birthYear: null,
-  aiLanguage: "english",
+  aiLanguage: demoSpanishEnabled ? "spanish" : "english",
   bodyGoals: {
     goalWeightKg: null,
     goalWaistCm: null,
@@ -57,6 +68,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     health: "",
     todos: "",
     social: "",
+    finance: "",
   },
   workoutGoals: {
     goal: "build_muscle",
@@ -68,6 +80,13 @@ const DEFAULT_SETTINGS: AppSettings = {
     injuries: "",
   },
   timeZone: DEFAULT_TIME_ZONE,
+  finance: {
+    defaultCurrency: "COP",
+    syncIntervalMinutes: 15,
+    gmailLookbackMonths: 12,
+    autoReviewThreshold: 0.75,
+    receiptRequireReview: true,
+  },
 };
 
 const STORAGE_KEY = "personal-os-settings";

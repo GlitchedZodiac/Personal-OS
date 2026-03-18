@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@/lib/openai";
+import {
+  capDemoCompletionTokens,
+  enforceDemoAIBudget,
+  getDemoChatModel,
+  recordDemoAISpend,
+} from "@/lib/demo-ai-budget";
 
 // Allow up to 60s for AI generation (Vercel Pro)
 export const maxDuration = 60;
@@ -101,15 +107,19 @@ Return this exact JSON structure:
 
 The "imageKey" should be one of: bench_press, squat, deadlift, overhead_press, barbell_row, pull_up, lat_pulldown, bicep_curl, tricep_extension, lateral_raise, leg_press, leg_curl, leg_extension, calf_raise, plank, crunch, cable_fly, dumbbell_fly, pushup, lunge, hip_thrust, face_pull, shrug, dip, romanian_deadlift, front_squat, incline_press, decline_press, hammer_curl, preacher_curl, skull_crusher, cable_crossover, chest_press_machine, seated_row, t_bar_row, good_morning, step_up, goblet_squat, kettlebell_swing, burpee, mountain_climber, battle_ropes, box_jump, resistance_band, stretch, cardio_generic`;
 
+    const blocked = await enforceDemoAIBudget();
+    if (blocked) return blocked;
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: getDemoChatModel("gpt-5.2"),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
       temperature: 0.7,
-      max_completion_tokens: 4000,
+      max_completion_tokens: capDemoCompletionTokens(4000),
     });
+    await recordDemoAISpend(completion.usage);
 
     const content = completion.choices[0]?.message?.content || "";
 

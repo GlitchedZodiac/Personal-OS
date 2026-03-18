@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { endOfDay, endOfMonth, startOfDay, startOfMonth, subDays } from "date-fns";
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay, subDays, startOfMonth, endOfMonth } from "date-fns";
+import { ingestFinanceCandidate } from "@/lib/finance/ingestion";
 import { parseLocalDate } from "@/lib/utils";
 
-// GET /api/finance/transactions — list transactions with filters
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const accountId = searchParams.get("accountId");
     const category = searchParams.get("category");
-    const type = searchParams.get("type"); // income, expense, transfer
-    const range = searchParams.get("range") || "30"; // days
-    const month = searchParams.get("month"); // "2026-02" format
-    const limit = parseInt(searchParams.get("limit") || "100");
-    const offset = parseInt(searchParams.get("offset") || "0");
+    const type = searchParams.get("type");
+    const status = searchParams.get("status");
+    const range = searchParams.get("range") || "30";
+    const month = searchParams.get("month");
+    const limit = parseInt(searchParams.get("limit") || "100", 10);
+    const offset = parseInt(searchParams.get("offset") || "0", 10);
 
-    // Build date range
     let dateStart: Date;
     let dateEnd: Date;
 
@@ -29,18 +29,18 @@ export async function GET(req: NextRequest) {
         ? parseLocalDate(searchParams.get("date")!)
         : new Date();
       dateEnd = endOfDay(today);
-      dateStart = startOfDay(subDays(today, parseInt(range)));
+      dateStart = startOfDay(subDays(today, parseInt(range, 10)));
     }
 
-    // Build where clause
     const where: Record<string, unknown> = {
       transactedAt: { gte: dateStart, lte: dateEnd },
     };
     if (accountId) where.accountId = accountId;
     if (category) where.category = category;
     if (type) where.type = type;
+    if (status) where.status = status;
 
-    const [transactions, total, aggregates] = await Promise.all([
+    const [transactions, total, incomeAgg, expenseAgg] = await Promise.all([
       prisma.financialTransaction.findMany({
         where,
         orderBy: { transactedAt: "desc" },
@@ -48,27 +48,20 @@ export async function GET(req: NextRequest) {
         skip: offset,
         include: {
           account: { select: { name: true, icon: true, color: true } },
+          merchantRef: { select: { id: true, name: true, normalizedName: true } },
+          sourceDocument: {
+            select: { id: true, source: true, documentType: true, sender: true, filename: true },
+          },
         },
       }),
       prisma.financialTransaction.count({ where }),
       prisma.financialTransaction.aggregate({
-        where,
-        _sum: { amount: true },
-      }),
-    ]);
-
-    // Separate income/expenses
-    const incomeWhere = { ...where, type: "income" };
-    const expenseWhere = { ...where, type: "expense" };
-
-    const [incomeAgg, expenseAgg] = await Promise.all([
-      prisma.financialTransaction.aggregate({
-        where: incomeWhere,
+        where: { ...where, type: "income", excludedFromBudget: false, status: { notIn: ["duplicate", "ignored"] } },
         _sum: { amount: true },
         _count: true,
       }),
       prisma.financialTransaction.aggregate({
-        where: expenseWhere,
+        where: { ...where, type: "expense", excludedFromBudget: false, status: { notIn: ["duplicate", "ignored"] } },
         _sum: { amount: true },
         _count: true,
       }),
@@ -77,7 +70,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       transactions,
       total,
-      totalAmount: aggregates._sum.amount || 0,
       income: {
         total: Math.abs(incomeAgg._sum.amount || 0),
         count: incomeAgg._count,
@@ -90,150 +82,101 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error("Error fetching transactions:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch transactions" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch transactions" }, { status: 500 });
   }
 }
 
-// POST /api/finance/transactions — create a transaction
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const {
-      accountId,
-      transactedAt,
-      amount,
-      currency = "COP",
-      description,
-      category,
-      subcategory,
-      type,
-      isRecurring = false,
-      merchant,
-      reference,
-      notes,
-      source = "manual",
-      tags,
-    } = body;
-
-    if (!accountId || !description || !category || !type || amount === undefined) {
-      return NextResponse.json(
-        { error: "accountId, description, category, type, and amount are required" },
-        { status: 400 }
-      );
-    }
-
-    // Ensure amount sign matches type
-    let normalizedAmount = Math.abs(amount);
-    if (type === "expense") normalizedAmount = -normalizedAmount;
-
-    const transaction = await prisma.financialTransaction.create({
-      data: {
-        accountId,
-        transactedAt: transactedAt ? new Date(transactedAt) : new Date(),
-        amount: normalizedAmount,
-        currency,
-        description,
-        category,
-        subcategory: subcategory ?? null,
-        type,
-        isRecurring,
-        merchant: merchant ?? null,
-        reference: reference ?? null,
-        notes: notes ?? null,
-        source,
-        tags: tags ?? null,
-      },
+    const result = await ingestFinanceCandidate({
+      accountId: body.accountId,
+      transactedAt: body.transactedAt ? new Date(body.transactedAt) : new Date(),
+      amount: typeof body.amount === "number" ? Math.abs(body.amount) : Number(body.amount),
+      currency: body.currency || "COP",
+      description: body.description,
+      category: body.category,
+      subcategory: body.subcategory ?? null,
+      type: body.type,
+      isRecurring: body.isRecurring ?? false,
+      merchant: body.merchant ?? body.description,
+      reference: body.reference ?? null,
+      notes: body.notes ?? null,
+      source: body.source || "manual",
+      tags: typeof body.tags === "string" ? body.tags.split(",").map((tag: string) => tag.trim()) : body.tags,
+      deductible: body.deductible ?? false,
+      excludedFromBudget: body.excludedFromBudget ?? false,
+      subtotalAmount: body.subtotalAmount ?? null,
+      taxAmount: body.taxAmount ?? null,
+      tipAmount: body.tipAmount ?? null,
+      confidence: body.confidence ?? 1,
     });
 
-    // Update account balance
-    await prisma.financialAccount.update({
-      where: { id: accountId },
-      data: { balance: { increment: normalizedAmount } },
-    });
-
-    return NextResponse.json(transaction, { status: 201 });
+    return NextResponse.json(result.transaction, { status: 201 });
   } catch (error) {
     console.error("Error creating transaction:", error);
-    return NextResponse.json(
-      { error: "Failed to create transaction" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
   }
 }
 
-// PATCH /api/finance/transactions — update a transaction
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
     const { id, ...updates } = body;
 
     if (!id) {
-      return NextResponse.json(
-        { error: "Transaction ID is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Transaction ID is required" }, { status: 400 });
     }
 
-    // Get old transaction to adjust balance
-    const oldTx = await prisma.financialTransaction.findUnique({
+    const existing = await prisma.financialTransaction.findUnique({
       where: { id },
       select: { amount: true, accountId: true },
     });
 
-    if (!oldTx) {
+    if (!existing) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
-    // Normalize amount if type changed
-    if (updates.amount !== undefined && updates.type) {
-      updates.amount = Math.abs(updates.amount);
-      if (updates.type === "expense") updates.amount = -updates.amount;
-    }
-
-    if (updates.transactedAt) {
-      updates.transactedAt = new Date(updates.transactedAt);
-    }
+    const nextAmount =
+      updates.amount !== undefined
+        ? updates.type === "expense"
+          ? -Math.abs(Number(updates.amount))
+          : updates.type === "income"
+          ? Math.abs(Number(updates.amount))
+          : Number(updates.amount)
+        : undefined;
 
     const transaction = await prisma.financialTransaction.update({
       where: { id },
-      data: updates,
+      data: {
+        ...updates,
+        amount: nextAmount,
+        transactedAt: updates.transactedAt ? new Date(updates.transactedAt) : undefined,
+        reviewState: updates.reviewState || "resolved",
+      },
     });
 
-    // Adjust account balance if amount changed
-    if (updates.amount !== undefined) {
-      const diff = transaction.amount - oldTx.amount;
-      if (diff !== 0) {
-        await prisma.financialAccount.update({
-          where: { id: oldTx.accountId },
-          data: { balance: { increment: diff } },
-        });
-      }
+    if (nextAmount !== undefined && nextAmount !== existing.amount) {
+      await prisma.financialAccount.update({
+        where: { id: existing.accountId },
+        data: { balance: { increment: nextAmount - existing.amount } },
+      });
     }
 
     return NextResponse.json(transaction);
   } catch (error) {
     console.error("Error updating transaction:", error);
-    return NextResponse.json(
-      { error: "Failed to update transaction" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 });
   }
 }
 
-// DELETE /api/finance/transactions — delete a transaction and adjust balance
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json(
-        { error: "Transaction ID is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Transaction ID is required" }, { status: 400 });
     }
 
     const tx = await prisma.financialTransaction.findUnique({
@@ -246,8 +189,6 @@ export async function DELETE(req: NextRequest) {
     }
 
     await prisma.financialTransaction.delete({ where: { id } });
-
-    // Reverse the balance effect
     await prisma.financialAccount.update({
       where: { id: tx.accountId },
       data: { balance: { decrement: tx.amount } },
@@ -256,9 +197,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting transaction:", error);
-    return NextResponse.json(
-      { error: "Failed to delete transaction" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to delete transaction" }, { status: 500 });
   }
 }

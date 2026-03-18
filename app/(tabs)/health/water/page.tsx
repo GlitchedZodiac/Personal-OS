@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ArrowLeft, Droplets, Pencil, Plus, Trash2 } from "lucide-react";
@@ -12,11 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { invalidateHealthCache, useCachedFetch } from "@/lib/cache";
-import { fetchServerSettings, getSettings } from "@/lib/settings";
-import {
-  getDateStringInTimeZone,
-  getTimeZoneOffsetMinutesForDateString,
-} from "@/lib/timezone";
 
 type WaterLog = {
   id: string;
@@ -35,15 +30,8 @@ type WaterResponse = {
 };
 
 export default function WaterLogPage() {
-  const initialTimeZone = getSettings().timeZone;
-  const [timeZone, setTimeZone] = useState(initialTimeZone);
-  const [dateFilter, setDateFilter] = useState(
-    getDateStringInTimeZone(new Date(), initialTimeZone)
-  );
-  const tzOffsetMinutes = useMemo(
-    () => getTimeZoneOffsetMinutesForDateString(dateFilter, timeZone),
-    [dateFilter, timeZone]
-  );
+  const tzOffsetMinutes = new Date().getTimezoneOffset();
+  const [dateFilter, setDateFilter] = useState(format(new Date(), "yyyy-MM-dd"));
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editEntry, setEditEntry] = useState<WaterLog | null>(null);
   const [newAmount, setNewAmount] = useState("250");
@@ -51,20 +39,12 @@ export default function WaterLogPage() {
   const [editAmount, setEditAmount] = useState("");
   const [editLoggedAt, setEditLoggedAt] = useState("");
 
-  useEffect(() => {
-    fetchServerSettings().then((s) => {
-      setTimeZone(s.timeZone);
-      setDateFilter(getDateStringInTimeZone(new Date(), s.timeZone));
-    });
-  }, []);
-
   const waterUrl = useMemo(() => {
     const params = new URLSearchParams();
     params.set("date", dateFilter);
     params.set("tzOffsetMinutes", String(tzOffsetMinutes));
-    params.set("timeZone", timeZone);
     return `/api/health/water?${params.toString()}`;
-  }, [dateFilter, tzOffsetMinutes, timeZone]);
+  }, [dateFilter, tzOffsetMinutes]);
 
   const { data, initialLoading, refresh } = useCachedFetch<WaterResponse>(waterUrl, { ttl: 30_000 });
   const logs = data?.logs ?? [];
@@ -150,8 +130,8 @@ export default function WaterLogPage() {
   };
 
   return (
-    <div className="px-4 pt-12 pb-36 space-y-4">
-      <div className="flex items-center gap-3">
+    <div className="space-y-4 px-4 pt-12 pb-36 lg:space-y-6 lg:px-0 lg:pt-10 lg:pb-10">
+      <div className="flex flex-wrap items-center gap-3">
         <Link href="/health">
           <Button variant="ghost" size="icon" className="h-9 w-9">
             <ArrowLeft className="h-5 w-5" />
@@ -167,6 +147,9 @@ export default function WaterLogPage() {
         </Button>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <div className="space-y-4 lg:sticky lg:top-6">
+
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="flex gap-2">
@@ -178,9 +161,7 @@ export default function WaterLogPage() {
             />
             <Button
               variant="outline"
-              onClick={() =>
-                setDateFilter(getDateStringInTimeZone(new Date(), timeZone))
-              }
+              onClick={() => setDateFilter(format(new Date(), "yyyy-MM-dd"))}
               className="h-9"
             >
               Today
@@ -208,6 +189,10 @@ export default function WaterLogPage() {
           )}
         </CardContent>
       </Card>
+
+        </div>
+
+        <div className="space-y-4">
 
       <Card>
         <CardHeader className="pb-2">
@@ -247,6 +232,8 @@ export default function WaterLogPage() {
           )}
         </CardContent>
       </Card>
+        </div>
+      </div>
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="max-w-sm">

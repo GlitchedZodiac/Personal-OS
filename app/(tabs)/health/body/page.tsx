@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,8 +66,8 @@ export default function BodyMeasurementsPage() {
     useCachedFetch<BodyEntry[]>("/api/health/body", { ttl: 60_000 });
   const [showWizard, setShowWizard] = useState(false);
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
-  const [units, setUnits] = useState<"metric" | "imperial">("metric");
-  const [gender, setGender] = useState<Gender | "">("");
+  const [units] = useState<"metric" | "imperial">(() => getSettings().units);
+  const [gender] = useState<Gender | "">(() => getSettings().gender || "");
   const [editEntry, setEditEntry] = useState<BodyEntry | null>(null);
   const [editForm, setEditForm] = useState({
     measuredAt: "",
@@ -86,12 +86,6 @@ export default function BodyMeasurementsPage() {
   });
 
   const isImperial = units === "imperial";
-
-  useEffect(() => {
-    const settings = getSettings();
-    setUnits(settings.units);
-    setGender(settings.gender || "");
-  }, []);
 
   const handleDelete = async (id: string) => {
     try {
@@ -222,9 +216,9 @@ export default function BodyMeasurementsPage() {
     : [];
 
   return (
-    <div className="px-4 pt-12 pb-36 space-y-4">
+    <div className="space-y-4 px-4 pt-12 pb-36 lg:space-y-6 lg:px-0 lg:pt-10 lg:pb-10">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Link href="/health">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
@@ -241,9 +235,11 @@ export default function BodyMeasurementsPage() {
         </Button>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start lg:gap-6">
+
       {/* Latest Measurement Summary */}
       {latest && (
-        <Card>
+        <Card className="lg:sticky lg:top-6">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
               Latest — {format(new Date(latest.measuredAt), "MMM d, yyyy")}
@@ -498,6 +494,7 @@ export default function BodyMeasurementsPage() {
           )}
         </CardContent>
       </Card>
+      </div>
 
       <Dialog open={!!editEntry} onOpenChange={(open) => !open && setEditEntry(null)}>
         <DialogContent className="max-w-sm">

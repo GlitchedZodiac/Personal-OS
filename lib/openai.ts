@@ -1,6 +1,15 @@
 import OpenAI from "openai";
 
-const apiKey = process.env.OPENAI_API_KEY?.trim();
+function cleanEnv(value: string | undefined): string | undefined {
+  if (!value) return value;
+  return value
+    .replace(/\\r\\n/g, "")
+    .replace(/\\n/g, "")
+    .replace(/\\r/g, "")
+    .trim();
+}
+
+const apiKey = cleanEnv(process.env.OPENAI_API_KEY);
 
 export const hasOpenAIKey = Boolean(apiKey);
 

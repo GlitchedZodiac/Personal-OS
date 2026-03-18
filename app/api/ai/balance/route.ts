@@ -1,8 +1,20 @@
 import { NextResponse } from "next/server";
+import { getDemoAIBudgetSummary, isDemoModeServer } from "@/lib/demo-ai-budget";
 
 // Check OpenAI billing / credit balance
 // Tries multiple endpoints since OpenAI has changed these over time
 export async function GET() {
+  if (isDemoModeServer()) {
+    const summary = await getDemoAIBudgetSummary();
+    if (summary) {
+      return NextResponse.json({
+        available: true,
+        ...summary,
+        message: "Demo AI budget mode is active.",
+      });
+    }
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {

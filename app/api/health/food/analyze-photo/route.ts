@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@/lib/openai";
+import {
+  capDemoCompletionTokens,
+  enforceDemoAIBudget,
+  getDemoChatModel,
+  recordDemoAISpend,
+} from "@/lib/demo-ai-budget";
 
 // Allow up to 60s for GPT-5.2 vision analysis (Vercel Pro)
 export const maxDuration = 60;
@@ -21,8 +27,11 @@ export async function POST(request: NextRequest) {
       mealType ||
       (hour < 11 ? "breakfast" : hour < 15 ? "lunch" : hour < 20 ? "dinner" : "snack");
 
+    const blocked = await enforceDemoAIBudget();
+    if (blocked) return blocked;
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: getDemoChatModel("gpt-5.2"),
       messages: [
         {
           role: "system",
@@ -70,8 +79,9 @@ Respond ONLY with valid JSON in this exact format:
         },
       ],
       temperature: 0.3,
-      max_completion_tokens: 1000,
+      max_completion_tokens: capDemoCompletionTokens(1000),
     });
+    await recordDemoAISpend(completion.usage);
 
     const raw = completion.choices[0].message?.content?.trim() || "";
 

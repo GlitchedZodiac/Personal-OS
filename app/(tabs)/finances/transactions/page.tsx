@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FinanceQuickCapture } from "@/components/finance-quick-capture";
 import { cn } from "@/lib/utils";
-import { format, subDays } from "date-fns";
+import { format } from "date-fns";
 import {
   ArrowLeft,
   Plus,
@@ -12,7 +13,6 @@ import {
   Filter,
   TrendingUp,
   TrendingDown,
-  ArrowUpDown,
   X,
   Check,
   Pencil,
@@ -43,6 +43,8 @@ interface Transaction {
   notes?: string;
   source: string;
   tags?: string;
+  status?: string;
+  reviewState?: string;
   account: { name: string; icon?: string; color?: string };
 }
 
@@ -233,6 +235,8 @@ export default function TransactionsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <FinanceQuickCapture onSaved={fetchTransactions} compact />
 
       {/* Search & Filters */}
       <div className="flex gap-2">

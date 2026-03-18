@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,12 +45,6 @@ import { addDays, format, isToday, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getSettings, getMacroGrams, fetchServerSettings } from "@/lib/settings";
 import { useCachedFetch, invalidateHealthCache } from "@/lib/cache";
-import {
-  getDateStringInTimeZone,
-  getDateTimeIsoForLocalDateUsingCurrentTime,
-  getZonedDateParts,
-  zonedLocalDateTimeToUtc,
-} from "@/lib/timezone";
 
 interface FoodEntry {
   id: string;
@@ -74,31 +68,6 @@ interface FavoriteFood {
   carbsG: number;
   fatG: number;
   usageCount: number;
-}
-
-interface LatestFoodDateResponse {
-  date: string | null;
-}
-
-function pad2(value: number) {
-  return String(value).padStart(2, "0");
-}
-
-function formatIsoForDateTimeInput(isoValue: string, timeZone: string) {
-  const parts = getZonedDateParts(new Date(isoValue), timeZone);
-  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}T${pad2(parts.hour)}:${pad2(parts.minute)}`;
-}
-
-function dateTimeInputToIsoInTimeZone(value: string, timeZone: string) {
-  const [datePart, timePart] = value.split("T");
-  if (!datePart || !timePart) return null;
-
-  const [hourStr, minuteStr] = timePart.split(":");
-  const hour = Number.parseInt(hourStr || "", 10);
-  const minute = Number.parseInt(minuteStr || "", 10);
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
-
-  return zonedLocalDateTimeToUtc(datePart, timeZone, hour, minute, 0).toISOString();
 }
 
 const mealConfig: Record<
@@ -329,14 +298,12 @@ function MealSection({
 }
 
 export default function FoodLogPage() {
-  const initialSettings = useMemo(() => getSettings(), []);
-  const initialDateRef = useRef(
-    getDateStringInTimeZone(new Date(), initialSettings.timeZone)
-  );
+  const tzOffsetMinutes = new Date().getTimezoneOffset();
   const [searchQuery, setSearchQuery] = useState("");
   const [mealFilter, setMealFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState(initialDateRef.current);
-  const [timeZone, setTimeZone] = useState(initialSettings.timeZone);
+  const [dateFilter, setDateFilter] = useState(
+    format(new Date(), "yyyy-MM-dd")
+  );
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [collapsedMeals, setCollapsedMeals] = useState<Record<string, boolean>>(
@@ -351,14 +318,11 @@ export default function FoodLogPage() {
     fatG: "",
     notes: "",
   });
-  const [calTarget, setCalTarget] = useState(initialSettings.calorieTarget);
-  const [macroTargets, setMacroTargets] = useState(() =>
-    getMacroGrams(initialSettings)
-  );
+  const [calTarget, setCalTarget] = useState(2000);
+  const [macroTargets, setMacroTargets] = useState({ proteinG: 150, carbsG: 200, fatG: 67 });
   const [showQuickLog, setShowQuickLog] = useState(false);
   const [quickLogLoading, setQuickLogLoading] = useState<string | null>(null);
   const [editEntry, setEditEntry] = useState<FoodEntry | null>(null);
-  const [autoFocusedLatestDate, setAutoFocusedLatestDate] = useState(false);
   const [editForm, setEditForm] = useState({
     foodDescription: "",
     mealType: "",
@@ -374,20 +338,14 @@ export default function FoodLogPage() {
   const foodUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (dateFilter) params.set("date", dateFilter);
-    params.set("timeZone", timeZone);
+    params.set("tzOffsetMinutes", String(tzOffsetMinutes));
     if (mealFilter !== "all") params.set("mealType", mealFilter);
     if (searchQuery) params.set("search", searchQuery);
     return `/api/health/food?${params.toString()}`;
-  }, [dateFilter, mealFilter, searchQuery, timeZone]);
+  }, [dateFilter, mealFilter, searchQuery, tzOffsetMinutes]);
 
   const { data: entries, initialLoading, refresh: fetchEntries } =
     useCachedFetch<FoodEntry[]>(foodUrl, { ttl: 60_000 });
-  const latestDateUrl = useMemo(
-    () => `/api/health/food?latestDateOnly=true&timeZone=${encodeURIComponent(timeZone)}`,
-    [timeZone]
-  );
-  const { data: latestFoodDate } =
-    useCachedFetch<LatestFoodDateResponse>(latestDateUrl, { ttl: 300_000 });
 
   const { data: favorites, refresh: refreshFavorites } =
     useCachedFetch<FavoriteFood[]>("/api/health/favorites", { ttl: 300_000 });
@@ -396,22 +354,12 @@ export default function FoodLogPage() {
     const local = getSettings();
     setCalTarget(local.calorieTarget);
     setMacroTargets(getMacroGrams(local));
-    setTimeZone(local.timeZone);
 
     fetchServerSettings().then((s) => {
       setCalTarget(s.calorieTarget);
       setMacroTargets(getMacroGrams(s));
-      setTimeZone(s.timeZone);
-      const todayInServerZone = getDateStringInTimeZone(new Date(), s.timeZone);
-      setDateFilter((prev) =>
-        prev === initialDateRef.current ? todayInServerZone : prev
-      );
     });
   }, []);
-
-  const getLoggedAtForSelectedDate = () => {
-    return getDateTimeIsoForLocalDateUsingCurrentTime(dateFilter, timeZone);
-  };
 
   const handleDelete = async (id: string) => {
     try {
@@ -433,7 +381,6 @@ export default function FoodLogPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          loggedAt: getLoggedAtForSelectedDate(),
           mealType: entry.mealType,
           foodDescription: entry.foodDescription,
           calories: entry.calories,
@@ -486,7 +433,7 @@ export default function FoodLogPage() {
       proteinG: String(entry.proteinG),
       carbsG: String(entry.carbsG),
       fatG: String(entry.fatG),
-      loggedAt: formatIsoForDateTimeInput(entry.loggedAt, timeZone),
+      loggedAt: format(new Date(entry.loggedAt), "yyyy-MM-dd'T'HH:mm"),
       notes: entry.notes || "",
     });
   };
@@ -494,11 +441,6 @@ export default function FoodLogPage() {
   const handleSaveEdit = async () => {
     if (!editEntry) return;
     try {
-      const editedLoggedAtIso =
-        editForm.loggedAt
-          ? dateTimeInputToIsoInTimeZone(editForm.loggedAt, timeZone)
-          : null;
-
       const res = await fetch(`/api/health/food?id=${editEntry.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -509,7 +451,7 @@ export default function FoodLogPage() {
           proteinG: parseFloat(editForm.proteinG) || 0,
           carbsG: parseFloat(editForm.carbsG) || 0,
           fatG: parseFloat(editForm.fatG) || 0,
-          loggedAt: editedLoggedAtIso || undefined,
+          loggedAt: editForm.loggedAt ? new Date(editForm.loggedAt).toISOString() : undefined,
           notes: editForm.notes || null,
         }),
       });
@@ -531,7 +473,6 @@ export default function FoodLogPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          loggedAt: getLoggedAtForSelectedDate(),
           ...newEntry,
           calories: parseFloat(newEntry.calories) || 0,
           proteinG: parseFloat(newEntry.proteinG) || 0,
@@ -566,7 +507,6 @@ export default function FoodLogPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          loggedAt: getLoggedAtForSelectedDate(),
           foodDescription: fav.foodDescription,
           mealType: fav.mealType,
           calories: fav.calories,
@@ -614,32 +554,6 @@ export default function FoodLogPage() {
 
   // Group entries by meal type
   const safeEntries = entries ?? [];
-  const todayInTimeZone = useMemo(
-    () => getDateStringInTimeZone(new Date(), timeZone),
-    [timeZone]
-  );
-
-  useEffect(() => {
-    if (autoFocusedLatestDate) return;
-    if (initialLoading) return;
-    if (safeEntries.length > 0) return;
-    if (mealFilter !== "all" || searchQuery.trim().length > 0) return;
-    if (dateFilter !== todayInTimeZone) return;
-    if (!latestFoodDate?.date || latestFoodDate.date === todayInTimeZone) return;
-
-    setDateFilter(latestFoodDate.date);
-    setAutoFocusedLatestDate(true);
-  }, [
-    autoFocusedLatestDate,
-    initialLoading,
-    safeEntries.length,
-    mealFilter,
-    searchQuery,
-    dateFilter,
-    todayInTimeZone,
-    latestFoodDate?.date,
-  ]);
-
   const groupedEntries = safeEntries.reduce<Record<string, FoodEntry[]>>(
     (groups, entry) => {
       const key = entry.mealType || "snack";
@@ -681,14 +595,13 @@ export default function FoodLogPage() {
   };
 
   const goToToday = () => {
-    setDateFilter(getDateStringInTimeZone(new Date(), timeZone));
+    setDateFilter(format(new Date(), "yyyy-MM-dd"));
   };
 
   return (
-    <div className="health-stage px-4 pt-10 pb-40">
-      <div className="stagger-children space-y-4">
+    <div className="space-y-4 px-4 pt-12 pb-36 lg:space-y-6 lg:px-0 lg:pt-10 lg:pb-10">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Link href="/health">
           <Button variant="ghost" size="icon" className="h-9 w-9">
             <ArrowLeft className="h-5 w-5" />
@@ -824,8 +737,11 @@ export default function FoodLogPage() {
         </Dialog>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <div className="space-y-4 lg:sticky lg:top-6">
+
       {/* Always-visible date navigation for history */}
-      <Card className="cockpit-card rounded-[28px] border-white/8 bg-transparent">
+      <Card className="border-border/50">
         <CardContent className="p-3 flex items-center gap-2">
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToPreviousDay}>
             <ChevronLeft className="h-4 w-4" />
@@ -847,19 +763,8 @@ export default function FoodLogPage() {
         </CardContent>
       </Card>
 
-      {autoFocusedLatestDate && latestFoodDate?.date && dateFilter === latestFoodDate.date && (
-        <Card className="cockpit-card rounded-[24px] border-amber-400/20 bg-transparent">
-          <CardContent className="flex items-center justify-between gap-3 p-3 text-xs text-muted-foreground">
-            <span>Showing your latest logged food day.</span>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-amber-300" onClick={goToToday}>
-              Back to today
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Daily Summary Card */}
-      <Card className="cockpit-card overflow-hidden rounded-[28px] border-white/8 bg-transparent">
+      <Card className="overflow-hidden">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-end justify-between">
             <div>
@@ -933,8 +838,12 @@ export default function FoodLogPage() {
       </Card>
 
             {/* Filters (collapsible) */}
-      {showFilters && (
-        <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+      <div
+        className={cn(
+          "space-y-2",
+          showFilters ? "animate-in slide-in-from-top-2 duration-200" : "hidden lg:block"
+        )}
+      >
           <Select value={mealFilter} onValueChange={setMealFilter}>
             <SelectTrigger>
               <SelectValue />
@@ -957,11 +866,14 @@ export default function FoodLogPage() {
             />
           </div>
         </div>
-      )}
 
       {/* Quick Log Favorites Panel */}
-      {showQuickLog && (
-        <Card className="cockpit-card animate-in slide-in-from-top-2 duration-200 rounded-[28px] border-amber-400/20 bg-transparent">
+      <Card
+        className={cn(
+          "border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-orange-500/5",
+          showQuickLog ? "animate-in slide-in-from-top-2 duration-200" : "hidden lg:block"
+        )}
+      >
           <CardHeader className="pb-2 pt-3 px-4">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -1039,7 +951,10 @@ export default function FoodLogPage() {
             )}
           </CardContent>
         </Card>
-      )}
+
+        </div>
+
+        <div className="space-y-4">
 
       {/* Meal-grouped entries */}
       {initialLoading ? (
@@ -1073,6 +988,9 @@ export default function FoodLogPage() {
           ))}
         </div>
       )}
+
+        </div>
+      </div>
 
       {/* Edit Dialog */}
       <Dialog open={!!editEntry} onOpenChange={(open) => { if (!open) setEditEntry(null); }}>
@@ -1179,7 +1097,6 @@ export default function FoodLogPage() {
 
       {/* Voice Input */}
       <VoiceInput onDataLogged={() => { invalidateHealthCache(); fetchEntries(); }} />
-      </div>
     </div>
   );
 }

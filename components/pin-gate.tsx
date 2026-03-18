@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Lock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lock, Loader2 } from "lucide-react";
+import { demoText } from "@/lib/demo-client";
 import { cn } from "@/lib/utils";
 
 interface PinGateProps {
@@ -15,6 +16,7 @@ export function PinGate({ children }: PinGateProps) {
   const [isChecking, setIsChecking] = useState(true);
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
+  const [pinConfigured, setPinConfigured] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,6 +30,9 @@ export function PinGate({ children }: PinGateProps) {
       const res = await fetch("/api/auth");
       if (res.ok) {
         setIsAuthenticated(true);
+      } else if (res.status === 503) {
+        setPinConfigured(false);
+        setError(demoText("APP_PIN is not configured yet", "APP_PIN todavia no esta configurado"));
       }
     } catch {
       // Not authenticated
@@ -36,8 +41,8 @@ export function PinGate({ children }: PinGateProps) {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError("");
     setIsSubmitting(true);
 
@@ -50,16 +55,22 @@ export function PinGate({ children }: PinGateProps) {
 
       if (res.ok) {
         setSuccess(true);
-        // Small delay for the success animation
         setTimeout(() => setIsAuthenticated(true), 400);
-      } else {
-        setError("Invalid PIN");
+      } else if (res.status === 429) {
+        setError(demoText("Too many attempts. Wait a few minutes.", "Demasiados intentos. Espera unos minutos."));
         setPin("");
-        // Shake animation feedback
+        inputRef.current?.focus();
+      } else if (res.status === 503) {
+        setPinConfigured(false);
+        setError(demoText("APP_PIN is not configured yet", "APP_PIN todavia no esta configurado"));
+        setPin("");
+      } else {
+        setError(demoText("Invalid PIN", "PIN invalido"));
+        setPin("");
         inputRef.current?.focus();
       }
     } catch {
-      setError("Something went wrong");
+      setError(demoText("Something went wrong", "Algo salio mal"));
     } finally {
       setIsSubmitting(false);
     }
@@ -74,8 +85,8 @@ export function PinGate({ children }: PinGateProps) {
   if (isChecking) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3">
-        <div className="h-10 w-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs text-muted-foreground">Loading...</p>
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <p className="text-xs text-muted-foreground">{demoText("Loading...", "Cargando...")}</p>
       </div>
     );
   }
@@ -93,40 +104,34 @@ export function PinGate({ children }: PinGateProps) {
           error && "animate-shake"
         )}
       >
-        <CardHeader className="text-center pb-4">
+        <CardHeader className="pb-4 text-center">
           <div
             className={cn(
-              "mx-auto mb-3 h-16 w-16 rounded-2xl flex items-center justify-center transition-all duration-300",
-              success
-                ? "bg-green-500/20"
-                : "bg-primary/10"
+              "mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl transition-all duration-300",
+              success ? "bg-green-500/20" : "bg-primary/10"
             )}
           >
             <Lock
-              className={cn(
-                "h-7 w-7 transition-colors",
-                success ? "text-green-500" : "text-primary"
-              )}
+              className={cn("h-7 w-7 transition-colors", success ? "text-green-500" : "text-primary")}
             />
           </div>
           <CardTitle className="text-xl">Personal OS</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Enter your PIN to continue
+            {demoText("Enter your PIN to continue", "Ingresa tu PIN para continuar")}
           </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* PIN dots display */}
             <div className="flex justify-center gap-3 py-2">
-              {[0, 1, 2, 3].map((i) => (
+              {[0, 1, 2, 3].map((index) => (
                 <div
-                  key={i}
+                  key={index}
                   className={cn(
-                    "w-3.5 h-3.5 rounded-full border-2 transition-all duration-200",
-                    pin.length > i
+                    "h-3.5 w-3.5 rounded-full border-2 transition-all duration-200",
+                    pin.length > index
                       ? error
-                        ? "bg-destructive border-destructive"
-                        : "bg-primary border-primary scale-110"
+                        ? "border-destructive bg-destructive"
+                        : "border-primary bg-primary scale-110"
                       : "border-muted-foreground/30"
                   )}
                 />
@@ -140,37 +145,34 @@ export function PinGate({ children }: PinGateProps) {
               pattern="[0-9]*"
               maxLength={8}
               value={pin}
-              onChange={(e) => handlePinChange(e.target.value)}
+              onChange={(event) => handlePinChange(event.target.value)}
               className="sr-only"
               autoFocus
             />
 
-            {/* Invisible clickable area to focus the input */}
             <button
               type="button"
               onClick={() => inputRef.current?.focus()}
-              className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+              className="w-full py-1 text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
-              Tap to enter PIN
+              {demoText("Tap to enter PIN", "Toca para ingresar el PIN")}
             </button>
 
-            {error && (
-              <p className="text-xs text-destructive text-center font-medium">
-                {error}
-              </p>
-            )}
+            {error && <p className="text-center text-xs font-medium text-destructive">{error}</p>}
 
             <Button
               type="submit"
-              className="w-full h-11 rounded-xl font-medium"
-              disabled={isSubmitting || pin.length < 4}
+              className="h-11 w-full rounded-xl font-medium"
+              disabled={isSubmitting || pin.length < 4 || !pinConfigured}
             >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                "Unlock"
-              )}
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : demoText("Unlock", "Entrar")}
             </Button>
+
+            {!pinConfigured && (
+              <p className="text-center text-[10px] text-muted-foreground">
+                Set <code>APP_PIN</code> in your environment to re-enable login.
+              </p>
+            )}
           </form>
         </CardContent>
       </Card>

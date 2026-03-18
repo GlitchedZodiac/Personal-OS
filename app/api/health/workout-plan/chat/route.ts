@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
+import {
+  capDemoCompletionTokens,
+  enforceDemoAIBudget,
+  getDemoChatModel,
+  recordDemoAISpend,
+} from "@/lib/demo-ai-budget";
 
 // Allow up to 60s for AI generation (Vercel Pro)
 export const maxDuration = 60;
@@ -279,14 +285,18 @@ ${planContext}${recentWorkoutsContext}`;
 
     messages.push({ role: "user", content: message });
 
+    const blocked = await enforceDemoAIBudget();
+    if (blocked) return blocked;
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: getDemoChatModel("gpt-5.2"),
       messages,
       functions: WORKOUT_CHAT_FUNCTIONS,
       function_call: "auto",
       temperature: 0.7,
-      max_completion_tokens: 4000,
+      max_completion_tokens: capDemoCompletionTokens(4000),
     });
+    await recordDemoAISpend(completion.usage);
 
     const responseMessage = completion.choices[0].message;
 

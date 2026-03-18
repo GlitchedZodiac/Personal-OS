@@ -1,34 +1,38 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import {
-  Activity,
-  ArrowRight,
-  Bell,
-  Camera,
-  LineChart,
-  Moon,
-  Scale,
-  Sparkles,
-  Sunrise,
-  Sun,
-  TableProperties,
-  Utensils,
-} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { AIMealSuggestion } from "@/components/ai-meal-suggestion";
-import { VoiceInput } from "@/components/voice-input";
-import { invalidateHealthCache, useCachedFetch } from "@/lib/cache";
-import { fetchServerSettings, getMacroGrams, getSettings } from "@/lib/settings";
 import {
-  getDateStringInTimeZone,
-  getHourInTimeZone,
-  getTimeZoneOffsetMinutes,
-} from "@/lib/timezone";
+  Utensils,
+  Scale,
+  Dumbbell,
+  Flame,
+  TrendingDown,
+  Activity,
+  TrendingUp,
+  Zap,
+  Camera,
+  Sparkles,
+  Sun,
+  Moon,
+  Sunrise,
+  Bell,
+  Trophy,
+  ChevronDown,
+  ChevronUp,
+  Droplets,
+} from "lucide-react";
+import { VoiceInput } from "@/components/voice-input";
+import { WaterTracker } from "@/components/water-tracker";
+import { QuickFavorites } from "@/components/quick-favorites";
+import { AIMealSuggestion } from "@/components/ai-meal-suggestion";
+import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
+import { getSettings, getMacroGrams, fetchServerSettings } from "@/lib/settings";
+import { cn } from "@/lib/utils";
+import { useCachedFetch, invalidateHealthCache } from "@/lib/cache";
 
 interface DailySummary {
   totalCalories: number;
@@ -43,14 +47,15 @@ interface DailySummary {
   caloriesBurned: number;
   netCalories: number;
   waterMl: number;
-  waterMlManual?: number;
-  waterMlInferred?: number;
   waterGlasses: number;
-  distanceMeters?: number;
-  steps?: number;
-  workoutSteps?: number;
-  restingHeartRateBpm?: number | null;
-  activeEnergyKcal?: number | null;
+}
+
+interface StreakData {
+  streak: number;
+  totalDaysLogged: number;
+  weekDays: number;
+  weekLogged: boolean[]; // [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+  loggedToday: boolean;
 }
 
 interface DailyBrief {
@@ -59,6 +64,23 @@ interface DailyBrief {
   tip: string;
   todosToday: number;
   topPriority: string | null;
+}
+
+interface Achievement {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  earned: boolean;
+  progress?: number;
+  progressLabel?: string;
+  tier: "bronze" | "silver" | "gold" | "diamond";
+}
+
+interface AchievementsData {
+  achievements: Achievement[];
+  totalEarned: number;
+  totalAvailable: number;
 }
 
 const DEFAULT_SUMMARY: DailySummary = {
@@ -74,432 +96,627 @@ const DEFAULT_SUMMARY: DailySummary = {
   caloriesBurned: 0,
   netCalories: 0,
   waterMl: 0,
-  waterMlManual: 0,
-  waterMlInferred: 0,
   waterGlasses: 0,
-  distanceMeters: 0,
-  steps: 0,
-  workoutSteps: 0,
-  restingHeartRateBpm: null,
-  activeEnergyKcal: null,
 };
 
-const quickActions = [
-  {
-    href: "/trends",
-    label: "Trends",
-    blurb: "Consistency, weekly insight, and projections.",
-    icon: LineChart,
-    accent: "text-teal-300",
-  },
-  {
-    href: "/trends/daily-log",
-    label: "Daily log",
-    blurb: "Review past days and spot missing entries.",
-    icon: TableProperties,
-    accent: "text-amber-300",
-  },
-  {
-    href: "/health/progress",
-    label: "Progress",
-    blurb: "Open photos and visual check-ins.",
-    icon: Camera,
-    accent: "text-orange-300",
-  },
-];
-
-function SectionCard({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <Card className="cockpit-card rounded-[28px] border-white/8 bg-transparent">
-      <CardContent className="p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-          {action}
-        </div>
-        {children}
-      </CardContent>
-    </Card>
-  );
-}
-
-function MetricTile({
-  label,
-  value,
-  detail,
-  accentClass,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  accentClass?: string;
-}) {
-  return (
-    <div className="rounded-[22px] border border-white/8 bg-black/12 p-3">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className={`mt-2 text-2xl font-semibold tracking-tight ${accentClass ?? "text-foreground"}`}>
-        {value}
-      </p>
-      <p className="mt-1 text-[11px] text-muted-foreground">{detail}</p>
-    </div>
-  );
-}
-
-function MacroChip({
-  label,
-  value,
-  percent,
-  accentClass,
-}: {
-  label: string;
-  value: string;
-  percent: number;
-  accentClass: string;
-}) {
-  return (
-    <div className="rounded-[20px] border border-white/8 bg-black/12 p-3">
-      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className={`mt-2 text-lg font-semibold tracking-tight ${accentClass}`}>{value}</p>
-      <p className="mt-1 text-[11px] text-muted-foreground">{Math.round(percent)}% of target</p>
-    </div>
-  );
-}
+const DEFAULT_STREAK: StreakData = {
+  streak: 0,
+  totalDaysLogged: 0,
+  weekDays: 0,
+  weekLogged: [false, false, false, false, false, false, false],
+  loggedToday: false,
+};
 
 export default function HealthDashboard() {
-  const initialSettings = useMemo(() => getSettings(), []);
-  const [timeZone, setTimeZone] = useState(initialSettings.timeZone);
-  const [clockTick, setClockTick] = useState(() => Date.now());
-  const [calorieTarget, setCalorieTarget] = useState(initialSettings.calorieTarget);
-  const [macroTargets, setMacroTargets] = useState(() => getMacroGrams(initialSettings));
-
-  useEffect(() => {
-    const id = setInterval(() => setClockTick(Date.now()), 60_000);
-    return () => clearInterval(id);
+  const today = format(new Date(), "yyyy-MM-dd");
+  const tzOffsetMinutes = new Date().getTimezoneOffset();
+  const { data: summaryData, initialLoading: summaryLoading, refresh: refreshSummary } =
+    useCachedFetch<DailySummary>(`/api/health/summary?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}`, { ttl: 60_000 });
+  const { data: streakData, refresh: refreshStreak } =
+    useCachedFetch<StreakData>("/api/health/streak", { ttl: 60_000 });
+  const briefUrl = useMemo(() => {
+    const now = new Date();
+    const localDate = format(now, "yyyy-MM-dd");
+    const localHour = now.getHours();
+    return `/api/health/daily-brief?localDate=${localDate}&localHour=${localHour}`;
   }, []);
-
-  useEffect(() => {
-    let mounted = true;
-
-    fetchServerSettings().then((settings) => {
-      if (!mounted) return;
-      setTimeZone(settings.timeZone);
-      setCalorieTarget(settings.calorieTarget);
-      setMacroTargets(getMacroGrams(settings));
-    });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const now = useMemo(() => new Date(clockTick), [clockTick]);
-  const today = useMemo(() => getDateStringInTimeZone(now, timeZone), [now, timeZone]);
-  const localHour = useMemo(() => getHourInTimeZone(now, timeZone), [now, timeZone]);
-  const tzOffsetMinutes = useMemo(
-    () => getTimeZoneOffsetMinutes(now, timeZone),
-    [now, timeZone]
-  );
-
-  const summaryUrl = useMemo(
-    () =>
-      `/api/health/summary?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}&timeZone=${encodeURIComponent(
-        timeZone
-      )}`,
-    [today, tzOffsetMinutes, timeZone]
-  );
-
-  const briefUrl = useMemo(
-    () =>
-      `/api/health/daily-brief?timeZone=${encodeURIComponent(
-        timeZone
-      )}&localDate=${today}&localHour=${localHour}`,
-    [timeZone, today, localHour]
-  );
-
-  const {
-    data: summaryData,
-    initialLoading: summaryLoading,
-    refresh: refreshSummary,
-  } = useCachedFetch<DailySummary>(summaryUrl, { ttl: 60_000 });
-  const { data: briefData, refresh: refreshBrief } = useCachedFetch<DailyBrief>(briefUrl, {
-    ttl: 60_000,
-  });
+  const { data: briefData } =
+    useCachedFetch<DailyBrief>(briefUrl, { ttl: 300_000 });
+  const { data: achievementsData } =
+    useCachedFetch<AchievementsData>("/api/health/achievements", { ttl: 300_000 });
 
   const summary = summaryData ?? DEFAULT_SUMMARY;
+  const streak = streakData ?? DEFAULT_STREAK;
+  const initialLoading = summaryLoading;
 
+  const [calorieTarget, setCalorieTarget] = useState(() => getSettings().calorieTarget);
+  const [showAchievements, setShowAchievements] = useState(false);
+  const [macroTargets, setMacroTargets] = useState(() => getMacroGrams(getSettings()));
+
+  // Refresh helper for child components to call after mutations
   const fetchData = () => {
     invalidateHealthCache();
     refreshSummary();
-    refreshBrief();
+    refreshStreak();
   };
 
+  useEffect(() => {
+    void fetchServerSettings().then((s) => {
+      setCalorieTarget(s.calorieTarget);
+      setMacroTargets(getMacroGrams(s));
+    });
+  }, []);
+
   const caloriePercent = Math.min(
-    calorieTarget > 0 ? (summary.totalCalories / calorieTarget) * 100 : 0,
+    (summary.totalCalories / calorieTarget) * 100,
     100
   );
-  const proteinPercent = Math.min(
-    macroTargets.proteinG > 0 ? (summary.totalProtein / macroTargets.proteinG) * 100 : 0,
-    100
-  );
-  const carbsPercent = Math.min(
-    macroTargets.carbsG > 0 ? (summary.totalCarbs / macroTargets.carbsG) * 100 : 0,
-    100
-  );
-  const fatPercent = Math.min(
-    macroTargets.fatG > 0 ? (summary.totalFat / macroTargets.fatG) * 100 : 0,
-    100
-  );
+  const remaining = Math.max(calorieTarget - summary.totalCalories, 0);
 
-  const greetingIcon =
-    localHour < 6 ? (
-      <Moon className="h-4 w-4 text-cyan-300" />
-    ) : localHour < 12 ? (
-      <Sunrise className="h-4 w-4 text-amber-300" />
-    ) : localHour < 17 ? (
-      <Sun className="h-4 w-4 text-orange-300" />
-    ) : (
-      <Moon className="h-4 w-4 text-cyan-300" />
-    );
+  // Macro progress percentages
+  const proteinPct = macroTargets.proteinG > 0
+    ? Math.min((summary.totalProtein / macroTargets.proteinG) * 100, 100)
+    : 0;
+  const carbsPct = macroTargets.carbsG > 0
+    ? Math.min((summary.totalCarbs / macroTargets.carbsG) * 100, 100)
+    : 0;
+  const fatPct = macroTargets.fatG > 0
+    ? Math.min((summary.totalFat / macroTargets.fatG) * 100, 100)
+    : 0;
 
-  const greeting = localHour < 12 ? "Good morning" : localHour < 17 ? "Good afternoon" : "Good evening";
+  const getGreetingIcon = () => {
+    const hour = new Date().getHours();
+    if (hour < 6) return <Moon className="h-5 w-5 text-indigo-400" />;
+    if (hour < 12) return <Sunrise className="h-5 w-5 text-amber-400" />;
+    if (hour < 17) return <Sun className="h-5 w-5 text-yellow-400" />;
+    return <Moon className="h-5 w-5 text-indigo-400" />;
+  };
+
+  const greeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 17) return "Good afternoon";
+    return "Good evening";
+  };
 
   return (
-    <div className="health-stage px-4 pb-40 pt-10">
-      <div className="stagger-children space-y-4">
-        <section className="cockpit-card card-glow relative overflow-hidden rounded-[32px] border border-white/8 bg-transparent p-5">
-          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-teal-500/14 via-transparent to-amber-500/12" />
-          <div className="relative space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
-                  {greetingIcon}
-                  <span>{greeting}</span>
+    <div className="stagger-children space-y-4 px-4 pt-12 pb-36 lg:space-y-6 lg:px-0 lg:pt-10 lg:pb-10">
+      {/* ─── Header ─── */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {getGreetingIcon()}
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{greeting()}</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {format(new Date(), "EEEE, MMMM d")}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          {streak.streak > 0 && (
+            <Badge className="text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border-orange-500/20 glow-orange">
+              {streak.streak}-day streak
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* ─── AI Morning Brief ─── */}
+      {briefData && (
+        <Card className="border-purple-500/20 bg-gradient-to-br from-purple-500/5 to-indigo-500/5 glow-purple overflow-hidden">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-purple-500/10 shrink-0 mt-0.5">
+                <Sparkles className="h-4 w-4 text-purple-400" />
+              </div>
+              <div className="space-y-1.5 min-w-0">
+                <p className="text-sm font-medium text-purple-300">Daily Brief</p>
+                <p className="text-sm leading-relaxed text-foreground/80">
+                  {briefData.summary}
+                </p>
+                {briefData.tip && (
+                  <p className="text-xs text-muted-foreground italic">
+                    {briefData.tip}
+                  </p>
+                )}
+                {briefData.todosToday > 0 && (
+                  <Link href="/todos" className="inline-flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 mt-1">
+                    <Bell className="h-3 w-3" />
+                    {briefData.todosToday} task{briefData.todosToday > 1 ? "s" : ""} today
+                    {briefData.topPriority && ` — "${briefData.topPriority}"`}
+                  </Link>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-12 lg:items-start">
+        <div className="space-y-4 lg:col-span-8">
+
+      {/* ─── Calorie Progress ─── */}
+      {initialLoading ? (
+        <Card className="overflow-hidden">
+          <CardContent className="p-5 space-y-3">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-10 w-40" />
+            <Skeleton className="h-3 w-full rounded-full" />
+            <div className="grid grid-cols-3 gap-3 pt-2">
+              <Skeleton className="h-16 rounded-lg" />
+              <Skeleton className="h-16 rounded-lg" />
+              <Skeleton className="h-16 rounded-lg" />
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Flame className="h-4 w-4 text-orange-500" />
+              <span className="text-sm font-medium">Daily Calories</span>
+              <Badge variant="outline" className="text-[10px] ml-auto">
+                {summary.mealCount} meal{summary.mealCount !== 1 ? "s" : ""}
+              </Badge>
+            </div>
+            <div className="flex items-end justify-between mb-3">
+              <div>
+                <span className="text-4xl font-bold tracking-tight count-up">
+                  {Math.round(summary.totalCalories)}
+                </span>
+                <span className="text-sm text-muted-foreground ml-1">
+                  / {calorieTarget}
+                </span>
+              </div>
+              {remaining > 0 && (
+                <div className="text-right">
+                  <p className="text-lg font-semibold text-green-500 count-up">
+                    {Math.round(remaining)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">remaining</p>
                 </div>
+              )}
+            </div>
+
+            {/* Calorie progress bar */}
+            <div className="w-full bg-secondary rounded-full h-3 overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all duration-1000 ease-out",
+                  caloriePercent >= 100
+                    ? "bg-red-500"
+                    : caloriePercent >= 80
+                    ? "bg-gradient-to-r from-orange-400 to-orange-500"
+                    : "bg-gradient-to-r from-green-400 to-emerald-500"
+                )}
+                style={{ width: `${caloriePercent}%` }}
+              />
+            </div>
+
+            {/* Macro progress bars */}
+            <div className="grid grid-cols-3 gap-3 mt-4">
+              {/* Protein */}
+              <div className="tap-scale">
+                <div className="flex items-center gap-1 mb-1">
+                  <div className="w-2 h-2 rounded-full bg-blue-400" />
+                  <span className="text-[10px] text-muted-foreground">Protein</span>
+                </div>
+                <p className="text-base font-semibold">{Math.round(summary.totalProtein)}g</p>
+                <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden mt-1">
+                  <div
+                    className="h-full bg-blue-400 rounded-full transition-all duration-1000"
+                    style={{ width: `${proteinPct}%` }}
+                  />
+                </div>
+                <p className="text-[9px] text-muted-foreground mt-0.5">
+                  {Math.round(summary.totalProtein)} / {macroTargets.proteinG}g
+                </p>
+              </div>
+
+              {/* Carbs */}
+              <div className="tap-scale">
+                <div className="flex items-center gap-1 mb-1">
+                  <div className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="text-[10px] text-muted-foreground">Carbs</span>
+                </div>
+                <p className="text-base font-semibold">{Math.round(summary.totalCarbs)}g</p>
+                <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden mt-1">
+                  <div
+                    className="h-full bg-amber-400 rounded-full transition-all duration-1000"
+                    style={{ width: `${carbsPct}%` }}
+                  />
+                </div>
+                <p className="text-[9px] text-muted-foreground mt-0.5">
+                  {Math.round(summary.totalCarbs)} / {macroTargets.carbsG}g
+                </p>
+              </div>
+
+              {/* Fat */}
+              <div className="tap-scale">
+                <div className="flex items-center gap-1 mb-1">
+                  <div className="w-2 h-2 rounded-full bg-rose-400" />
+                  <span className="text-[10px] text-muted-foreground">Fat</span>
+                </div>
+                <p className="text-base font-semibold">{Math.round(summary.totalFat)}g</p>
+                <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden mt-1">
+                  <div
+                    className="h-full bg-rose-400 rounded-full transition-all duration-1000"
+                    style={{ width: `${fatPct}%` }}
+                  />
+                </div>
+                <p className="text-[9px] text-muted-foreground mt-0.5">
+                  {Math.round(summary.totalFat)} / {macroTargets.fatG}g
+                </p>
+              </div>
+            </div>
+
+            {/* Water Tracker (compact) */}
+            <WaterTracker onUpdate={fetchData} compact />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── Net Calories (only show if there are workouts) ─── */}
+      {!initialLoading && summary.caloriesBurned > 0 && (
+        <Card className="border-purple-500/20 bg-purple-500/5 glow-purple">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-purple-400" />
+                <span className="text-sm font-medium">Net Calories</span>
+              </div>
+              <div className="text-right">
+                <p className="text-xl font-bold count-up">
+                  {Math.round(summary.netCalories)}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {Math.round(summary.totalCalories)} eaten −{" "}
+                  {Math.round(summary.caloriesBurned)} burned
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+        </div>
+
+        <div className="space-y-4 lg:col-span-4 lg:sticky lg:top-6">
+
+      {/* ─── AI Meal Suggestion ─── */}
+      {!initialLoading && (
+        <AIMealSuggestion
+          totalCalories={summary.totalCalories}
+          totalProtein={summary.totalProtein}
+          totalCarbs={summary.totalCarbs}
+          totalFat={summary.totalFat}
+          mealCount={summary.mealCount}
+        />
+      )}
+
+      {/* ─── Quick-Add Favorites ─── */}
+      <QuickFavorites onFoodLogged={fetchData} />
+
+        </div>
+      </div>
+
+      {/* ─── Quick Links Grid ─── */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <Link href="/health/food">
+          <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-green-500/10 group-hover:bg-green-500/20 transition-colors">
+                <Utensils className="h-4 w-4 text-green-500" />
+              </div>
+              <span className="text-[10px] font-medium">Food</span>
+              <span className="text-base font-bold">
+                {initialLoading ? <Skeleton className="h-5 w-5" /> : summary.mealCount}
+              </span>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/health/body">
+          <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
+                <Scale className="h-4 w-4 text-blue-500" />
+              </div>
+              <span className="text-[10px] font-medium">Body</span>
+              <span className="text-base font-bold">
+                {initialLoading ? (
+                  <Skeleton className="h-5 w-8" />
+                ) : summary.latestWeight ? (
+                  `${summary.latestWeight}kg`
+                ) : (
+                  "—"
+                )}
+              </span>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/health/workouts">
+          <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
+                <Dumbbell className="h-4 w-4 text-purple-500" />
+              </div>
+              <span className="text-[10px] font-medium">Workouts</span>
+              <span className="text-base font-bold">
+                {initialLoading ? <Skeleton className="h-5 w-5" /> : summary.workoutCount}
+              </span>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/health/progress">
+          <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-pink-500/10 group-hover:bg-pink-500/20 transition-colors">
+                <Camera className="h-4 w-4 text-pink-500" />
+              </div>
+              <span className="text-[10px] font-medium">Progress</span>
+              <span className="text-base font-bold">📸</span>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/health/water">
+          <Card className="hover:bg-accent/50 transition-all duration-200 cursor-pointer group tap-scale">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-cyan-500/10 group-hover:bg-cyan-500/20 transition-colors">
+                <Droplets className="h-4 w-4 text-cyan-400" />
+              </div>
+              <span className="text-[10px] font-medium">Hydration</span>
+              <span className="text-base font-bold">
+                {initialLoading ? <Skeleton className="h-5 w-6" /> : `${Math.round(summary.waterMl)}ml`}
+              </span>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
+      {/* ─── Today's Activity ─── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+      {!initialLoading && summary.workoutCount > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Activity className="h-4 w-4 text-purple-500" />
+              Today&apos;s Activity
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-6">
+              <div>
+                <p className="text-2xl font-bold count-up">{summary.workoutCount}</p>
+                <p className="text-xs text-muted-foreground">workouts</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold count-up">{summary.workoutMinutes}</p>
+                <p className="text-xs text-muted-foreground">minutes</p>
+              </div>
+              {summary.caloriesBurned > 0 && (
                 <div>
-                  <h1 className="text-2xl font-semibold tracking-tight">Health cockpit</h1>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {new Intl.DateTimeFormat("en-US", {
-                      timeZone,
-                      weekday: "long",
-                      month: "long",
-                      day: "numeric",
-                    }).format(now)}
+                  <p className="text-2xl font-bold count-up">
+                    {Math.round(summary.caloriesBurned)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">cal burned</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── Latest Measurements ─── */}
+      {(summary.latestWeight || summary.latestBodyFat) && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <TrendingDown className="h-4 w-4 text-blue-500" />
+              Latest Measurements
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-6">
+              {summary.latestWeight && (
+                <div>
+                  <p className="text-2xl font-bold count-up">{summary.latestWeight}</p>
+                  <p className="text-xs text-muted-foreground">kg</p>
+                </div>
+              )}
+              {summary.latestBodyFat && (
+                <div>
+                  <p className="text-2xl font-bold count-up">
+                    {summary.latestBodyFat}%
+                  </p>
+                  <p className="text-xs text-muted-foreground">body fat</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      </div>
+
+      {/* ─── Quick Tip (empty state) ─── */}
+      {!initialLoading && summary.mealCount === 0 && !briefData && (
+        <Card className="border-dashed border-primary/20">
+          <CardContent className="p-4 text-center">
+            <TrendingUp className="h-8 w-8 text-primary/30 mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">
+              Tap the microphone below to log your first meal!
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Try: &quot;I had coffee and eggs for breakfast&quot;
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── Streaks & Achievements ─── */}
+      {(streak.totalDaysLogged > 0 || (achievementsData && achievementsData.totalEarned > 0)) && (
+        <Card className="border-orange-500/10 overflow-hidden">
+          <CardContent className="p-4 space-y-3">
+            {/* Streak row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">🔥</div>
+                <div>
+                  <p className="text-sm font-medium">
+                    {streak.streak > 0
+                      ? `${streak.streak}-day streak!`
+                      : "Start a streak!"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {streak.weekDays}/7 days this week • {streak.totalDaysLogged}{" "}
+                    total days
                   </p>
                 </div>
               </div>
-              <Badge className="border-white/10 bg-white/8 text-[11px] text-foreground">{timeZone}</Badge>
+              <div className="flex gap-1">
+                {["M", "T", "W", "T", "F", "S", "S"].map((day, i) => (
+                  <div key={i} className="flex flex-col items-center gap-0.5">
+                    <div
+                      className={cn(
+                        "w-3 h-3 rounded-full transition-all duration-500",
+                        streak.weekLogged?.[i]
+                          ? "bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.4)]"
+                          : "bg-secondary/50"
+                      )}
+                      style={{ animationDelay: `${i * 50}ms` }}
+                    />
+                    <span className="text-[8px] text-muted-foreground">
+                      {day}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {summaryLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-44 rounded-[28px]" />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Skeleton className="h-32 rounded-[28px]" />
-                  <Skeleton className="h-32 rounded-[28px]" />
-                </div>
-                <Skeleton className="h-28 rounded-[28px]" />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
-                  <Link
-                    href="/health/food"
-                    className="group rounded-[28px] border border-white/8 bg-white/4 p-4 transition duration-200 hover:border-white/14 hover:bg-white/6"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 text-sm font-medium tracking-tight">
-                          <Utensils className="h-4 w-4 text-teal-300" />
-                          <span>Fuel status</span>
-                        </div>
-                        <p className="mt-3 text-3xl font-semibold tracking-tight">
-                          {Math.round(summary.totalCalories)}
-                          <span className="text-lg text-muted-foreground"> / {calorieTarget}</span>
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {summary.mealCount} meal{summary.mealCount === 1 ? "" : "s"} logged today
-                        </p>
-                        <p className="mt-2 text-[11px] text-muted-foreground">Click to view food logs.</p>
-                      </div>
-                      <div className="rounded-full border border-white/10 px-3 py-1 text-xs text-muted-foreground">
-                        {Math.round(caloriePercent)}%
-                      </div>
-                    </div>
-                    <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/8">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-teal-400 via-amber-300 to-orange-400 transition-all duration-700"
-                        style={{ width: `${caloriePercent}%` }}
-                      />
-                    </div>
-                    <div className="mt-4 grid grid-cols-3 gap-2">
-                      <MacroChip
-                        label="Protein"
-                        value={`${Math.round(summary.totalProtein)}g`}
-                        percent={proteinPercent}
-                        accentClass="text-teal-300"
-                      />
-                      <MacroChip
-                        label="Carbs"
-                        value={`${Math.round(summary.totalCarbs)}g`}
-                        percent={carbsPercent}
-                        accentClass="text-amber-300"
-                      />
-                      <MacroChip
-                        label="Fat"
-                        value={`${Math.round(summary.totalFat)}g`}
-                        percent={fatPercent}
-                        accentClass="text-orange-300"
-                      />
-                    </div>
-                  </Link>
-
-                  <Link
-                    href="/health/workouts"
-                    className="group rounded-[28px] border border-white/8 bg-white/4 p-4 transition duration-200 hover:border-white/14 hover:bg-white/6"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 text-sm font-medium tracking-tight">
-                          <Activity className="h-4 w-4 text-amber-300" />
-                          <span>Output and recovery</span>
-                        </div>
-                        <p className="mt-2 text-[11px] text-muted-foreground">Click to view workout logs.</p>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:text-foreground" />
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <MetricTile
-                        label="Calories burned"
-                        value={String(Math.round(summary.caloriesBurned))}
-                        detail={`${summary.workoutCount} workout${summary.workoutCount === 1 ? "" : "s"} today`}
-                        accentClass="text-amber-300"
-                      />
-                      <MetricTile
-                        label="Daily steps"
-                        value={(summary.steps ?? 0).toLocaleString()}
-                        detail={`${summary.workoutMinutes} training minutes`}
-                        accentClass="text-teal-300"
-                      />
-                    </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                      <div className="rounded-[20px] border border-white/8 bg-black/12 p-3 text-xs">
-                        <p className="text-muted-foreground">Training</p>
-                        <p className="mt-2 text-base font-semibold text-foreground">{summary.workoutMinutes}m</p>
-                      </div>
-                      <div className="rounded-[20px] border border-white/8 bg-black/12 p-3 text-xs">
-                        <p className="text-muted-foreground">Resting HR</p>
-                        <p className="mt-2 text-base font-semibold text-foreground">
-                          {summary.restingHeartRateBpm ?? "-"}
-                        </p>
-                      </div>
-                      <div className="rounded-[20px] border border-white/8 bg-black/12 p-3 text-xs">
-                        <p className="text-muted-foreground">Active energy</p>
-                        <p className="mt-2 text-base font-semibold text-foreground">
-                          {summary.activeEnergyKcal ? Math.round(summary.activeEnergyKcal) : "-"}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-
-                <Link
-                  href="/health/body"
-                  className="group rounded-[28px] border border-white/8 bg-white/4 p-4 transition duration-200 hover:border-white/14 hover:bg-white/6"
+            {/* Achievements summary row */}
+            {achievementsData && (
+              <>
+                <button
+                  onClick={() => setShowAchievements(!showAchievements)}
+                  className="w-full flex items-center justify-between pt-2 border-t border-border/50"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 text-sm font-medium tracking-tight">
-                        <Scale className="h-4 w-4 text-cyan-300" />
-                        <span>Latest body check</span>
-                      </div>
-                      <p className="mt-2 text-[11px] text-muted-foreground">
-                        Click to view measurements and body history.
-                      </p>
+                  <div className="flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-amber-400" />
+                    <span className="text-sm font-medium">Achievements</span>
+                    <Badge variant="secondary" className="text-[10px] h-5 bg-amber-500/10 text-amber-400">
+                      {achievementsData.totalEarned} / {achievementsData.totalAvailable}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {/* Show last 3 earned badges */}
+                    <div className="flex -space-x-1">
+                      {achievementsData.achievements
+                        .filter((a) => a.earned)
+                        .slice(0, 4)
+                        .map((a) => (
+                          <span key={a.id} className="text-sm" title={a.title}>
+                            {a.icon}
+                          </span>
+                        ))}
                     </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:text-foreground" />
+                    {showAchievements ? (
+                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    )}
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <MetricTile
-                      label="Weight"
-                      value={summary.latestWeight ? `${summary.latestWeight} kg` : "-"}
-                      detail={summary.latestWeight ? "Latest recorded measurement" : "No weigh-in saved yet"}
-                      accentClass="text-foreground"
-                    />
-                    <MetricTile
-                      label="Body fat"
-                      value={summary.latestBodyFat ? `${summary.latestBodyFat}%` : "-"}
-                      detail={summary.latestBodyFat ? "Latest recorded measurement" : "Open body history to log it"}
-                      accentClass="text-cyan-300"
-                    />
-                  </div>
-                </Link>
+                </button>
 
-                {briefData && (
-                  <div className="rounded-[28px] border border-white/8 bg-black/15 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2 text-sm font-medium tracking-tight">
-                        <Sparkles className="h-4 w-4 text-teal-300" />
-                        <span>Daily brief</span>
+                {/* Expanded achievements grid */}
+                {showAchievements && (
+                  <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                    {/* Earned badges */}
+                    {achievementsData.achievements.filter((a) => a.earned).length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium text-amber-400 uppercase tracking-wide mb-1.5">
+                          Earned
+                        </p>
+                        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+                          {achievementsData.achievements
+                            .filter((a) => a.earned)
+                            .map((a) => (
+                              <div
+                                key={a.id}
+                                className={cn(
+                                  "flex items-center gap-2 rounded-lg px-2.5 py-2 border",
+                                  a.tier === "diamond"
+                                    ? "bg-cyan-500/10 border-cyan-500/20"
+                                    : a.tier === "gold"
+                                    ? "bg-amber-500/10 border-amber-500/20"
+                                    : a.tier === "silver"
+                                    ? "bg-slate-400/10 border-slate-400/20"
+                                    : "bg-orange-800/10 border-orange-800/20"
+                                )}
+                              >
+                                <span className="text-lg">{a.icon}</span>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium truncate">{a.title}</p>
+                                  <p className="text-[9px] text-muted-foreground truncate">
+                                    {a.description}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
                       </div>
-                      {briefData.todosToday > 0 ? (
-                        <Link href="/todos" className="text-[11px] text-teal-300 transition hover:text-teal-200">
-                          {briefData.todosToday} task{briefData.todosToday === 1 ? "" : "s"}
-                        </Link>
-                      ) : null}
-                    </div>
-                    <p className="mt-3 text-sm leading-relaxed text-foreground/90">{briefData.summary}</p>
-                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{briefData.tip}</p>
-                    {briefData.topPriority && (
-                      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                        <Bell className="h-3.5 w-3.5 text-amber-300" />
-                        <span>Top priority: {briefData.topPriority}</span>
+                    )}
+
+                    {/* In-progress badges */}
+                    {achievementsData.achievements.filter((a) => !a.earned).length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                          In Progress
+                        </p>
+                        <div className="space-y-1.5">
+                          {achievementsData.achievements
+                            .filter((a) => !a.earned && (a.progress || 0) > 0)
+                            .sort((a, b) => (b.progress || 0) - (a.progress || 0))
+                            .slice(0, 5)
+                            .map((a) => (
+                              <div
+                                key={a.id}
+                                className="flex items-center gap-2 rounded-lg px-2.5 py-2 bg-secondary/30"
+                              >
+                                <span className="text-base opacity-50">{a.icon}</span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs font-medium truncate text-muted-foreground">
+                                      {a.title}
+                                    </p>
+                                    <span className="text-[9px] text-muted-foreground shrink-0 ml-2">
+                                      {a.progressLabel}
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-1 rounded-full bg-secondary mt-1 overflow-hidden">
+                                    <div
+                                      className="h-full bg-amber-500/50 rounded-full transition-all duration-700"
+                                      style={{ width: `${a.progress || 0}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
                       </div>
                     )}
                   </div>
                 )}
-              </div>
+              </>
             )}
-          </div>
-        </section>
+          </CardContent>
+        </Card>
+      )}
 
-        {!summaryLoading && (
-          <AIMealSuggestion
-            totalCalories={summary.totalCalories}
-            totalProtein={summary.totalProtein}
-            totalCarbs={summary.totalCarbs}
-            totalFat={summary.totalFat}
-            mealCount={summary.mealCount}
-          />
-        )}
-
-        <SectionCard title="Quick actions">
-          <div className="grid gap-3 sm:grid-cols-3">
-            {quickActions.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="group rounded-[24px] border border-white/8 bg-white/4 p-4 transition duration-200 hover:border-white/14 hover:bg-white/6"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <item.icon className={`h-5 w-5 ${item.accent}`} />
-                  <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:text-foreground" />
-                </div>
-                <p className="mt-4 text-base font-medium tracking-tight">{item.label}</p>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.blurb}</p>
-              </Link>
-            ))}
-          </div>
-        </SectionCard>
-
-        <VoiceInput onDataLogged={fetchData} />
-      </div>
+      {/* ─── Voice Input ─── */}
+      <VoiceInput onDataLogged={fetchData} />
     </div>
   );
 }
