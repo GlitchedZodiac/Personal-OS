@@ -360,6 +360,7 @@ model FinancialTransaction {
   sourceDocumentId String?
   sourceDocument FinanceDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
   sourceFingerprint String?
+  sourceSignals  FinanceSignal[] @relation("SignalTransaction")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   reviewItems   FinanceReviewItem[]
@@ -507,8 +508,13 @@ model FinanceDocument {
   externalId        String?
   documentType      String   // email, pdf, image, statement, receipt
   status            String   @default("pending") // pending, processed, password_required, error
+  classification    String   @default("unclassified")
+  processingStage   String   @default("captured")
   mailConnectionId  String?
   mailConnection    GoogleMailboxConnection? @relation(fields: [mailConnectionId], references: [id], onDelete: SetNull)
+  sourceId          String?
+  sourceRef         FinanceSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceKey         String?
   messageId         String?
   threadId          String?
   attachmentId      String?
@@ -522,14 +528,20 @@ model FinanceDocument {
   parseError        String?
   requiresPassword  Boolean  @default(false)
   passwordSecretKey String?
+  signalCount       Int      @default(0)
+  promotedSignalCount Int    @default(0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   transactions      FinancialTransaction[]
+  signals           FinanceSignal[]
   reviewItems       FinanceReviewItem[]
   upcomingPayments  UpcomingPayment[]
 
   @@unique([source, externalId])
+  @@index([sourceId])
+  @@index([classification, processingStage])
+  @@index([sourceKey])
   @@index([messageId])
   @@index([threadId])
   @@index([status])
@@ -551,10 +563,48 @@ model Merchant {
   updatedAt        DateTime @updatedAt
 
   transactions     FinancialTransaction[] @relation("MerchantTransactions")
+  sources          FinanceSource[]
+  signals          FinanceSignal[]
   rules            FinanceRule[]
   upcomingPayments UpcomingPayment[]
 
   @@map("merchants")
+}
+
+model FinanceSource {
+  id                 String   @id @default(uuid())
+  sourceKey          String   @unique
+  label              String
+  senderEmail        String?
+  senderDomain       String?
+  trustLevel         String   @default("new") // new, learning, trusted, ignored
+  defaultDisposition String   @default("capture_only") // always_ignore, capture_only, bill_notice, expense_receipt, income_notice, trusted_autopost
+  merchantId         String?
+  merchant           Merchant? @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  categoryHint       String?
+  subcategoryHint    String?
+  isBiller           Boolean  @default(false)
+  isIncomeSource     Boolean  @default(false)
+  isRecurring        Boolean  @default(false)
+  documentCount      Int      @default(0)
+  signalCount        Int      @default(0)
+  confirmedCount     Int      @default(0)
+  ignoredCount       Int      @default(0)
+  autoPostCount      Int      @default(0)
+  firstSeenAt        DateTime @default(now())
+  lastSeenAt         DateTime @default(now())
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  documents          FinanceDocument[]
+  signals            FinanceSignal[]
+  rules              FinanceRule[]
+  reviewItems        FinanceReviewItem[]
+
+  @@index([trustLevel, defaultDisposition])
+  @@index([senderDomain])
+  @@map("finance_sources")
 }
 
 model FinanceRule {
@@ -566,6 +616,8 @@ model FinanceRule {
   learned    Boolean  @default(false)
   merchantId String?
   merchant   Merchant? @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  sourceId   String?
+  source     FinanceSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   conditions Json
   actions    Json
   createdAt  DateTime @default(now())
@@ -573,7 +625,51 @@ model FinanceRule {
 
   @@index([isActive, priority])
   @@index([merchantId])
+  @@index([sourceId])
   @@map("finance_rules")
+}
+
+model FinanceSignal {
+  id               String   @id @default(uuid())
+  documentId       String
+  document         FinanceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  sourceId         String?
+  source           FinanceSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  merchantId       String?
+  merchant         Merchant? @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  transactionId    String?
+  transaction      FinancialTransaction? @relation("SignalTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
+  kind             String   // purchase, bill_due, statement, subscription, income, refund, transfer, unknown
+  status           String   @default("pending") // pending, promoted, ignored, duplicate, resolved
+  promotionState   String   @default("pending_review") // pending_review, auto_posted, user_confirmed, ignored, dismissed
+  confidence       Float?
+  amount           Float?
+  currency         String   @default("COP")
+  description      String
+  category         String?
+  subcategory      String?
+  type             String?  // income, expense, transfer
+  transactedAt     DateTime?
+  dueDate          DateTime?
+  subtotalAmount   Float?
+  taxAmount        Float?
+  tipAmount        Float?
+  minimumDue       Float?
+  statementBalance Float?
+  reference        String?
+  notes            String?
+  fingerprint      String?  @unique
+  extractedData    Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  reviewItems      FinanceReviewItem[]
+
+  @@index([documentId])
+  @@index([sourceId, promotionState])
+  @@index([kind, status])
+  @@index([transactionId])
+  @@map("finance_signals")
 }
 
 model FinanceReviewItem {
@@ -582,6 +678,10 @@ model FinanceReviewItem {
   transaction   FinancialTransaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   documentId    String?
   document      FinanceDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  sourceId      String?
+  source        FinanceSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  signalId      String?
+  signal        FinanceSignal? @relation(fields: [signalId], references: [id], onDelete: Cascade)
   kind          String   // low_confidence, duplicate, refund, password_required, parse_error
   status        String   @default("pending") // pending, resolved, dismissed
   title         String
@@ -593,6 +693,8 @@ model FinanceReviewItem {
   updatedAt     DateTime @updatedAt
 
   @@index([status, kind])
+  @@index([signalId])
+  @@index([sourceId])
   @@map("finance_review_items")
 }
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { analyzeFinanceText } from "@/lib/finance/ai";
 import { ingestFinanceCandidate } from "@/lib/finance/ingestion";
 
@@ -29,11 +30,33 @@ export async function POST(request: NextRequest) {
       notes: parsed.notes,
       source: "voice",
       confidence: parsed.confidence,
+      signalKind:
+        parsed.type === "income"
+          ? "income"
+          : parsed.type === "transfer"
+          ? "transfer"
+          : "purchase",
+      documentClassification:
+        parsed.type === "income"
+          ? "income_notice"
+          : parsed.type === "transfer"
+          ? "transfer_notice"
+          : "expense_receipt",
+      promotionPreference: "manual_post",
+      document: {
+        source: "voice_note",
+        externalId: `voice:${Date.now()}`,
+        documentType: "voice_note",
+        contentText: message,
+        extractedData: parsed as unknown as Prisma.InputJsonValue,
+        status: "processed",
+      },
     });
 
     return NextResponse.json({
       parsed,
       transaction: result.transaction,
+      signal: result.signal,
       reviewItems: result.reviewItems,
       message: parsed.message,
     });

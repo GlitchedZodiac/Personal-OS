@@ -31,7 +31,8 @@ interface Account {
 
 interface Transaction {
   id: string;
-  accountId: string;
+  recordType?: string;
+  accountId: string | null;
   transactedAt: string;
   amount: number;
   description: string;
@@ -45,7 +46,10 @@ interface Transaction {
   tags?: string;
   status?: string;
   reviewState?: string;
-  account: { name: string; icon?: string; color?: string };
+  confidence?: number | null;
+  signalKind?: string;
+  documentClassification?: string | null;
+  account: { name: string; icon?: string | null; color?: string | null };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -104,7 +108,12 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<{ type?: string; category?: string; accountId?: string }>({});
+  const [filter, setFilter] = useState<{
+    type?: string;
+    category?: string;
+    accountId?: string;
+    status?: string;
+  }>({ status: "posted" });
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [range, setRange] = useState("30");
@@ -137,6 +146,7 @@ export default function TransactionsPage() {
       if (filter.type) params.set("type", filter.type);
       if (filter.category) params.set("category", filter.category);
       if (filter.accountId) params.set("accountId", filter.accountId);
+      if (filter.status) params.set("status", filter.status);
 
       const res = await fetch(`/api/finance/transactions?${params}`);
       const data = await res.json();
@@ -203,7 +213,7 @@ export default function TransactionsPage() {
         <div className="flex-1">
           <h1 className="text-lg font-bold">Transactions</h1>
           <p className="text-[10px] text-muted-foreground">
-            Last {range} days · {filtered.length} transactions
+            {(filter.status || "posted").replace(/_/g, " ")} · Last {range} days · {filtered.length} items
           </p>
         </div>
         <button
@@ -220,7 +230,9 @@ export default function TransactionsPage() {
           <CardContent className="p-3 flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-green-400" />
             <div>
-              <p className="text-[10px] text-muted-foreground">Income</p>
+              <p className="text-[10px] text-muted-foreground">
+                {(filter.status || "posted") === "posted" ? "Income" : "Pending in"}
+              </p>
               <p className="text-sm font-bold text-green-400">{formatCOP(income, true)}</p>
             </div>
           </CardContent>
@@ -229,7 +241,9 @@ export default function TransactionsPage() {
           <CardContent className="p-3 flex items-center gap-2">
             <TrendingDown className="h-4 w-4 text-red-400" />
             <div>
-              <p className="text-[10px] text-muted-foreground">Expenses</p>
+              <p className="text-[10px] text-muted-foreground">
+                {(filter.status || "posted") === "posted" ? "Expenses" : "Pending out"}
+              </p>
               <p className="text-sm font-bold text-red-400">{formatCOP(expenses, true)}</p>
             </div>
           </CardContent>
@@ -276,6 +290,23 @@ export default function TransactionsPage() {
       {showFilters && (
         <Card>
           <CardContent className="p-3 space-y-2">
+            <div className="flex gap-2 flex-wrap">
+              <span className="text-[10px] text-muted-foreground w-full">Status</span>
+              {["posted", "pending", "ignored", "all"].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setFilter((p) => ({ ...p, status: s }))}
+                  className={cn(
+                    "text-[10px] px-2 py-1 rounded-full transition-colors",
+                    (filter.status || "posted") === s
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-secondary/50 text-muted-foreground"
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
             <div className="flex gap-2 flex-wrap">
               <span className="text-[10px] text-muted-foreground w-full">Type</span>
               {["all", "income", "expense", "transfer"].map((t) => (
@@ -384,6 +415,8 @@ export default function TransactionsPage() {
                         {tx.account.name}
                         {tx.isRecurring && " · 🔁"}
                         {tx.source !== "manual" && ` · ${tx.source}`}
+                        {tx.documentClassification && ` · ${tx.documentClassification}`}
+                        {tx.signalKind && ` · ${tx.signalKind}`}
                       </p>
                     </div>
                     <p
@@ -397,13 +430,13 @@ export default function TransactionsPage() {
                     </p>
                     <div className="hidden group-hover:flex gap-1">
                       <button
-                        onClick={() => setEditingTx(tx)}
+                        onClick={() => tx.recordType !== "signal" && setEditingTx(tx)}
                         className="p-1 rounded hover:bg-secondary"
                       >
                         <Pencil className="h-3 w-3 text-muted-foreground" />
                       </button>
                       <button
-                        onClick={() => handleDelete(tx.id)}
+                        onClick={() => tx.recordType !== "signal" && handleDelete(tx.id)}
                         className="p-1 rounded hover:bg-red-500/20"
                       >
                         <Trash2 className="h-3 w-3 text-red-400" />

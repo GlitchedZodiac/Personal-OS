@@ -54,7 +54,24 @@ export async function getFinanceReportSummary(referenceDate = new Date()) {
         transactedAt: { gte: monthStart, lte: monthEnd },
         type: "expense",
         excludedFromBudget: false,
-        status: { notIn: ["duplicate", "ignored"] },
+        status: "posted",
+        reviewState: "resolved",
+        OR: [
+          { sourceDocumentId: null },
+          {
+            sourceDocument: {
+              classification: {
+                in: [
+                  "expense_receipt",
+                  "income_notice",
+                  "refund_notice",
+                  "transfer_notice",
+                  "subscription_notice",
+                ],
+              },
+            },
+          },
+        ],
       },
       select: {
         id: true,

@@ -95,6 +95,20 @@ export async function POST(req: NextRequest) {
         reference: refCol >= 0 ? columns[refCol] : null,
         source: "csv_import",
         confidence: guessed.confidence,
+        signalKind: type === "income" ? "income" : "purchase",
+        documentClassification:
+          type === "income"
+            ? "income_notice"
+            : "expense_receipt",
+        promotionPreference: "manual_post",
+        document: {
+          source: "csv_import",
+          externalId: `csv:${accountId}:${index}`,
+          documentType: "csv_row",
+          contentText: lines[index],
+          receivedAt: dateValue ? new Date(dateValue) : new Date(),
+          status: "processed",
+        },
       });
 
       if (result.transaction) {

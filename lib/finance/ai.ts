@@ -27,6 +27,46 @@ interface ParsedReceipt extends ParsedFinanceText {
   subtotalAmount: number | null;
 }
 
+interface ParsedFinanceDocument {
+  classification:
+    | "ignored"
+    | "unclassified"
+    | "expense_receipt"
+    | "bill_notice"
+    | "statement"
+    | "income_notice"
+    | "refund_notice"
+    | "transfer_notice"
+    | "subscription_notice";
+  signalKind:
+    | "purchase"
+    | "bill_due"
+    | "statement"
+    | "subscription"
+    | "income"
+    | "refund"
+    | "transfer"
+    | "unknown";
+  defaultDisposition:
+    | "always_ignore"
+    | "capture_only"
+    | "bill_notice"
+    | "expense_receipt"
+    | "income_notice"
+    | "trusted_autopost";
+  description: string;
+  amount: number | null;
+  currency: string;
+  merchant: string | null;
+  category: string | null;
+  subcategory: string | null;
+  type: "income" | "expense" | "transfer" | null;
+  dueDate: string | null;
+  minimumDue: number | null;
+  statementBalance: number | null;
+  confidence: number;
+}
+
 const FINANCE_TEXT_SYSTEM_PROMPT = `You are a finance extraction assistant inside a personal operating system app.
 
 Extract a single finance event from a user's free-form note or voice transcription.
@@ -82,6 +122,41 @@ Rules:
 - Use COP unless clearly another currency.
 - Keep categories in this set: food, dining_out, transport, housing, utilities, entertainment, health, education, shopping, personal, insurance, debt_payment, savings, income, transfer, other.
 - Respond with valid JSON only.`;
+
+const FINANCE_DOCUMENT_SYSTEM_PROMPT = `You are classifying finance-related documents for a personal finance inbox.
+
+Return JSON with:
+- classification
+- signalKind
+- defaultDisposition
+- description
+- amount
+- currency
+- merchant
+- category
+- subcategory
+- type
+- dueDate
+- minimumDue
+- statementBalance
+- confidence
+
+Allowed classification values:
+ignored, unclassified, expense_receipt, bill_notice, statement, income_notice, refund_notice, transfer_notice, subscription_notice
+
+Allowed signalKind values:
+purchase, bill_due, statement, subscription, income, refund, transfer, unknown
+
+Allowed defaultDisposition values:
+always_ignore, capture_only, bill_notice, expense_receipt, income_notice, trusted_autopost
+
+Rules:
+- Use "ignored" only for promos, newsletters, deals, or clearly non-financial noise.
+- Bills and statements should not be purchases unless there is evidence of an actual paid charge.
+- Expenses should be positive amounts in the JSON.
+- Keep categories in this set: food, dining_out, transport, housing, utilities, entertainment, health, education, shopping, personal, insurance, debt_payment, savings, income, transfer, other.
+- Use COP unless clearly another currency.
+- If unsure, lower confidence and use classification "unclassified".`;
 
 async function parseJSONResponse<T>(content: string): Promise<T> {
   const sanitized = content
@@ -139,4 +214,32 @@ export async function analyzeFinanceReceipt(image: string, aiLanguage = "english
   await recordDemoAISpend(response.usage);
 
   return parseJSONResponse<ParsedReceipt>(response.choices[0].message.content || "{}");
+}
+
+export async function analyzeFinanceDocument(input: {
+  description: string;
+  text: string;
+  sender?: string | null;
+  subject?: string | null;
+}) {
+  const blocked = await enforceDemoAIBudget();
+  if (blocked) {
+    throw new Error("Finance AI budget unavailable");
+  }
+
+  const response = await openai.chat.completions.create({
+    model: getDemoChatModel("gpt-5.2"),
+    response_format: { type: "json_object" },
+    max_completion_tokens: capDemoCompletionTokens(900),
+    messages: [
+      { role: "system", content: FINANCE_DOCUMENT_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: `Sender: ${input.sender || "unknown"}\nSubject: ${input.subject || "unknown"}\nDescription: ${input.description}\n\nDocument text:\n${input.text}`,
+      },
+    ],
+  });
+  await recordDemoAISpend(response.usage);
+
+  return parseJSONResponse<ParsedFinanceDocument>(response.choices[0].message.content || "{}");
 }

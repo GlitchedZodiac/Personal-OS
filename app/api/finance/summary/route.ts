@@ -14,7 +14,24 @@ import { getFinanceReportSummary } from "@/lib/finance/reports";
 
 const ACTIVE_TRANSACTION_FILTER: Prisma.FinancialTransactionWhereInput = {
   excludedFromBudget: false,
-  status: { notIn: ["duplicate", "ignored"] },
+  status: "posted",
+  reviewState: "resolved",
+  OR: [
+    { sourceDocumentId: null },
+    {
+      sourceDocument: {
+        classification: {
+          in: [
+            "expense_receipt",
+            "income_notice",
+            "refund_notice",
+            "transfer_notice",
+            "subscription_notice",
+          ],
+        },
+      },
+    },
+  ],
 };
 
 export async function GET(req: NextRequest) {
@@ -46,6 +63,16 @@ export async function GET(req: NextRequest) {
       pendingReviews,
       upcomingPayments,
       reportSummary,
+      pendingSignals,
+      ignoredSignals,
+      totalSources,
+      trustedSources,
+      ignoredSources,
+      mailboxConnection,
+      errorDocuments,
+      ignoredDocuments,
+      monthlyDocumentCoverage,
+      earliestDocument,
     ] = await Promise.all([
       prisma.financialAccount.findMany({
         where: { isActive: true },
@@ -172,6 +199,32 @@ export async function GET(req: NextRequest) {
         take: 5,
       }),
       getFinanceReportSummary(currentMonth),
+      prisma.financeSignal.count({ where: { promotionState: "pending_review" } }),
+      prisma.financeSignal.count({ where: { promotionState: { in: ["ignored", "dismissed"] } } }),
+      prisma.financeSource.count(),
+      prisma.financeSource.count({ where: { trustLevel: "trusted" } }),
+      prisma.financeSource.count({ where: { defaultDisposition: "always_ignore" } }),
+      prisma.googleMailboxConnection.findUnique({ where: { id: "default" } }),
+      prisma.financeDocument.count({ where: { status: "error" } }),
+      prisma.financeDocument.count({ where: { classification: "ignored" } }),
+      Promise.all(
+        Array.from({ length: 12 }, (_, i) => {
+          const cursor = subMonths(startOfMonth(now), i);
+          return prisma.financeDocument.count({
+            where: {
+              receivedAt: { gte: startOfMonth(cursor), lte: endOfMonth(cursor) },
+            },
+          }).then((count) => ({
+            month: format(cursor, "yyyy-MM"),
+            count,
+          }));
+        })
+      ),
+      prisma.financeDocument.findFirst({
+        where: { receivedAt: { not: null } },
+        orderBy: { receivedAt: "asc" },
+        select: { receivedAt: true },
+      }),
     ]);
 
     const netWorth = accounts.reduce((sum, account) => {
@@ -216,6 +269,8 @@ export async function GET(req: NextRequest) {
         todaySpent: Math.abs(todayExpenses._sum.amount || 0),
         todayTransactions: todayExpenses._count,
         pendingReviews,
+        pendingSignals,
+        ignoredSignals,
       },
       comparison: {
         incomeChange: prevIncome > 0 ? Math.round(((income - prevIncome) / prevIncome) * 100) : 0,
@@ -248,6 +303,28 @@ export async function GET(req: NextRequest) {
       topMerchants: reportSummary.topMerchants,
       budgetRisk: reportSummary.budgetRisk,
       possibleSavings: reportSummary.possibleSavings,
+      sourceCounts: {
+        total: totalSources,
+        trusted: trustedSources,
+        ignored: ignoredSources,
+        learning: Math.max(totalSources - trustedSources - ignoredSources, 0),
+      },
+      pendingCounts: {
+        reviews: pendingReviews,
+        signals: pendingSignals,
+        upcomingBills: upcomingPayments.length,
+      },
+      ignoredCounts: {
+        signals: ignoredSignals,
+        documents: ignoredDocuments,
+      },
+      backfillCoverage: {
+        oldestSyncedDate: earliestDocument?.receivedAt || null,
+        lastBackfillAt: mailboxConnection?.lastBackfillAt || null,
+        lastSyncAt: mailboxConnection?.lastSyncAt || null,
+        documentsByMonth: monthlyDocumentCoverage.reverse(),
+        errorCount: errorDocuments,
+      },
     });
   } catch (error) {
     console.error("Error fetching financial summary:", error);

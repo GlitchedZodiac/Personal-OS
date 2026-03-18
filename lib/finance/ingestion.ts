@@ -1,14 +1,35 @@
-import crypto from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   DEFAULT_FINANCE_ACCOUNT,
-  FINANCE_CATEGORY_KEYWORDS,
-  FINANCE_REVIEW_THRESHOLD,
-  type FinanceCategory,
   type ReviewAction,
 } from "@/lib/finance/constants";
+import { analyzeFinanceDocument } from "@/lib/finance/ai";
+import {
+  buildFinanceSourceIdentity,
+  buildSignalFingerprint,
+  buildSourceFingerprint,
+  detectPotentialFlags,
+  extractDueDateFromText,
+  extractMoneyByLabel,
+  extractPrimaryAmount,
+  guessCategoryFromText,
+  inferFinanceDocumentClassification,
+  normalizeMerchantName,
+  titleCase,
+  type FinanceDocumentClassification,
+  type FinanceSignalKind,
+  type FinanceSourceDisposition,
+} from "@/lib/finance/pipeline-utils";
 import { upsertVaultSecret } from "@/lib/finance/vault";
+
+export {
+  buildSourceFingerprint,
+  detectPotentialFlags,
+  guessCategoryFromText,
+  normalizeMerchantName,
+  titleCase,
+};
 
 export interface FinanceDocumentInput {
   id?: string | null;
@@ -30,6 +51,9 @@ export interface FinanceDocumentInput {
   parseError?: string | null;
   passwordSecretKey?: string | null;
   status?: string;
+  classification?: FinanceDocumentClassification | string | null;
+  processingStage?: string | null;
+  sourceKey?: string | null;
 }
 
 export interface FinanceIngestionCandidate {
@@ -41,6 +65,11 @@ export interface FinanceIngestionCandidate {
   category?: string | null;
   subcategory?: string | null;
   type?: "income" | "expense" | "transfer";
+  signalKind?: FinanceSignalKind | null;
+  documentClassification?: FinanceDocumentClassification | null;
+  dueDate?: Date | null;
+  minimumDue?: number | null;
+  statementBalance?: number | null;
   isRecurring?: boolean;
   merchant?: string | null;
   reference?: string | null;
@@ -55,6 +84,7 @@ export interface FinanceIngestionCandidate {
   subtotalAmount?: number | null;
   taxAmount?: number | null;
   tipAmount?: number | null;
+  promotionPreference?: "source_policy" | "trusted_autopost" | "manual_post";
   document?: FinanceDocumentInput | null;
 }
 
@@ -64,12 +94,21 @@ export interface ReviewActionPayload {
   targetTransactionId?: string;
   passwordSecretKey?: string;
   password?: string;
+  sourceDisposition?: FinanceSourceDisposition;
+  trustLevel?: string;
   splits?: Array<{
     description: string;
     amount: number;
     category: string;
     subcategory?: string;
   }>;
+}
+
+export interface InboxActionPayload extends ReviewActionPayload {
+  reviewId?: string;
+  signalId?: string;
+  documentId?: string;
+  sourceId?: string;
 }
 
 interface NormalizedRuleAction {
@@ -79,6 +118,15 @@ interface NormalizedRuleAction {
   deductible?: boolean;
   excludedFromBudget?: boolean;
   isRecurring?: boolean;
+  signalKind?: FinanceSignalKind;
+  classification?: FinanceDocumentClassification;
+  defaultDisposition?: FinanceSourceDisposition;
+}
+
+interface ResolvedDocumentContext {
+  document: Awaited<ReturnType<typeof ensureDocument>>;
+  source: Awaited<ReturnType<typeof ensureSource>>;
+  merchant: Awaited<ReturnType<typeof ensureMerchant>>;
 }
 
 function toJsonValue(value: unknown): Prisma.InputJsonValue {
@@ -90,85 +138,8 @@ function toOptionalJsonValue(value: unknown): Prisma.InputJsonValue | undefined 
   return toJsonValue(value);
 }
 
-export function normalizeMerchantName(value?: string | null) {
-  if (!value) return null;
-
-  return value
-    .normalize("NFD")
-    .replace(/\p{Diacritic}+/gu, "")
-    .toLowerCase()
-    .replace(/\b(sas|s\.a\.s|sa|s\.a|ltda|llc|inc|corp|co)\b/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-export function titleCase(value: string) {
-  return value
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-export function buildSourceFingerprint(input: {
-  source: string;
-  amount?: number | null;
-  description: string;
-  transactedAt?: Date | null;
-  merchant?: string | null;
-  externalId?: string | null;
-}) {
-  const payload = [
-    input.source,
-    input.externalId || "",
-    input.amount ?? "",
-    input.transactedAt ? input.transactedAt.toISOString().slice(0, 10) : "",
-    normalizeMerchantName(input.merchant) || "",
-    normalizeMerchantName(input.description) || input.description.toLowerCase(),
-  ].join("|");
-
-  return crypto.createHash("sha256").update(payload).digest("hex");
-}
-
-export function guessCategoryFromText(text: string) {
-  const lower = text.toLowerCase();
-
-  for (const [keyword, match] of Object.entries(FINANCE_CATEGORY_KEYWORDS)) {
-    if (lower.includes(keyword)) {
-      return {
-        category: match.category,
-        subcategory: match.subcategory ?? null,
-        type: match.type ?? null,
-        confidence: match.confidence ?? 0.8,
-      };
-    }
-  }
-
-  return {
-    category: "other" as FinanceCategory,
-    subcategory: null,
-    type: null,
-    confidence: 0.45,
-  };
-}
-
-export function detectPotentialFlags(input: {
-  description: string;
-  confidence: number;
-  amount?: number | null;
-  requiresPassword?: boolean;
-}) {
-  const flags: string[] = [];
-  const lower = input.description.toLowerCase();
-
-  if (input.confidence < FINANCE_REVIEW_THRESHOLD) flags.push("low_confidence");
-  if (input.amount == null) flags.push("missing_amount");
-  if (/(refund|reembolso|reversed|chargeback)/.test(lower)) flags.push("refund");
-  if (/(duplicate|duplicado|same day)/.test(lower)) flags.push("duplicate");
-  if (input.requiresPassword) flags.push("password_required");
-
-  return flags;
+function cleanString(value?: string | null) {
+  return value?.trim() || null;
 }
 
 async function getOrCreateFallbackAccount(currency = "COP") {
@@ -206,20 +177,137 @@ async function ensureMerchant(rawName?: string | null) {
   });
 }
 
-async function ensureDocument(input?: FinanceDocumentInput | null) {
+async function refreshMerchantStats(merchantId: string) {
+  const result = await prisma.financialTransaction.aggregate({
+    where: {
+      merchantId,
+      status: "posted",
+      reviewState: "resolved",
+      excludedFromBudget: false,
+    },
+    _sum: { amount: true, taxAmount: true, tipAmount: true },
+    _count: true,
+  });
+
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: {
+      transactionCount: result._count,
+      totalSpent: Math.abs(result._sum.amount || 0),
+      totalTax: result._sum.taxAmount || 0,
+      totalTip: result._sum.tipAmount || 0,
+    },
+  });
+}
+
+async function ensureSource(params: {
+  candidate: FinanceIngestionCandidate;
+  document?: FinanceDocumentInput | null;
+  merchantId?: string | null;
+  categoryHint?: string | null;
+}) {
+  const identity = buildFinanceSourceIdentity({
+    source: params.candidate.source,
+    sender: params.document?.sender,
+    merchant: params.candidate.merchant,
+    filename: params.document?.filename,
+    subject: params.document?.subject || params.candidate.description,
+  });
+
+  const label =
+    cleanString(identity.senderName) ||
+    cleanString(identity.senderEmail) ||
+    cleanString(identity.senderDomain) ||
+    cleanString(params.candidate.merchant) ||
+    cleanString(params.candidate.description) ||
+    "Unknown source";
+
+  return prisma.financeSource.upsert({
+    where: { sourceKey: identity.sourceKey },
+    create: {
+      sourceKey: identity.sourceKey,
+      label: label.slice(0, 140),
+      senderEmail: identity.senderEmail,
+      senderDomain: identity.senderDomain,
+      merchantId: params.merchantId ?? null,
+      categoryHint: params.categoryHint ?? null,
+      firstSeenAt: params.document?.receivedAt || params.candidate.transactedAt || new Date(),
+      lastSeenAt: params.document?.receivedAt || params.candidate.transactedAt || new Date(),
+    },
+    update: {
+      label: label.slice(0, 140),
+      senderEmail: identity.senderEmail || undefined,
+      senderDomain: identity.senderDomain || undefined,
+      merchantId: params.merchantId ?? undefined,
+      categoryHint: params.categoryHint ?? undefined,
+      lastSeenAt: params.document?.receivedAt || params.candidate.transactedAt || new Date(),
+    },
+  });
+}
+
+async function refreshSourceStats(sourceId: string) {
+  const [documentCount, signalCount, confirmedCount, ignoredCount, autoPostCount] =
+    await Promise.all([
+      prisma.financeDocument.count({ where: { sourceId } }),
+      prisma.financeSignal.count({ where: { sourceId } }),
+      prisma.financeSignal.count({
+        where: { sourceId, promotionState: { in: ["auto_posted", "user_confirmed"] } },
+      }),
+      prisma.financeSignal.count({
+        where: { sourceId, promotionState: { in: ["ignored", "dismissed"] } },
+      }),
+      prisma.financeSignal.count({ where: { sourceId, promotionState: "auto_posted" } }),
+    ]);
+
+  await prisma.financeSource.update({
+    where: { id: sourceId },
+    data: {
+      documentCount,
+      signalCount,
+      confirmedCount,
+      ignoredCount,
+      autoPostCount,
+    },
+  });
+}
+
+async function ensureDocument(
+  input: FinanceDocumentInput | null | undefined,
+  sourceId?: string | null
+) {
   if (!input) return null;
+
+  const baseData = {
+    source: input.source,
+    externalId: input.externalId ?? null,
+    documentType: input.documentType,
+    status: input.status || (input.requiresPassword ? "password_required" : "processed"),
+    classification: input.classification || "unclassified",
+    processingStage:
+      input.processingStage ||
+      (input.requiresPassword ? "password_required" : input.status === "error" ? "error" : "captured"),
+    mailConnectionId: input.mailConnectionId ?? null,
+    sourceId: sourceId ?? null,
+    sourceKey: input.sourceKey ?? null,
+    messageId: input.messageId ?? null,
+    threadId: input.threadId ?? null,
+    attachmentId: input.attachmentId ?? null,
+    filename: input.filename ?? null,
+    mimeType: input.mimeType ?? null,
+    sender: input.sender ?? null,
+    subject: input.subject ?? null,
+    receivedAt: input.receivedAt ?? null,
+    contentText: input.contentText ?? null,
+    extractedData: toOptionalJsonValue(input.extractedData),
+    parseError: input.parseError ?? null,
+    requiresPassword: input.requiresPassword ?? false,
+    passwordSecretKey: input.passwordSecretKey ?? null,
+  };
 
   if (input.id) {
     return prisma.financeDocument.update({
       where: { id: input.id },
-      data: {
-        contentText: input.contentText ?? undefined,
-        extractedData: toOptionalJsonValue(input.extractedData),
-        parseError: input.parseError ?? undefined,
-        requiresPassword: input.requiresPassword ?? undefined,
-        passwordSecretKey: input.passwordSecretKey ?? undefined,
-        status: input.status ?? undefined,
-      },
+      data: baseData,
     });
   }
 
@@ -227,67 +315,64 @@ async function ensureDocument(input?: FinanceDocumentInput | null) {
     const existing = await prisma.financeDocument.findFirst({
       where: { source: input.source, externalId: input.externalId },
     });
-    if (existing) return existing;
-  }
-
-  return prisma.financeDocument.create({
-    data: {
-      source: input.source,
-      externalId: input.externalId ?? null,
-      documentType: input.documentType,
-      status: input.status || (input.requiresPassword ? "password_required" : "processed"),
-      mailConnectionId: input.mailConnectionId ?? null,
-      messageId: input.messageId ?? null,
-      threadId: input.threadId ?? null,
-      attachmentId: input.attachmentId ?? null,
-      filename: input.filename ?? null,
-      mimeType: input.mimeType ?? null,
-      sender: input.sender ?? null,
-      subject: input.subject ?? null,
-      receivedAt: input.receivedAt ?? null,
-      contentText: input.contentText ?? null,
-      extractedData: toOptionalJsonValue(input.extractedData),
-      parseError: input.parseError ?? null,
-      requiresPassword: input.requiresPassword ?? false,
-      passwordSecretKey: input.passwordSecretKey ?? null,
-    },
-  });
-}
-
-async function findMatchingRule(input: {
-  description: string;
-  merchantNormalized?: string | null;
-  documentSender?: string | null;
-}) {
-  const rules = await prisma.financeRule.findMany({
-    where: { isActive: true },
-    orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-  });
-
-  const lowerDescription = input.description.toLowerCase();
-  const lowerSender = input.documentSender?.toLowerCase() || "";
-
-  for (const rule of rules) {
-    const conditions = rule.conditions as Record<string, unknown>;
-    const merchantNormalized = String(conditions.merchantNormalized || "");
-    const descriptionIncludes = String(conditions.descriptionIncludes || "");
-    const senderIncludes = String(conditions.senderIncludes || "");
-
-    const merchantMatches =
-      !merchantNormalized ||
-      merchantNormalized === input.merchantNormalized ||
-      lowerDescription.includes(merchantNormalized);
-    const descriptionMatches =
-      !descriptionIncludes || lowerDescription.includes(descriptionIncludes.toLowerCase());
-    const senderMatches =
-      !senderIncludes || lowerSender.includes(senderIncludes.toLowerCase());
-
-    if (merchantMatches && descriptionMatches && senderMatches) {
-      return rule;
+    if (existing) {
+      return prisma.financeDocument.update({
+        where: { id: existing.id },
+        data: baseData,
+      });
     }
   }
 
-  return null;
+  return prisma.financeDocument.create({
+    data: baseData,
+  });
+}
+
+async function refreshDocumentProgress(documentId: string) {
+  const document = await prisma.financeDocument.findUnique({
+    where: { id: documentId },
+    select: {
+      id: true,
+      classification: true,
+      status: true,
+      requiresPassword: true,
+      signals: {
+        select: {
+          id: true,
+          promotionState: true,
+        },
+      },
+    },
+  });
+
+  if (!document) return;
+
+  const signalCount = document.signals.length;
+  const promotedSignalCount = document.signals.filter((signal) =>
+    ["auto_posted", "user_confirmed"].includes(signal.promotionState)
+  ).length;
+
+  let processingStage = "captured";
+  if (document.requiresPassword) {
+    processingStage = "password_required";
+  } else if (document.status === "error") {
+    processingStage = "error";
+  } else if (document.classification === "ignored") {
+    processingStage = "ignored";
+  } else if (promotedSignalCount > 0) {
+    processingStage = "promoted";
+  } else if (signalCount > 0) {
+    processingStage = "classified";
+  }
+
+  await prisma.financeDocument.update({
+    where: { id: documentId },
+    data: {
+      signalCount,
+      promotedSignalCount,
+      processingStage,
+    },
+  });
 }
 
 async function writeChangeLog(
@@ -308,87 +393,109 @@ async function writeChangeLog(
   });
 }
 
-async function refreshMerchantStats(merchantId: string) {
-  const result = await prisma.financialTransaction.aggregate({
-    where: {
-      merchantId,
-      status: { notIn: ["duplicate", "ignored"] },
-    },
-    _sum: { amount: true, taxAmount: true, tipAmount: true },
-    _count: true,
+async function findMatchingRule(input: {
+  description: string;
+  merchantNormalized?: string | null;
+  documentSender?: string | null;
+  sourceKey?: string | null;
+  sourceId?: string | null;
+}) {
+  const rules = await prisma.financeRule.findMany({
+    where: { isActive: true },
+    orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
   });
 
-  await prisma.merchant.update({
-    where: { id: merchantId },
-    data: {
-      transactionCount: result._count,
-      totalSpent: Math.abs(result._sum.amount || 0),
-      totalTax: result._sum.taxAmount || 0,
-      totalTip: result._sum.tipAmount || 0,
-    },
-  });
+  const lowerDescription = input.description.toLowerCase();
+  const lowerSender = input.documentSender?.toLowerCase() || "";
+
+  for (const rule of rules) {
+    if (rule.sourceId && rule.sourceId !== input.sourceId) continue;
+
+    const conditions = (rule.conditions || {}) as Record<string, unknown>;
+    const merchantNormalized = String(conditions.merchantNormalized || "");
+    const descriptionIncludes = String(conditions.descriptionIncludes || "");
+    const senderIncludes = String(conditions.senderIncludes || "");
+    const sourceKey = String(conditions.sourceKey || "");
+
+    const merchantMatches =
+      !merchantNormalized ||
+      merchantNormalized === input.merchantNormalized ||
+      lowerDescription.includes(merchantNormalized);
+    const descriptionMatches =
+      !descriptionIncludes || lowerDescription.includes(descriptionIncludes.toLowerCase());
+    const senderMatches =
+      !senderIncludes || lowerSender.includes(senderIncludes.toLowerCase());
+    const sourceMatches = !sourceKey || sourceKey === input.sourceKey;
+
+    if (merchantMatches && descriptionMatches && senderMatches && sourceMatches) {
+      return rule;
+    }
+  }
+
+  return null;
+}
+
+async function maybeRunDocumentAI(input: {
+  description: string;
+  text: string;
+  sender?: string | null;
+  subject?: string | null;
+  heuristicConfidence: number;
+}) {
+  if (input.heuristicConfidence >= 0.68) return null;
+  try {
+    return await analyzeFinanceDocument({
+      description: input.description,
+      text: input.text.slice(0, 6000),
+      sender: input.sender,
+      subject: input.subject,
+    });
+  } catch {
+    return null;
+  }
 }
 
 async function createReviewItems(params: {
   transactionId?: string | null;
   documentId?: string | null;
+  sourceId?: string | null;
+  signalId?: string | null;
   flags: string[];
   candidate: FinanceIngestionCandidate;
 }) {
   if (params.flags.length === 0) return [];
 
   const uniqueFlags = [...new Set(params.flags)];
-  const relationFilters: Array<{ transactionId: string } | { documentId: string }> = [];
-  if (params.transactionId) {
-    relationFilters.push({ transactionId: params.transactionId });
-  }
-  if (params.documentId) {
-    relationFilters.push({ documentId: params.documentId });
-  }
+  const relationFilters: Prisma.FinanceReviewItemWhereInput[] = [];
+  if (params.transactionId) relationFilters.push({ transactionId: params.transactionId });
+  if (params.documentId) relationFilters.push({ documentId: params.documentId });
+  if (params.signalId) relationFilters.push({ signalId: params.signalId });
+  if (params.sourceId) relationFilters.push({ sourceId: params.sourceId });
 
-  if (relationFilters.length > 0) {
-    const existing = await prisma.financeReviewItem.findMany({
-      where: {
-        status: "pending",
-        kind: { in: uniqueFlags },
-        OR: relationFilters,
-      },
-      select: { kind: true },
-    });
-
-    const existingKinds = new Set(existing.map((item) => item.kind));
-    const remainingFlags = uniqueFlags.filter((flag) => !existingKinds.has(flag));
-    if (remainingFlags.length === 0) return [];
-
-    return prisma.$transaction(
-      remainingFlags.map((flag) =>
-        prisma.financeReviewItem.create({
-          data: {
-            transactionId: params.transactionId ?? null,
-            documentId: params.documentId ?? null,
-            kind: flag,
-            title: titleCase(flag.replace(/_/g, " ")),
-            detail: params.candidate.description,
-            suggestedData: toJsonValue({
-              category: params.candidate.category,
-              subcategory: params.candidate.subcategory,
-              type: params.candidate.type,
-              amount: params.candidate.amount,
-              merchant: params.candidate.merchant,
-              source: params.candidate.source,
-            }),
+  const existing =
+    relationFilters.length > 0
+      ? await prisma.financeReviewItem.findMany({
+          where: {
+            status: "pending",
+            kind: { in: uniqueFlags },
+            OR: relationFilters,
           },
+          select: { kind: true },
         })
-      )
-    );
-  }
+      : [];
+
+  const existingKinds = new Set(existing.map((item) => item.kind));
+  const remainingFlags = uniqueFlags.filter((flag) => !existingKinds.has(flag));
+  if (remainingFlags.length === 0) return [];
 
   return prisma.$transaction(
-    uniqueFlags.map((flag) =>
+    remainingFlags.map((flag) =>
       prisma.financeReviewItem.create({
         data: {
           transactionId: params.transactionId ?? null,
           documentId: params.documentId ?? null,
+          sourceId: params.sourceId ?? null,
+          signalId: params.signalId ?? null,
           kind: flag,
           title: titleCase(flag.replace(/_/g, " ")),
           detail: params.candidate.description,
@@ -399,6 +506,7 @@ async function createReviewItems(params: {
             amount: params.candidate.amount,
             merchant: params.candidate.merchant,
             source: params.candidate.source,
+            dueDate: params.candidate.dueDate?.toISOString() || null,
           }),
         },
       })
@@ -406,16 +514,389 @@ async function createReviewItems(params: {
   );
 }
 
-export async function ensureRuleFromTransaction(
-  transactionId: string,
-  name?: string
-) {
+async function settlePendingReviewItems(params: {
+  transactionId?: string | null;
+  documentId?: string | null;
+  signalId?: string | null;
+  sourceId?: string | null;
+  status: "resolved" | "dismissed";
+  resolution?: Prisma.InputJsonValue | null;
+}) {
+  const orFilters = [
+    params.transactionId ? { transactionId: params.transactionId } : null,
+    params.documentId ? { documentId: params.documentId } : null,
+    params.signalId ? { signalId: params.signalId } : null,
+    params.sourceId ? { sourceId: params.sourceId } : null,
+  ].filter(Boolean) as Prisma.FinanceReviewItemWhereInput[];
+
+  if (orFilters.length === 0) return;
+
+  await prisma.financeReviewItem.updateMany({
+    where: {
+      status: "pending",
+      OR: orFilters,
+    },
+    data: {
+      status: params.status,
+      resolvedAt: new Date(),
+      resolution:
+        params.resolution === null ? Prisma.JsonNull : params.resolution ?? undefined,
+    },
+  });
+}
+
+async function upsertUpcomingPaymentFromSignal(signal: {
+  id: string;
+  kind: string;
+  documentId: string;
+  merchantId?: string | null;
+  description: string;
+  dueDate?: Date | null;
+  amount?: number | null;
+  minimumDue?: number | null;
+  statementBalance?: number | null;
+  category?: string | null;
+}) {
+  if (!signal.dueDate || !["bill_due", "statement", "subscription"].includes(signal.kind)) {
+    return null;
+  }
+
+  const existing = await prisma.upcomingPayment.findFirst({
+    where: {
+      sourceDocumentId: signal.documentId,
+      description: signal.description,
+    },
+  });
+
+  if (existing) {
+    return prisma.upcomingPayment.update({
+      where: { id: existing.id },
+      data: {
+        dueDate: signal.dueDate,
+        amount: signal.amount ?? undefined,
+        minimumDue: signal.minimumDue ?? undefined,
+        statementBalance: signal.statementBalance ?? undefined,
+        merchantId: signal.merchantId ?? undefined,
+        category: signal.category ?? undefined,
+        status: "detected",
+      },
+    });
+  }
+
+  return prisma.upcomingPayment.create({
+    data: {
+      sourceDocumentId: signal.documentId,
+      merchantId: signal.merchantId ?? null,
+      description: signal.description,
+      dueDate: signal.dueDate,
+      amount: signal.amount ?? null,
+      minimumDue: signal.minimumDue ?? null,
+      statementBalance: signal.statementBalance ?? null,
+      category: signal.category ?? null,
+      source: "email",
+      status: "detected",
+      confidence: 0.8,
+    },
+  });
+}
+
+function shouldAutoPromoteSignal(params: {
+  signalKind: FinanceSignalKind;
+  confidence: number;
+  amount?: number | null;
+  sourceDisposition: FinanceSourceDisposition;
+  promotionPreference?: FinanceIngestionCandidate["promotionPreference"];
+}) {
+  if (params.promotionPreference === "manual_post") {
+    return params.amount != null && !["bill_due", "statement"].includes(params.signalKind);
+  }
+
+  if (params.promotionPreference === "trusted_autopost") {
+    return params.amount != null && !["bill_due", "statement"].includes(params.signalKind);
+  }
+
+  return (
+    params.amount != null &&
+    params.confidence >= 0.85 &&
+    params.sourceDisposition === "trusted_autopost" &&
+    !["bill_due", "statement"].includes(params.signalKind)
+  );
+}
+
+async function promoteSignalToTransaction(params: {
+  signalId: string;
+  accountId?: string | null;
+  fields?: Partial<FinanceIngestionCandidate>;
+  promotionState: "auto_posted" | "user_confirmed";
+}) {
+  const signal = await prisma.financeSignal.findUnique({
+    where: { id: params.signalId },
+    include: {
+      document: true,
+      source: true,
+      merchant: true,
+      transaction: true,
+    },
+  });
+
+  if (!signal) {
+    throw new Error("Finance signal not found");
+  }
+
+  const account =
+    params.accountId
+      ? await prisma.financialAccount.findUnique({ where: { id: params.accountId } })
+      : await getOrCreateFallbackAccount(signal.currency || "COP");
+
+  if (!account) {
+    throw new Error("Could not resolve finance account");
+  }
+
+  const nextType =
+    params.fields?.type || (signal.type as "income" | "expense" | "transfer" | null) || "expense";
+  const nextAmountBase =
+    params.fields?.amount ??
+    signal.amount ??
+    extractPrimaryAmount(signal.description) ??
+    0;
+  const nextAmount =
+    nextType === "expense"
+      ? -Math.abs(nextAmountBase)
+      : nextType === "income"
+      ? Math.abs(nextAmountBase)
+      : nextAmountBase;
+
+  const fingerprint = buildSourceFingerprint({
+    source: signal.document.source,
+    amount: signal.amount,
+    description: params.fields?.description || signal.description,
+    transactedAt: params.fields?.transactedAt || signal.transactedAt || signal.document.receivedAt,
+    merchant:
+      params.fields?.merchant ||
+      signal.merchant?.name ||
+      signal.document.sender ||
+      signal.description,
+    externalId: signal.document.externalId,
+  });
+
+  const existing =
+    signal.transaction ||
+    (await prisma.financialTransaction.findFirst({
+      where: {
+        OR: [{ sourceFingerprint: fingerprint }, { sourceDocumentId: signal.documentId }],
+      },
+    }));
+
+  let transaction;
+  if (existing) {
+    const beforeAmount = existing.amount;
+    transaction = await prisma.financialTransaction.update({
+      where: { id: existing.id },
+      data: {
+        accountId: params.accountId || existing.accountId,
+        transactedAt:
+          params.fields?.transactedAt ||
+          signal.transactedAt ||
+          signal.document.receivedAt ||
+          existing.transactedAt,
+        amount: nextAmount,
+        currency: params.fields?.currency || signal.currency || existing.currency,
+        description: params.fields?.description || signal.description,
+        category: params.fields?.category || signal.category || existing.category,
+        subcategory: params.fields?.subcategory ?? signal.subcategory ?? existing.subcategory,
+        type: nextType,
+        isRecurring: params.fields?.isRecurring ?? existing.isRecurring,
+        merchant: params.fields?.merchant || signal.merchant?.name || existing.merchant,
+        merchantId: signal.merchantId ?? existing.merchantId,
+        reference: params.fields?.reference ?? signal.reference ?? existing.reference,
+        notes: params.fields?.notes ?? signal.notes ?? existing.notes,
+        source: signal.document.source,
+        tags: params.fields?.tags?.join(",") || existing.tags,
+        status: "posted",
+        reviewState: "resolved",
+        confidence: params.fields?.confidence ?? signal.confidence ?? existing.confidence,
+        subtotalAmount:
+          params.fields?.subtotalAmount ?? signal.subtotalAmount ?? existing.subtotalAmount,
+        taxAmount: params.fields?.taxAmount ?? signal.taxAmount ?? existing.taxAmount,
+        tipAmount: params.fields?.tipAmount ?? signal.tipAmount ?? existing.tipAmount,
+        deductible: params.fields?.deductible ?? existing.deductible,
+        excludedFromBudget: params.fields?.excludedFromBudget ?? false,
+        sourceDocumentId: signal.documentId,
+        sourceFingerprint: fingerprint,
+      },
+    });
+
+    if (nextAmount !== beforeAmount) {
+      await prisma.financialAccount.update({
+        where: { id: transaction.accountId },
+        data: {
+          balance: { increment: nextAmount - beforeAmount },
+        },
+      });
+    }
+  } else {
+    transaction = await prisma.financialTransaction.create({
+      data: {
+        accountId: account.id,
+        transactedAt:
+          params.fields?.transactedAt || signal.transactedAt || signal.document.receivedAt || new Date(),
+        amount: nextAmount,
+        currency: params.fields?.currency || signal.currency || account.currency || "COP",
+        description: params.fields?.description || signal.description,
+        category: params.fields?.category || signal.category || "other",
+        subcategory: params.fields?.subcategory ?? signal.subcategory ?? null,
+        type: nextType,
+        isRecurring: params.fields?.isRecurring ?? false,
+        merchant: params.fields?.merchant || signal.merchant?.name || null,
+        merchantId: signal.merchantId ?? null,
+        reference: params.fields?.reference ?? signal.reference ?? null,
+        notes: params.fields?.notes ?? signal.notes ?? null,
+        source: signal.document.source,
+        tags: params.fields?.tags?.join(",") || null,
+        status: "posted",
+        reviewState: "resolved",
+        confidence: params.fields?.confidence ?? signal.confidence ?? null,
+        subtotalAmount: params.fields?.subtotalAmount ?? signal.subtotalAmount ?? null,
+        taxAmount: params.fields?.taxAmount ?? signal.taxAmount ?? null,
+        tipAmount: params.fields?.tipAmount ?? signal.tipAmount ?? null,
+        deductible: params.fields?.deductible ?? false,
+        excludedFromBudget: params.fields?.excludedFromBudget ?? false,
+        sourceDocumentId: signal.documentId,
+        sourceFingerprint: fingerprint,
+      },
+    });
+
+    await prisma.financialAccount.update({
+      where: { id: transaction.accountId },
+      data: { balance: { increment: transaction.amount } },
+    });
+  }
+
+  await prisma.financeSignal.update({
+    where: { id: signal.id },
+    data: {
+      transactionId: transaction.id,
+      status: "promoted",
+      promotionState: params.promotionState,
+    },
+  });
+
+  if (signal.sourceId && params.promotionState === "auto_posted") {
+    await prisma.financeSource.update({
+      where: { id: signal.sourceId },
+      data: {
+        autoPostCount: { increment: 1 },
+      },
+    });
+  }
+
+  await settlePendingReviewItems({
+    signalId: signal.id,
+    documentId: signal.documentId,
+    sourceId: signal.sourceId,
+    transactionId: transaction.id,
+    status: "resolved",
+    resolution: toJsonValue({ promotionState: params.promotionState }),
+  });
+
+  await writeChangeLog(transaction.id, "created", null, {
+    category: transaction.category,
+    subcategory: transaction.subcategory,
+    type: transaction.type,
+    confidence: transaction.confidence,
+    source: transaction.source,
+  });
+
+  if (transaction.merchantId) {
+    await refreshMerchantStats(transaction.merchantId);
+  }
+  if (signal.sourceId) {
+    await refreshSourceStats(signal.sourceId);
+  }
+  await refreshDocumentProgress(signal.documentId);
+
+  return transaction;
+}
+
+async function learnFromInboxAction(params: {
+  sourceId?: string | null;
+  signalKind?: string | null;
+  action: ReviewAction;
+}) {
+  if (!params.sourceId) return;
+
+  const source = await prisma.financeSource.findUnique({ where: { id: params.sourceId } });
+  if (!source) return;
+
+  if (params.action === "create_rule") {
+    await prisma.financeSource.update({
+      where: { id: source.id },
+      data: {
+        trustLevel: "trusted",
+        defaultDisposition:
+          params.signalKind && ["bill_due", "statement", "subscription"].includes(params.signalKind)
+            ? "bill_notice"
+            : "trusted_autopost",
+      },
+    });
+    await refreshSourceStats(source.id);
+    return;
+  }
+
+  if (params.action === "ignore" || params.action === "dismiss") {
+    const nextIgnoredCount = source.ignoredCount + 1;
+    await prisma.financeSource.update({
+      where: { id: source.id },
+      data: {
+        trustLevel:
+          nextIgnoredCount >= 2 && source.confirmedCount === 0 ? "ignored" : source.trustLevel,
+        defaultDisposition:
+          nextIgnoredCount >= 2 && source.confirmedCount === 0
+            ? "always_ignore"
+            : source.defaultDisposition,
+      },
+    });
+    await refreshSourceStats(source.id);
+    return;
+  }
+
+  if (params.action === "confirm" || params.action === "edit") {
+    const nextConfirmedCount = source.confirmedCount + 1;
+    const promoteToTrusted =
+      nextConfirmedCount >= 2 &&
+      params.signalKind &&
+      ["purchase", "income", "refund", "transfer", "subscription"].includes(params.signalKind);
+
+    await prisma.financeSource.update({
+      where: { id: source.id },
+      data: {
+        trustLevel: promoteToTrusted
+          ? "trusted"
+          : source.trustLevel === "new"
+          ? "learning"
+          : source.trustLevel,
+        defaultDisposition: promoteToTrusted
+          ? "trusted_autopost"
+          : params.signalKind && ["bill_due", "statement"].includes(params.signalKind)
+          ? "bill_notice"
+          : source.defaultDisposition,
+      },
+    });
+    await refreshSourceStats(source.id);
+  }
+}
+
+export async function ensureRuleFromTransaction(transactionId: string, name?: string) {
   const transaction = await prisma.financialTransaction.findUnique({
     where: { id: transactionId },
     include: { merchantRef: true, sourceDocument: true },
   });
   if (!transaction) return null;
 
+  const sourceKey = transaction.sourceDocument?.sourceKey || null;
+  const source = sourceKey
+    ? await prisma.financeSource.findUnique({ where: { sourceKey } })
+    : null;
   const merchantNormalized =
     transaction.merchantRef?.normalizedName || normalizeMerchantName(transaction.merchant);
 
@@ -424,8 +905,10 @@ export async function ensureRuleFromTransaction(
       name: name || `Learn ${transaction.description}`,
       learned: true,
       merchantId: transaction.merchantId ?? null,
+      sourceId: source?.id ?? null,
       priority: 100,
       conditions: toJsonValue({
+        sourceKey,
         merchantNormalized: merchantNormalized || null,
         senderIncludes: transaction.sourceDocument?.sender || null,
         descriptionIncludes: transaction.description.toLowerCase().slice(0, 32),
@@ -441,215 +924,538 @@ export async function ensureRuleFromTransaction(
   });
 }
 
-export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidate) {
-  const document = await ensureDocument(candidate.document);
+async function resolveDocumentContext(
+  candidate: FinanceIngestionCandidate
+): Promise<ResolvedDocumentContext> {
   const merchant = await ensureMerchant(candidate.merchant || candidate.description);
+  const sourcePreview = await ensureSource({
+    candidate,
+    document: candidate.document,
+    merchantId: merchant?.id ?? null,
+    categoryHint: candidate.category ?? null,
+  });
+
+  const document = await ensureDocument(
+    {
+      source: candidate.document?.source || candidate.source,
+      externalId:
+        candidate.document?.externalId ||
+        `capture:${candidate.source}:${candidate.transactedAt?.toISOString() || Date.now()}:${candidate.description.slice(0, 24)}`,
+      documentType: candidate.document?.documentType || "captured_event",
+      ...candidate.document,
+      sourceKey:
+        candidate.document?.sourceKey ||
+        buildFinanceSourceIdentity({
+          source: candidate.source,
+          sender: candidate.document?.sender,
+          merchant: candidate.merchant,
+          filename: candidate.document?.filename,
+          subject: candidate.document?.subject || candidate.description,
+        }).sourceKey,
+    },
+    sourcePreview.id
+  );
+
+  return {
+    document,
+    source: sourcePreview,
+    merchant,
+  };
+}
+
+export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidate) {
+  const combinedText = [
+    candidate.description,
+    candidate.notes,
+    candidate.document?.subject,
+    candidate.document?.contentText,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const guessed = guessCategoryFromText(combinedText);
+  const { document, source, merchant } = await resolveDocumentContext({
+    ...candidate,
+    category: candidate.category || guessed.category,
+    subcategory: candidate.subcategory ?? guessed.subcategory,
+  });
+
   const rule = await findMatchingRule({
     description: candidate.description,
     merchantNormalized: merchant?.normalizedName,
     documentSender: document?.sender,
+    sourceKey: source.sourceKey,
+    sourceId: source.id,
   });
-  const guessed = guessCategoryFromText(
-    [candidate.description, candidate.notes, document?.contentText, document?.subject]
-      .filter(Boolean)
-      .join(" ")
-  );
-  const actions = (rule?.actions || {}) as NormalizedRuleAction;
-  const resolvedCategory = candidate.category || actions.category || guessed.category;
+
+  const actions = ((rule?.actions || {}) as Record<string, unknown>) as NormalizedRuleAction;
+
+  const heuristic = inferFinanceDocumentClassification({
+    text: combinedText,
+    subject: document?.subject || candidate.document?.subject,
+    sourceDisposition:
+      actions.defaultDisposition || (source.defaultDisposition as FinanceSourceDisposition),
+    trustLevel: source.trustLevel,
+  });
+
+  const aiDecision =
+    candidate.documentClassification || candidate.signalKind || candidate.category
+      ? null
+      : await maybeRunDocumentAI({
+          description: candidate.description,
+          text: combinedText,
+          sender: document?.sender,
+          subject: document?.subject,
+          heuristicConfidence: heuristic.confidence,
+        });
+
+  const classification = (candidate.documentClassification ||
+    actions.classification ||
+    aiDecision?.classification ||
+    heuristic.classification) as FinanceDocumentClassification;
+  const signalKind = (candidate.signalKind ||
+    actions.signalKind ||
+    aiDecision?.signalKind ||
+    heuristic.signalKind) as FinanceSignalKind;
+  const resolvedDisposition =
+    candidate.promotionPreference === "trusted_autopost"
+      ? "trusted_autopost"
+      : actions.defaultDisposition ||
+        (aiDecision?.defaultDisposition as FinanceSourceDisposition | undefined) ||
+        (source.defaultDisposition as FinanceSourceDisposition) ||
+        heuristic.defaultDisposition;
+  const resolvedCategory =
+    candidate.category || actions.category || aiDecision?.category || guessed.category;
   const resolvedSubcategory =
-    candidate.subcategory || actions.subcategory || guessed.subcategory || null;
+    candidate.subcategory ||
+    actions.subcategory ||
+    aiDecision?.subcategory ||
+    guessed.subcategory ||
+    null;
   const resolvedType =
     candidate.type ||
     actions.type ||
+    aiDecision?.type ||
+    heuristic.typeHint ||
     guessed.type ||
     ((candidate.amount || 0) > 0 ? "income" : "expense");
   const confidence =
     candidate.confidence ??
-    (rule ? 0.98 : merchant ? Math.max(guessed.confidence, 0.78) : guessed.confidence);
+    aiDecision?.confidence ??
+    (rule ? 0.98 : merchant ? Math.max(heuristic.confidence, guessed.confidence, 0.7) : heuristic.confidence);
+
+  const resolvedAmount =
+    candidate.amount ??
+    aiDecision?.amount ??
+    extractMoneyByLabel(combinedText, [
+      "total",
+      "paid",
+      "charged",
+      "charge",
+      "payment",
+      "amount",
+      "minimum due",
+      "minimo a pagar",
+    ]) ??
+    extractPrimaryAmount(combinedText);
+  const dueDate =
+    candidate.dueDate ||
+    (aiDecision?.dueDate ? new Date(aiDecision.dueDate) : null) ||
+    extractDueDateFromText(combinedText);
+  const minimumDue =
+    candidate.minimumDue ??
+    aiDecision?.minimumDue ??
+    extractMoneyByLabel(combinedText, ["minimum due", "minimo a pagar"]);
+  const statementBalance =
+    candidate.statementBalance ??
+    aiDecision?.statementBalance ??
+    extractMoneyByLabel(combinedText, ["statement balance", "saldo total", "total due"]);
+
+  const updatedDocument = await prisma.financeDocument.update({
+    where: { id: document!.id },
+    data: {
+      classification,
+      sourceId: source.id,
+      sourceKey: source.sourceKey,
+      extractedData: toOptionalJsonValue({
+        ...(((document?.extractedData as Record<string, unknown> | null) || {}) as Record<
+          string,
+          unknown
+        >),
+        aiDecision: aiDecision || undefined,
+        guessedCategory: guessed,
+        heuristic,
+      }),
+      processingStage:
+        classification === "ignored"
+          ? "ignored"
+          : document?.requiresPassword
+          ? "password_required"
+          : "classified",
+    },
+  });
+
+  if (
+    source.defaultDisposition !== resolvedDisposition ||
+    source.merchantId !== merchant?.id ||
+    source.categoryHint !== resolvedCategory ||
+    source.isBiller !== ["bill_due", "statement", "subscription"].includes(signalKind) ||
+    source.isIncomeSource !== (signalKind === "income") ||
+    source.isRecurring !== Boolean(candidate.isRecurring || signalKind === "subscription")
+  ) {
+    await prisma.financeSource.update({
+      where: { id: source.id },
+      data: {
+        defaultDisposition: resolvedDisposition,
+        merchantId: merchant?.id ?? undefined,
+        categoryHint: resolvedCategory,
+        subcategoryHint: resolvedSubcategory,
+        isBiller: ["bill_due", "statement", "subscription"].includes(signalKind),
+        isIncomeSource: signalKind === "income",
+        isRecurring: Boolean(candidate.isRecurring || signalKind === "subscription"),
+      },
+    });
+  }
+
+  const fingerprint = buildSignalFingerprint({
+    sourceKey: source.sourceKey,
+    signalKind,
+    amount: resolvedAmount,
+    dueDate,
+    transactedAt: candidate.transactedAt || updatedDocument.receivedAt,
+    description: candidate.description,
+  });
+
+  const existingSignal = await prisma.financeSignal.findFirst({
+    where: {
+      OR: [{ fingerprint }, { documentId: updatedDocument.id, kind: signalKind }],
+    },
+    include: {
+      transaction: true,
+    },
+  });
+
+  const signal = existingSignal
+    ? await prisma.financeSignal.update({
+        where: { id: existingSignal.id },
+        data: {
+          sourceId: source.id,
+          merchantId: merchant?.id ?? null,
+          kind: signalKind,
+          confidence,
+          amount: resolvedAmount ?? null,
+          currency: candidate.currency || "COP",
+          description: candidate.description,
+          category: resolvedCategory,
+          subcategory: resolvedSubcategory,
+          type: resolvedType,
+          transactedAt: candidate.transactedAt || updatedDocument.receivedAt || new Date(),
+          dueDate,
+          subtotalAmount: candidate.subtotalAmount ?? null,
+          taxAmount: candidate.taxAmount ?? null,
+          tipAmount: candidate.tipAmount ?? null,
+          minimumDue,
+          statementBalance,
+          reference: candidate.reference ?? null,
+          notes: candidate.notes ?? null,
+          fingerprint,
+          extractedData: toOptionalJsonValue({
+            heuristic,
+            aiDecision: aiDecision || undefined,
+          }),
+        },
+      })
+    : await prisma.financeSignal.create({
+        data: {
+          documentId: updatedDocument.id,
+          sourceId: source.id,
+          merchantId: merchant?.id ?? null,
+          kind: signalKind,
+          confidence,
+          amount: resolvedAmount ?? null,
+          currency: candidate.currency || "COP",
+          description: candidate.description,
+          category: resolvedCategory,
+          subcategory: resolvedSubcategory,
+          type: resolvedType,
+          transactedAt: candidate.transactedAt || updatedDocument.receivedAt || new Date(),
+          dueDate,
+          subtotalAmount: candidate.subtotalAmount ?? null,
+          taxAmount: candidate.taxAmount ?? null,
+          tipAmount: candidate.tipAmount ?? null,
+          minimumDue,
+          statementBalance,
+          reference: candidate.reference ?? null,
+          notes: candidate.notes ?? null,
+          fingerprint,
+          extractedData: toOptionalJsonValue({
+            heuristic,
+            aiDecision: aiDecision || undefined,
+          }),
+        },
+      });
+
+  const shouldIgnore = classification === "ignored";
+  const shouldAutoPromote = shouldAutoPromoteSignal({
+    signalKind,
+    confidence,
+    amount: resolvedAmount,
+    sourceDisposition: resolvedDisposition,
+    promotionPreference: candidate.promotionPreference,
+  });
+
+  if (shouldIgnore) {
+    await prisma.financeSignal.update({
+      where: { id: signal.id },
+      data: {
+        status: "ignored",
+        promotionState: "ignored",
+      },
+    });
+    await settlePendingReviewItems({
+      signalId: signal.id,
+      documentId: updatedDocument.id,
+      sourceId: source.id,
+      status: "dismissed",
+      resolution: toJsonValue({ reason: "ignored_noise" }),
+    });
+    await refreshDocumentProgress(updatedDocument.id);
+    await refreshSourceStats(source.id);
+    return {
+      transaction: null,
+      signal: await prisma.financeSignal.findUnique({ where: { id: signal.id } }),
+      document: updatedDocument,
+      source,
+      merchant,
+      reviewItems: [],
+      duplicated: false,
+    };
+  }
 
   const flags = detectPotentialFlags({
     description: candidate.description,
     confidence,
-    amount: candidate.amount,
-    requiresPassword: document?.requiresPassword ?? false,
+    amount: resolvedAmount,
+    requiresPassword: updatedDocument.requiresPassword,
+    shouldReview:
+      !shouldAutoPromote &&
+      ["purchase", "subscription", "income", "refund", "transfer"].includes(signalKind),
   });
 
-  const account =
-    candidate.accountId
-      ? await prisma.financialAccount.findUnique({ where: { id: candidate.accountId } })
-      : await getOrCreateFallbackAccount(candidate.currency || "COP");
+  if (classification === "unclassified" || source.trustLevel === "new") {
+    flags.push("source_review");
+  }
+  if (["bill_due", "statement", "subscription"].includes(signalKind)) {
+    flags.push("bill_notice");
+  }
+  if (updatedDocument.parseError) {
+    flags.push("parse_error");
+  }
 
-  const fingerprint = buildSourceFingerprint({
-    source: candidate.source,
-    amount: candidate.amount,
+  let transaction = null;
+  if (shouldAutoPromote) {
+    transaction = await promoteSignalToTransaction({
+      signalId: signal.id,
+      accountId: candidate.accountId,
+      promotionState:
+        candidate.promotionPreference === "manual_post" ? "user_confirmed" : "auto_posted",
+    });
+    await learnFromInboxAction({
+      sourceId: source.id,
+      signalKind,
+      action: candidate.promotionPreference === "manual_post" ? "confirm" : "edit",
+    });
+  } else {
+    await prisma.financeSignal.update({
+      where: { id: signal.id },
+      data: {
+        status: "pending",
+        promotionState: "pending_review",
+      },
+    });
+  }
+
+  const reviewItems =
+    transaction || shouldIgnore
+      ? []
+      : await createReviewItems({
+          transactionId: null,
+          documentId: updatedDocument.id,
+          sourceId: source.id,
+          signalId: signal.id,
+          flags,
+          candidate: {
+            ...candidate,
+            amount: resolvedAmount,
+            category: resolvedCategory,
+            subcategory: resolvedSubcategory,
+            type: resolvedType,
+            dueDate,
+          },
+        });
+
+  await upsertUpcomingPaymentFromSignal({
+    id: signal.id,
+    kind: signalKind,
+    documentId: updatedDocument.id,
+    merchantId: merchant?.id,
     description: candidate.description,
-    transactedAt: candidate.transactedAt,
-    merchant: merchant?.name || candidate.merchant || candidate.description,
-    externalId: document?.externalId || candidate.document?.externalId || null,
-  });
-
-  const existing = await prisma.financialTransaction.findFirst({
-    where: {
-      OR: [{ sourceFingerprint: fingerprint }, { sourceDocumentId: document?.id || undefined }],
-    },
-  });
-
-  if (existing) {
-    if (!flags.includes("duplicate")) flags.push("duplicate");
-    const reviewItems = await createReviewItems({
-      transactionId: existing.id,
-      documentId: document?.id,
-      flags,
-      candidate: {
-        ...candidate,
-        category: resolvedCategory,
-        subcategory: resolvedSubcategory,
-        type: resolvedType,
-        confidence,
-      },
-    });
-    return { transaction: existing, document, merchant, reviewItems, duplicated: true };
-  }
-
-  if (candidate.amount == null) {
-    const reviewItems = await createReviewItems({
-      documentId: document?.id,
-      flags: flags.includes("missing_amount") ? flags : [...flags, "missing_amount"],
-      candidate: {
-        ...candidate,
-        category: resolvedCategory,
-        subcategory: resolvedSubcategory,
-        type: resolvedType,
-        confidence,
-      },
-    });
-    return { transaction: null, document, merchant, reviewItems, duplicated: false };
-  }
-
-  const normalizedAmount =
-    resolvedType === "expense"
-      ? -Math.abs(candidate.amount)
-      : resolvedType === "income"
-      ? Math.abs(candidate.amount)
-      : candidate.amount;
-
-  const transaction = await prisma.financialTransaction.create({
-    data: {
-      accountId: account!.id,
-      transactedAt: candidate.transactedAt || document?.receivedAt || new Date(),
-      amount: normalizedAmount,
-      currency: candidate.currency || account?.currency || "COP",
-      description: candidate.description,
-      category: resolvedCategory,
-      subcategory: resolvedSubcategory,
-      type: resolvedType,
-      isRecurring: candidate.isRecurring || Boolean(actions.isRecurring),
-      merchant: merchant?.name || candidate.merchant || null,
-      merchantId: merchant?.id || null,
-      reference: candidate.reference || null,
-      notes: candidate.notes || null,
-      source: candidate.source,
-      tags: candidate.tags?.join(",") || null,
-      status: candidate.status || "posted",
-      reviewState: flags.length > 0 ? "pending_review" : candidate.reviewState || "resolved",
-      confidence,
-      subtotalAmount: candidate.subtotalAmount ?? null,
-      taxAmount: candidate.taxAmount ?? null,
-      tipAmount: candidate.tipAmount ?? null,
-      deductible: candidate.deductible || Boolean(actions.deductible),
-      excludedFromBudget:
-        candidate.excludedFromBudget || Boolean(actions.excludedFromBudget),
-      sourceDocumentId: document?.id || null,
-      sourceFingerprint: fingerprint,
-    },
-  });
-
-  await prisma.financialAccount.update({
-    where: { id: account!.id },
-    data: { balance: { increment: normalizedAmount } },
-  });
-
-  await writeChangeLog(transaction.id, "created", null, {
+    dueDate,
+    amount: resolvedAmount,
+    minimumDue,
+    statementBalance,
     category: resolvedCategory,
-    subcategory: resolvedSubcategory,
-    type: resolvedType,
-    confidence,
-    source: candidate.source,
   });
 
-  if (merchant?.id) {
+  await refreshDocumentProgress(updatedDocument.id);
+  await refreshSourceStats(source.id);
+  if (merchant?.id && transaction) {
     await refreshMerchantStats(merchant.id);
   }
 
-  const reviewItems = await createReviewItems({
-    transactionId: transaction.id,
-    documentId: document?.id,
-    flags,
-    candidate: {
-      ...candidate,
-      category: resolvedCategory,
-      subcategory: resolvedSubcategory,
-      type: resolvedType,
-      confidence,
-    },
-  });
-
-  return { transaction, document, merchant, reviewItems, duplicated: false };
+  return {
+    transaction,
+    signal: await prisma.financeSignal.findUnique({
+      where: { id: signal.id },
+      include: {
+        source: true,
+        document: true,
+        merchant: true,
+        transaction: true,
+      },
+    }),
+    document: updatedDocument,
+    source: await prisma.financeSource.findUnique({ where: { id: source.id } }),
+    merchant,
+    reviewItems,
+    duplicated: false,
+  };
 }
 
-export async function applyReviewAction(
-  reviewId: string,
-  action: ReviewAction,
-  payload?: ReviewActionPayload
-) {
-  const review = await prisma.financeReviewItem.findUnique({
-    where: { id: reviewId },
-    include: { transaction: true, document: true },
-  });
+export async function applyInboxAction(action: ReviewAction, payload: InboxActionPayload) {
+  let review =
+    payload.reviewId
+      ? await prisma.financeReviewItem.findUnique({
+          where: { id: payload.reviewId },
+          include: {
+            transaction: true,
+            document: true,
+            signal: true,
+            source: true,
+          },
+        })
+      : null;
 
-  if (!review) {
-    throw new Error("Review item not found");
-  }
+  const signal =
+    payload.signalId
+      ? await prisma.financeSignal.findUnique({
+          where: { id: payload.signalId },
+          include: {
+            document: true,
+            source: true,
+            transaction: true,
+          },
+        })
+      : review?.signal
+      ? await prisma.financeSignal.findUnique({
+          where: { id: review.signal.id },
+          include: {
+            document: true,
+            source: true,
+            transaction: true,
+          },
+        })
+      : null;
+
+  const targetTransaction =
+    payload.targetTransactionId
+      ? await prisma.financialTransaction.findUnique({ where: { id: payload.targetTransactionId } })
+      : null;
 
   switch (action) {
     case "confirm":
     case "edit": {
-      if (!review.transaction) break;
-      const before = {
-        category: review.transaction.category,
-        subcategory: review.transaction.subcategory,
-        status: review.transaction.status,
-        excludedFromBudget: review.transaction.excludedFromBudget,
-      };
-      const updated = await prisma.financialTransaction.update({
-        where: { id: review.transaction.id },
-        data: {
-          category: payload?.fields?.category ?? undefined,
-          subcategory: payload?.fields?.subcategory ?? undefined,
-          notes: payload?.fields?.notes ?? undefined,
-          merchant: payload?.fields?.merchant ?? undefined,
-          type: payload?.fields?.type ?? undefined,
-          taxAmount: payload?.fields?.taxAmount ?? undefined,
-          tipAmount: payload?.fields?.tipAmount ?? undefined,
-          deductible: payload?.fields?.deductible ?? undefined,
-          excludedFromBudget: payload?.fields?.excludedFromBudget ?? undefined,
-          reviewState: "resolved",
-        },
-      });
-      await writeChangeLog(review.transaction.id, action, before, {
-        category: updated.category,
-        subcategory: updated.subcategory,
-        status: updated.status,
-        excludedFromBudget: updated.excludedFromBudget,
-      });
-      if (payload?.createRule) {
-        await ensureRuleFromTransaction(review.transaction.id);
+      if (signal) {
+        const posted = await promoteSignalToTransaction({
+          signalId: signal.id,
+          accountId: payload.fields?.accountId || undefined,
+          fields: payload.fields,
+          promotionState: "user_confirmed",
+        });
+        await learnFromInboxAction({
+          sourceId: signal.sourceId,
+          signalKind: signal.kind,
+          action,
+        });
+        if (payload.createRule) {
+          await ensureRuleFromTransaction(posted.id);
+        }
+      } else if (review?.transaction) {
+        const before = {
+          category: review.transaction.category,
+          subcategory: review.transaction.subcategory,
+          status: review.transaction.status,
+          excludedFromBudget: review.transaction.excludedFromBudget,
+        };
+        const updated = await prisma.financialTransaction.update({
+          where: { id: review.transaction.id },
+          data: {
+            category: payload.fields?.category ?? undefined,
+            subcategory: payload.fields?.subcategory ?? undefined,
+            notes: payload.fields?.notes ?? undefined,
+            merchant: payload.fields?.merchant ?? undefined,
+            type: payload.fields?.type ?? undefined,
+            taxAmount: payload.fields?.taxAmount ?? undefined,
+            tipAmount: payload.fields?.tipAmount ?? undefined,
+            deductible: payload.fields?.deductible ?? undefined,
+            excludedFromBudget: payload.fields?.excludedFromBudget ?? undefined,
+            reviewState: "resolved",
+            status: "posted",
+          },
+        });
+        await writeChangeLog(review.transaction.id, action, before, {
+          category: updated.category,
+          subcategory: updated.subcategory,
+          status: updated.status,
+          excludedFromBudget: updated.excludedFromBudget,
+        });
+        if (payload.createRule) {
+          await ensureRuleFromTransaction(review.transaction.id);
+        }
       }
       break;
     }
     case "ignore":
     case "dismiss": {
-      if (review.transaction) {
+      if (signal) {
+        await prisma.financeSignal.update({
+          where: { id: signal.id },
+          data: {
+            status: action === "ignore" ? "ignored" : "resolved",
+            promotionState: action === "ignore" ? "ignored" : "dismissed",
+          },
+        });
+        await prisma.financeDocument.update({
+          where: { id: signal.documentId },
+          data: {
+            classification: action === "ignore" ? "ignored" : undefined,
+            processingStage: action === "ignore" ? "ignored" : "classified",
+          },
+        });
+        await settlePendingReviewItems({
+          signalId: signal.id,
+          documentId: signal.documentId,
+          sourceId: signal.sourceId,
+          status: action === "ignore" ? "dismissed" : "resolved",
+          resolution: toJsonValue({ action }),
+        });
+        await learnFromInboxAction({
+          sourceId: signal.sourceId,
+          signalKind: signal.kind,
+          action,
+        });
+        await refreshDocumentProgress(signal.documentId);
+      } else if (review?.transaction) {
         await prisma.financialTransaction.update({
           where: { id: review.transaction.id },
           data: {
@@ -663,115 +1469,193 @@ export async function applyReviewAction(
     }
     case "duplicate":
     case "merge": {
-      if (!review.transaction) break;
-      await prisma.financialTransaction.update({
-        where: { id: review.transaction.id },
-        data: {
-          status: "duplicate",
-          reviewState: "resolved",
-          duplicateOfId: payload?.targetTransactionId ?? review.transaction.duplicateOfId,
-          excludedFromBudget: true,
-        },
-      });
-      await writeChangeLog(review.transaction.id, action, null, {
-        duplicateOfId: payload?.targetTransactionId ?? null,
-      });
-      break;
-    }
-    case "refund": {
-      if (!review.transaction) break;
-      await prisma.financialTransaction.update({
-        where: { id: review.transaction.id },
-        data: {
-          status: "refunded",
-          reviewState: "resolved",
-          refundOfId: payload?.targetTransactionId ?? review.transaction.refundOfId,
-        },
-      });
-      await writeChangeLog(review.transaction.id, action, null, {
-        refundOfId: payload?.targetTransactionId ?? null,
-      });
-      break;
-    }
-    case "split": {
-      if (!review.transaction || !payload?.splits?.length) break;
-
-      await prisma.$transaction([
-        prisma.financialTransaction.update({
-          where: { id: review.transaction.id },
-          data: { status: "ignored", excludedFromBudget: true, reviewState: "resolved" },
-        }),
-        ...payload.splits.map((split) =>
-          prisma.financialTransaction.create({
-            data: {
-              accountId: review.transaction!.accountId,
-              transactedAt: review.transaction!.transactedAt,
-              amount: split.amount < 0 ? split.amount : -Math.abs(split.amount),
-              currency: review.transaction!.currency,
-              description: split.description,
-              category: split.category,
-              subcategory: split.subcategory ?? null,
-              type: "expense",
-              merchant: review.transaction!.merchant,
-              merchantId: review.transaction!.merchantId,
-              notes: `Split from ${review.transaction!.description}`,
-              source: review.transaction!.source,
-              status: "posted",
-              reviewState: "resolved",
-              sourceDocumentId: review.transaction!.sourceDocumentId,
-            },
-          })
-        ),
-      ]);
-      await writeChangeLog(review.transaction.id, action, null, toJsonValue(payload.splits));
-      break;
-    }
-    case "create_rule": {
-      if (review.transaction) {
-        await ensureRuleFromTransaction(review.transaction.id);
-      }
-      break;
-    }
-    case "attach_password": {
-      const passwordSecretKey =
-        payload?.passwordSecretKey ||
-        review.document?.passwordSecretKey ||
-        `pdf:${review.document?.sender || "unknown"}:${review.document?.filename || "attachment"}`;
-
-      if (!payload?.password || !passwordSecretKey) {
-        throw new Error("Password and passwordSecretKey are required");
-      }
-
-      await upsertVaultSecret(passwordSecretKey, "pdf_password", payload.password, {
-        label: review.document?.filename || "Bank PDF password",
-        context: {
-          sender: review.document?.sender,
-          filename: review.document?.filename,
-          documentId: review.document?.id,
-        },
-      });
-
-      if (review.document) {
-        await prisma.financeDocument.update({
-          where: { id: review.document.id },
+      if (signal) {
+        await prisma.financeSignal.update({
+          where: { id: signal.id },
           data: {
-            requiresPassword: false,
-            passwordSecretKey,
-            status: "pending",
+            status: "duplicate",
+            promotionState: "dismissed",
+            transactionId: targetTransaction?.id ?? signal.transactionId,
+          },
+        });
+        await settlePendingReviewItems({
+          signalId: signal.id,
+          documentId: signal.documentId,
+          sourceId: signal.sourceId,
+          transactionId: targetTransaction?.id ?? null,
+          status: "resolved",
+          resolution: toJsonValue({ duplicateOfId: targetTransaction?.id ?? null }),
+        });
+      } else if (review?.transaction) {
+        await prisma.financialTransaction.update({
+          where: { id: review.transaction.id },
+          data: {
+            status: "duplicate",
+            reviewState: "resolved",
+            duplicateOfId: payload.targetTransactionId ?? review.transaction.duplicateOfId,
+            excludedFromBudget: true,
           },
         });
       }
       break;
     }
+    case "refund": {
+      if (signal) {
+        const posted = await promoteSignalToTransaction({
+          signalId: signal.id,
+          accountId: payload.fields?.accountId || undefined,
+          fields: {
+            ...payload.fields,
+            type: "income",
+          },
+          promotionState: "user_confirmed",
+        });
+        if (payload.targetTransactionId) {
+          await prisma.financialTransaction.update({
+            where: { id: posted.id },
+            data: {
+              refundOfId: payload.targetTransactionId,
+            },
+          });
+        }
+      } else if (review?.transaction) {
+        await prisma.financialTransaction.update({
+          where: { id: review.transaction.id },
+          data: {
+            status: "refunded",
+            reviewState: "resolved",
+            refundOfId: payload.targetTransactionId ?? review.transaction.refundOfId,
+          },
+        });
+      }
+      break;
+    }
+    case "split": {
+      const signalTransaction =
+        signal && !signal.transactionId
+          ? await promoteSignalToTransaction({
+              signalId: signal.id,
+              accountId: payload.fields?.accountId || undefined,
+              fields: payload.fields,
+              promotionState: "user_confirmed",
+            })
+          : signal?.transaction ||
+            (review?.transaction
+              ? await prisma.financialTransaction.findUnique({ where: { id: review.transaction.id } })
+              : null);
+
+      if (!signalTransaction || !payload.splits?.length) break;
+
+      await prisma.$transaction([
+        prisma.financialTransaction.update({
+          where: { id: signalTransaction.id },
+          data: { status: "ignored", excludedFromBudget: true, reviewState: "resolved" },
+        }),
+        ...payload.splits.map((split) =>
+          prisma.financialTransaction.create({
+            data: {
+              accountId: signalTransaction.accountId,
+              transactedAt: signalTransaction.transactedAt,
+              amount: split.amount < 0 ? split.amount : -Math.abs(split.amount),
+              currency: signalTransaction.currency,
+              description: split.description,
+              category: split.category,
+              subcategory: split.subcategory ?? null,
+              type: "expense",
+              merchant: signalTransaction.merchant,
+              merchantId: signalTransaction.merchantId,
+              notes: `Split from ${signalTransaction.description}`,
+              source: signalTransaction.source,
+              status: "posted",
+              reviewState: "resolved",
+              sourceDocumentId: signalTransaction.sourceDocumentId,
+            },
+          })
+        ),
+      ]);
+      await writeChangeLog(signalTransaction.id, action, null, toJsonValue(payload.splits));
+      break;
+    }
+    case "create_rule": {
+      const transactionId =
+        signal?.transactionId || review?.transactionId || payload.targetTransactionId || null;
+      if (transactionId) {
+        await ensureRuleFromTransaction(transactionId);
+      }
+      await learnFromInboxAction({
+        sourceId: signal?.sourceId || review?.sourceId,
+        signalKind: signal?.kind || review?.signal?.kind || null,
+        action,
+      });
+      break;
+    }
+    case "attach_password": {
+      const document =
+        signal?.document ||
+        review?.document ||
+        (payload.documentId
+          ? await prisma.financeDocument.findUnique({ where: { id: payload.documentId } })
+          : null);
+
+      const passwordSecretKey =
+        payload.passwordSecretKey ||
+        document?.passwordSecretKey ||
+        `pdf:${document?.sender || "unknown"}:${document?.filename || "attachment"}`;
+
+      if (!payload.password || !passwordSecretKey || !document) {
+        throw new Error("Password and target document are required");
+      }
+
+      await upsertVaultSecret(passwordSecretKey, "pdf_password", payload.password, {
+        label: document.filename || "Bank PDF password",
+        context: {
+          sender: document.sender,
+          filename: document.filename,
+          documentId: document.id,
+        },
+      });
+
+      await prisma.financeDocument.update({
+        where: { id: document.id },
+        data: {
+          requiresPassword: false,
+          passwordSecretKey,
+          status: "pending",
+          processingStage: "captured",
+        },
+      });
+      break;
+    }
   }
 
-  return prisma.financeReviewItem.update({
-    where: { id: reviewId },
-    data: {
-      status:
-        action === "ignore" || action === "dismiss" ? "dismissed" : "resolved",
-      resolvedAt: new Date(),
-      resolution: toOptionalJsonValue(payload),
-    },
+  if (review) {
+    review = await prisma.financeReviewItem.update({
+      where: { id: review.id },
+      data: {
+        status:
+          action === "ignore" || action === "dismiss" ? "dismissed" : "resolved",
+        resolvedAt: new Date(),
+        resolution: toOptionalJsonValue(payload),
+      },
+      include: {
+        transaction: true,
+        document: true,
+        signal: true,
+        source: true,
+      },
+    });
+  }
+
+  return review;
+}
+
+export async function applyReviewAction(
+  reviewId: string,
+  action: ReviewAction,
+  payload?: ReviewActionPayload
+) {
+  return applyInboxAction(action, {
+    reviewId,
+    ...(payload || {}),
   });
 }

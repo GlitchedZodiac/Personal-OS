@@ -31,6 +31,9 @@ export async function POST(request: NextRequest) {
       notes: parsed.notes,
       source: "receipt_photo",
       confidence: parsed.confidence,
+      signalKind: "purchase",
+      documentClassification: "expense_receipt",
+      promotionPreference: "manual_post",
       document: {
         source: "receipt_photo",
         externalId: `receipt:${Date.now()}`,
@@ -44,6 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       parsed,
       transaction: result.transaction,
+      signal: result.signal,
       reviewItems: result.reviewItems,
       message: parsed.message,
     });

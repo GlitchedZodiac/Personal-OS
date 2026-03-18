@@ -5,8 +5,9 @@ import {
   FINANCE_GMAIL_QUERY,
   FINANCE_GMAIL_SYNC_MINUTES,
 } from "@/lib/finance/constants";
-import { ingestFinanceCandidate, normalizeMerchantName } from "@/lib/finance/ingestion";
+import { ingestFinanceCandidate } from "@/lib/finance/ingestion";
 import { extractPdfText, isEncryptedPdf } from "@/lib/finance/pdf";
+import { normalizeMerchantName } from "@/lib/finance/pipeline-utils";
 import { getVaultSecret, upsertVaultSecret } from "@/lib/finance/vault";
 
 const GOOGLE_TOKEN_SECRET_KEY = "gmail:default:oauth-token";
@@ -474,9 +475,22 @@ function buildFinanceCandidateFromText(params: {
   const lower = `${params.subject} ${params.text}`.toLowerCase();
   const type = /refund|reembolso/.test(lower)
     ? "income"
-    : /salary|nomina|salario/.test(lower)
+    : /salary|nomina|salario|deposito|abono/.test(lower)
     ? "income"
+    : /transfer|transferencia|pse/.test(lower)
+    ? "transfer"
     : "expense";
+  const signalKind = /refund|reembolso/.test(lower)
+    ? "refund"
+    : /salary|nomina|salario|deposito|abono/.test(lower)
+    ? "income"
+    : /minimum due|minimo a pagar|payment due|statement|estado de cuenta|saldo total/.test(lower)
+    ? "bill_due"
+    : /transfer|transferencia|pse/.test(lower)
+    ? "transfer"
+    : /subscription|suscripcion|renewal|renovacion/.test(lower)
+    ? "subscription"
+    : "purchase";
 
   return {
     amount,
@@ -485,8 +499,10 @@ function buildFinanceCandidateFromText(params: {
     source: params.source,
     transactedAt: params.receivedAt,
     type,
+    signalKind,
     notes: `Imported from Gmail sender ${params.sender}`,
     isRecurring: /subscription|suscripcion|monthly|mensual/.test(lower),
+    promotionPreference: "source_policy" as const,
     document: params.document,
   } as const;
 }
@@ -500,7 +516,7 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
   const messageExternalId = `gmail:${full.id}`;
 
   if (!looksFinancial(`${subject} ${text}`)) {
-    return { documents: 0, transactions: 0, reviews: 0, upcoming: 0 };
+    return { documents: 0, signals: 0, promotedTransactions: 0, reviews: 0, upcoming: 0 };
   }
 
   const baseCandidate = buildFinanceCandidateFromText({
@@ -525,9 +541,9 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
   });
 
   const messageResult = await ingestFinanceCandidate(baseCandidate);
-  if (messageResult.document?.id) {
+  if (messageResult.signal?.documentId) {
     await upsertUpcomingPayment({
-      sourceDocumentId: messageResult.document.id,
+      sourceDocumentId: messageResult.signal.documentId,
       merchantId: messageResult.merchant?.id,
       description: baseCandidate.description,
       dueDate: extractDueDate(`${subject} ${text}`),
@@ -535,7 +551,8 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
     });
   }
 
-  let attachmentTransactionCount = 0;
+  let attachmentSignalCount = 0;
+  let attachmentPromotedCount = 0;
   let attachmentReviewCount = 0;
   let upcomingCount = 0;
 
@@ -574,7 +591,21 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
       source: "email_attachment",
       transactedAt: receivedAt,
       type: /refund|reembolso/i.test(extractedText) ? "income" : "expense",
+      signalKind: /minimum due|minimo a pagar|payment due|statement|estado de cuenta|saldo total/i.test(
+        extractedText
+      )
+        ? "bill_due"
+        : /refund|reembolso/i.test(extractedText)
+        ? "refund"
+        : /salary|nomina|salario|deposito|abono/i.test(extractedText)
+        ? "income"
+        : /transfer|transferencia|pse/i.test(extractedText)
+        ? "transfer"
+        : /subscription|suscripcion|renewal|renovacion/i.test(extractedText)
+        ? "subscription"
+        : "purchase",
       notes: `Attachment from ${sender}`,
+      promotionPreference: "source_policy",
       document: {
         source: "gmail_attachment",
         externalId: attachmentExternalId,
@@ -596,14 +627,15 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
       },
     });
 
-    attachmentTransactionCount += attachmentResult.transaction ? 1 : 0;
+    attachmentSignalCount += attachmentResult.signal ? 1 : 0;
+    attachmentPromotedCount += attachmentResult.transaction ? 1 : 0;
     attachmentReviewCount += attachmentResult.reviewItems.length;
-    if (attachmentResult.document?.id) {
+    if (attachmentResult.signal?.documentId) {
       const dueDate = extractDueDate(extractedText);
       if (dueDate) {
         upcomingCount += 1;
         await upsertUpcomingPayment({
-          sourceDocumentId: attachmentResult.document.id,
+          sourceDocumentId: attachmentResult.signal.documentId,
           merchantId: attachmentResult.merchant?.id,
           description: filename,
           dueDate,
@@ -615,13 +647,19 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
 
   return {
     documents: 1,
-    transactions: (messageResult.transaction ? 1 : 0) + attachmentTransactionCount,
+    signals: (messageResult.signal ? 1 : 0) + attachmentSignalCount,
+    promotedTransactions: (messageResult.transaction ? 1 : 0) + attachmentPromotedCount,
     reviews: messageResult.reviewItems.length + attachmentReviewCount,
     upcoming: upcomingCount + (extractDueDate(`${subject} ${text}`) ? 1 : 0),
   };
 }
 
-export async function syncGoogleFinanceMailbox(options?: { fullRescan?: boolean }) {
+export async function syncGoogleFinanceMailbox(options?: {
+  fullRescan?: boolean;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  mode?: "source_discovery" | "full";
+}) {
   const setup = getGoogleFinanceSetupStatus();
   if (!setup.configured) {
     throw new Error(setup.setupMessage || "Google finance setup is incomplete");
@@ -679,8 +717,19 @@ export async function syncGoogleFinanceMailbox(options?: { fullRescan?: boolean 
   }
 
   if (usedFallback || messageIds.length === 0) {
-    const afterDate = subMonths(new Date(), syncLookbackMonths);
-    const q = `after:${afterDate.toISOString().slice(0, 10)} ${FINANCE_GMAIL_QUERY}`;
+    const afterDate = options?.dateFrom
+      ? new Date(`${options.dateFrom}T00:00:00`)
+      : subMonths(new Date(), syncLookbackMonths);
+    const beforeDate = options?.dateTo
+      ? new Date(`${options.dateTo}T00:00:00`)
+      : null;
+    const q = [
+      `after:${afterDate.toISOString().slice(0, 10)}`,
+      beforeDate ? `before:${beforeDate.toISOString().slice(0, 10)}` : null,
+      FINANCE_GMAIL_QUERY,
+    ]
+      .filter(Boolean)
+      .join(" ");
     const list = await gmailFetch<GmailMessageListResponse>(
       accessToken,
       `messages?q=${encodeURIComponent(q)}&maxResults=75`
@@ -689,14 +738,16 @@ export async function syncGoogleFinanceMailbox(options?: { fullRescan?: boolean 
   }
 
   let documents = 0;
-  let transactions = 0;
+  let signals = 0;
+  let promotedTransactions = 0;
   let reviews = 0;
   let upcoming = 0;
 
   for (const message of messageIds) {
     const result = await processGmailMessage(accessToken, message as GmailMessage, connection.id);
     documents += result.documents;
-    transactions += result.transactions;
+    signals += result.signals;
+    promotedTransactions += result.promotedTransactions;
     reviews += result.reviews;
     upcoming += result.upcoming;
   }
@@ -718,7 +769,8 @@ export async function syncGoogleFinanceMailbox(options?: { fullRescan?: boolean 
   return {
     processedMessages: messageIds.length,
     documents,
-    transactions,
+    signals,
+    promotedTransactions,
     reviews,
     upcoming,
     usedFallback,

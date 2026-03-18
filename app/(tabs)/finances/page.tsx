@@ -23,6 +23,7 @@ import {
   BarChart3,
   Upload,
   Inbox,
+  Workflow,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -121,6 +122,19 @@ interface FinanceSummary {
     percentUsed: number;
     remaining: number;
   }>;
+  sourceCounts: {
+    total: number;
+    trusted: number;
+    ignored: number;
+    learning: number;
+  };
+  backfillCoverage: {
+    oldestSyncedDate?: string | null;
+    lastBackfillAt?: string | null;
+    lastSyncAt?: string | null;
+    documentsByMonth: Array<{ month: string; count: number }>;
+    errorCount: number;
+  };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -201,6 +215,11 @@ export default function FinancesPage() {
               <Upload className="h-4 w-4" />
             </button>
           </Link>
+          <Link href="/finances/sources">
+            <button className="p-2 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors">
+              <Workflow className="h-4 w-4" />
+            </button>
+          </Link>
           <Link href="/finances/transactions?action=add">
             <button className="p-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 transition-colors">
               <Plus className="h-4 w-4" />
@@ -233,6 +252,36 @@ export default function FinancesPage() {
       </div>
 
       <FinanceQuickCapture />
+
+      {summary?.backfillCoverage && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Backfill Audit</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Oldest sync:{" "}
+                  {summary.backfillCoverage.oldestSyncedDate
+                    ? new Date(summary.backfillCoverage.oldestSyncedDate).toLocaleDateString()
+                    : "not available"}
+                </p>
+              </div>
+              <div className="text-right text-xs text-muted-foreground">
+                <p>{summary.sourceCounts?.trusted || 0} trusted sources</p>
+                <p>{summary.sourceCounts?.learning || 0} still learning</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {(summary.backfillCoverage.documentsByMonth || []).slice(-4).map((month) => (
+                <div key={month.month} className="rounded-2xl border border-border/30 p-3">
+                  <p className="text-[10px] text-muted-foreground">{month.month}</p>
+                  <p className="mt-1 text-sm font-semibold">{month.count}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ═══ OVERVIEW TAB ═══ */}
       {tab === "overview" && (

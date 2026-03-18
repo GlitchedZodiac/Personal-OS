@@ -82,14 +82,17 @@ export function FinanceSettingsCard({
   const sync = async (fullRescan = false) => {
     setSyncing(true);
     try {
-      const res = await fetch("/api/finance/google/sync", {
+      const endpoint = fullRescan ? "/api/finance/google/rescan" : "/api/finance/google/sync";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullRescan }),
+        body: JSON.stringify(fullRescan ? { mode: "full" } : { fullRescan: false }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Sync failed");
-      toast.success(`Gmail sync complete: ${data.transactions} transaction(s) processed`);
+      toast.success(
+        `Gmail sync complete: ${data.documents ?? 0} docs, ${data.signals ?? 0} signals, ${data.promotedTransactions ?? 0} posted`
+      );
       fetchStatus();
     } catch (error) {
       console.error(error);

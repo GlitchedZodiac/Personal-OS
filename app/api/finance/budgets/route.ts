@@ -109,8 +109,25 @@ export async function GET(req: NextRequest) {
       prisma.financialTransaction.findMany({
         where: {
           transactedAt: { gte: monthStart, lte: monthEnd },
-          status: { notIn: ["duplicate", "ignored"] },
+          status: "posted",
+          reviewState: "resolved",
           excludedFromBudget: false,
+          OR: [
+            { sourceDocumentId: null },
+            {
+              sourceDocument: {
+                classification: {
+                  in: [
+                    "expense_receipt",
+                    "income_notice",
+                    "refund_notice",
+                    "transfer_notice",
+                    "subscription_notice",
+                  ],
+                },
+              },
+            },
+          ],
         },
         select: {
           amount: true,

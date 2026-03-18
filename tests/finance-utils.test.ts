@@ -10,6 +10,10 @@ import {
   normalizeMerchantName,
 } from "@/lib/finance/ingestion";
 import {
+  buildFinanceSourceIdentity,
+  inferFinanceDocumentClassification,
+} from "@/lib/finance/pipeline-utils";
+import {
   calculateBudgetRiskCards,
   calculateVendorConcentration,
 } from "@/lib/finance/reports";
@@ -61,6 +65,39 @@ describe("finance ingestion helpers", () => {
         "password_required",
       ])
     );
+  });
+
+  it("builds stable source identities from sender addresses", () => {
+    const identity = buildFinanceSourceIdentity({
+      source: "email",
+      sender: '"Spotify" <no-reply@spotify.com>',
+      subject: "Your receipt",
+    });
+
+    expect(identity.senderEmail).toBe("no-reply@spotify.com");
+    expect(identity.senderDomain).toBe("spotify.com");
+    expect(identity.sourceKey).toContain("spotify.com");
+  });
+
+  it("classifies promo noise as ignored instead of spend", () => {
+    const classification = inferFinanceDocumentClassification({
+      text: "Bogota flight deals you'll love. Fares from $48 this week only.",
+      subject: "Flight Deals You'll Love",
+    });
+
+    expect(classification.classification).toBe("ignored");
+    expect(classification.shouldIgnore).toBe(true);
+  });
+
+  it("classifies bill reminders as bill notices, not purchases", () => {
+    const classification = inferFinanceDocumentClassification({
+      text: "Minimum due COP 320.000 payment due 2026-03-25 statement balance COP 900.000",
+      subject: "Your statement is ready",
+    });
+
+    expect(classification.classification).toBe("statement");
+    expect(classification.signalKind).toBe("statement");
+    expect(classification.defaultDisposition).toBe("bill_notice");
   });
 });
 
