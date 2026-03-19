@@ -39,7 +39,6 @@ function looksPromotionalSubject(value: string) {
 
 function isMeaningfulPreview(signal: PreviewSignal) {
   const hasAmount = signal.amount != null || signal.sourceAmount != null;
-  const hasLabeledAmount = hasAmount && Boolean(signal.amountExtractionLabel);
   const hasKnownSubtype = signal.messageSubtype !== "unknown";
   const hasResolution = ["settled", "failed", "rejected", "refunded"].includes(
     signal.settlementStatus
@@ -55,13 +54,12 @@ function isMeaningfulPreview(signal: PreviewSignal) {
     !hasKnownSubtype &&
     !hasMeaningfulKind &&
     !hasGroupingRef &&
-    !hasLabeledAmount
+    !subjectLooksTransactional
   ) {
     return false;
   }
 
   return (
-    hasLabeledAmount ||
     hasKnownSubtype ||
     hasResolution ||
     hasMeaningfulKind ||
