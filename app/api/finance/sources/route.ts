@@ -43,11 +43,16 @@ function isMeaningfulPreview(signal: PreviewSignal) {
   const hasResolution = ["settled", "failed", "rejected", "refunded"].includes(
     signal.settlementStatus
   );
-  const hasMeaningfulKind = ["bill_due", "statement", "income", "refund"].includes(signal.kind);
   const hasGroupingRef = Boolean(signal.orderRef || signal.chargeRef);
   const subjectText = `${signal.document?.subject || ""} ${signal.description || ""}`.trim();
   const subjectLooksTransactional = looksTransactionalSubject(subjectText);
   const subjectLooksPromotional = looksPromotionalSubject(subjectText);
+  const hasMeaningfulKind =
+    ["bill_due", "statement", "income"].includes(signal.kind) ||
+    (signal.kind === "refund" &&
+      (signal.messageSubtype === "refund" ||
+        signal.settlementStatus === "refunded" ||
+        Boolean(signal.chargeRef)));
 
   if (
     subjectLooksPromotional &&
