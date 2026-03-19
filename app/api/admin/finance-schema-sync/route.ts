@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { withRequestPrisma } from "@/lib/prisma-request";
 
 const STATEMENT_GROUPS: Record<string, string[]> = {
   transactions: [
@@ -99,13 +99,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unknown schema sync group" }, { status: 400 });
     }
 
-    await prisma.$executeRawUnsafe(`SET statement_timeout TO 0`);
+    return await withRequestPrisma(async (prisma) => {
+      await prisma.$executeRawUnsafe(`SET statement_timeout TO 0`);
 
-    for (const statement of statements) {
-      await prisma.$executeRawUnsafe(statement);
-    }
+      for (const statement of statements) {
+        await prisma.$executeRawUnsafe(statement);
+      }
 
-    return NextResponse.json({ success: true, group, applied: statements.length });
+      return NextResponse.json({ success: true, group, applied: statements.length });
+    });
   } catch (error) {
     console.error("Finance schema sync error:", error);
     return NextResponse.json({ error: "Failed to sync finance schema" }, { status: 500 });

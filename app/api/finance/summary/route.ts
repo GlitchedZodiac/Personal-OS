@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import {
   endOfDay,
   endOfMonth,
@@ -11,6 +10,7 @@ import {
   subMonths,
 } from "date-fns";
 import { getFinanceReportSummary } from "@/lib/finance/reports";
+import { withRequestPrisma } from "@/lib/prisma-request";
 
 const ACTIVE_TRANSACTION_FILTER: Prisma.FinancialTransactionWhereInput = {
   excludedFromBudget: false,
@@ -49,7 +49,8 @@ export async function GET(req: NextRequest) {
     const prevMonthStart = startOfMonth(subMonths(currentMonth, 1));
     const prevMonthEnd = endOfMonth(subMonths(currentMonth, 1));
 
-    const accounts = await prisma.financialAccount.findMany({
+    return await withRequestPrisma(async (db) => {
+      const accounts = await db.financialAccount.findMany({
       where: { isActive: true },
       select: {
         id: true,
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const thisMonthIncome = await prisma.financialTransaction.aggregate({
+      const thisMonthIncome = await db.financialTransaction.aggregate({
       where: {
         transactedAt: { gte: monthStart, lte: monthEnd },
         type: "income",
@@ -74,7 +75,7 @@ export async function GET(req: NextRequest) {
       _count: true,
     });
 
-    const thisMonthExpenses = await prisma.financialTransaction.aggregate({
+      const thisMonthExpenses = await db.financialTransaction.aggregate({
       where: {
         transactedAt: { gte: monthStart, lte: monthEnd },
         type: "expense",
@@ -84,7 +85,7 @@ export async function GET(req: NextRequest) {
       _count: true,
     });
 
-    const prevMonthIncome = await prisma.financialTransaction.aggregate({
+      const prevMonthIncome = await db.financialTransaction.aggregate({
       where: {
         transactedAt: { gte: prevMonthStart, lte: prevMonthEnd },
         type: "income",
@@ -93,7 +94,7 @@ export async function GET(req: NextRequest) {
       _sum: { amount: true },
     });
 
-    const prevMonthExpenses = await prisma.financialTransaction.aggregate({
+      const prevMonthExpenses = await db.financialTransaction.aggregate({
       where: {
         transactedAt: { gte: prevMonthStart, lte: prevMonthEnd },
         type: "expense",
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest) {
       _sum: { amount: true },
     });
 
-    const todayExpenses = await prisma.financialTransaction.aggregate({
+      const todayExpenses = await db.financialTransaction.aggregate({
       where: {
         transactedAt: { gte: startOfDay(now), lte: endOfDay(now) },
         type: "expense",
@@ -112,7 +113,7 @@ export async function GET(req: NextRequest) {
       _count: true,
     });
 
-    const categoryBreakdown = await prisma.financialTransaction.groupBy({
+      const categoryBreakdown = await db.financialTransaction.groupBy({
       by: ["category"],
       where: {
         transactedAt: { gte: monthStart, lte: monthEnd },
@@ -124,7 +125,7 @@ export async function GET(req: NextRequest) {
       orderBy: { _sum: { amount: "asc" } },
     });
 
-    const recentTransactions = await prisma.financialTransaction.findMany({
+      const recentTransactions = await db.financialTransaction.findMany({
       where: ACTIVE_TRANSACTION_FILTER,
       orderBy: { transactedAt: "desc" },
       take: 8,
@@ -144,13 +145,13 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const recurringTransactions = await prisma.recurringTransaction.findMany({
+      const recurringTransactions = await db.recurringTransaction.findMany({
       where: { isActive: true },
       orderBy: { nextDueDate: "asc" },
       take: 8,
     });
 
-    const savingsGoals = await prisma.savingsGoal.findMany({
+      const savingsGoals = await db.savingsGoal.findMany({
       where: { isCompleted: false },
       orderBy: { createdAt: "asc" },
       take: 8,
@@ -163,7 +164,7 @@ export async function GET(req: NextRequest) {
     }> = [];
     for (let i = 0; i < 7; i += 1) {
       const day = subDays(now, i);
-      const result = await prisma.financialTransaction.aggregate({
+        const result = await db.financialTransaction.aggregate({
         where: {
           transactedAt: { gte: startOfDay(day), lte: endOfDay(day) },
           type: "expense",
@@ -179,8 +180,8 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const pendingReviews = await prisma.financeReviewItem.count({ where: { status: "pending" } });
-    const upcomingPayments = await prisma.upcomingPayment.findMany({
+      const pendingReviews = await db.financeReviewItem.count({ where: { status: "pending" } });
+      const upcomingPayments = await db.upcomingPayment.findMany({
       where: {
         dueDate: { gte: now },
         status: { in: ["detected", "confirmed"] },
@@ -190,37 +191,37 @@ export async function GET(req: NextRequest) {
       take: 5,
     });
 
-    const reportSummary = await getFinanceReportSummary(currentMonth);
-    const pendingSignals = await prisma.financeSignal.count({
+      const reportSummary = await getFinanceReportSummary(currentMonth, db);
+      const pendingSignals = await db.financeSignal.count({
       where: { promotionState: "pending_review" },
     });
-    const ignoredSignals = await prisma.financeSignal.count({
+      const ignoredSignals = await db.financeSignal.count({
       where: { promotionState: { in: ["ignored", "dismissed"] } },
     });
-    const provisionalSignals = await prisma.financeSignal.count({
+      const provisionalSignals = await db.financeSignal.count({
       where: { settlementStatus: "provisional" },
     });
-    const failedSignals = await prisma.financeSignal.count({
+      const failedSignals = await db.financeSignal.count({
       where: { settlementStatus: { in: ["failed", "rejected"] } },
     });
-    const totalSources = await prisma.financeSource.count();
-    const trustedSources = await prisma.financeSource.count({
+      const totalSources = await db.financeSource.count();
+      const trustedSources = await db.financeSource.count({
       where: { trustLevel: "trusted" },
     });
-    const ignoredSources = await prisma.financeSource.count({
+      const ignoredSources = await db.financeSource.count({
       where: { defaultDisposition: "always_ignore" },
     });
-    const mailboxConnection = await prisma.googleMailboxConnection.findUnique({
+      const mailboxConnection = await db.googleMailboxConnection.findUnique({
       where: { id: "default" },
     });
-    const errorDocuments = await prisma.financeDocument.count({
+      const errorDocuments = await db.financeDocument.count({
       where: { status: "error" },
     });
-    const ignoredDocuments = await prisma.financeDocument.count({
+      const ignoredDocuments = await db.financeDocument.count({
       where: { classification: "ignored" },
     });
 
-    const budget = await prisma.budget.findUnique({
+      const budget = await db.budget.findUnique({
       where: {
         month_year: {
           month: currentMonth.getMonth() + 1,
@@ -246,82 +247,83 @@ export async function GET(req: NextRequest) {
     const prevIncome = Math.abs(prevMonthIncome._sum.amount || 0);
     const prevExpenses = Math.abs(prevMonthExpenses._sum.amount || 0);
 
-    const totalBudgeted =
-      budget?.items
-        .filter((item) => item.category.type === "expense")
-        .reduce((sum, item) => sum + item.planned, 0) || 0;
+      const totalBudgeted =
+        budget?.items
+          .filter((item) => item.category.type === "expense")
+          .reduce((sum, item) => sum + item.planned, 0) || 0;
 
-    return NextResponse.json({
-      accounts,
-      overview: {
-        netWorth,
-        totalDebt,
-        income,
-        expenses,
-        savings: income - expenses,
-        todaySpent: Math.abs(todayExpenses._sum.amount || 0),
-        todayTransactions: todayExpenses._count,
-        pendingReviews,
-        pendingSignals,
-        ignoredSignals,
-        provisionalSignals,
-        failedSignals,
-      },
-      comparison: {
-        incomeChange: prevIncome > 0 ? Math.round(((income - prevIncome) / prevIncome) * 100) : 0,
-        expenseChange:
-          prevExpenses > 0 ? Math.round(((expenses - prevExpenses) / prevExpenses) * 100) : 0,
-      },
-      budget: {
-        totalBudgeted,
-        totalSpent: expenses,
-        remaining: totalBudgeted - expenses,
-        percentUsed: totalBudgeted > 0 ? Math.round((expenses / totalBudgeted) * 100) : 0,
-      },
-      categoryBreakdown: categoryBreakdown.map((category) => ({
-        category: category.category,
-        amount: Math.abs(category._sum.amount || 0),
-        count: category._count,
-      })),
-      recentTransactions,
-      recurringTransactions,
-      savingsGoals,
-      dailySpending: last7DaysSpending.reverse(),
-      upcomingPayments: upcomingPayments.map((payment) => ({
-        id: payment.id,
-        description: payment.description,
-        amount: payment.amount,
-        dueDate: payment.dueDate,
-        status: payment.status,
-        merchantName: payment.merchant?.name || null,
-      })),
-      topMerchants: reportSummary.topMerchants,
-      budgetRisk: reportSummary.budgetRisk,
-      possibleSavings: reportSummary.possibleSavings,
-      sourceCounts: {
-        total: totalSources,
-        trusted: trustedSources,
-        ignored: ignoredSources,
-        learning: Math.max(totalSources - trustedSources - ignoredSources, 0),
-        provisionalSignals,
-        failedSignals,
-      },
-      pendingCounts: {
-        reviews: pendingReviews,
-        signals: pendingSignals,
-        upcomingBills: upcomingPayments.length,
-      },
-      ignoredCounts: {
-        signals: ignoredSignals,
-        documents: ignoredDocuments,
-      },
-      backfillCoverage: {
-        oldestSyncedDate: null,
-        lastBackfillAt: mailboxConnection?.lastBackfillAt || null,
-        lastSyncAt: mailboxConnection?.lastSyncAt || null,
-        documentsByMonth: [],
-        errorCount: errorDocuments,
-      },
+      return NextResponse.json({
+        accounts,
+        overview: {
+          netWorth,
+          totalDebt,
+          income,
+          expenses,
+          savings: income - expenses,
+          todaySpent: Math.abs(todayExpenses._sum.amount || 0),
+          todayTransactions: todayExpenses._count,
+          pendingReviews,
+          pendingSignals,
+          ignoredSignals,
+          provisionalSignals,
+          failedSignals,
+        },
+        comparison: {
+          incomeChange: prevIncome > 0 ? Math.round(((income - prevIncome) / prevIncome) * 100) : 0,
+          expenseChange:
+            prevExpenses > 0 ? Math.round(((expenses - prevExpenses) / prevExpenses) * 100) : 0,
+        },
+        budget: {
+          totalBudgeted,
+          totalSpent: expenses,
+          remaining: totalBudgeted - expenses,
+          percentUsed: totalBudgeted > 0 ? Math.round((expenses / totalBudgeted) * 100) : 0,
+        },
+        categoryBreakdown: categoryBreakdown.map((category) => ({
+          category: category.category,
+          amount: Math.abs(category._sum.amount || 0),
+          count: category._count,
+        })),
+        recentTransactions,
+        recurringTransactions,
+        savingsGoals,
+        dailySpending: last7DaysSpending.reverse(),
+        upcomingPayments: upcomingPayments.map((payment) => ({
+          id: payment.id,
+          description: payment.description,
+          amount: payment.amount,
+          dueDate: payment.dueDate,
+          status: payment.status,
+          merchantName: payment.merchant?.name || null,
+        })),
+        topMerchants: reportSummary.topMerchants,
+        budgetRisk: reportSummary.budgetRisk,
+        possibleSavings: reportSummary.possibleSavings,
+        sourceCounts: {
+          total: totalSources,
+          trusted: trustedSources,
+          ignored: ignoredSources,
+          learning: Math.max(totalSources - trustedSources - ignoredSources, 0),
+          provisionalSignals,
+          failedSignals,
+        },
+        pendingCounts: {
+          reviews: pendingReviews,
+          signals: pendingSignals,
+          upcomingBills: upcomingPayments.length,
+        },
+        ignoredCounts: {
+          signals: ignoredSignals,
+          documents: ignoredDocuments,
+        },
+        backfillCoverage: {
+          oldestSyncedDate: null,
+          lastBackfillAt: mailboxConnection?.lastBackfillAt || null,
+          lastSyncAt: mailboxConnection?.lastSyncAt || null,
+          documentsByMonth: [],
+          errorCount: errorDocuments,
+        },
+      });
     });
   } catch (error) {
     console.error("Error fetching financial summary:", error);
