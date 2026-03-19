@@ -27,94 +27,80 @@ export async function GET() {
         },
       });
 
-      const pendingSignals = await db.financeSignal.findMany({
-        where: {
-          promotionState: "pending_review",
-          settlementStatus: { notIn: ["ignored"] },
-          kind: { in: ["purchase", "subscription", "income", "refund", "transfer", "unknown"] },
-        },
-        orderBy: [{ transactedAt: "desc" }, { createdAt: "desc" }],
+      const pendingReviewItems = await db.financeReviewItem.findMany({
+        where: { status: "pending", signalId: { not: null } },
+        orderBy: { createdAt: "desc" },
         take: 24,
         select: {
           id: true,
-          kind: true,
-          messageSubtype: true,
-          settlementStatus: true,
-          description: true,
-          amount: true,
-          sourceAmount: true,
-          sourceCurrency: true,
-          category: true,
-          promotionState: true,
-          confidence: true,
-          dueDate: true,
-          fxRate: true,
-          requiresCurrencyReview: true,
-          source: {
+          signal: {
             select: {
               id: true,
-              label: true,
-              senderEmail: true,
-              senderDomain: true,
-              trustLevel: true,
-              defaultDisposition: true,
-              documentCount: true,
-              signalCount: true,
-            },
-          },
-          document: {
-            select: {
-              id: true,
-              sender: true,
-              subject: true,
-              filename: true,
-              classification: true,
+              kind: true,
               messageSubtype: true,
-              processingStage: true,
-              status: true,
-              passwordSecretKey: true,
+              settlementStatus: true,
+              description: true,
+              amount: true,
+              sourceAmount: true,
+              sourceCurrency: true,
+              category: true,
+              promotionState: true,
+              confidence: true,
+              dueDate: true,
+              fxRate: true,
+              requiresCurrencyReview: true,
+              source: {
+                select: {
+                  id: true,
+                  label: true,
+                  senderEmail: true,
+                  senderDomain: true,
+                  trustLevel: true,
+                  defaultDisposition: true,
+                  documentCount: true,
+                  signalCount: true,
+                },
+              },
+              document: {
+                select: {
+                  id: true,
+                  sender: true,
+                  subject: true,
+                  filename: true,
+                  classification: true,
+                  messageSubtype: true,
+                  processingStage: true,
+                  status: true,
+                  passwordSecretKey: true,
+                },
+              },
+              merchant: { select: { id: true, name: true } },
             },
           },
-          merchant: { select: { id: true, name: true } },
         },
       });
 
-      const upcomingBills = await db.financeSignal.findMany({
+      const pendingSignals = pendingReviewItems
+        .map((item) => item.signal)
+        .filter((signal): signal is NonNullable<typeof pendingReviewItems[number]["signal"]> => Boolean(signal));
+
+      const upcomingPayments = await db.upcomingPayment.findMany({
         where: {
-          kind: { in: ["bill_due", "statement", "subscription"] },
-          settlementStatus: { notIn: ["ignored", "failed", "rejected"] },
-          status: { not: "ignored" },
+          dueDate: { gte: new Date() },
+          status: { in: ["detected", "confirmed"] },
         },
-        orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+        orderBy: { dueDate: "asc" },
         take: 12,
         select: {
           id: true,
-          kind: true,
-          messageSubtype: true,
-          settlementStatus: true,
           description: true,
           amount: true,
-          sourceAmount: true,
-          sourceCurrency: true,
-          category: true,
-          promotionState: true,
-          confidence: true,
           dueDate: true,
-          fxRate: true,
-          requiresCurrencyReview: true,
-          source: {
-            select: {
-              id: true,
-              label: true,
-              senderEmail: true,
-              senderDomain: true,
-              trustLevel: true,
-              defaultDisposition: true,
-              documentCount: true,
-              signalCount: true,
-            },
-          },
-          document: {
+          status: true,
+          confidence: true,
+          currency: true,
+          merchant: { select: { id: true, name: true } },
+          sourceDocument: {
             select: {
               id: true,
               sender: true,
@@ -125,11 +111,52 @@ export async function GET() {
               processingStage: true,
               status: true,
               passwordSecretKey: true,
+              sourceRef: {
+                select: {
+                  id: true,
+                  label: true,
+                  senderEmail: true,
+                  senderDomain: true,
+                  trustLevel: true,
+                  defaultDisposition: true,
+                  documentCount: true,
+                  signalCount: true,
+                },
+              },
             },
           },
-          merchant: { select: { id: true, name: true } },
         },
       });
+
+      const upcomingBills = upcomingPayments.map((payment) => ({
+        id: payment.id,
+        kind: "bill_due",
+        messageSubtype: payment.sourceDocument?.messageSubtype || "bill_available",
+        settlementStatus: payment.status === "confirmed" ? "settled" : "provisional",
+        description: payment.description,
+        amount: payment.amount,
+        sourceAmount: payment.amount,
+        sourceCurrency: payment.currency,
+        category: null,
+        promotionState: payment.status === "confirmed" ? "user_confirmed" : "pending_review",
+        confidence: payment.confidence,
+        dueDate: payment.dueDate,
+        fxRate: null,
+        requiresCurrencyReview: payment.currency !== "COP",
+        source: payment.sourceDocument?.sourceRef || null,
+        document: {
+          id: payment.sourceDocument?.id || payment.id,
+          sender: payment.sourceDocument?.sender || null,
+          subject: payment.sourceDocument?.subject || payment.description,
+          filename: payment.sourceDocument?.filename || null,
+          classification: payment.sourceDocument?.classification || "bill_notice",
+          messageSubtype: payment.sourceDocument?.messageSubtype || "bill_available",
+          processingStage: payment.sourceDocument?.processingStage || "review",
+          status: payment.sourceDocument?.status || "processed",
+          passwordSecretKey: payment.sourceDocument?.passwordSecretKey || null,
+        },
+        merchant: payment.merchant,
+      }));
 
       const ignoredNoise = await db.financeDocument.findMany({
         where: { classification: "ignored" },

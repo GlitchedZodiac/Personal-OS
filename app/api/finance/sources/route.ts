@@ -37,36 +37,6 @@ export async function GET() {
       });
 
       const sourceIds = sources.map((source) => source.id);
-      const signals = sourceIds.length
-        ? await prisma.financeSignal.findMany({
-            where: { sourceId: { in: sourceIds } },
-            orderBy: { createdAt: "desc" },
-            select: {
-              id: true,
-              sourceId: true,
-              kind: true,
-              messageSubtype: true,
-              settlementStatus: true,
-              description: true,
-              amount: true,
-              sourceAmount: true,
-              sourceCurrency: true,
-              fxRate: true,
-              requiresCurrencyReview: true,
-              promotionState: true,
-              category: true,
-              createdAt: true,
-              document: {
-                select: {
-                  subject: true,
-                  sender: true,
-                },
-              },
-            },
-            take: 160,
-          })
-        : [];
-
       const rules = sourceIds.length
         ? await prisma.financeRule.findMany({
             where: { isActive: true, sourceId: { in: sourceIds } },
@@ -85,16 +55,6 @@ export async function GET() {
           })
         : [];
 
-      const signalsBySource = new Map<string, typeof signals>();
-      for (const signal of signals) {
-        if (!signal.sourceId) continue;
-        const bucket = signalsBySource.get(signal.sourceId) || [];
-        if (bucket.length < 4) {
-          bucket.push(signal);
-          signalsBySource.set(signal.sourceId, bucket);
-        }
-      }
-
       const rulesBySource = new Map<string, typeof rules>();
       for (const rule of rules) {
         if (!rule.sourceId) continue;
@@ -108,11 +68,9 @@ export async function GET() {
       return NextResponse.json({
         sources: sources.map((source) => ({
           ...source,
-          signals: signalsBySource.get(source.id) || [],
+          signals: [],
           rules: rulesBySource.get(source.id) || [],
-          exampleSubtypes: [
-            ...new Set((signalsBySource.get(source.id) || []).map((signal) => signal.messageSubtype)),
-          ].filter(Boolean),
+          exampleSubtypes: [],
         })),
       });
     });

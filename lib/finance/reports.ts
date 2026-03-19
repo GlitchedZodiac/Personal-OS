@@ -56,22 +56,6 @@ const ACTIVE_EXPENSE_FILTER: Prisma.FinancialTransactionWhereInput = {
   status: "posted",
   reviewState: "resolved",
   settlementStatus: { notIn: ["provisional", "failed", "rejected", "ignored"] },
-  OR: [
-    { sourceDocumentId: null },
-    {
-      sourceDocument: {
-        classification: {
-          in: [
-            "expense_receipt",
-            "income_notice",
-            "refund_notice",
-            "transfer_notice",
-            "subscription_notice",
-          ],
-        },
-      },
-    },
-  ],
 };
 
 export async function getFinanceReportSummary(
