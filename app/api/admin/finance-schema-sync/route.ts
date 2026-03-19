@@ -70,6 +70,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    await prisma.$executeRawUnsafe(`SET statement_timeout TO 0`);
+
     for (const statement of STATEMENTS) {
       await prisma.$executeRawUnsafe(statement);
     }
