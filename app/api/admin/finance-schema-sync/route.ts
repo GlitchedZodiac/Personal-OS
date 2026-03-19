@@ -16,6 +16,8 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "chargeRef" TEXT`,
   `CREATE INDEX IF NOT EXISTS "financial_transactions_settlementStatus_idx" ON "financial_transactions" ("settlementStatus")`,
   `CREATE INDEX IF NOT EXISTS "financial_transactions_groupKey_idx" ON "financial_transactions" ("groupKey")`,
+  `CREATE INDEX IF NOT EXISTS "financial_transactions_activity_window_idx" ON "financial_transactions" ("type", "status", "reviewState", "settlementStatus", "transactedAt" DESC)`,
+  `CREATE INDEX IF NOT EXISTS "financial_transactions_recent_active_idx" ON "financial_transactions" ("transactedAt" DESC) WHERE "excludedFromBudget" = FALSE AND "status" = 'posted' AND "reviewState" = 'resolved'`,
   ],
 
   documents: [
@@ -25,6 +27,7 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
   `ALTER TABLE "finance_documents" ADD COLUMN IF NOT EXISTS "chargeRef" TEXT`,
   `CREATE INDEX IF NOT EXISTS "finance_documents_messageSubtype_idx" ON "finance_documents" ("messageSubtype")`,
   `CREATE INDEX IF NOT EXISTS "finance_documents_groupKey_idx" ON "finance_documents" ("groupKey")`,
+  `CREATE INDEX IF NOT EXISTS "finance_documents_classification_receivedAt_idx" ON "finance_documents" ("classification", "receivedAt" DESC)`,
   ],
 
   sources: [
@@ -34,6 +37,8 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
   `ALTER TABLE "finance_sources" ADD COLUMN IF NOT EXISTS "provisionalCount" INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE "finance_sources" ADD COLUMN IF NOT EXISTS "settledCount" INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE "finance_sources" ADD COLUMN IF NOT EXISTS "failedCount" INTEGER NOT NULL DEFAULT 0`,
+  `CREATE INDEX IF NOT EXISTS "finance_sources_trustLevel_defaultDisposition_idx" ON "finance_sources" ("trustLevel", "defaultDisposition")`,
+  `CREATE INDEX IF NOT EXISTS "finance_sources_documentCount_lastSeenAt_idx" ON "finance_sources" ("documentCount" DESC, "lastSeenAt" DESC)`,
   ],
 
   signals: [
@@ -52,6 +57,12 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
   `ALTER TABLE "finance_signals" ADD COLUMN IF NOT EXISTS "chargeRef" TEXT`,
   `CREATE INDEX IF NOT EXISTS "finance_signals_messageSubtype_settlementStatus_idx" ON "finance_signals" ("messageSubtype", "settlementStatus")`,
   `CREATE INDEX IF NOT EXISTS "finance_signals_groupKey_idx" ON "finance_signals" ("groupKey")`,
+  `CREATE INDEX IF NOT EXISTS "finance_signals_sourceId_promotionState_idx" ON "finance_signals" ("sourceId", "promotionState")`,
+  `CREATE INDEX IF NOT EXISTS "finance_signals_sourceId_createdAt_idx" ON "finance_signals" ("sourceId", "createdAt" DESC)`,
+  `CREATE INDEX IF NOT EXISTS "finance_signals_promotionState_kind_createdAt_idx" ON "finance_signals" ("promotionState", "kind", "createdAt" DESC)`,
+  `CREATE INDEX IF NOT EXISTS "finance_signals_kind_status_dueDate_idx" ON "finance_signals" ("kind", "status", "dueDate" ASC)`,
+  `CREATE INDEX IF NOT EXISTS "finance_signals_transactedAt_idx" ON "finance_signals" ("transactedAt" DESC)`,
+  `CREATE INDEX IF NOT EXISTS "finance_signals_dueDate_idx" ON "finance_signals" ("dueDate" ASC)`,
   ],
 
   exchange: [
