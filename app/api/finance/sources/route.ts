@@ -11,9 +11,11 @@ type PreviewSignal = {
   sourceAmount: number | null;
   sourceCurrency: string | null;
   fxRate: number | null;
+  amountExtractionLabel: string | null;
   requiresCurrencyReview: boolean;
   promotionState: string;
   category: string | null;
+  dueDate: Date | null;
   groupKey: string | null;
   orderRef: string | null;
   chargeRef: string | null;
@@ -23,16 +25,50 @@ type PreviewSignal = {
   } | null;
 };
 
+function looksTransactionalSubject(value: string) {
+  return /(order|ordered|shipped|receipt|statement|invoice|payment|paid|bill|subscription|charge|transaction|factur|operaci[oó]n|compra|pedido|cobro|minim|minimo|minimum|due)/i.test(
+    value
+  );
+}
+
+function looksPromotionalSubject(value: string) {
+  return /(save|winner|contest|deal|deals|hours left|few days|vale la pena|you'll love|tips of the month|begun|started|guide|travel deal|lo nuevo)/i.test(
+    value
+  );
+}
+
 function isMeaningfulPreview(signal: PreviewSignal) {
   const hasAmount = signal.amount != null || signal.sourceAmount != null;
+  const hasLabeledAmount = hasAmount && Boolean(signal.amountExtractionLabel);
   const hasKnownSubtype = signal.messageSubtype !== "unknown";
   const hasResolution = ["settled", "failed", "rejected", "refunded"].includes(
     signal.settlementStatus
   );
   const hasMeaningfulKind = ["bill_due", "statement", "income", "refund"].includes(signal.kind);
   const hasGroupingRef = Boolean(signal.groupKey || signal.orderRef || signal.chargeRef);
+  const subjectText = `${signal.document?.subject || ""} ${signal.description || ""}`.trim();
+  const subjectLooksTransactional = looksTransactionalSubject(subjectText);
+  const subjectLooksPromotional = looksPromotionalSubject(subjectText);
 
-  return hasAmount || hasKnownSubtype || hasResolution || hasMeaningfulKind || hasGroupingRef;
+  if (
+    subjectLooksPromotional &&
+    !hasKnownSubtype &&
+    !hasMeaningfulKind &&
+    !hasGroupingRef &&
+    !hasLabeledAmount
+  ) {
+    return false;
+  }
+
+  return (
+    hasLabeledAmount ||
+    hasKnownSubtype ||
+    hasResolution ||
+    hasMeaningfulKind ||
+    hasGroupingRef ||
+    signal.dueDate != null ||
+    (hasAmount && subjectLooksTransactional)
+  );
 }
 
 export async function GET() {
@@ -128,9 +164,11 @@ export async function GET() {
                   sourceAmount: true,
                   sourceCurrency: true,
                   fxRate: true,
+                  amountExtractionLabel: true,
                   requiresCurrencyReview: true,
                   promotionState: true,
                   category: true,
+                  dueDate: true,
                   groupKey: true,
                   orderRef: true,
                   chargeRef: true,
