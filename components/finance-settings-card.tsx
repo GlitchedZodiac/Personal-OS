@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { Loader2, Mail, RefreshCw, Unplug, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { HelpTooltip } from "@/components/help-tooltip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTimeLabel } from "@/lib/date-utils";
+import { FINANCE_HELP } from "@/lib/finance/help";
 import type { AppSettings } from "@/lib/settings";
 
 interface FinanceSettingsCardProps {
@@ -248,17 +250,23 @@ export function FinanceSettingsCard({
                 )}
               </div>
               <div className="flex gap-2">
-                <Button onClick={() => sync(false)} disabled={syncing} className="flex-1">
-                  {syncing ? (
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                  )}
-                  Sync Now
-                </Button>
-                <Button onClick={() => sync(true)} disabled={syncing} variant="outline">
-                  Full Re-scan
-                </Button>
+                <div className="flex flex-1 items-center gap-1">
+                  <Button onClick={() => sync(false)} disabled={syncing} className="flex-1">
+                    {syncing ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    Sync Now
+                  </Button>
+                  <HelpTooltip content={FINANCE_HELP.syncNow} />
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button onClick={() => sync(true)} disabled={syncing} variant="outline">
+                    Full Re-scan
+                  </Button>
+                  <HelpTooltip content={FINANCE_HELP.fullRescan} />
+                </div>
               </div>
               <Button onClick={disconnect} variant="ghost" size="sm" className="w-full text-muted-foreground">
                 <Unplug className="h-3 w-3 mr-1.5" />

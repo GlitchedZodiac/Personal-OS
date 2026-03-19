@@ -7,7 +7,13 @@ import {
 } from "@/lib/finance/constants";
 import { ingestFinanceCandidate } from "@/lib/finance/ingestion";
 import { extractPdfText, isEncryptedPdf } from "@/lib/finance/pdf";
-import { coerceValidDate, extractDueDateFromText, normalizeMerchantName } from "@/lib/finance/pipeline-utils";
+import {
+  coerceValidDate,
+  extractDueDateFromText,
+  inferFinanceMessageSubtype,
+  normalizeMerchantName,
+} from "@/lib/finance/pipeline-utils";
+import { extractFinanceMoney } from "@/lib/finance/money";
 import { getVaultSecret, upsertVaultSecret } from "@/lib/finance/vault";
 
 const GOOGLE_TOKEN_SECRET_KEY = "gmail:default:oauth-token";
@@ -178,18 +184,10 @@ function extractSenderName(value: string) {
   return value.split("@")[0]?.trim() || value;
 }
 
-function extractAmount(text: string) {
-  const matches = text.match(/(?:COP|\$)?\s*-?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?/g) || [];
-  const values = matches
-    .map((value) => {
-      const normalized = value.replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
-      const amount = Number(normalized);
-      return Number.isFinite(amount) ? amount : null;
-    })
-    .filter((value): value is number => value !== null);
-
-  if (values.length === 0) return null;
-  return Math.max(...values);
+function extractSenderDomainFromHeader(value: string) {
+  const match = value.match(/<([^>]+)>/);
+  const email = match?.[1] || value;
+  return email.split("@")[1]?.replace(/>$/, "").trim().toLowerCase() || null;
 }
 
 function extractDueDate(text: string) {
@@ -461,8 +459,18 @@ function buildFinanceCandidateFromText(params: {
 }) {
   const merchantName = extractSenderName(params.sender);
   const description = params.subject || params.text.split(".")[0] || merchantName;
-  const amount = extractAmount(`${params.subject} ${params.text}`);
+  const money = extractFinanceMoney({
+    text: `${params.subject} ${params.text}`,
+    senderDomain: extractSenderDomainFromHeader(params.sender),
+    sourceCountryHint: params.sender.includes(".co") ? "CO" : null,
+    sourceLocaleHint: params.sender.includes(".co") ? "es-CO" : null,
+    sourceCurrencyHint: params.sender.includes(".co") ? "COP" : null,
+  });
   const lower = `${params.subject} ${params.text}`.toLowerCase();
+  const messageSubtype = inferFinanceMessageSubtype({
+    text: params.text,
+    subject: params.subject,
+  });
   const type = /refund|reembolso/.test(lower)
     ? "income"
     : /salary|nomina|salario|deposito|abono/.test(lower)
@@ -483,13 +491,15 @@ function buildFinanceCandidateFromText(params: {
     : "purchase";
 
   return {
-    amount,
+    amount: money.sourceAmount,
+    currency: money.sourceCurrency || undefined,
     description: description.slice(0, 180),
     merchant: merchantName,
     source: params.source,
     transactedAt: params.receivedAt,
     type,
     signalKind,
+    messageSubtype,
     notes: `Imported from Gmail sender ${params.sender}`,
     isRecurring: /subscription|suscripcion|monthly|mensual/.test(lower),
     promotionPreference: "source_policy" as const,
@@ -539,7 +549,7 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
       merchantId: messageResult.merchant?.id,
       description: baseCandidate.description,
       dueDate: extractDueDate(`${subject} ${text}`),
-      amount: baseCandidate.amount,
+      amount: messageResult.signal.amount ?? baseCandidate.amount,
     });
   }
 
@@ -577,7 +587,24 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
     }
 
     const attachmentResult = await ingestFinanceCandidate({
-      amount: extractedText ? extractAmount(extractedText) : null,
+      amount: extractedText
+        ? extractFinanceMoney({
+            text: extractedText,
+            senderDomain: extractSenderDomainFromHeader(sender),
+            sourceCountryHint: sender.includes(".co") ? "CO" : null,
+            sourceLocaleHint: sender.includes(".co") ? "es-CO" : null,
+            sourceCurrencyHint: sender.includes(".co") ? "COP" : null,
+          }).sourceAmount
+        : null,
+      currency: extractedText
+        ? extractFinanceMoney({
+            text: extractedText,
+            senderDomain: extractSenderDomainFromHeader(sender),
+            sourceCountryHint: sender.includes(".co") ? "CO" : null,
+            sourceLocaleHint: sender.includes(".co") ? "es-CO" : null,
+            sourceCurrencyHint: sender.includes(".co") ? "COP" : null,
+          }).sourceCurrency || undefined
+        : undefined,
       description: `${subject || filename} attachment`,
       merchant: extractSenderName(sender),
       source: "email_attachment",
@@ -598,6 +625,10 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
         : "purchase",
       notes: `Attachment from ${sender}`,
       promotionPreference: "source_policy",
+      messageSubtype: inferFinanceMessageSubtype({
+        text: extractedText,
+        subject: subject || filename,
+      }),
       document: {
         source: "gmail_attachment",
         externalId: attachmentExternalId,
@@ -631,7 +662,7 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
           merchantId: attachmentResult.merchant?.id,
           description: filename,
           dueDate,
-          amount: extractAmount(extractedText),
+          amount: attachmentResult.signal.amount ?? attachmentResult.signal.sourceAmount,
         });
       }
     }

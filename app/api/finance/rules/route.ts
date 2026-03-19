@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const rules = await prisma.financeRule.findMany({
       orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-      include: { merchant: true },
+      include: { merchant: true, source: true },
     });
     return NextResponse.json({ rules });
   } catch (error) {
@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
         priority: body.priority ?? 0,
         learned: body.learned ?? false,
         merchantId: body.merchantId ?? null,
+        sourceId: body.sourceId ?? null,
         conditions: body.conditions as Prisma.InputJsonValue,
         actions: body.actions as Prisma.InputJsonValue,
       },

@@ -15,6 +15,7 @@ import { getFinanceReportSummary } from "@/lib/finance/reports";
 const ACTIVE_TRANSACTION_FILTER: Prisma.FinancialTransactionWhereInput = {
   excludedFromBudget: false,
   status: "posted",
+  settlementStatus: { notIn: ["provisional", "failed", "rejected", "ignored"] },
   reviewState: "resolved",
   OR: [
     { sourceDocumentId: null },
@@ -65,6 +66,8 @@ export async function GET(req: NextRequest) {
       reportSummary,
       pendingSignals,
       ignoredSignals,
+      provisionalSignals,
+      failedSignals,
       totalSources,
       trustedSources,
       ignoredSources,
@@ -201,6 +204,8 @@ export async function GET(req: NextRequest) {
       getFinanceReportSummary(currentMonth),
       prisma.financeSignal.count({ where: { promotionState: "pending_review" } }),
       prisma.financeSignal.count({ where: { promotionState: { in: ["ignored", "dismissed"] } } }),
+      prisma.financeSignal.count({ where: { settlementStatus: "provisional" } }),
+      prisma.financeSignal.count({ where: { settlementStatus: { in: ["failed", "rejected"] } } }),
       prisma.financeSource.count(),
       prisma.financeSource.count({ where: { trustLevel: "trusted" } }),
       prisma.financeSource.count({ where: { defaultDisposition: "always_ignore" } }),
@@ -271,6 +276,8 @@ export async function GET(req: NextRequest) {
         pendingReviews,
         pendingSignals,
         ignoredSignals,
+        provisionalSignals,
+        failedSignals,
       },
       comparison: {
         incomeChange: prevIncome > 0 ? Math.round(((income - prevIncome) / prevIncome) * 100) : 0,
@@ -308,6 +315,8 @@ export async function GET(req: NextRequest) {
         trusted: trustedSources,
         ignored: ignoredSources,
         learning: Math.max(totalSources - trustedSources - ignoredSources, 0),
+        provisionalSignals,
+        failedSignals,
       },
       pendingCounts: {
         reviews: pendingReviews,

@@ -47,9 +47,16 @@ function mapPendingSignal(signal: {
   kind: string;
   promotionState: string;
   confidence: number | null;
+  messageSubtype: string;
+  settlementStatus: string;
+  sourceAmount: number | null;
+  sourceCurrency: string | null;
+  fxRate: number | null;
+  requiresCurrencyReview: boolean;
   source: { label: string } | null;
   document: {
     classification: string;
+    messageSubtype: string;
     sender: string | null;
     source: string;
     sourceKey: string | null;
@@ -61,11 +68,13 @@ function mapPendingSignal(signal: {
     accountId: null,
     transactedAt: (signal.transactedAt || signal.dueDate || new Date()).toISOString(),
     amount:
-      signal.type === "income"
-        ? Math.abs(signal.amount || 0)
+      signal.amount == null
+        ? null
+        : signal.type === "income"
+        ? Math.abs(signal.amount)
         : signal.type === "expense"
-        ? -Math.abs(signal.amount || 0)
-        : signal.amount || 0,
+        ? -Math.abs(signal.amount)
+        : signal.amount,
     description: signal.description,
     category: signal.category || "other",
     subcategory: signal.subcategory,
@@ -77,6 +86,12 @@ function mapPendingSignal(signal: {
     status: signal.promotionState,
     reviewState: "pending_review",
     confidence: signal.confidence,
+    messageSubtype: signal.messageSubtype,
+    settlementStatus: signal.settlementStatus,
+    sourceAmount: signal.sourceAmount,
+    sourceCurrency: signal.sourceCurrency,
+    fxRate: signal.fxRate,
+    requiresCurrencyReview: signal.requiresCurrencyReview,
     signalKind: signal.kind,
     documentClassification: signal.document.classification,
     account: { name: "Finance Inbox", icon: "Inbox", color: null },
@@ -110,6 +125,12 @@ export async function GET(req: NextRequest) {
           status === "pending"
             ? "pending_review"
             : { in: ["ignored", "dismissed"] },
+        settlementStatus:
+          status === "pending"
+            ? { notIn: ["ignored"] }
+            : status === "ignored"
+            ? { in: ["ignored"] }
+            : undefined,
       };
 
       const [signals, total] = await Promise.all([
@@ -123,6 +144,7 @@ export async function GET(req: NextRequest) {
             document: {
               select: {
                 classification: true,
+                messageSubtype: true,
                 sender: true,
                 source: true,
                 sourceKey: true,
@@ -136,10 +158,10 @@ export async function GET(req: NextRequest) {
       const mapped = signals.map(mapPendingSignal);
       const incomeTotal = mapped
         .filter((item) => item.type === "income")
-        .reduce((sum, item) => sum + Math.abs(item.amount), 0);
+        .reduce((sum, item) => sum + Math.abs(item.amount ?? 0), 0);
       const expenseTotal = mapped
         .filter((item) => item.type === "expense")
-        .reduce((sum, item) => sum + Math.abs(item.amount), 0);
+        .reduce((sum, item) => sum + Math.abs(item.amount ?? 0), 0);
 
       return NextResponse.json({
         transactions: mapped,
@@ -157,6 +179,7 @@ export async function GET(req: NextRequest) {
       transactedAt: { gte: dateStart, lte: dateEnd },
       status: status === "all" ? undefined : status,
       reviewState: "resolved",
+      settlementStatus: { notIn: ["provisional", "failed", "rejected", "ignored"] },
       OR: [
         { sourceDocumentId: null },
         {
@@ -188,6 +211,7 @@ export async function GET(req: NextRequest) {
               sender: true,
               filename: true,
               classification: true,
+              messageSubtype: true,
             },
           },
         },
@@ -210,6 +234,7 @@ export async function GET(req: NextRequest) {
         ...transaction,
         recordType: "transaction",
         documentClassification: transaction.sourceDocument?.classification || null,
+        messageSubtype: transaction.sourceDocument?.messageSubtype || null,
       })),
       total,
       income: {

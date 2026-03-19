@@ -11,8 +11,10 @@ import {
 } from "@/lib/finance/ingestion";
 import {
   buildFinanceSourceIdentity,
+  inferFinanceMessageSubtype,
   inferFinanceDocumentClassification,
 } from "@/lib/finance/pipeline-utils";
+import { extractFinanceMoney } from "@/lib/finance/money";
 import {
   calculateBudgetRiskCards,
   calculateVendorConcentration,
@@ -98,6 +100,57 @@ describe("finance ingestion helpers", () => {
     expect(classification.classification).toBe("statement");
     expect(classification.signalKind).toBe("statement");
     expect(classification.defaultDisposition).toBe("bill_notice");
+  });
+
+  it("detects payment receipts versus promos at the subtype layer", () => {
+    expect(
+      inferFinanceMessageSubtype({
+        subject: "Confirmación de su Operación",
+        text: "Tu operación fue aprobada y el valor total es COP 72.500",
+      })
+    ).toBe("payment_receipt");
+
+    expect(
+      inferFinanceMessageSubtype({
+        subject: "Flight deals you'll love",
+        text: "Fares from $48 this week only",
+      })
+    ).toBe("promo");
+  });
+
+  it("parses Colombian totals as COP and ignores reference-like invoice ids", () => {
+    const parsed = extractFinanceMoney({
+      text: "Confirmación de su Operación. Valor total COP 72.500.",
+      sourceCountryHint: "CO",
+      sourceLocaleHint: "es-CO",
+      senderDomain: "digital.cinemark.com.co",
+    });
+
+    expect(parsed.sourceAmount).toBe(72500);
+    expect(parsed.sourceCurrency).toBe("COP");
+    expect(parsed.requiresCurrencyReview).toBe(false);
+  });
+
+  it("does not mistake structured references for the payable amount", () => {
+    const parsed = extractFinanceMoney({
+      text: "830055643;CINEMARK COLOMBIA S.A.S.;2425104347;01;CINEMARK COLOMBIA S.A.S.",
+      sourceCountryHint: "CO",
+      sourceLocaleHint: "es-CO",
+      senderDomain: "documenteme.co",
+    });
+
+    expect(parsed.sourceAmount).toBeNull();
+  });
+
+  it("does not pull payment amounts out of UUID-heavy transaction text without labels", () => {
+    const parsed = extractFinanceMoney({
+      text: "-- Transacción Aprobada: [7b7ed6a5-abf9-419b-b954-64537cc5adb3] --",
+      sourceCountryHint: "CO",
+      sourceLocaleHint: "es-CO",
+      senderDomain: "payulatam.com",
+    });
+
+    expect(parsed.sourceAmount).toBeNull();
   });
 });
 

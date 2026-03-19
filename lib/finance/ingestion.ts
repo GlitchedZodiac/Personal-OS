@@ -7,22 +7,28 @@ import {
 import { analyzeFinanceDocument } from "@/lib/finance/ai";
 import {
   buildFinanceSourceIdentity,
+  buildSignalGroupKey,
   buildSignalFingerprint,
   buildSourceFingerprint,
   coerceValidDate,
   detectPotentialFlags,
+  extractChargeReference,
   extractDueDateFromText,
-  extractMoneyByLabel,
-  extractPrimaryAmount,
+  extractOrderReference,
   guessCategoryFromText,
   inferFinanceDocumentClassification,
+  inferFinanceMessageSubtype,
   isValidDateValue,
   normalizeMerchantName,
   titleCase,
   type FinanceDocumentClassification,
+  type FinanceMessageSubtype,
+  type FinanceSettlementStatus,
   type FinanceSignalKind,
   type FinanceSourceDisposition,
 } from "@/lib/finance/pipeline-utils";
+import { extractFinanceMoney, normalizeCurrencyCode } from "@/lib/finance/money";
+import { normalizeAmountToCop } from "@/lib/finance/fx";
 import { upsertVaultSecret } from "@/lib/finance/vault";
 
 export {
@@ -54,8 +60,12 @@ export interface FinanceDocumentInput {
   passwordSecretKey?: string | null;
   status?: string;
   classification?: FinanceDocumentClassification | string | null;
+  messageSubtype?: FinanceMessageSubtype | string | null;
   processingStage?: string | null;
   sourceKey?: string | null;
+  groupKey?: string | null;
+  orderRef?: string | null;
+  chargeRef?: string | null;
 }
 
 export interface FinanceIngestionCandidate {
@@ -68,6 +78,7 @@ export interface FinanceIngestionCandidate {
   subcategory?: string | null;
   type?: "income" | "expense" | "transfer";
   signalKind?: FinanceSignalKind | null;
+  messageSubtype?: FinanceMessageSubtype | null;
   documentClassification?: FinanceDocumentClassification | null;
   dueDate?: Date | null;
   minimumDue?: number | null;
@@ -121,8 +132,21 @@ interface NormalizedRuleAction {
   excludedFromBudget?: boolean;
   isRecurring?: boolean;
   signalKind?: FinanceSignalKind;
+  messageSubtype?: FinanceMessageSubtype;
   classification?: FinanceDocumentClassification;
   defaultDisposition?: FinanceSourceDisposition;
+  settlementStatus?: FinanceSettlementStatus;
+  sourceCurrency?: string;
+  merchantId?: string;
+  action?:
+    | "ignore"
+    | "capture_only"
+    | "bill_notice"
+    | "income_notice"
+    | "provisional_purchase"
+    | "settle_charge"
+    | "refund_notice"
+    | "mark_failed_payment";
 }
 
 interface ResolvedDocumentContext {
@@ -248,7 +272,16 @@ async function ensureSource(params: {
 }
 
 async function refreshSourceStats(sourceId: string) {
-  const [documentCount, signalCount, confirmedCount, ignoredCount, autoPostCount] =
+  const [
+    documentCount,
+    signalCount,
+    confirmedCount,
+    ignoredCount,
+    autoPostCount,
+    provisionalCount,
+    settledCount,
+    failedCount,
+  ] =
     await Promise.all([
       prisma.financeDocument.count({ where: { sourceId } }),
       prisma.financeSignal.count({ where: { sourceId } }),
@@ -259,6 +292,11 @@ async function refreshSourceStats(sourceId: string) {
         where: { sourceId, promotionState: { in: ["ignored", "dismissed"] } },
       }),
       prisma.financeSignal.count({ where: { sourceId, promotionState: "auto_posted" } }),
+      prisma.financeSignal.count({ where: { sourceId, settlementStatus: "provisional" } }),
+      prisma.financeSignal.count({ where: { sourceId, settlementStatus: "settled" } }),
+      prisma.financeSignal.count({
+        where: { sourceId, settlementStatus: { in: ["failed", "rejected"] } },
+      }),
     ]);
 
   await prisma.financeSource.update({
@@ -269,6 +307,9 @@ async function refreshSourceStats(sourceId: string) {
       confirmedCount,
       ignoredCount,
       autoPostCount,
+      provisionalCount,
+      settledCount,
+      failedCount,
     },
   });
 }
@@ -285,12 +326,16 @@ async function ensureDocument(
     documentType: input.documentType,
     status: input.status || (input.requiresPassword ? "password_required" : "processed"),
     classification: input.classification || "unclassified",
+    messageSubtype: input.messageSubtype || "unknown",
     processingStage:
       input.processingStage ||
       (input.requiresPassword ? "password_required" : input.status === "error" ? "error" : "captured"),
     mailConnectionId: input.mailConnectionId ?? null,
     sourceId: sourceId ?? null,
     sourceKey: input.sourceKey ?? null,
+    groupKey: input.groupKey ?? null,
+    orderRef: input.orderRef ?? null,
+    chargeRef: input.chargeRef ?? null,
     messageId: input.messageId ?? null,
     threadId: input.threadId ?? null,
     attachmentId: input.attachmentId ?? null,
@@ -395,12 +440,49 @@ async function writeChangeLog(
   });
 }
 
+function toStringList(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function matchesTextCondition(value: string, includes: unknown, excludes: unknown) {
+  const normalized = value.toLowerCase();
+  const includeList = toStringList(includes).map((item) => item.toLowerCase());
+  const excludeList = toStringList(excludes).map((item) => item.toLowerCase());
+
+  if (includeList.length > 0 && !includeList.some((item) => normalized.includes(item))) {
+    return false;
+  }
+
+  if (excludeList.some((item) => normalized.includes(item))) {
+    return false;
+  }
+
+  return true;
+}
+
 async function findMatchingRule(input: {
   description: string;
   merchantNormalized?: string | null;
   documentSender?: string | null;
+  documentSubject?: string | null;
+  documentText?: string | null;
+  attachmentFilename?: string | null;
   sourceKey?: string | null;
   sourceId?: string | null;
+  messageSubtype?: FinanceMessageSubtype | null;
+  hasAmount?: boolean;
+  orderRef?: string | null;
 }) {
   const rules = await prisma.financeRule.findMany({
     where: { isActive: true },
@@ -409,6 +491,9 @@ async function findMatchingRule(input: {
 
   const lowerDescription = input.description.toLowerCase();
   const lowerSender = input.documentSender?.toLowerCase() || "";
+  const lowerSubject = input.documentSubject?.toLowerCase() || "";
+  const lowerText = input.documentText?.toLowerCase() || "";
+  const lowerFilename = input.attachmentFilename?.toLowerCase() || "";
 
   for (const rule of rules) {
     if (rule.sourceId && rule.sourceId !== input.sourceId) continue;
@@ -418,6 +503,11 @@ async function findMatchingRule(input: {
     const descriptionIncludes = String(conditions.descriptionIncludes || "");
     const senderIncludes = String(conditions.senderIncludes || "");
     const sourceKey = String(conditions.sourceKey || "");
+    const messageSubtype = String(conditions.messageSubtype || "");
+    const requiresAmount =
+      typeof conditions.requiresAmount === "boolean" ? conditions.requiresAmount : null;
+    const requiresOrderRef =
+      typeof conditions.requiresOrderRef === "boolean" ? conditions.requiresOrderRef : null;
 
     const merchantMatches =
       !merchantNormalized ||
@@ -428,8 +518,40 @@ async function findMatchingRule(input: {
     const senderMatches =
       !senderIncludes || lowerSender.includes(senderIncludes.toLowerCase());
     const sourceMatches = !sourceKey || sourceKey === input.sourceKey;
+    const subjectMatches = matchesTextCondition(
+      lowerSubject,
+      conditions.subjectIncludes,
+      conditions.subjectExcludes
+    );
+    const bodyMatches = matchesTextCondition(
+      lowerText,
+      conditions.bodyIncludes,
+      conditions.bodyExcludes
+    );
+    const attachmentMatches = matchesTextCondition(
+      lowerFilename,
+      conditions.attachmentFilenameIncludes,
+      []
+    );
+    const subtypeMatches =
+      !messageSubtype || messageSubtype === String(input.messageSubtype || "");
+    const amountMatches =
+      requiresAmount === null ? true : Boolean(input.hasAmount) === requiresAmount;
+    const orderRefMatches =
+      requiresOrderRef === null ? true : Boolean(input.orderRef) === requiresOrderRef;
 
-    if (merchantMatches && descriptionMatches && senderMatches && sourceMatches) {
+    if (
+      merchantMatches &&
+      descriptionMatches &&
+      senderMatches &&
+      sourceMatches &&
+      subjectMatches &&
+      bodyMatches &&
+      attachmentMatches &&
+      subtypeMatches &&
+      amountMatches &&
+      orderRefMatches
+    ) {
       return rule;
     }
   }
@@ -604,26 +726,99 @@ async function upsertUpcomingPaymentFromSignal(signal: {
   });
 }
 
+function resolveDispositionFromRuleAction(
+  action?: NormalizedRuleAction["action"]
+): FinanceSourceDisposition | null {
+  switch (action) {
+    case "ignore":
+      return "always_ignore";
+    case "capture_only":
+      return "capture_only";
+    case "bill_notice":
+      return "bill_notice";
+    case "income_notice":
+      return "income_notice";
+    case "provisional_purchase":
+      return "capture_only";
+    case "settle_charge":
+      return "trusted_autopost";
+    case "refund_notice":
+      return "trusted_autopost";
+    case "mark_failed_payment":
+      return "capture_only";
+    default:
+      return null;
+  }
+}
+
+function resolveSettlementStatus(params: {
+  action?: NormalizedRuleAction["action"];
+  messageSubtype: FinanceMessageSubtype;
+  signalKind: FinanceSignalKind;
+  classification: FinanceDocumentClassification;
+}) {
+  if (params.classification === "ignored" || params.action === "ignore") {
+    return "ignored" satisfies FinanceSettlementStatus;
+  }
+
+  if (params.action === "mark_failed_payment" || params.messageSubtype === "payment_failed") {
+    return "failed" satisfies FinanceSettlementStatus;
+  }
+
+  if (params.action === "refund_notice" || params.signalKind === "refund") {
+    return "refunded" satisfies FinanceSettlementStatus;
+  }
+
+  if (
+    params.action === "provisional_purchase" ||
+    params.messageSubtype === "order_confirmation" ||
+    params.signalKind === "bill_due" ||
+    params.signalKind === "statement"
+  ) {
+    return "provisional" satisfies FinanceSettlementStatus;
+  }
+
+  if (
+    params.action === "settle_charge" ||
+    params.messageSubtype === "payment_receipt" ||
+    params.messageSubtype === "charge_notice" ||
+    params.classification === "expense_receipt"
+  ) {
+    return "settled" satisfies FinanceSettlementStatus;
+  }
+
+  return "provisional" satisfies FinanceSettlementStatus;
+}
+
 function shouldAutoPromoteSignal(params: {
   signalKind: FinanceSignalKind;
+  settlementStatus: FinanceSettlementStatus;
   confidence: number;
   amount?: number | null;
+  requiresCurrencyReview?: boolean;
   sourceDisposition: FinanceSourceDisposition;
   promotionPreference?: FinanceIngestionCandidate["promotionPreference"];
 }) {
+  if (
+    params.settlementStatus !== "settled" ||
+    params.requiresCurrencyReview ||
+    ["bill_due", "statement"].includes(params.signalKind)
+  ) {
+    return false;
+  }
+
   if (params.promotionPreference === "manual_post") {
-    return params.amount != null && !["bill_due", "statement"].includes(params.signalKind);
+    return params.amount != null;
   }
 
   if (params.promotionPreference === "trusted_autopost") {
-    return params.amount != null && !["bill_due", "statement"].includes(params.signalKind);
+    return params.amount != null;
   }
 
   return (
     params.amount != null &&
     params.confidence >= 0.85 &&
-    params.sourceDisposition === "trusted_autopost" &&
-    !["bill_due", "statement"].includes(params.signalKind)
+    params.sourceDisposition === "trusted_autopost"
   );
 }
 
@@ -661,7 +856,6 @@ async function promoteSignalToTransaction(params: {
   const nextAmountBase =
     params.fields?.amount ??
     signal.amount ??
-    extractPrimaryAmount(signal.description) ??
     0;
   const nextAmount =
     nextType === "expense"
@@ -687,7 +881,11 @@ async function promoteSignalToTransaction(params: {
     signal.transaction ||
     (await prisma.financialTransaction.findFirst({
       where: {
-        OR: [{ sourceFingerprint: fingerprint }, { sourceDocumentId: signal.documentId }],
+        OR: [
+          { sourceFingerprint: fingerprint },
+          { sourceDocumentId: signal.documentId },
+          signal.groupKey ? { groupKey: signal.groupKey } : undefined,
+        ].filter(Boolean) as Prisma.FinancialTransactionWhereInput[],
       },
     }));
 
@@ -717,8 +915,17 @@ async function promoteSignalToTransaction(params: {
         source: signal.document.source,
         tags: params.fields?.tags?.join(",") || existing.tags,
         status: "posted",
+        settlementStatus: "settled",
         reviewState: "resolved",
         confidence: params.fields?.confidence ?? signal.confidence ?? existing.confidence,
+        sourceAmount: signal.sourceAmount ?? existing.sourceAmount,
+        sourceCurrency: signal.sourceCurrency ?? existing.sourceCurrency,
+        fxRate: signal.fxRate ?? existing.fxRate,
+        fxDate: signal.fxDate ?? existing.fxDate,
+        amountConfidence: signal.amountConfidence ?? existing.amountConfidence,
+        amountExtractionLabel:
+          signal.amountExtractionLabel ?? existing.amountExtractionLabel,
+        requiresCurrencyReview: false,
         subtotalAmount:
           params.fields?.subtotalAmount ?? signal.subtotalAmount ?? existing.subtotalAmount,
         taxAmount: params.fields?.taxAmount ?? signal.taxAmount ?? existing.taxAmount,
@@ -727,6 +934,9 @@ async function promoteSignalToTransaction(params: {
         excludedFromBudget: params.fields?.excludedFromBudget ?? false,
         sourceDocumentId: signal.documentId,
         sourceFingerprint: fingerprint,
+        groupKey: signal.groupKey ?? existing.groupKey,
+        orderRef: signal.orderRef ?? existing.orderRef,
+        chargeRef: signal.chargeRef ?? existing.chargeRef,
       },
     });
 
@@ -758,8 +968,16 @@ async function promoteSignalToTransaction(params: {
         source: signal.document.source,
         tags: params.fields?.tags?.join(",") || null,
         status: "posted",
+        settlementStatus: "settled",
         reviewState: "resolved",
         confidence: params.fields?.confidence ?? signal.confidence ?? null,
+        sourceAmount: signal.sourceAmount ?? null,
+        sourceCurrency: signal.sourceCurrency ?? null,
+        fxRate: signal.fxRate ?? null,
+        fxDate: signal.fxDate ?? null,
+        amountConfidence: signal.amountConfidence ?? null,
+        amountExtractionLabel: signal.amountExtractionLabel ?? null,
+        requiresCurrencyReview: false,
         subtotalAmount: params.fields?.subtotalAmount ?? signal.subtotalAmount ?? null,
         taxAmount: params.fields?.taxAmount ?? signal.taxAmount ?? null,
         tipAmount: params.fields?.tipAmount ?? signal.tipAmount ?? null,
@@ -767,6 +985,9 @@ async function promoteSignalToTransaction(params: {
         excludedFromBudget: params.fields?.excludedFromBudget ?? false,
         sourceDocumentId: signal.documentId,
         sourceFingerprint: fingerprint,
+        groupKey: signal.groupKey ?? null,
+        orderRef: signal.orderRef ?? null,
+        chargeRef: signal.chargeRef ?? null,
       },
     });
 
@@ -782,6 +1003,7 @@ async function promoteSignalToTransaction(params: {
       transactionId: transaction.id,
       status: "promoted",
       promotionState: params.promotionState,
+      settlementStatus: "settled",
     },
   });
 
@@ -840,7 +1062,11 @@ async function learnFromInboxAction(params: {
         defaultDisposition:
           params.signalKind && ["bill_due", "statement", "subscription"].includes(params.signalKind)
             ? "bill_notice"
-            : "trusted_autopost",
+            : params.signalKind === "income"
+            ? "income_notice"
+            : source.defaultDisposition === "always_ignore"
+            ? "capture_only"
+            : source.defaultDisposition,
       },
     });
     await refreshSourceStats(source.id);
@@ -871,21 +1097,24 @@ async function learnFromInboxAction(params: {
       params.signalKind &&
       ["purchase", "income", "refund", "transfer", "subscription"].includes(params.signalKind);
 
-    await prisma.financeSource.update({
-      where: { id: source.id },
-      data: {
-        trustLevel: promoteToTrusted
-          ? "trusted"
-          : source.trustLevel === "new"
-          ? "learning"
-          : source.trustLevel,
-        defaultDisposition: promoteToTrusted
-          ? "trusted_autopost"
-          : params.signalKind && ["bill_due", "statement"].includes(params.signalKind)
-          ? "bill_notice"
-          : source.defaultDisposition,
-      },
-    });
+      await prisma.financeSource.update({
+        where: { id: source.id },
+        data: {
+          trustLevel: promoteToTrusted
+            ? "trusted"
+            : source.trustLevel === "new"
+            ? "learning"
+            : source.trustLevel,
+          defaultDisposition:
+            params.signalKind && ["bill_due", "statement"].includes(params.signalKind)
+              ? "bill_notice"
+              : params.signalKind === "income"
+              ? "income_notice"
+              : source.defaultDisposition === "always_ignore"
+              ? "capture_only"
+              : source.defaultDisposition,
+        },
+      });
     await refreshSourceStats(source.id);
   }
 }
@@ -923,6 +1152,68 @@ export async function ensureRuleFromTransaction(transactionId: string, name?: st
         type: transaction.type,
         deductible: transaction.deductible,
         excludedFromBudget: transaction.excludedFromBudget,
+      }),
+    },
+  });
+}
+
+export async function ensureRuleFromSignal(signalId: string, name?: string) {
+  const signal = await prisma.financeSignal.findUnique({
+    where: { id: signalId },
+    include: {
+      document: true,
+      source: true,
+    },
+  });
+
+  if (!signal || !signal.sourceId) return null;
+
+  const action: NormalizedRuleAction["action"] =
+    signal.settlementStatus === "failed" || signal.messageSubtype === "payment_failed"
+      ? "mark_failed_payment"
+      : signal.kind === "bill_due" || signal.kind === "statement"
+      ? "bill_notice"
+      : signal.settlementStatus === "provisional" || signal.messageSubtype === "order_confirmation"
+      ? "provisional_purchase"
+      : signal.kind === "refund"
+      ? "refund_notice"
+      : signal.kind === "income"
+      ? "income_notice"
+      : "settle_charge";
+
+  const subjectSnippet = signal.document.subject?.slice(0, 56) || null;
+
+  return prisma.financeRule.create({
+    data: {
+      name: name || `Learn ${signal.description}`,
+      ruleType: "source_override",
+      learned: true,
+      merchantId: signal.merchantId ?? null,
+      sourceId: signal.sourceId,
+      priority: 160,
+      conditions: toJsonValue({
+        sourceId: signal.sourceId,
+        messageSubtype: signal.messageSubtype,
+        subjectIncludes: subjectSnippet ? [subjectSnippet] : undefined,
+        requiresAmount: signal.sourceAmount != null,
+        requiresOrderRef: signal.orderRef != null ? true : undefined,
+      }),
+      actions: toJsonValue({
+        action,
+        signalKind: signal.kind,
+        classification:
+          signal.kind === "statement"
+            ? "statement"
+            : signal.kind === "bill_due"
+            ? "bill_notice"
+            : signal.kind === "refund"
+            ? "refund_notice"
+            : signal.kind === "income"
+            ? "income_notice"
+            : "expense_receipt",
+        type: signal.type,
+        category: signal.category,
+        subcategory: signal.subcategory,
       }),
     },
   });
@@ -984,21 +1275,58 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
     subcategory: candidate.subcategory ?? guessed.subcategory,
   });
 
+  const inferredSubtype =
+    candidate.messageSubtype ||
+    (document?.messageSubtype as FinanceMessageSubtype | undefined) ||
+    inferFinanceMessageSubtype({
+      text: combinedText,
+      subject: document?.subject || candidate.document?.subject,
+    });
+  const orderRef =
+    candidate.document?.orderRef ||
+    document?.orderRef ||
+    extractOrderReference(`${document?.subject || ""} ${combinedText}`);
+  const chargeRef =
+    candidate.document?.chargeRef ||
+    document?.chargeRef ||
+    candidate.reference ||
+    extractChargeReference(`${document?.subject || ""} ${combinedText}`);
+  const groupKey =
+    candidate.document?.groupKey ||
+    document?.groupKey ||
+    buildSignalGroupKey({
+      sourceKey: source.sourceKey,
+      threadId: candidate.document?.threadId || document?.threadId,
+      orderRef,
+      chargeRef,
+      transactedAt: candidate.transactedAt || document?.receivedAt,
+      description: candidate.description,
+    });
+
   const rule = await findMatchingRule({
     description: candidate.description,
     merchantNormalized: merchant?.normalizedName,
     documentSender: document?.sender,
+    documentSubject: document?.subject,
+    documentText: combinedText,
+    attachmentFilename: document?.filename,
     sourceKey: source.sourceKey,
     sourceId: source.id,
+    messageSubtype: inferredSubtype,
+    hasAmount: candidate.amount != null,
+    orderRef,
   });
 
   const actions = ((rule?.actions || {}) as Record<string, unknown>) as NormalizedRuleAction;
+  const ruleDisposition = resolveDispositionFromRuleAction(actions.action);
 
   const heuristic = inferFinanceDocumentClassification({
     text: combinedText,
     subject: document?.subject || candidate.document?.subject,
     sourceDisposition:
-      actions.defaultDisposition || (source.defaultDisposition as FinanceSourceDisposition),
+      ruleDisposition ||
+      actions.defaultDisposition ||
+      (source.defaultDisposition as FinanceSourceDisposition),
     trustLevel: source.trustLevel,
   });
 
@@ -1021,10 +1349,15 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
     actions.signalKind ||
     aiDecision?.signalKind ||
     heuristic.signalKind) as FinanceSignalKind;
+  const messageSubtype = (candidate.messageSubtype ||
+    actions.messageSubtype ||
+    heuristic.messageSubtype ||
+    inferredSubtype) as FinanceMessageSubtype;
   const resolvedDisposition =
     candidate.promotionPreference === "trusted_autopost"
       ? "trusted_autopost"
-      : actions.defaultDisposition ||
+      : ruleDisposition ||
+        actions.defaultDisposition ||
         (aiDecision?.defaultDisposition as FinanceSourceDisposition | undefined) ||
         (source.defaultDisposition as FinanceSourceDisposition) ||
         heuristic.defaultDisposition;
@@ -1048,20 +1381,38 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
     aiDecision?.confidence ??
     (rule ? 0.98 : merchant ? Math.max(heuristic.confidence, guessed.confidence, 0.7) : heuristic.confidence);
 
-  const resolvedAmount =
-    candidate.amount ??
-    aiDecision?.amount ??
-    extractMoneyByLabel(combinedText, [
-      "total",
-      "paid",
-      "charged",
-      "charge",
-      "payment",
-      "amount",
-      "minimum due",
-      "minimo a pagar",
-    ]) ??
-    extractPrimaryAmount(combinedText);
+  const money = extractFinanceMoney({
+    text: combinedText,
+    labels:
+      signalKind === "bill_due" || signalKind === "statement"
+        ? [
+            "statement balance",
+            "saldo total",
+            "minimum due",
+            "minimo a pagar",
+            "mínimo a pagar",
+            "total",
+            "valor",
+          ]
+        : ["total", "valor", "cobrado", "pagado", "monto", "importe", "charge", "payment"],
+    sourceCurrencyHint: actions.sourceCurrency || source.currencyHint || candidate.currency || null,
+    sourceLocaleHint: source.localeHint,
+    sourceCountryHint: source.countryHint,
+    senderDomain: source.senderDomain,
+  });
+  const sourceAmount =
+    candidate.amount != null ? Math.abs(candidate.amount) : aiDecision?.amount ?? money.sourceAmount;
+  const sourceCurrency =
+    normalizeCurrencyCode(candidate.currency) ||
+    normalizeCurrencyCode(actions.sourceCurrency) ||
+    normalizeCurrencyCode(source.currencyHint) ||
+    money.sourceCurrency;
+  const normalizedMoney = await normalizeAmountToCop({
+    amount: sourceAmount,
+    currency: sourceCurrency,
+    date: candidate.transactedAt || document?.receivedAt || new Date(),
+  });
+  const resolvedAmount = normalizedMoney.amount;
   const dueDate =
     coerceValidDate(candidate.dueDate) ||
     coerceValidDate(aiDecision?.dueDate) ||
@@ -1069,18 +1420,43 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
   const minimumDue =
     candidate.minimumDue ??
     aiDecision?.minimumDue ??
-    extractMoneyByLabel(combinedText, ["minimum due", "minimo a pagar"]);
+    extractFinanceMoney({
+      text: combinedText,
+      labels: ["minimum due", "minimo a pagar", "mínimo a pagar"],
+      sourceCurrencyHint: sourceCurrency,
+      sourceLocaleHint: source.localeHint,
+      sourceCountryHint: source.countryHint,
+      senderDomain: source.senderDomain,
+    }).sourceAmount;
   const statementBalance =
     candidate.statementBalance ??
     aiDecision?.statementBalance ??
-    extractMoneyByLabel(combinedText, ["statement balance", "saldo total", "total due"]);
+    extractFinanceMoney({
+      text: combinedText,
+      labels: ["statement balance", "saldo total", "total due", "valor total"],
+      sourceCurrencyHint: sourceCurrency,
+      sourceLocaleHint: source.localeHint,
+      sourceCountryHint: source.countryHint,
+      senderDomain: source.senderDomain,
+    }).sourceAmount;
+  const settlementStatus = (actions.settlementStatus ||
+    resolveSettlementStatus({
+      action: actions.action,
+      messageSubtype,
+      signalKind,
+      classification,
+    })) as FinanceSettlementStatus;
 
   const updatedDocument = await prisma.financeDocument.update({
     where: { id: document!.id },
     data: {
       classification,
+      messageSubtype,
       sourceId: source.id,
       sourceKey: source.sourceKey,
+      groupKey,
+      orderRef,
+      chargeRef,
       extractedData: toOptionalJsonValue({
         ...(((document?.extractedData as Record<string, unknown> | null) || {}) as Record<
           string,
@@ -1089,6 +1465,10 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
         aiDecision: aiDecision || undefined,
         guessedCategory: guessed,
         heuristic,
+        money,
+        sourceAmount,
+        sourceCurrency,
+        normalizedAmount: resolvedAmount,
       }),
       processingStage:
         classification === "ignored"
@@ -1099,24 +1479,39 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
     },
   });
 
+  const inferredLocaleHint =
+    source.localeHint || (source.senderDomain?.endsWith(".co") ? "es-CO" : null);
+  const inferredCountryHint =
+    source.countryHint || (source.senderDomain?.endsWith(".co") ? "CO" : null);
+  const inferredCurrencyHint =
+    source.currencyHint ||
+    (normalizeCurrencyCode(sourceCurrency) === "COP" && source.senderDomain?.endsWith(".co")
+      ? "COP"
+      : sourceCurrency);
+
   if (
-    source.defaultDisposition !== resolvedDisposition ||
     source.merchantId !== merchant?.id ||
     source.categoryHint !== resolvedCategory ||
+    source.subcategoryHint !== resolvedSubcategory ||
     source.isBiller !== ["bill_due", "statement", "subscription"].includes(signalKind) ||
     source.isIncomeSource !== (signalKind === "income") ||
-    source.isRecurring !== Boolean(candidate.isRecurring || signalKind === "subscription")
+    source.isRecurring !== Boolean(candidate.isRecurring || signalKind === "subscription") ||
+    source.localeHint !== inferredLocaleHint ||
+    source.countryHint !== inferredCountryHint ||
+    source.currencyHint !== inferredCurrencyHint
   ) {
     await prisma.financeSource.update({
       where: { id: source.id },
       data: {
-        defaultDisposition: resolvedDisposition,
         merchantId: merchant?.id ?? undefined,
         categoryHint: resolvedCategory,
         subcategoryHint: resolvedSubcategory,
         isBiller: ["bill_due", "statement", "subscription"].includes(signalKind),
         isIncomeSource: signalKind === "income",
         isRecurring: Boolean(candidate.isRecurring || signalKind === "subscription"),
+        localeHint: inferredLocaleHint || undefined,
+        countryHint: inferredCountryHint || undefined,
+        currencyHint: inferredCurrencyHint || undefined,
       },
     });
   }
@@ -1132,7 +1527,11 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
 
   const existingSignal = await prisma.financeSignal.findFirst({
     where: {
-      OR: [{ fingerprint }, { documentId: updatedDocument.id, kind: signalKind }],
+      OR: [
+        { fingerprint },
+        { documentId: updatedDocument.id, kind: signalKind },
+        groupKey ? { groupKey } : undefined,
+      ].filter(Boolean) as Prisma.FinanceSignalWhereInput[],
     },
     include: {
       transaction: true,
@@ -1145,10 +1544,20 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
         data: {
           sourceId: source.id,
           merchantId: merchant?.id ?? null,
+          matchedRuleId: rule?.id ?? null,
           kind: signalKind,
+          messageSubtype,
+          settlementStatus,
           confidence,
           amount: resolvedAmount ?? null,
-          currency: candidate.currency || "COP",
+          currency: "COP",
+          sourceAmount: sourceAmount ?? null,
+          sourceCurrency: sourceCurrency ?? null,
+          fxRate: normalizedMoney.fxRate ?? null,
+          fxDate: normalizedMoney.fxDate ?? null,
+          amountConfidence: money.amountConfidence ?? confidence,
+          amountExtractionLabel: money.amountExtractionLabel ?? null,
+          requiresCurrencyReview: normalizedMoney.requiresCurrencyReview,
           description: candidate.description,
           category: resolvedCategory,
           subcategory: resolvedSubcategory,
@@ -1161,11 +1570,16 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
           minimumDue,
           statementBalance,
           reference: candidate.reference ?? null,
+          groupKey,
+          orderRef,
+          chargeRef,
           notes: candidate.notes ?? null,
           fingerprint,
           extractedData: toOptionalJsonValue({
             heuristic,
             aiDecision: aiDecision || undefined,
+            matchedRuleId: rule?.id ?? null,
+            settlementStatus,
           }),
         },
       })
@@ -1174,10 +1588,20 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
           documentId: updatedDocument.id,
           sourceId: source.id,
           merchantId: merchant?.id ?? null,
+          matchedRuleId: rule?.id ?? null,
           kind: signalKind,
+          messageSubtype,
+          settlementStatus,
           confidence,
           amount: resolvedAmount ?? null,
-          currency: candidate.currency || "COP",
+          currency: "COP",
+          sourceAmount: sourceAmount ?? null,
+          sourceCurrency: sourceCurrency ?? null,
+          fxRate: normalizedMoney.fxRate ?? null,
+          fxDate: normalizedMoney.fxDate ?? null,
+          amountConfidence: money.amountConfidence ?? confidence,
+          amountExtractionLabel: money.amountExtractionLabel ?? null,
+          requiresCurrencyReview: normalizedMoney.requiresCurrencyReview,
           description: candidate.description,
           category: resolvedCategory,
           subcategory: resolvedSubcategory,
@@ -1190,11 +1614,16 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
           minimumDue,
           statementBalance,
           reference: candidate.reference ?? null,
+          groupKey,
+          orderRef,
+          chargeRef,
           notes: candidate.notes ?? null,
           fingerprint,
           extractedData: toOptionalJsonValue({
             heuristic,
             aiDecision: aiDecision || undefined,
+            matchedRuleId: rule?.id ?? null,
+            settlementStatus,
           }),
         },
       });
@@ -1202,8 +1631,10 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
   const shouldIgnore = classification === "ignored";
   const shouldAutoPromote = shouldAutoPromoteSignal({
     signalKind,
+    settlementStatus,
     confidence,
     amount: resolvedAmount,
+    requiresCurrencyReview: normalizedMoney.requiresCurrencyReview,
     sourceDisposition: resolvedDisposition,
     promotionPreference: candidate.promotionPreference,
   });
@@ -1214,6 +1645,7 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
       data: {
         status: "ignored",
         promotionState: "ignored",
+        settlementStatus: "ignored",
       },
     });
     await settlePendingReviewItems({
@@ -1255,6 +1687,15 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
   if (updatedDocument.parseError) {
     flags.push("parse_error");
   }
+  if (normalizedMoney.requiresCurrencyReview) {
+    flags.push("currency_review");
+  }
+  if (settlementStatus === "provisional") {
+    flags.push("provisional_review");
+  }
+  if (["failed", "rejected"].includes(settlementStatus)) {
+    flags.push("failed_payment");
+  }
 
   let transaction = null;
   if (shouldAutoPromote) {
@@ -1273,7 +1714,10 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
     await prisma.financeSignal.update({
       where: { id: signal.id },
       data: {
-        status: "pending",
+        status:
+          settlementStatus === "failed" || settlementStatus === "rejected"
+            ? "resolved"
+            : "pending",
         promotionState: "pending_review",
       },
     });
@@ -1291,6 +1735,7 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
           candidate: {
             ...candidate,
             amount: resolvedAmount,
+            currency: sourceCurrency || "COP",
             category: resolvedCategory,
             subcategory: resolvedSubcategory,
             type: resolvedType,
@@ -1437,6 +1882,7 @@ export async function applyInboxAction(action: ReviewAction, payload: InboxActio
           data: {
             status: action === "ignore" ? "ignored" : "resolved",
             promotionState: action === "ignore" ? "ignored" : "dismissed",
+            settlementStatus: action === "ignore" ? "ignored" : signal.settlementStatus,
           },
         });
         await prisma.financeDocument.update({
@@ -1479,6 +1925,7 @@ export async function applyInboxAction(action: ReviewAction, payload: InboxActio
           data: {
             status: "duplicate",
             promotionState: "dismissed",
+            settlementStatus: "ignored",
             transactionId: targetTransaction?.id ?? signal.transactionId,
           },
         });
@@ -1514,11 +1961,18 @@ export async function applyInboxAction(action: ReviewAction, payload: InboxActio
           },
           promotionState: "user_confirmed",
         });
+        await prisma.financeSignal.update({
+          where: { id: signal.id },
+          data: {
+            settlementStatus: "refunded",
+          },
+        });
         if (payload.targetTransactionId) {
           await prisma.financialTransaction.update({
             where: { id: posted.id },
             data: {
               refundOfId: payload.targetTransactionId,
+              settlementStatus: "refunded",
             },
           });
         }
@@ -1585,6 +2039,8 @@ export async function applyInboxAction(action: ReviewAction, payload: InboxActio
         signal?.transactionId || review?.transactionId || payload.targetTransactionId || null;
       if (transactionId) {
         await ensureRuleFromTransaction(transactionId);
+      } else if (signal?.id) {
+        await ensureRuleFromSignal(signal.id);
       }
       await learnFromInboxAction({
         sourceId: signal?.sourceId || review?.sourceId,

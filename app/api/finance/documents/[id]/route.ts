@@ -13,9 +13,18 @@ export async function PATCH(
       where: { id },
       data: {
         classification: body.classification ?? undefined,
+        messageSubtype: body.messageSubtype ?? undefined,
         processingStage: body.processingStage ?? undefined,
         status: body.status ?? undefined,
+        sourceId: body.sourceId ?? undefined,
+        groupKey: body.groupKey ?? undefined,
+        orderRef: body.orderRef ?? undefined,
+        chargeRef: body.chargeRef ?? undefined,
         parseError: body.parseError ?? undefined,
+      },
+      include: {
+        sourceRef: true,
+        signals: true,
       },
     });
 

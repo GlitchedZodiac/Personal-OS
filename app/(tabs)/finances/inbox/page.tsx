@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { HelpTooltip } from "@/components/help-tooltip";
 import { FinanceQuickCapture } from "@/components/finance-quick-capture";
-import { useCachedFetch, invalidateCache } from "@/lib/cache";
+import { invalidateCache, useCachedFetch } from "@/lib/cache";
+import { FINANCE_HELP } from "@/lib/finance/help";
 
 interface SourceItem {
   id: string;
@@ -24,12 +26,18 @@ interface SourceItem {
 interface SignalItem {
   id: string;
   kind: string;
+  messageSubtype: string;
+  settlementStatus: string;
   description: string;
   amount?: number | null;
+  sourceAmount?: number | null;
+  sourceCurrency?: string | null;
   category?: string | null;
   promotionState: string;
   confidence?: number | null;
   dueDate?: string | null;
+  fxRate?: number | null;
+  requiresCurrencyReview?: boolean;
   source?: SourceItem | null;
   merchant?: { id: string; name: string } | null;
   document: {
@@ -38,6 +46,7 @@ interface SignalItem {
     subject?: string | null;
     filename?: string | null;
     classification: string;
+    messageSubtype: string;
     processingStage: string;
     status: string;
     passwordSecretKey?: string | null;
@@ -74,6 +83,17 @@ function formatCOP(value?: number | null) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(Math.abs(value || 0));
+}
+
+function formatSignalAmount(item: SignalItem) {
+  if (item.sourceCurrency && item.sourceCurrency !== "COP" && item.sourceAmount != null) {
+    return `${item.sourceCurrency} ${new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(item.sourceAmount)} -> ${item.amount != null ? formatCOP(item.amount) : "review"}`;
+  }
+
+  return item.amount != null ? formatCOP(item.amount) : "No amount";
 }
 
 export default function FinanceInboxPage() {
@@ -133,7 +153,7 @@ export default function FinanceInboxPage() {
         <div>
           <h1 className="text-2xl font-bold">Finance Inbox</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Documents land here first. Only confirmed or trusted items should hit the ledger.
+            Documents land here first. Only settled and confirmed items should ever hit the ledger.
           </p>
         </div>
         <Link href="/finances/sources" className="hidden lg:block">
@@ -151,10 +171,7 @@ export default function FinanceInboxPage() {
         </div>
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
-          <SectionCard
-            title="New Sources"
-            count={data?.counts.newSources || 0}
-          >
+          <SectionCard title="New Sources" count={data?.counts.newSources || 0}>
             <div className="space-y-3">
               {(data?.sections.newSources || []).map((source) => (
                 <div key={source.id} className="rounded-2xl border border-border/30 p-4">
@@ -177,35 +194,37 @@ export default function FinanceInboxPage() {
             </div>
           </SectionCard>
 
-          <SectionCard
-            title="Pending Transactions"
-            count={data?.counts.pendingTransactions || 0}
-          >
+          <SectionCard title="Pending Transactions" count={data?.counts.pendingTransactions || 0}>
             <div className="space-y-3">
               {(data?.sections.pendingTransactions || []).map((item) => (
                 <div key={item.id} className="rounded-2xl border border-border/30 p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium">{item.description}</p>
+                      <p className="text-sm font-medium">{item.document.subject || item.description}</p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {item.source?.label || item.document.sender || "Unknown source"} ·{" "}
-                        {item.category || "uncategorized"} · {item.kind}
+                        {item.category || "uncategorized"} · {item.messageSubtype.replace(/_/g, " ")} ·{" "}
+                        {item.settlementStatus}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold">
-                        {item.amount != null ? formatCOP(item.amount) : "No amount"}
-                      </p>
+                      <p className="text-sm font-semibold">{formatSignalAmount(item)}</p>
                       <p className="text-[11px] text-muted-foreground">
                         {Math.round((item.confidence || 0) * 100)}% confidence
                       </p>
+                      {item.requiresCurrencyReview && (
+                        <p className="text-[11px] text-amber-300">currency review</p>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={() => applyAction("confirm", { signalId: item.id })}>
-                      Confirm & Post
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button size="sm" onClick={() => applyAction("confirm", { signalId: item.id })}>
+                        Confirm & Post
+                      </Button>
+                      <HelpTooltip content={FINANCE_HELP.confirmPost} />
+                    </div>
                     <Button
                       size="sm"
                       variant="outline"
@@ -213,37 +232,42 @@ export default function FinanceInboxPage() {
                     >
                       Ignore
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => applyAction("create_rule", { signalId: item.id })}
-                    >
-                      Learn Rule
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => applyAction("create_rule", { signalId: item.id })}
+                      >
+                        Learn Rule
+                      </Button>
+                      <HelpTooltip content={FINANCE_HELP.learnRule} />
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           </SectionCard>
 
-          <SectionCard
-            title="Upcoming Bills"
-            count={data?.counts.upcomingBills || 0}
-          >
+          <SectionCard title="Upcoming Bills" count={data?.counts.upcomingBills || 0}>
             <div className="space-y-3">
               {(data?.sections.upcomingBills || []).map((item) => (
                 <div key={item.id} className="rounded-2xl border border-border/30 p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium">{item.description}</p>
+                      <p className="text-sm font-medium">{item.document.subject || item.description}</p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {item.source?.label || item.document.sender || "Unknown source"} · due{" "}
-                        {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "unknown"}
+                        {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "unknown"} ·{" "}
+                        {item.messageSubtype.replace(/_/g, " ")}
                       </p>
                     </div>
-                    <p className="text-sm font-semibold">
-                      {item.amount != null ? formatCOP(item.amount) : "Pending"}
-                    </p>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold">{formatSignalAmount(item)}</p>
+                      <div className="mt-1 flex items-center justify-end gap-1">
+                        <Badge variant="outline">{item.settlementStatus}</Badge>
+                        <HelpTooltip content={FINANCE_HELP.provisional} />
+                      </div>
+                    </div>
                   </div>
 
                   {item.document.status === "password_required" && (
@@ -285,10 +309,7 @@ export default function FinanceInboxPage() {
             </div>
           </SectionCard>
 
-          <SectionCard
-            title="Ignored / Noise"
-            count={data?.counts.ignoredNoise || 0}
-          >
+          <SectionCard title="Ignored / Noise" count={data?.counts.ignoredNoise || 0}>
             <div className="space-y-3">
               {(data?.sections.ignoredNoise || []).map((item) => (
                 <div key={item.id} className="rounded-2xl border border-border/30 p-4">

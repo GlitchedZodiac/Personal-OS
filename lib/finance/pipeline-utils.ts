@@ -1,5 +1,9 @@
 import crypto from "crypto";
 import { FINANCE_CATEGORY_KEYWORDS, type FinanceCategory } from "@/lib/finance/constants";
+import {
+  extractMoneyByLabel as extractMoneyByLabelFromParser,
+  extractPrimaryAmount as extractPrimaryAmountFromParser,
+} from "@/lib/finance/money";
 
 export const FINANCE_SOURCE_DISPOSITIONS = [
   "always_ignore",
@@ -24,6 +28,32 @@ export const FINANCE_SIGNAL_KINDS = [
 ] as const;
 
 export type FinanceSignalKind = (typeof FINANCE_SIGNAL_KINDS)[number];
+
+export const FINANCE_MESSAGE_SUBTYPES = [
+  "promo",
+  "order_confirmation",
+  "payment_receipt",
+  "charge_notice",
+  "bill_available",
+  "payment_failed",
+  "refund",
+  "shipment_update",
+  "statement",
+  "unknown",
+] as const;
+
+export type FinanceMessageSubtype = (typeof FINANCE_MESSAGE_SUBTYPES)[number];
+
+export const FINANCE_SETTLEMENT_STATUSES = [
+  "provisional",
+  "settled",
+  "failed",
+  "rejected",
+  "refunded",
+  "ignored",
+] as const;
+
+export type FinanceSettlementStatus = (typeof FINANCE_SETTLEMENT_STATUSES)[number];
 
 export const FINANCE_DOCUMENT_CLASSIFICATIONS = [
   "ignored",
@@ -50,6 +80,7 @@ export interface FinanceSourceIdentity {
 export interface FinanceClassificationResult {
   classification: FinanceDocumentClassification;
   signalKind: FinanceSignalKind;
+  messageSubtype: FinanceMessageSubtype;
   defaultDisposition: FinanceSourceDisposition;
   typeHint: "income" | "expense" | "transfer" | null;
   shouldIgnore: boolean;
@@ -247,48 +278,16 @@ export function detectPotentialFlags(input: {
 }
 
 export function extractAmountCandidates(text: string) {
-  const matches =
-    text.match(
-      /(?:cop|usd|eur|\$)\s*-?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|-?\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|-?\d{4,}(?:[.,]\d{1,2})?/gi
-    ) || [];
-
-  return matches
-    .map((value) => {
-      const cleaned = value.replace(/[^\d,.-]/g, "");
-      if (!cleaned) return null;
-
-      const normalized =
-        cleaned.includes(",") && cleaned.includes(".")
-          ? cleaned.replace(/\./g, "").replace(",", ".")
-          : cleaned.includes(",") && !cleaned.includes(".")
-          ? cleaned.replace(/\./g, "").replace(",", ".")
-          : cleaned.replace(/,(?=\d{3}\b)/g, "");
-
-      const amount = Number(normalized);
-      return Number.isFinite(amount) ? Math.abs(amount) : null;
-    })
-    .filter((value): value is number => value !== null)
-    .sort((a, b) => b - a);
+  const primary = extractPrimaryAmountFromParser(text);
+  return primary != null ? [primary] : [];
 }
 
 export function extractPrimaryAmount(text: string) {
-  const values = extractAmountCandidates(text);
-  return values[0] ?? null;
+  return extractPrimaryAmountFromParser(text);
 }
 
 export function extractMoneyByLabel(text: string, labels: string[]) {
-  for (const label of labels) {
-    const regex = new RegExp(
-      `${label}\\s*[:=-]?\\s*(?:cop|usd|eur|\\$)?\\s*(-?\\d{1,3}(?:[.,]\\d{3})*(?:[.,]\\d{1,2})?|\\d{4,}(?:[.,]\\d{1,2})?)`,
-      "i"
-    );
-    const match = text.match(regex);
-    if (!match?.[1]) continue;
-    const parsed = extractPrimaryAmount(match[1]);
-    if (parsed != null) return parsed;
-  }
-
-  return null;
+  return extractMoneyByLabelFromParser(text, labels);
 }
 
 export function extractDueDateFromText(text: string) {
@@ -329,11 +328,16 @@ export function inferFinanceDocumentClassification(input: {
 }) {
   const combined = `${input.subject || ""} ${input.text}`.toLowerCase();
   const amount = extractPrimaryAmount(combined);
+  const messageSubtype = inferFinanceMessageSubtype({
+    text: input.text,
+    subject: input.subject,
+  });
 
   if (input.sourceDisposition === "always_ignore") {
     return {
       classification: "ignored",
       signalKind: "unknown",
+      messageSubtype,
       defaultDisposition: "always_ignore",
       typeHint: null,
       shouldIgnore: true,
@@ -343,10 +347,11 @@ export function inferFinanceDocumentClassification(input: {
   }
 
   if (input.sourceDisposition === "trusted_autopost") {
-    if (/(refund|reembolso|chargeback)/.test(combined)) {
+    if (messageSubtype === "refund") {
       return {
         classification: "refund_notice",
         signalKind: "refund",
+        messageSubtype,
         defaultDisposition: "trusted_autopost",
         typeHint: "income",
         shouldIgnore: false,
@@ -359,6 +364,7 @@ export function inferFinanceDocumentClassification(input: {
       return {
         classification: "income_notice",
         signalKind: "income",
+        messageSubtype,
         defaultDisposition: "trusted_autopost",
         typeHint: "income",
         shouldIgnore: false,
@@ -369,7 +375,11 @@ export function inferFinanceDocumentClassification(input: {
 
     return {
       classification: "expense_receipt",
-      signalKind: "purchase",
+      signalKind:
+        messageSubtype === "statement" || messageSubtype === "bill_available"
+          ? "statement"
+          : "purchase",
+      messageSubtype,
       defaultDisposition: "trusted_autopost",
       typeHint: "expense",
       shouldIgnore: false,
@@ -378,17 +388,11 @@ export function inferFinanceDocumentClassification(input: {
     } satisfies FinanceClassificationResult;
   }
 
-  const promoNoise =
-    /(deal|deals|offer|offers|sale|promo|promocion|promociones|discount|descuento|newsletter|newsletters|imperdibles|you.?ll love|fares from|flight deals|up to \d+%|hasta \d+%)/.test(
-      combined
-    ) && !/(paid|payment|purchase|receipt|factura|recibo|transaction|charge|bill|statement|minimum due|saldo|reembolso|refund)/.test(
-      combined
-    );
-
-  if (promoNoise) {
+  if (messageSubtype === "promo") {
     return {
       classification: "ignored",
       signalKind: "unknown",
+      messageSubtype,
       defaultDisposition: "always_ignore",
       typeHint: null,
       shouldIgnore: true,
@@ -397,16 +401,16 @@ export function inferFinanceDocumentClassification(input: {
     } satisfies FinanceClassificationResult;
   }
 
-  if (/(minimum due|minimo a pagar|payment due|vence el|due date|fecha limite|statement balance|saldo total|estado de cuenta)/.test(combined)) {
+  if (messageSubtype === "statement" || messageSubtype === "bill_available") {
     return {
-      classification: /(statement|estado de cuenta|statement balance|saldo total)/.test(combined)
-        ? "statement"
-        : "bill_notice",
-      signalKind: /(subscription|suscripcion|renewal|renovacion|monthly plan|plan mensual)/.test(combined)
-        ? "subscription"
-        : /(statement|estado de cuenta|statement balance|saldo total)/.test(combined)
-        ? "statement"
-        : "bill_due",
+      classification: messageSubtype === "statement" ? "statement" : "bill_notice",
+      signalKind:
+        /(subscription|suscripcion|renewal|renovacion|monthly plan|plan mensual)/.test(combined)
+          ? "subscription"
+          : messageSubtype === "statement"
+          ? "statement"
+          : "bill_due",
+      messageSubtype,
       defaultDisposition: "bill_notice",
       typeHint: "expense",
       shouldIgnore: false,
@@ -415,10 +419,11 @@ export function inferFinanceDocumentClassification(input: {
     } satisfies FinanceClassificationResult;
   }
 
-  if (/(refund|reembolso|chargeback|reversed charge)/.test(combined)) {
+  if (messageSubtype === "refund") {
     return {
       classification: "refund_notice",
       signalKind: "refund",
+      messageSubtype,
       defaultDisposition: "capture_only",
       typeHint: "income",
       shouldIgnore: false,
@@ -431,6 +436,7 @@ export function inferFinanceDocumentClassification(input: {
     return {
       classification: "income_notice",
       signalKind: "income",
+      messageSubtype,
       defaultDisposition: input.trustLevel === "trusted" ? "trusted_autopost" : "income_notice",
       typeHint: "income",
       shouldIgnore: false,
@@ -443,6 +449,7 @@ export function inferFinanceDocumentClassification(input: {
     return {
       classification: "transfer_notice",
       signalKind: "transfer",
+      messageSubtype,
       defaultDisposition: input.trustLevel === "trusted" ? "trusted_autopost" : "capture_only",
       typeHint: "transfer",
       shouldIgnore: false,
@@ -455,6 +462,7 @@ export function inferFinanceDocumentClassification(input: {
     return {
       classification: "subscription_notice",
       signalKind: "subscription",
+      messageSubtype,
       defaultDisposition: input.trustLevel === "trusted" ? "trusted_autopost" : "expense_receipt",
       typeHint: "expense",
       shouldIgnore: false,
@@ -463,10 +471,18 @@ export function inferFinanceDocumentClassification(input: {
     } satisfies FinanceClassificationResult;
   }
 
-  if (/(receipt|invoice|payment confirmation|payment processed|paid|purchase|order confirmation|charge|factura|recibo|pago|compra|cobro|transaction approved)/.test(combined)) {
+  if (
+    messageSubtype === "order_confirmation" ||
+    messageSubtype === "payment_receipt" ||
+    messageSubtype === "charge_notice" ||
+    /(receipt|invoice|payment confirmation|payment processed|paid|purchase|order confirmation|charge|factura|recibo|pago|compra|cobro|transaction approved)/.test(
+      combined
+    )
+  ) {
     return {
       classification: "expense_receipt",
       signalKind: "purchase",
+      messageSubtype,
       defaultDisposition: input.trustLevel === "trusted" ? "trusted_autopost" : "expense_receipt",
       typeHint: "expense",
       shouldIgnore: false,
@@ -478,10 +494,88 @@ export function inferFinanceDocumentClassification(input: {
   return {
     classification: "unclassified",
     signalKind: "unknown",
+    messageSubtype,
     defaultDisposition: "capture_only",
     typeHint: null,
     shouldIgnore: false,
     confidence: amount != null ? 0.48 : 0.35,
     reason: "No strong finance pattern detected.",
   } satisfies FinanceClassificationResult;
+}
+
+export function inferFinanceMessageSubtype(input: {
+  text: string;
+  subject?: string | null;
+}): FinanceMessageSubtype {
+  const combined = `${input.subject || ""} ${input.text}`.toLowerCase();
+
+  const promoNoise =
+    /(deal|deals|offer|offers|sale|promo|promocion|promociones|discount|descuento|newsletter|newsletters|imperdibles|you.?ll love|fares from|flight deals|up to \d+%|hasta \d+%)/.test(
+      combined
+    ) && !/(paid|payment|purchase|receipt|factura|recibo|transaction|charge|bill|statement|minimum due|saldo|reembolso|refund|approved|cobrado|pagado)/.test(
+      combined
+    );
+
+  if (promoNoise) return "promo";
+  if (/(failed payment|payment failed|rechazad|declined|denegad|not processed|could not process)/.test(combined)) {
+    return "payment_failed";
+  }
+  if (/(refund|reembolso|chargeback|reversed charge)/.test(combined)) {
+    return "refund";
+  }
+  if (/(statement|estado de cuenta|statement balance|saldo total)/.test(combined)) {
+    return "statement";
+  }
+  if (/(minimum due|minimo a pagar|mínimo a pagar|payment due|vence el|due date|fecha limite|bill available|factura disponible)/.test(combined)) {
+    return "bill_available";
+  }
+  if (/(shipped|shipment|delivery update|enviado|despachad|entrega)/.test(combined)) {
+    return "shipment_update";
+  }
+  if (/(order confirmation|ordered|pedido confirmado|orden confirmada|order placed|pedido realizado)/.test(combined)) {
+    return "order_confirmation";
+  }
+  if (/(payment receipt|receipt|paid|payment processed|confirmacion de su operacion|confirmación de su operación|transaction approved|transaccion aprobada|transacción aprobada)/.test(combined)) {
+    return "payment_receipt";
+  }
+  if (/(charge|charged|cobro|cobrado|debited|debitado)/.test(combined)) {
+    return "charge_notice";
+  }
+
+  return "unknown";
+}
+
+export function extractOrderReference(text: string) {
+  const match = text.match(
+    /(?:order|pedido|orden)\s*(?:#|n[oº.]*)?\s*([A-Z0-9][A-Z0-9-]{3,})/i
+  );
+  return match?.[1] || null;
+}
+
+export function extractChargeReference(text: string) {
+  const match = text.match(
+    /(?:transaction(?:\s+id)?|transaccion|transacción|reference|referencia|authorization|autorizacion|autorización)\s*(?:#|n[oº.]*)?\s*([A-Z0-9][A-Z0-9-]{3,})/i
+  );
+  return match?.[1] || null;
+}
+
+export function buildSignalGroupKey(input: {
+  sourceKey: string;
+  threadId?: string | null;
+  orderRef?: string | null;
+  chargeRef?: string | null;
+  transactedAt?: Date | null;
+  description: string;
+}) {
+  const normalizedDescription = normalizeMerchantName(input.description) || normalizeKeyPart(input.description);
+  const payload = [
+    input.sourceKey,
+    input.orderRef || "",
+    input.chargeRef || "",
+    input.threadId || "",
+    isValidDateValue(input.transactedAt) ? input.transactedAt.toISOString().slice(0, 10) : "",
+    normalizedDescription.slice(0, 48),
+  ].join("|");
+
+  return crypto.createHash("sha256").update(payload).digest("hex");
 }

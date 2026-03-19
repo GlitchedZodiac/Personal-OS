@@ -23,8 +23,13 @@ export async function GET() {
               select: {
                 id: true,
                 kind: true,
+                messageSubtype: true,
+                settlementStatus: true,
                 description: true,
                 amount: true,
+                sourceAmount: true,
+                sourceCurrency: true,
+                requiresCurrencyReview: true,
                 promotionState: true,
                 category: true,
               },
@@ -34,13 +39,26 @@ export async function GET() {
         prisma.financeSignal.findMany({
           where: {
             promotionState: "pending_review",
+            settlementStatus: { notIn: ["ignored"] },
             kind: { in: ["purchase", "subscription", "income", "refund", "transfer", "unknown"] },
           },
           orderBy: [{ transactedAt: "desc" }, { createdAt: "desc" }],
           take: 40,
           include: {
             source: true,
-            document: true,
+            document: {
+              select: {
+                id: true,
+                sender: true,
+                subject: true,
+                filename: true,
+                classification: true,
+                messageSubtype: true,
+                processingStage: true,
+                status: true,
+                passwordSecretKey: true,
+              },
+            },
             merchant: true,
             reviewItems: {
               where: { status: "pending" },
@@ -51,13 +69,26 @@ export async function GET() {
         prisma.financeSignal.findMany({
           where: {
             kind: { in: ["bill_due", "statement", "subscription"] },
+            settlementStatus: { notIn: ["ignored", "failed", "rejected"] },
             status: { not: "ignored" },
           },
           orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
           take: 20,
           include: {
             source: true,
-            document: true,
+            document: {
+              select: {
+                id: true,
+                sender: true,
+                subject: true,
+                filename: true,
+                classification: true,
+                messageSubtype: true,
+                processingStage: true,
+                status: true,
+                passwordSecretKey: true,
+              },
+            },
             merchant: true,
             reviewItems: {
               where: { status: "pending" },

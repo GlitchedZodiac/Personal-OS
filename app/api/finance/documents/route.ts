@@ -4,39 +4,41 @@ import { prisma } from "@/lib/prisma";
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
     const classification = searchParams.get("classification");
-    const processingStage = searchParams.get("processingStage");
-    const limit = Number(searchParams.get("limit") || 100);
+    const status = searchParams.get("status");
+    const sourceId = searchParams.get("sourceId");
 
     const documents = await prisma.financeDocument.findMany({
       where: {
         classification: classification || undefined,
-        processingStage: processingStage || undefined,
+        status: status || undefined,
+        sourceId: sourceId || undefined,
       },
-      take: Math.max(1, Math.min(limit, 200)),
       orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
+      take: limit,
       include: {
         sourceRef: {
           select: {
             id: true,
             label: true,
-            trustLevel: true,
             defaultDisposition: true,
+            trustLevel: true,
           },
         },
         signals: {
           orderBy: { createdAt: "desc" },
+          take: 5,
           select: {
             id: true,
             kind: true,
-            description: true,
+            messageSubtype: true,
+            settlementStatus: true,
             amount: true,
+            sourceAmount: true,
+            sourceCurrency: true,
             promotionState: true,
-            confidence: true,
-            category: true,
-            type: true,
-            dueDate: true,
-            transactionId: true,
+            description: true,
           },
         },
       },
