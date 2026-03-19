@@ -100,7 +100,7 @@ export default function FinanceInboxPage() {
   const [passwordBySignal, setPasswordBySignal] = useState<Record<string, string>>({});
   const { data, error, initialLoading, refresh } = useCachedFetch<InboxData>(
     useMemo(() => "/api/finance/inbox", []),
-    { ttl: 20_000 }
+    { ttl: 20_000, timeoutMs: 20_000 }
   );
 
   const applyAction = async (
@@ -137,7 +137,7 @@ export default function FinanceInboxPage() {
     children: React.ReactNode;
   }) => (
     <Card>
-      <CardContent className="p-4 space-y-4">
+      <CardContent className="space-y-4 p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold">{title}</p>
           <Badge variant="outline">{count}</Badge>
@@ -148,11 +148,11 @@ export default function FinanceInboxPage() {
   );
 
   return (
-    <div className="px-4 pt-12 pb-36 lg:pb-8 space-y-4">
+    <div className="space-y-4 px-4 pb-36 pt-12 lg:pb-8">
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Finance Inbox</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             Documents land here first. Only settled and confirmed items should ever hit the ledger.
           </p>
         </div>
@@ -165,11 +165,11 @@ export default function FinanceInboxPage() {
 
       {error && (
         <Card className="border-amber-500/20 bg-amber-500/5">
-          <CardContent className="p-4 flex items-center justify-between gap-4">
+          <CardContent className="flex items-center justify-between gap-4 p-4">
             <div>
               <p className="text-sm font-medium">Inbox is in fallback mode.</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Your imported finance data is still stored, but the review feed hit a backend timeout.
+              <p className="mt-1 text-xs text-muted-foreground">
+                Your imported finance data is still stored, but the review feed took too long to answer.
               </p>
             </div>
             <Button variant="outline" onClick={refresh}>
@@ -194,8 +194,8 @@ export default function FinanceInboxPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium">{source.label}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {source.senderEmail || source.senderDomain || "manual"} · {source.documentCount} docs
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {source.senderEmail || source.senderDomain || "manual"} - {source.documentCount} docs
                       </p>
                     </div>
                     <Badge variant="secondary">{source.defaultDisposition.replace(/_/g, " ")}</Badge>
@@ -213,13 +213,13 @@ export default function FinanceInboxPage() {
           <SectionCard title="Pending Transactions" count={data?.counts.pendingTransactions || 0}>
             <div className="space-y-3">
               {(data?.sections.pendingTransactions || []).map((item) => (
-                <div key={item.id} className="rounded-2xl border border-border/30 p-4 space-y-3">
+                <div key={item.id} className="space-y-3 rounded-2xl border border-border/30 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium">{item.document.subject || item.description}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {item.source?.label || item.document.sender || "Unknown source"} ·{" "}
-                        {item.category || "uncategorized"} · {item.messageSubtype.replace(/_/g, " ")} ·{" "}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.source?.label || item.document.sender || "Unknown source"} -{" "}
+                        {item.category || "uncategorized"} - {item.messageSubtype.replace(/_/g, " ")} -{" "}
                         {item.settlementStatus}
                       </p>
                     </div>
@@ -267,13 +267,13 @@ export default function FinanceInboxPage() {
           <SectionCard title="Upcoming Bills" count={data?.counts.upcomingBills || 0}>
             <div className="space-y-3">
               {(data?.sections.upcomingBills || []).map((item) => (
-                <div key={item.id} className="rounded-2xl border border-border/30 p-4 space-y-3">
+                <div key={item.id} className="space-y-3 rounded-2xl border border-border/30 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium">{item.document.subject || item.description}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {item.source?.label || item.document.sender || "Unknown source"} · due{" "}
-                        {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "unknown"} ·{" "}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.source?.label || item.document.sender || "Unknown source"} - due{" "}
+                        {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "unknown"} -{" "}
                         {item.messageSubtype.replace(/_/g, " ")}
                       </p>
                     </div>
@@ -330,8 +330,8 @@ export default function FinanceInboxPage() {
               {(data?.sections.ignoredNoise || []).map((item) => (
                 <div key={item.id} className="rounded-2xl border border-border/30 p-4">
                   <p className="text-sm font-medium">{item.subject || "Ignored document"}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {item.sourceRef?.label || item.sender || "Unknown source"} · {item.classification}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.sourceRef?.label || item.sender || "Unknown source"} - {item.classification}
                   </p>
                 </div>
               ))}

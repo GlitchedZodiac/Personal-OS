@@ -92,6 +92,8 @@ interface UseCachedFetchOptions {
   skip?: boolean;
   /** If true, always refetch even if cache is fresh. */
   forceRefresh?: boolean;
+  /** Abort the request if it takes too long. Default 15_000. */
+  timeoutMs?: number;
 }
 
 interface UseCachedFetchResult<T> {
@@ -108,7 +110,7 @@ export function useCachedFetch<T = unknown>(
   url: string | null,
   options: UseCachedFetchOptions = {}
 ): UseCachedFetchResult<T> {
-  const { ttl = 60_000, skip = false, forceRefresh = false } = options;
+  const { ttl = 60_000, skip = false, forceRefresh = false, timeoutMs = 15_000 } = options;
 
   const cacheKey = url || "";
   const cached = cacheKey ? (cache.get(cacheKey) as CacheEntry<T> | undefined) : undefined;
@@ -197,13 +199,25 @@ export function useCachedFetch<T = unknown>(
 
       setLoading(true);
 
-      fetchPromise = fetch(url)
+      const controller = new AbortController();
+      const timeoutHandle = setTimeout(() => {
+        controller.abort();
+      }, timeoutMs);
+
+      fetchPromise = fetch(url, { signal: controller.signal })
         .then(async (res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const json = await res.json();
           return json as T;
         })
+        .catch((error) => {
+          if (error instanceof Error && error.name === "AbortError") {
+            throw new Error(`Request timed out after ${timeoutMs}ms`);
+          }
+          throw error;
+        })
         .finally(() => {
+          clearTimeout(timeoutHandle);
           inflight.delete(url);
         });
 
@@ -235,7 +249,7 @@ export function useCachedFetch<T = unknown>(
         }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, ttl, skip, forceRefresh, fetchTrigger]);
+  }, [url, ttl, skip, forceRefresh, timeoutMs, fetchTrigger]);
 
   const refresh = useCallback(() => {
     if (url) {

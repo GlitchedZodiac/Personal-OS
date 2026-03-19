@@ -101,10 +101,10 @@ function summarizeRule(rule: FinanceRule) {
     typeof actions.action === "string"
       ? actions.action.replace(/_/g, " ")
       : typeof actions.defaultDisposition === "string"
-      ? String(actions.defaultDisposition).replace(/_/g, " ")
-      : "custom";
+        ? String(actions.defaultDisposition).replace(/_/g, " ")
+        : "custom";
 
-  return [action, subtype, subject].filter(Boolean).join(" · ");
+  return [action, subtype, subject].filter(Boolean).join(" - ");
 }
 
 export default function FinanceSourcesPage() {
@@ -112,7 +112,7 @@ export default function FinanceSourcesPage() {
   const [ruleSavingKey, setRuleSavingKey] = useState<string | null>(null);
   const { data, error, initialLoading, refresh } = useCachedFetch<{ sources: FinanceSource[] }>(
     useMemo(() => "/api/finance/sources", []),
-    { ttl: 30_000 }
+    { ttl: 30_000, timeoutMs: 20_000 }
   );
 
   const refreshFinanceCaches = () => {
@@ -166,7 +166,9 @@ export default function FinanceSourcesPage() {
           messageSubtype: signal.messageSubtype,
           subjectIncludes: subjectSnippet ? [subjectSnippet] : undefined,
           requiresAmount:
-            action === "settle_charge" || action === "bill_notice" ? Boolean(signal.sourceAmount ?? signal.amount) : undefined,
+            action === "settle_charge" || action === "bill_notice"
+              ? Boolean(signal.sourceAmount ?? signal.amount)
+              : undefined,
           requiresOrderRef: action === "provisional_purchase" ? false : undefined,
         },
         actions: {
@@ -183,7 +185,8 @@ export default function FinanceSourcesPage() {
                 ? "statement"
                 : "bill_notice"
               : "expense_receipt",
-          type: signal.kind === "income" ? "income" : signal.kind === "transfer" ? "transfer" : "expense",
+          type:
+            signal.kind === "income" ? "income" : signal.kind === "transfer" ? "transfer" : "expense",
         },
       };
 
@@ -203,21 +206,22 @@ export default function FinanceSourcesPage() {
   };
 
   return (
-    <div className="px-4 pt-12 pb-36 lg:pb-8 space-y-4">
+    <div className="space-y-4 px-4 pb-36 pt-12 lg:pb-8">
       <div>
         <h1 className="text-2xl font-bold">Sources</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Set the source default here, then add second-layer rules for mixed senders like Amazon, payment processors, and billers with promos.
+        <p className="mt-1 text-sm text-muted-foreground">
+          Set the source default here, then add second-layer rules for mixed senders like Amazon,
+          payment processors, and billers with promos.
         </p>
       </div>
 
       {error && (
         <Card className="border-amber-500/20 bg-amber-500/5">
-          <CardContent className="p-4 flex items-center justify-between gap-4">
+          <CardContent className="flex items-center justify-between gap-4 p-4">
             <div>
               <p className="text-sm font-medium">Source examples are in fallback mode.</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Your saved source data is still there, but the richer example feed had trouble loading.
+              <p className="mt-1 text-xs text-muted-foreground">
+                Your saved source data is still there, but the richer example feed took too long to answer.
               </p>
             </div>
             <Button variant="outline" onClick={refresh}>
@@ -237,16 +241,16 @@ export default function FinanceSourcesPage() {
         <div className="grid gap-4 xl:grid-cols-2">
           {(data?.sources || []).map((source) => (
             <Card key={source.id}>
-              <CardContent className="p-4 space-y-4">
+              <CardContent className="space-y-4 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-lg font-semibold">{source.label}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {source.senderEmail || source.senderDomain || "manual"} · {source.documentCount} docs ·{" "}
-                      {source.signalCount} signals
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {source.senderEmail || source.senderDomain || "manual"} - {source.documentCount} docs -
+                      {" "}{source.signalCount} signals
                     </p>
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      {source.localeHint || "locale?"} · {source.currencyHint || "currency?"} ·{" "}
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {source.localeHint || "locale?"} - {source.currencyHint || "currency?"} -{" "}
                       {source.countryHint || "country?"}
                     </p>
                   </div>
@@ -385,7 +389,7 @@ export default function FinanceSourcesPage() {
                             <p className="text-sm font-medium">{rule.name}</p>
                             <Badge variant="outline">P{rule.priority}</Badge>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">{summarizeRule(rule)}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{summarizeRule(rule)}</p>
                         </div>
                       ))}
                     </div>
@@ -396,13 +400,13 @@ export default function FinanceSourcesPage() {
                   <div className="space-y-2">
                     <p className="text-sm font-medium">Examples</p>
                     {source.signals.map((signal) => (
-                      <div key={signal.id} className="rounded-2xl border border-border/30 p-3 space-y-3">
+                      <div key={signal.id} className="space-y-3 rounded-2xl border border-border/30 p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-sm font-medium">{signal.document.subject || signal.description}</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {signal.messageSubtype.replace(/_/g, " ")} · {signal.category || "uncategorized"} ·{" "}
-                              {signal.settlementStatus}
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {signal.messageSubtype.replace(/_/g, " ")} -{" "}
+                              {signal.category || "uncategorized"} - {signal.settlementStatus}
                             </p>
                           </div>
                           <div className="text-right">
@@ -464,7 +468,8 @@ export default function FinanceSourcesPage() {
                   <div className="rounded-2xl border border-border/30 p-3">
                     <p className="text-sm font-medium">Examples</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Stored history exists for this source, but the lightweight view only surfaced counts right now.
+                      Stored history exists for this source, but nothing high-signal surfaced for the
+                      lightweight preview yet.
                     </p>
                   </div>
                 )}

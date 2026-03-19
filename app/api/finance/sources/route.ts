@@ -1,43 +1,45 @@
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 import { withRequestPrisma } from "@/lib/prisma-request";
 
-function getJsonRecord(value: Prisma.JsonValue | null | undefined): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
+type PreviewSignal = {
+  id: string;
+  kind: string;
+  messageSubtype: string;
+  settlementStatus: string;
+  description: string;
+  amount: number | null;
+  sourceAmount: number | null;
+  sourceCurrency: string | null;
+  fxRate: number | null;
+  requiresCurrencyReview: boolean;
+  promotionState: string;
+  category: string | null;
+  groupKey: string | null;
+  orderRef: string | null;
+  chargeRef: string | null;
+  document: {
+    subject: string | null;
+    sender: string | null;
+  } | null;
+};
 
-function getNumericField(record: Record<string, unknown> | null, ...keys: string[]) {
-  for (const key of keys) {
-    const value = record?.[key];
-    if (typeof value === "number") return value;
-  }
-  return null;
-}
+function isMeaningfulPreview(signal: PreviewSignal) {
+  const hasAmount = signal.amount != null || signal.sourceAmount != null;
+  const hasKnownSubtype = signal.messageSubtype !== "unknown";
+  const hasResolution = ["settled", "failed", "rejected", "refunded"].includes(
+    signal.settlementStatus
+  );
+  const hasMeaningfulKind = ["bill_due", "statement", "income", "refund"].includes(signal.kind);
+  const hasGroupingRef = Boolean(signal.groupKey || signal.orderRef || signal.chargeRef);
 
-function getStringField(record: Record<string, unknown> | null, ...keys: string[]) {
-  for (const key of keys) {
-    const value = record?.[key];
-    if (typeof value === "string" && value.trim()) return value;
-  }
-  return null;
-}
-
-function inferSignalKind(classification: string, messageSubtype: string) {
-  if (classification === "income_notice") return "income";
-  if (classification === "refund_notice") return "refund";
-  if (classification === "transfer_notice") return "transfer";
-  if (classification === "bill_notice" || messageSubtype === "bill_available") return "bill_due";
-  if (classification === "statement" || messageSubtype === "statement") return "statement";
-  if (messageSubtype === "payment_failed") return "purchase";
-  return "purchase";
+  return hasAmount || hasKnownSubtype || hasResolution || hasMeaningfulKind || hasGroupingRef;
 }
 
 export async function GET() {
   try {
     return await withRequestPrisma(async (prisma) => {
       const sources = await prisma.financeSource.findMany({
-        orderBy: [{ documentCount: "desc" }, { lastSeenAt: "desc" }],
+        orderBy: [{ signalCount: "desc" }, { documentCount: "desc" }, { lastSeenAt: "desc" }],
         take: 24,
         select: {
           id: true,
@@ -69,44 +71,79 @@ export async function GET() {
       });
 
       const sourceIds = sources.map((source) => source.id);
-      const documents = sourceIds.length
-        ? await prisma.financeDocument
-            .findMany({
-              where: {
-                sourceId: { in: sourceIds },
-                classification: { not: "ignored" },
-              },
-              orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
-              take: 96,
-              select: {
-                id: true,
-                sourceId: true,
-                classification: true,
-                messageSubtype: true,
-                subject: true,
-                sender: true,
-                extractedData: true,
-              },
-            })
-            .catch(() => [])
-        : [];
-      const rules = sourceIds.length
-        ? await prisma.financeRule.findMany({
-            where: { isActive: true, sourceId: { in: sourceIds } },
-            orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-            select: {
-              id: true,
-              sourceId: true,
-              name: true,
-              ruleType: true,
-              priority: true,
-              isActive: true,
-              conditions: true,
-              actions: true,
-            },
-            take: 160,
-          })
-        : [];
+
+      const [documentCounts, signalCounts, settlementCounts, promotionCounts, rules, rawSignals] =
+        sourceIds.length
+          ? await Promise.all([
+              prisma.financeDocument.groupBy({
+                by: ["sourceId"],
+                where: { sourceId: { in: sourceIds } },
+                _count: { _all: true },
+              }),
+              prisma.financeSignal.groupBy({
+                by: ["sourceId"],
+                where: { sourceId: { in: sourceIds } },
+                _count: { _all: true },
+              }),
+              prisma.financeSignal.groupBy({
+                by: ["sourceId", "settlementStatus"],
+                where: { sourceId: { in: sourceIds } },
+                _count: { _all: true },
+              }),
+              prisma.financeSignal.groupBy({
+                by: ["sourceId", "promotionState"],
+                where: { sourceId: { in: sourceIds } },
+                _count: { _all: true },
+              }),
+              prisma.financeRule.findMany({
+                where: { isActive: true, sourceId: { in: sourceIds } },
+                orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+                select: {
+                  id: true,
+                  sourceId: true,
+                  name: true,
+                  ruleType: true,
+                  priority: true,
+                  isActive: true,
+                  conditions: true,
+                  actions: true,
+                },
+                take: 160,
+              }),
+              prisma.financeSignal.findMany({
+                where: {
+                  sourceId: { in: sourceIds },
+                  promotionState: { notIn: ["ignored", "dismissed"] },
+                },
+                orderBy: { createdAt: "desc" },
+                take: 240,
+                select: {
+                  id: true,
+                  sourceId: true,
+                  kind: true,
+                  messageSubtype: true,
+                  settlementStatus: true,
+                  description: true,
+                  amount: true,
+                  sourceAmount: true,
+                  sourceCurrency: true,
+                  fxRate: true,
+                  requiresCurrencyReview: true,
+                  promotionState: true,
+                  category: true,
+                  groupKey: true,
+                  orderRef: true,
+                  chargeRef: true,
+                  document: {
+                    select: {
+                      subject: true,
+                      sender: true,
+                    },
+                  },
+                },
+              }),
+            ])
+          : [[], [], [], [], [], []];
 
       const rulesBySource = new Map<string, typeof rules>();
       for (const rule of rules) {
@@ -118,85 +155,108 @@ export async function GET() {
         }
       }
 
-      const documentsBySource = new Map<
+      const documentCountsBySource = new Map<string, number>();
+      for (const row of documentCounts) {
+        if (!row.sourceId) continue;
+        documentCountsBySource.set(row.sourceId, row._count._all);
+      }
+
+      const signalCountsBySource = new Map<string, number>();
+      for (const row of signalCounts) {
+        if (!row.sourceId) continue;
+        signalCountsBySource.set(row.sourceId, row._count._all);
+      }
+
+      const settlementCountsBySource = new Map<
         string,
-        Array<{
-          id: string;
-          kind: string;
-          messageSubtype: string;
-          settlementStatus: string;
-          description: string;
-          amount: number | null;
-          sourceAmount: number | null;
-          sourceCurrency: string | null;
-          fxRate: number | null;
-          requiresCurrencyReview: boolean;
-          promotionState: string;
-          category: string | null;
-          document: {
-            subject: string | null;
-            sender: string | null;
-          };
-        }>
+        { provisional: number; settled: number; failed: number }
       >();
+      for (const row of settlementCounts) {
+        if (!row.sourceId) continue;
+        const current = settlementCountsBySource.get(row.sourceId) || {
+          provisional: 0,
+          settled: 0,
+          failed: 0,
+        };
+        if (row.settlementStatus === "provisional") current.provisional += row._count._all;
+        if (row.settlementStatus === "settled") current.settled += row._count._all;
+        if (row.settlementStatus === "failed" || row.settlementStatus === "rejected") {
+          current.failed += row._count._all;
+        }
+        settlementCountsBySource.set(row.sourceId, current);
+      }
 
-      for (const document of documents) {
-        if (!document.sourceId) continue;
-        const bucket = documentsBySource.get(document.sourceId) || [];
+      const promotionCountsBySource = new Map<
+        string,
+        { confirmed: number; ignored: number; autoPosted: number }
+      >();
+      for (const row of promotionCounts) {
+        if (!row.sourceId) continue;
+        const current = promotionCountsBySource.get(row.sourceId) || {
+          confirmed: 0,
+          ignored: 0,
+          autoPosted: 0,
+        };
+        if (row.promotionState === "auto_posted") {
+          current.autoPosted += row._count._all;
+          current.confirmed += row._count._all;
+        }
+        if (row.promotionState === "user_confirmed") {
+          current.confirmed += row._count._all;
+        }
+        if (row.promotionState === "ignored" || row.promotionState === "dismissed") {
+          current.ignored += row._count._all;
+        }
+        promotionCountsBySource.set(row.sourceId, current);
+      }
+
+      const signalsBySource = new Map<string, PreviewSignal[]>();
+      for (const signal of rawSignals) {
+        if (!signal.sourceId || !isMeaningfulPreview(signal)) continue;
+        const bucket = signalsBySource.get(signal.sourceId) || [];
         if (bucket.length >= 3) continue;
-
-        const extracted = getJsonRecord(document.extractedData);
-        const sourceAmount = getNumericField(extracted, "sourceAmount", "amount", "totalAmount");
-        const amount = getNumericField(extracted, "amount", "normalizedAmount", "sourceAmount");
-        const sourceCurrency = getStringField(extracted, "sourceCurrency", "currency");
-        const category = getStringField(extracted, "category", "categoryHint");
-        const settlementStatus =
-          document.messageSubtype === "payment_failed"
-            ? "failed"
-            : document.classification === "ignored"
-            ? "ignored"
-            : document.classification === "expense_receipt" ||
-              document.classification === "income_notice" ||
-              document.classification === "refund_notice"
-            ? "settled"
-            : "provisional";
-
-        bucket.push({
-          id: document.id,
-          kind: inferSignalKind(document.classification, document.messageSubtype),
-          messageSubtype: document.messageSubtype || "unknown",
-          settlementStatus,
-          description: document.subject || document.classification.replace(/_/g, " "),
-          amount,
-          sourceAmount,
-          sourceCurrency,
-          fxRate: getNumericField(extracted, "fxRate"),
-          requiresCurrencyReview: Boolean(extracted?.requiresCurrencyReview),
-          promotionState:
-            document.classification === "ignored"
-              ? "ignored"
-              : document.classification === "unclassified"
-              ? "pending_review"
-              : "user_confirmed",
-          category,
-          document: {
-            subject: document.subject,
-            sender: document.sender,
-          },
-        });
-
-        documentsBySource.set(document.sourceId, bucket);
+        bucket.push(signal);
+        signalsBySource.set(signal.sourceId, bucket);
       }
 
       return NextResponse.json({
-        sources: sources.map((source) => ({
-          ...source,
-          signals: documentsBySource.get(source.id) || [],
-          rules: rulesBySource.get(source.id) || [],
-          exampleSubtypes: [
-            ...new Set((documentsBySource.get(source.id) || []).map((signal) => signal.messageSubtype)),
-          ],
-        })),
+        sources: sources.map((source) => {
+          const liveSettlementCounts = settlementCountsBySource.get(source.id);
+          const livePromotionCounts = promotionCountsBySource.get(source.id);
+          const previewSignals = signalsBySource.get(source.id) || [];
+
+          return {
+            ...source,
+            documentCount: documentCountsBySource.get(source.id) ?? source.documentCount,
+            signalCount: signalCountsBySource.get(source.id) ?? source.signalCount,
+            confirmedCount: livePromotionCounts?.confirmed ?? source.confirmedCount,
+            ignoredCount: livePromotionCounts?.ignored ?? source.ignoredCount,
+            autoPostCount: livePromotionCounts?.autoPosted ?? source.autoPostCount,
+            provisionalCount: liveSettlementCounts?.provisional ?? source.provisionalCount,
+            settledCount: liveSettlementCounts?.settled ?? source.settledCount,
+            failedCount: liveSettlementCounts?.failed ?? source.failedCount,
+            signals: previewSignals.map((signal) => ({
+              id: signal.id,
+              kind: signal.kind,
+              messageSubtype: signal.messageSubtype || "unknown",
+              settlementStatus: signal.settlementStatus || "provisional",
+              description: signal.description,
+              amount: signal.amount,
+              sourceAmount: signal.sourceAmount,
+              sourceCurrency: signal.sourceCurrency,
+              fxRate: signal.fxRate,
+              requiresCurrencyReview: signal.requiresCurrencyReview,
+              promotionState: signal.promotionState,
+              category: signal.category,
+              document: {
+                subject: signal.document?.subject || null,
+                sender: signal.document?.sender || null,
+              },
+            })),
+            rules: rulesBySource.get(source.id) || [],
+            exampleSubtypes: [...new Set(previewSignals.map((signal) => signal.messageSubtype || "unknown"))],
+          };
+        }),
       });
     });
   } catch (error) {
