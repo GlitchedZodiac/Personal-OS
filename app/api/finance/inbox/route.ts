@@ -5,15 +5,50 @@ import type { ReviewAction } from "@/lib/finance/constants";
 
 export async function GET() {
   try {
-    const inboxData = await prisma.$transaction(async (tx) => {
-      const newSources = await tx.financeSource.findMany({
-          where: {
-            trustLevel: { in: ["new", "learning"] },
-            defaultDisposition: { not: "always_ignore" },
-            documentCount: { gt: 0 },
-          },
-          orderBy: [{ documentCount: "desc" }, { lastSeenAt: "desc" }],
-          take: 8,
+    const newSources = await prisma.financeSource.findMany({
+      where: {
+        trustLevel: { in: ["new", "learning"] },
+        defaultDisposition: { not: "always_ignore" },
+        documentCount: { gt: 0 },
+      },
+      orderBy: [{ documentCount: "desc" }, { lastSeenAt: "desc" }],
+      take: 8,
+      select: {
+        id: true,
+        label: true,
+        senderEmail: true,
+        senderDomain: true,
+        trustLevel: true,
+        defaultDisposition: true,
+        documentCount: true,
+        signalCount: true,
+      },
+    });
+
+    const pendingSignals = await prisma.financeSignal.findMany({
+      where: {
+        promotionState: "pending_review",
+        settlementStatus: { notIn: ["ignored"] },
+        kind: { in: ["purchase", "subscription", "income", "refund", "transfer", "unknown"] },
+      },
+      orderBy: [{ transactedAt: "desc" }, { createdAt: "desc" }],
+      take: 24,
+      select: {
+        id: true,
+        kind: true,
+        messageSubtype: true,
+        settlementStatus: true,
+        description: true,
+        amount: true,
+        sourceAmount: true,
+        sourceCurrency: true,
+        category: true,
+        promotionState: true,
+        confidence: true,
+        dueDate: true,
+        fxRate: true,
+        requiresCurrencyReview: true,
+        source: {
           select: {
             id: true,
             label: true,
@@ -24,144 +59,97 @@ export async function GET() {
             documentCount: true,
             signalCount: true,
           },
-        });
-
-      const pendingSignals = await tx.financeSignal.findMany({
-          where: {
-            promotionState: "pending_review",
-            settlementStatus: { notIn: ["ignored"] },
-            kind: { in: ["purchase", "subscription", "income", "refund", "transfer", "unknown"] },
-          },
-          orderBy: [{ transactedAt: "desc" }, { createdAt: "desc" }],
-          take: 24,
-          select: {
-            id: true,
-            kind: true,
-            messageSubtype: true,
-            settlementStatus: true,
-            description: true,
-            amount: true,
-            sourceAmount: true,
-            sourceCurrency: true,
-            category: true,
-            promotionState: true,
-            confidence: true,
-            dueDate: true,
-            fxRate: true,
-            requiresCurrencyReview: true,
-            source: {
-              select: {
-                id: true,
-                label: true,
-                senderEmail: true,
-                senderDomain: true,
-                trustLevel: true,
-                defaultDisposition: true,
-                documentCount: true,
-                signalCount: true,
-              },
-            },
-            document: {
-              select: {
-                id: true,
-                sender: true,
-                subject: true,
-                filename: true,
-                classification: true,
-                messageSubtype: true,
-                processingStage: true,
-                status: true,
-                passwordSecretKey: true,
-              },
-            },
-            merchant: { select: { id: true, name: true } },
-          },
-        });
-
-      const upcomingBills = await tx.financeSignal.findMany({
-          where: {
-            kind: { in: ["bill_due", "statement", "subscription"] },
-            settlementStatus: { notIn: ["ignored", "failed", "rejected"] },
-            status: { not: "ignored" },
-          },
-          orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-          take: 12,
-          select: {
-            id: true,
-            kind: true,
-            messageSubtype: true,
-            settlementStatus: true,
-            description: true,
-            amount: true,
-            sourceAmount: true,
-            sourceCurrency: true,
-            category: true,
-            promotionState: true,
-            confidence: true,
-            dueDate: true,
-            fxRate: true,
-            requiresCurrencyReview: true,
-            source: {
-              select: {
-                id: true,
-                label: true,
-                senderEmail: true,
-                senderDomain: true,
-                trustLevel: true,
-                defaultDisposition: true,
-                documentCount: true,
-                signalCount: true,
-              },
-            },
-            document: {
-              select: {
-                id: true,
-                sender: true,
-                subject: true,
-                filename: true,
-                classification: true,
-                messageSubtype: true,
-                processingStage: true,
-                status: true,
-                passwordSecretKey: true,
-              },
-            },
-            merchant: { select: { id: true, name: true } },
-          },
-        });
-
-      const ignoredNoise = await tx.financeDocument.findMany({
-          where: { classification: "ignored" },
-          orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
-          take: 12,
+        },
+        document: {
           select: {
             id: true,
             sender: true,
             subject: true,
+            filename: true,
             classification: true,
-            sourceRef: {
-              select: {
-                id: true,
-                label: true,
-                trustLevel: true,
-                defaultDisposition: true,
-              },
-            },
+            messageSubtype: true,
+            processingStage: true,
+            status: true,
+            passwordSecretKey: true,
           },
-        });
-
-      const pendingReviews = await tx.financeReviewItem.count({ where: { status: "pending" } });
-
-      return {
-        newSources,
-        pendingSignals,
-        upcomingBills,
-        ignoredNoise,
-        pendingReviews,
-      };
+        },
+        merchant: { select: { id: true, name: true } },
+      },
     });
 
-    const { newSources, pendingSignals, upcomingBills, ignoredNoise, pendingReviews } = inboxData;
+    const upcomingBills = await prisma.financeSignal.findMany({
+      where: {
+        kind: { in: ["bill_due", "statement", "subscription"] },
+        settlementStatus: { notIn: ["ignored", "failed", "rejected"] },
+        status: { not: "ignored" },
+      },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+      take: 12,
+      select: {
+        id: true,
+        kind: true,
+        messageSubtype: true,
+        settlementStatus: true,
+        description: true,
+        amount: true,
+        sourceAmount: true,
+        sourceCurrency: true,
+        category: true,
+        promotionState: true,
+        confidence: true,
+        dueDate: true,
+        fxRate: true,
+        requiresCurrencyReview: true,
+        source: {
+          select: {
+            id: true,
+            label: true,
+            senderEmail: true,
+            senderDomain: true,
+            trustLevel: true,
+            defaultDisposition: true,
+            documentCount: true,
+            signalCount: true,
+          },
+        },
+        document: {
+          select: {
+            id: true,
+            sender: true,
+            subject: true,
+            filename: true,
+            classification: true,
+            messageSubtype: true,
+            processingStage: true,
+            status: true,
+            passwordSecretKey: true,
+          },
+        },
+        merchant: { select: { id: true, name: true } },
+      },
+    });
+
+    const ignoredNoise = await prisma.financeDocument.findMany({
+      where: { classification: "ignored" },
+      orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
+      take: 12,
+      select: {
+        id: true,
+        sender: true,
+        subject: true,
+        classification: true,
+        sourceRef: {
+          select: {
+            id: true,
+            label: true,
+            trustLevel: true,
+            defaultDisposition: true,
+          },
+        },
+      },
+    });
+
+    const pendingReviews = await prisma.financeReviewItem.count({ where: { status: "pending" } });
 
     return NextResponse.json({
       counts: {
