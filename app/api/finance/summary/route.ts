@@ -49,7 +49,218 @@ export async function GET(req: NextRequest) {
     const prevMonthStart = startOfMonth(subMonths(currentMonth, 1));
     const prevMonthEnd = endOfMonth(subMonths(currentMonth, 1));
 
-    const [
+    const summaryData = await prisma.$transaction(async (tx) => {
+      const accounts = await tx.financialAccount.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          accountType: true,
+          balance: true,
+          creditLimit: true,
+          institution: true,
+          icon: true,
+          color: true,
+          currency: true,
+        },
+      });
+
+      const thisMonthIncome = await tx.financialTransaction.aggregate({
+        where: {
+          transactedAt: { gte: monthStart, lte: monthEnd },
+          type: "income",
+          ...ACTIVE_TRANSACTION_FILTER,
+        },
+        _sum: { amount: true },
+        _count: true,
+      });
+
+      const thisMonthExpenses = await tx.financialTransaction.aggregate({
+        where: {
+          transactedAt: { gte: monthStart, lte: monthEnd },
+          type: "expense",
+          ...ACTIVE_TRANSACTION_FILTER,
+        },
+        _sum: { amount: true },
+        _count: true,
+      });
+
+      const prevMonthIncome = await tx.financialTransaction.aggregate({
+        where: {
+          transactedAt: { gte: prevMonthStart, lte: prevMonthEnd },
+          type: "income",
+          ...ACTIVE_TRANSACTION_FILTER,
+        },
+        _sum: { amount: true },
+      });
+
+      const prevMonthExpenses = await tx.financialTransaction.aggregate({
+        where: {
+          transactedAt: { gte: prevMonthStart, lte: prevMonthEnd },
+          type: "expense",
+          ...ACTIVE_TRANSACTION_FILTER,
+        },
+        _sum: { amount: true },
+      });
+
+      const todayExpenses = await tx.financialTransaction.aggregate({
+        where: {
+          transactedAt: { gte: startOfDay(now), lte: endOfDay(now) },
+          type: "expense",
+          ...ACTIVE_TRANSACTION_FILTER,
+        },
+        _sum: { amount: true },
+        _count: true,
+      });
+
+      const categoryBreakdown = await tx.financialTransaction.groupBy({
+        by: ["category"],
+        where: {
+          transactedAt: { gte: monthStart, lte: monthEnd },
+          type: "expense",
+          ...ACTIVE_TRANSACTION_FILTER,
+        },
+        _sum: { amount: true },
+        _count: true,
+        orderBy: { _sum: { amount: "asc" } },
+      });
+
+      const recentTransactions = await tx.financialTransaction.findMany({
+        where: ACTIVE_TRANSACTION_FILTER,
+        orderBy: { transactedAt: "desc" },
+        take: 8,
+        select: {
+          id: true,
+          transactedAt: true,
+          amount: true,
+          description: true,
+          category: true,
+          type: true,
+          status: true,
+          reviewState: true,
+          taxAmount: true,
+          tipAmount: true,
+          account: { select: { name: true, icon: true } },
+          merchantRef: { select: { id: true, name: true } },
+        },
+      });
+
+      const recurringTransactions = await tx.recurringTransaction.findMany({
+        where: { isActive: true },
+        orderBy: { nextDueDate: "asc" },
+        take: 8,
+      });
+
+      const savingsGoals = await tx.savingsGoal.findMany({
+        where: { isCompleted: false },
+        orderBy: { createdAt: "asc" },
+        take: 8,
+      });
+
+      const last7DaysSpending: Array<{
+        date: string;
+        fullDate: string;
+        amount: number;
+      }> = [];
+      for (let i = 0; i < 7; i += 1) {
+        const day = subDays(now, i);
+        const result = await tx.financialTransaction.aggregate({
+          where: {
+            transactedAt: { gte: startOfDay(day), lte: endOfDay(day) },
+            type: "expense",
+            ...ACTIVE_TRANSACTION_FILTER,
+          },
+          _sum: { amount: true },
+        });
+
+        last7DaysSpending.push({
+          date: format(day, "EEE"),
+          fullDate: format(day, "yyyy-MM-dd"),
+          amount: Math.abs(result._sum.amount || 0),
+        });
+      }
+
+      const pendingReviews = await tx.financeReviewItem.count({ where: { status: "pending" } });
+      const upcomingPayments = await tx.upcomingPayment.findMany({
+        where: {
+          dueDate: { gte: now },
+          status: { in: ["detected", "confirmed"] },
+        },
+        include: { merchant: true },
+        orderBy: { dueDate: "asc" },
+        take: 5,
+      });
+
+      const reportSummary = await getFinanceReportSummary(currentMonth, tx);
+      const pendingSignals = await tx.financeSignal.count({
+        where: { promotionState: "pending_review" },
+      });
+      const ignoredSignals = await tx.financeSignal.count({
+        where: { promotionState: { in: ["ignored", "dismissed"] } },
+      });
+      const provisionalSignals = await tx.financeSignal.count({
+        where: { settlementStatus: "provisional" },
+      });
+      const failedSignals = await tx.financeSignal.count({
+        where: { settlementStatus: { in: ["failed", "rejected"] } },
+      });
+      const totalSources = await tx.financeSource.count();
+      const trustedSources = await tx.financeSource.count({
+        where: { trustLevel: "trusted" },
+      });
+      const ignoredSources = await tx.financeSource.count({
+        where: { defaultDisposition: "always_ignore" },
+      });
+      const mailboxConnection = await tx.googleMailboxConnection.findUnique({
+        where: { id: "default" },
+      });
+      const errorDocuments = await tx.financeDocument.count({
+        where: { status: "error" },
+      });
+      const ignoredDocuments = await tx.financeDocument.count({
+        where: { classification: "ignored" },
+      });
+
+      const budget = await tx.budget.findUnique({
+        where: {
+          month_year: {
+            month: currentMonth.getMonth() + 1,
+            year: currentMonth.getFullYear(),
+          },
+        },
+        include: { items: { include: { category: true } } },
+      });
+
+      return {
+        accounts,
+        thisMonthIncome,
+        thisMonthExpenses,
+        prevMonthIncome,
+        prevMonthExpenses,
+        todayExpenses,
+        categoryBreakdown,
+        recentTransactions,
+        recurringTransactions,
+        savingsGoals,
+        last7DaysSpending,
+        pendingReviews,
+        upcomingPayments,
+        reportSummary,
+        pendingSignals,
+        ignoredSignals,
+        provisionalSignals,
+        failedSignals,
+        totalSources,
+        trustedSources,
+        ignoredSources,
+        mailboxConnection,
+        errorDocuments,
+        ignoredDocuments,
+        budget,
+      };
+    });
+
+    const {
       accounts,
       thisMonthIncome,
       thisMonthExpenses,
@@ -74,163 +285,8 @@ export async function GET(req: NextRequest) {
       mailboxConnection,
       errorDocuments,
       ignoredDocuments,
-      monthlyDocumentCoverage,
-      earliestDocument,
-    ] = await Promise.all([
-      prisma.financialAccount.findMany({
-        where: { isActive: true },
-        select: {
-          id: true,
-          name: true,
-          accountType: true,
-          balance: true,
-          creditLimit: true,
-          institution: true,
-          icon: true,
-          color: true,
-          currency: true,
-        },
-      }),
-      prisma.financialTransaction.aggregate({
-        where: {
-          transactedAt: { gte: monthStart, lte: monthEnd },
-          type: "income",
-          ...ACTIVE_TRANSACTION_FILTER,
-        },
-        _sum: { amount: true },
-        _count: true,
-      }),
-      prisma.financialTransaction.aggregate({
-        where: {
-          transactedAt: { gte: monthStart, lte: monthEnd },
-          type: "expense",
-          ...ACTIVE_TRANSACTION_FILTER,
-        },
-        _sum: { amount: true },
-        _count: true,
-      }),
-      prisma.financialTransaction.aggregate({
-        where: {
-          transactedAt: { gte: prevMonthStart, lte: prevMonthEnd },
-          type: "income",
-          ...ACTIVE_TRANSACTION_FILTER,
-        },
-        _sum: { amount: true },
-      }),
-      prisma.financialTransaction.aggregate({
-        where: {
-          transactedAt: { gte: prevMonthStart, lte: prevMonthEnd },
-          type: "expense",
-          ...ACTIVE_TRANSACTION_FILTER,
-        },
-        _sum: { amount: true },
-      }),
-      prisma.financialTransaction.aggregate({
-        where: {
-          transactedAt: { gte: startOfDay(now), lte: endOfDay(now) },
-          type: "expense",
-          ...ACTIVE_TRANSACTION_FILTER,
-        },
-        _sum: { amount: true },
-        _count: true,
-      }),
-      prisma.financialTransaction.groupBy({
-        by: ["category"],
-        where: {
-          transactedAt: { gte: monthStart, lte: monthEnd },
-          type: "expense",
-          ...ACTIVE_TRANSACTION_FILTER,
-        },
-        _sum: { amount: true },
-        _count: true,
-        orderBy: { _sum: { amount: "asc" } },
-      }),
-      prisma.financialTransaction.findMany({
-        where: ACTIVE_TRANSACTION_FILTER,
-        orderBy: { transactedAt: "desc" },
-        take: 10,
-        select: {
-          id: true,
-          transactedAt: true,
-          amount: true,
-          description: true,
-          category: true,
-          type: true,
-          status: true,
-          reviewState: true,
-          taxAmount: true,
-          tipAmount: true,
-          account: { select: { name: true, icon: true } },
-          merchantRef: { select: { id: true, name: true } },
-        },
-      }),
-      prisma.recurringTransaction.findMany({
-        where: { isActive: true },
-        orderBy: { nextDueDate: "asc" },
-      }),
-      prisma.savingsGoal.findMany({
-        where: { isCompleted: false },
-        orderBy: { createdAt: "asc" },
-      }),
-      Promise.all(
-        Array.from({ length: 7 }, (_, i) => {
-          const day = subDays(now, i);
-          return prisma.financialTransaction
-            .aggregate({
-              where: {
-                transactedAt: { gte: startOfDay(day), lte: endOfDay(day) },
-                type: "expense",
-                ...ACTIVE_TRANSACTION_FILTER,
-              },
-              _sum: { amount: true },
-            })
-            .then((result) => ({
-              date: format(day, "EEE"),
-              fullDate: format(day, "yyyy-MM-dd"),
-              amount: Math.abs(result._sum.amount || 0),
-            }));
-        })
-      ),
-      prisma.financeReviewItem.count({ where: { status: "pending" } }),
-      prisma.upcomingPayment.findMany({
-        where: {
-          dueDate: { gte: now },
-          status: { in: ["detected", "confirmed"] },
-        },
-        include: { merchant: true },
-        orderBy: { dueDate: "asc" },
-        take: 5,
-      }),
-      getFinanceReportSummary(currentMonth),
-      prisma.financeSignal.count({ where: { promotionState: "pending_review" } }),
-      prisma.financeSignal.count({ where: { promotionState: { in: ["ignored", "dismissed"] } } }),
-      prisma.financeSignal.count({ where: { settlementStatus: "provisional" } }),
-      prisma.financeSignal.count({ where: { settlementStatus: { in: ["failed", "rejected"] } } }),
-      prisma.financeSource.count(),
-      prisma.financeSource.count({ where: { trustLevel: "trusted" } }),
-      prisma.financeSource.count({ where: { defaultDisposition: "always_ignore" } }),
-      prisma.googleMailboxConnection.findUnique({ where: { id: "default" } }),
-      prisma.financeDocument.count({ where: { status: "error" } }),
-      prisma.financeDocument.count({ where: { classification: "ignored" } }),
-      Promise.all(
-        Array.from({ length: 12 }, (_, i) => {
-          const cursor = subMonths(startOfMonth(now), i);
-          return prisma.financeDocument.count({
-            where: {
-              receivedAt: { gte: startOfMonth(cursor), lte: endOfMonth(cursor) },
-            },
-          }).then((count) => ({
-            month: format(cursor, "yyyy-MM"),
-            count,
-          }));
-        })
-      ),
-      prisma.financeDocument.findFirst({
-        where: { receivedAt: { not: null } },
-        orderBy: { receivedAt: "asc" },
-        select: { receivedAt: true },
-      }),
-    ]);
+      budget,
+    } = summaryData;
 
     const netWorth = accounts.reduce((sum, account) => {
       if (account.accountType === "credit_card" || account.accountType === "loan") {
@@ -247,16 +303,6 @@ export async function GET(req: NextRequest) {
     const expenses = Math.abs(thisMonthExpenses._sum.amount || 0);
     const prevIncome = Math.abs(prevMonthIncome._sum.amount || 0);
     const prevExpenses = Math.abs(prevMonthExpenses._sum.amount || 0);
-
-    const budget = await prisma.budget.findUnique({
-      where: {
-        month_year: {
-          month: currentMonth.getMonth() + 1,
-          year: currentMonth.getFullYear(),
-        },
-      },
-      include: { items: { include: { category: true } } },
-    });
 
     const totalBudgeted =
       budget?.items
@@ -328,10 +374,10 @@ export async function GET(req: NextRequest) {
         documents: ignoredDocuments,
       },
       backfillCoverage: {
-        oldestSyncedDate: earliestDocument?.receivedAt || null,
+        oldestSyncedDate: null,
         lastBackfillAt: mailboxConnection?.lastBackfillAt || null,
         lastSyncAt: mailboxConnection?.lastSyncAt || null,
-        documentsByMonth: monthlyDocumentCoverage.reverse(),
+        documentsByMonth: [],
         errorCount: errorDocuments,
       },
     });

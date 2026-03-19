@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { endOfMonth, format, startOfMonth } from "date-fns";
 
@@ -44,89 +45,121 @@ export function calculateVendorConcentration(merchants: MerchantReport[]) {
   }));
 }
 
-export async function getFinanceReportSummary(referenceDate = new Date()) {
+type FinanceReportDb = Pick<
+  typeof prisma,
+  "financialTransaction" | "financeReviewItem" | "upcomingPayment" | "merchant" | "budget"
+>;
+
+const ACTIVE_EXPENSE_FILTER: Prisma.FinancialTransactionWhereInput = {
+  type: "expense",
+  excludedFromBudget: false,
+  status: "posted",
+  reviewState: "resolved",
+  settlementStatus: { notIn: ["provisional", "failed", "rejected", "ignored"] },
+  OR: [
+    { sourceDocumentId: null },
+    {
+      sourceDocument: {
+        classification: {
+          in: [
+            "expense_receipt",
+            "income_notice",
+            "refund_notice",
+            "transfer_notice",
+            "subscription_notice",
+          ],
+        },
+      },
+    },
+  ],
+};
+
+export async function getFinanceReportSummary(
+  referenceDate = new Date(),
+  db: FinanceReportDb = prisma
+) {
   const monthStart = startOfMonth(referenceDate);
   const monthEnd = endOfMonth(referenceDate);
 
-  const [transactions, reviewCount, upcomingPayments, merchants, budget] = await Promise.all([
-    prisma.financialTransaction.findMany({
-      where: {
-        transactedAt: { gte: monthStart, lte: monthEnd },
-        type: "expense",
-        excludedFromBudget: false,
-        status: "posted",
-        reviewState: "resolved",
-        OR: [
-          { sourceDocumentId: null },
-          {
-            sourceDocument: {
-              classification: {
-                in: [
-                  "expense_receipt",
-                  "income_notice",
-                  "refund_notice",
-                  "transfer_notice",
-                  "subscription_notice",
-                ],
-              },
-            },
-          },
-        ],
-      },
-      select: {
-        id: true,
-        amount: true,
-        category: true,
-        merchantId: true,
-        taxAmount: true,
-        tipAmount: true,
-        merchantRef: { select: { id: true, name: true } },
-      },
-    }),
-    prisma.financeReviewItem.count({ where: { status: "pending" } }),
-    prisma.upcomingPayment.findMany({
-      where: { dueDate: { gte: referenceDate }, status: { in: ["detected", "confirmed"] } },
-      orderBy: { dueDate: "asc" },
-      take: 8,
-      include: { merchant: true },
-    }),
-    prisma.merchant.findMany({
-      orderBy: { totalSpent: "desc" },
-      take: 8,
-    }),
-    prisma.budget.findUnique({
-      where: {
-        month_year: {
-          month: referenceDate.getMonth() + 1,
-          year: referenceDate.getFullYear(),
-        },
-      },
-      include: { items: { include: { category: true } } },
-    }),
-  ]);
+  const merchantSpendRows = await db.financialTransaction.groupBy({
+    by: ["merchantId"],
+    where: {
+      transactedAt: { gte: monthStart, lte: monthEnd },
+      ...ACTIVE_EXPENSE_FILTER,
+    },
+    _sum: {
+      amount: true,
+      taxAmount: true,
+      tipAmount: true,
+    },
+    _count: {
+      _all: true,
+    },
+  });
 
-  const merchantTotals = new Map<string, MerchantReport>();
-  for (const tx of transactions) {
-    const id = tx.merchantRef?.id || tx.merchantId || "unknown";
-    const name = tx.merchantRef?.name || "Unassigned";
-    const current = merchantTotals.get(id) || {
-      id,
-      name,
-      totalSpent: 0,
-      totalTax: 0,
-      totalTip: 0,
-      transactionCount: 0,
+  const categorySpendRows = await db.financialTransaction.groupBy({
+    by: ["category"],
+    where: {
+      transactedAt: { gte: monthStart, lte: monthEnd },
+      ...ACTIVE_EXPENSE_FILTER,
+    },
+    _sum: { amount: true },
+  });
+
+  const reviewCount = await db.financeReviewItem.count({ where: { status: "pending" } });
+
+  const upcomingPayments = await db.upcomingPayment.findMany({
+    where: { dueDate: { gte: referenceDate }, status: { in: ["detected", "confirmed"] } },
+    orderBy: { dueDate: "asc" },
+    take: 8,
+    include: { merchant: true },
+  });
+
+  const merchantIds = merchantSpendRows
+    .map((row) => row.merchantId)
+    .filter((merchantId): merchantId is string => Boolean(merchantId));
+  const merchants = merchantIds.length
+    ? await db.merchant.findMany({
+        where: { id: { in: merchantIds } },
+        select: {
+          id: true,
+          name: true,
+          totalSpent: true,
+          transactionCount: true,
+          totalTax: true,
+          totalTip: true,
+        },
+      })
+    : [];
+
+  const budget = await db.budget.findUnique({
+    where: {
+      month_year: {
+        month: referenceDate.getMonth() + 1,
+        year: referenceDate.getFullYear(),
+      },
+    },
+    include: { items: { include: { category: true } } },
+  });
+
+  const merchantMap = new Map(merchants.map((merchant) => [merchant.id, merchant]));
+  const merchantTotals = merchantSpendRows.map((row) => {
+    const merchant = row.merchantId ? merchantMap.get(row.merchantId) : null;
+    const count =
+      typeof row._count === "object" && row._count ? ("_all" in row._count ? row._count._all || 0 : 0) : 0;
+    return {
+      id: row.merchantId || "unknown",
+      name: merchant?.name || "Unassigned",
+      totalSpent: Math.abs(row._sum?.amount || 0),
+      totalTax: row._sum?.taxAmount || 0,
+      totalTip: row._sum?.tipAmount || 0,
+      transactionCount: count,
     };
-    current.totalSpent += Math.abs(tx.amount);
-    current.totalTax += tx.taxAmount || 0;
-    current.totalTip += tx.tipAmount || 0;
-    current.transactionCount += 1;
-    merchantTotals.set(id, current);
-  }
+  });
 
   const actualByCategory = new Map<string, number>();
-  for (const tx of transactions) {
-    actualByCategory.set(tx.category, (actualByCategory.get(tx.category) || 0) + Math.abs(tx.amount));
+  for (const row of categorySpendRows) {
+    actualByCategory.set(row.category, Math.abs(row._sum?.amount || 0));
   }
 
   const categoryBudgetRows =
@@ -146,7 +179,7 @@ export async function getFinanceReportSummary(referenceDate = new Date()) {
     monthLabel: format(referenceDate, "MMMM yyyy"),
     pendingReviews: reviewCount,
     topMerchants: calculateVendorConcentration(
-      Array.from(merchantTotals.values()).sort((a, b) => b.totalSpent - a.totalSpent)
+      merchantTotals.sort((a, b) => b.totalSpent - a.totalSpent)
     ).slice(0, 6),
     merchantLeaderboard: merchants.map((merchant) => ({
       id: merchant.id,
