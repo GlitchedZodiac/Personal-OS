@@ -145,6 +145,23 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
+    const obligationOccurrences = await prisma.scheduledObligationOccurrence.findMany({
+      where: {
+        dueDate: { gte: monthStart, lte: monthEnd },
+      },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+      include: {
+        obligation: true,
+        transaction: {
+          select: {
+            id: true,
+            amount: true,
+            transactedAt: true,
+          },
+        },
+      },
+    });
+
     const budgetWithActuals = categories.map((category) => {
       const budgetItem = budget!.items.find((item) => item.categoryId === category.id);
       const matchingCategories = BUDGET_NAME_TO_TX_CATEGORY[category.name] || [category.name.toLowerCase()];
@@ -212,6 +229,29 @@ export async function GET(req: NextRequest) {
         totalSpent: merchant.totalSpent,
         transactionCount: merchant.transactionCount,
       })),
+      plannedObligations: obligationOccurrences.map((occurrence) => ({
+        id: occurrence.id,
+        obligationId: occurrence.obligationId,
+        name: occurrence.obligation.name,
+        category: occurrence.obligation.category,
+        subcategory: occurrence.obligation.subcategory,
+        frequency: occurrence.obligation.frequency,
+        dueDate: occurrence.dueDate,
+        expectedAmount: occurrence.expectedAmount,
+        status: occurrence.status,
+        paidAt: occurrence.paidAt,
+        transactionId: occurrence.transactionId,
+        notes: occurrence.notes || occurrence.obligation.notes || null,
+      })),
+      planning: {
+        plannedObligationsTotal: obligationOccurrences.reduce(
+          (sum, occurrence) => sum + Math.abs(occurrence.expectedAmount || 0),
+          0
+        ),
+        dueObligationCount: obligationOccurrences.filter((occurrence) =>
+          ["due", "overdue"].includes(occurrence.status)
+        ).length,
+      },
     });
   } catch (error) {
     console.error("Error fetching budget:", error);

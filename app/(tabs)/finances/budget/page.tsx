@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Plus,
   Target,
   Save,
   TrendingUp,
@@ -53,6 +54,19 @@ interface BudgetData {
     percentUsed: number;
     surplus: number;
   };
+  plannedObligations?: Array<{
+    id: string;
+    name: string;
+    category: string;
+    dueDate: string;
+    expectedAmount: number;
+    status: string;
+    transactionId?: string | null;
+  }>;
+  planning?: {
+    plannedObligationsTotal: number;
+    dueObligationCount: number;
+  };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -79,6 +93,13 @@ export default function BudgetPage() {
   const [editValues, setEditValues] = useState<Record<string, { planned: number; isFixed: boolean }>>({});
   const [saving, setSaving] = useState(false);
   const [incomePlanned, setIncomePlanned] = useState(0);
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [categoryForm, setCategoryForm] = useState({
+    name: "",
+    type: "expense",
+    icon: "",
+    color: "",
+  });
 
   const monthKey = format(currentDate, "yyyy-MM");
 
@@ -147,6 +168,30 @@ export default function BudgetPage() {
   const expenseCategories = data?.categories.filter((c) => c.categoryType === "expense") || [];
   const incomeCategories = data?.categories.filter((c) => c.categoryType === "income") || [];
   const savingsCategories = data?.categories.filter((c) => c.categoryType === "savings") || [];
+
+  const handleAddCategory = async () => {
+    if (!categoryForm.name) return;
+    setSaving(true);
+    try {
+      await fetch("/api/finance/budget-categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: categoryForm.name,
+          type: categoryForm.type,
+          icon: categoryForm.icon || null,
+          color: categoryForm.color || null,
+        }),
+      });
+      setCategoryForm({ name: "", type: "expense", icon: "", color: "" });
+      setShowCategoryForm(false);
+      fetchBudget();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="px-4 pt-12 pb-36 space-y-4">
@@ -277,6 +322,127 @@ export default function BudgetPage() {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">Planned Obligations</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Manual recurring commitments that should shape the budget before they are paid.
+                  </p>
+                </div>
+                <Link href="/finances/obligations" className="text-[11px] text-emerald-400">
+                  Open obligations
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div className="rounded-xl border border-border/40 p-3">
+                  <p className="text-[10px] text-muted-foreground">Planned</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {formatCOP(data.planning?.plannedObligationsTotal || 0, true)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-border/40 p-3">
+                  <p className="text-[10px] text-muted-foreground">Due</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {data.planning?.dueObligationCount || 0}
+                  </p>
+                </div>
+              </div>
+              {(data.plannedObligations || []).length > 0 ? (
+                <div className="space-y-2">
+                  {data.plannedObligations?.slice(0, 5).map((obligation) => (
+                    <div key={obligation.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border/30 p-3">
+                      <div>
+                        <p className="text-xs font-medium">{obligation.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Due {format(new Date(obligation.dueDate), "MMM d")} · {obligation.status}
+                        </p>
+                      </div>
+                      <p className="text-xs font-semibold">
+                        {formatCOP(obligation.expectedAmount, true)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No manual obligations for this month yet.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {(editMode || showCategoryForm) && (
+            <Card>
+              <CardContent className="space-y-3 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground">Custom Categories</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Add budget categories directly from the UI for planning lines the defaults missed.
+                    </p>
+                  </div>
+                  {!showCategoryForm && (
+                    <button
+                      onClick={() => setShowCategoryForm(true)}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-secondary text-foreground hover:bg-secondary/80 transition-colors flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add Category
+                    </button>
+                  )}
+                </div>
+                {showCategoryForm && (
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <input
+                      className="rounded-xl bg-secondary/50 px-3 py-2 text-xs"
+                      placeholder="Category name"
+                      value={categoryForm.name}
+                      onChange={(e) => setCategoryForm((p) => ({ ...p, name: e.target.value }))}
+                    />
+                    <select
+                      className="rounded-xl bg-secondary/50 px-3 py-2 text-xs"
+                      value={categoryForm.type}
+                      onChange={(e) => setCategoryForm((p) => ({ ...p, type: e.target.value }))}
+                    >
+                      <option value="expense">Expense</option>
+                      <option value="income">Income</option>
+                      <option value="savings">Savings</option>
+                    </select>
+                    <input
+                      className="rounded-xl bg-secondary/50 px-3 py-2 text-xs"
+                      placeholder="Icon (optional)"
+                      value={categoryForm.icon}
+                      onChange={(e) => setCategoryForm((p) => ({ ...p, icon: e.target.value }))}
+                    />
+                    <input
+                      className="rounded-xl bg-secondary/50 px-3 py-2 text-xs"
+                      placeholder="Color hex (optional)"
+                      value={categoryForm.color}
+                      onChange={(e) => setCategoryForm((p) => ({ ...p, color: e.target.value }))}
+                    />
+                    <div className="md:col-span-4 flex gap-2">
+                      <button
+                        onClick={handleAddCategory}
+                        disabled={saving || !categoryForm.name}
+                        className="text-xs px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors disabled:opacity-50"
+                      >
+                        {saving ? "Saving..." : "Save Category"}
+                      </button>
+                      <button
+                        onClick={() => setShowCategoryForm(false)}
+                        className="text-xs px-3 py-2 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Expense Categories — Desires vs Actuals */}
           <div className="space-y-1">

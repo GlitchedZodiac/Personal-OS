@@ -15,6 +15,11 @@ import {
 } from "@/lib/finance/pipeline-utils";
 import { extractFinanceMoney } from "@/lib/finance/money";
 import { getVaultSecret, upsertVaultSecret } from "@/lib/finance/vault";
+import {
+  buildPrioritySourceSearchTerms,
+  matchPrioritySource,
+  syncSourceWithPriorityMatch,
+} from "@/lib/finance/priority-sources";
 
 const GOOGLE_TOKEN_SECRET_KEY = "gmail:default:oauth-token";
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
@@ -438,6 +443,8 @@ function buildFinanceCandidateFromText(params: {
   subject: string;
   text: string;
   receivedAt: Date;
+  priorityRole?: string | null;
+  priorityDisposition?: string | null;
   document: {
     source: string;
     externalId: string;
@@ -471,14 +478,20 @@ function buildFinanceCandidateFromText(params: {
     text: params.text,
     subject: params.subject,
   });
-  const type = /refund|reembolso/.test(lower)
+  const type = params.priorityRole === "payroll"
+    ? "income"
+    : /refund|reembolso/.test(lower)
     ? "income"
     : /salary|nomina|salario|deposito|abono/.test(lower)
     ? "income"
     : /transfer|transferencia|pse/.test(lower)
     ? "transfer"
     : "expense";
-  const signalKind = /refund|reembolso/.test(lower)
+  const signalKind = params.priorityDisposition === "bill_notice" || params.priorityRole === "card_statement"
+    ? "bill_due"
+    : params.priorityRole === "payroll"
+    ? "income"
+    : /refund|reembolso/.test(lower)
     ? "refund"
     : /salary|nomina|salario|deposito|abono/.test(lower)
     ? "income"
@@ -511,13 +524,19 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
   const full = await gmailFetch<GmailMessage>(accessToken, `messages/${message.id}?format=full`);
   const sender = getHeader(full.payload, "From");
   const subject = getHeader(full.payload, "Subject");
+  const senderDomain = extractSenderDomainFromHeader(sender);
   const receivedAt = coerceValidDate(
     full.internalDate ? new Date(Number(full.internalDate)) : new Date()
   ) || new Date();
   const text = collectTextParts(full.payload).join(" ").trim() || full.snippet || "";
   const messageExternalId = `gmail:${full.id}`;
+  const priorityMatch = await matchPrioritySource({
+    sender,
+    senderDomain,
+    subject,
+  });
 
-  if (!looksFinancial(`${subject} ${text}`)) {
+  if (!priorityMatch && !looksFinancial(`${subject} ${text}`)) {
     return { documents: 0, signals: 0, promotedTransactions: 0, reviews: 0, upcoming: 0 };
   }
 
@@ -527,6 +546,8 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
     subject,
     text,
     receivedAt,
+    priorityRole: priorityMatch?.sourceRole || null,
+    priorityDisposition: priorityMatch?.defaultDisposition || null,
     document: {
       source: "gmail_email",
       externalId: messageExternalId,
@@ -543,6 +564,9 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
   });
 
   const messageResult = await ingestFinanceCandidate(baseCandidate);
+  if (messageResult.source?.id && priorityMatch) {
+    await syncSourceWithPriorityMatch(messageResult.source.id, priorityMatch);
+  }
   if (messageResult.signal?.documentId) {
     await upsertUpcomingPayment({
       sourceDocumentId: messageResult.signal.documentId,
@@ -571,7 +595,9 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
     let requiresPassword = false;
     let status = "processed";
     let parseError: string | null = null;
-    const passwordSecretKey = `pdf:${normalizeMerchantName(sender) || "unknown"}:${filename.toLowerCase()}`;
+    const passwordSecretKey =
+      priorityMatch?.passwordSecretKey ||
+      `pdf:${normalizeMerchantName(sender) || "unknown"}:${filename.toLowerCase()}`;
 
     if (mimeType.includes("pdf") || filename.toLowerCase().endsWith(".pdf")) {
       requiresPassword = isEncryptedPdf(data);
@@ -609,10 +635,20 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
       merchant: extractSenderName(sender),
       source: "email_attachment",
       transactedAt: receivedAt,
-      type: /refund|reembolso/i.test(extractedText) ? "income" : "expense",
-      signalKind: /minimum due|minimo a pagar|payment due|statement|estado de cuenta|saldo total/i.test(
-        extractedText
-      )
+      type: priorityMatch?.sourceRole === "payroll"
+        ? "income"
+        : /refund|reembolso/i.test(extractedText)
+        ? "income"
+        : "expense",
+      signalKind:
+        priorityMatch?.defaultDisposition === "bill_notice" ||
+        priorityMatch?.sourceRole === "card_statement"
+        ? "bill_due"
+        : priorityMatch?.sourceRole === "payroll"
+        ? "income"
+        : /minimum due|minimo a pagar|payment due|statement|estado de cuenta|saldo total/i.test(
+            extractedText
+          )
         ? "bill_due"
         : /refund|reembolso/i.test(extractedText)
         ? "refund"
@@ -649,6 +685,10 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
         mailConnectionId: connectionId,
       },
     });
+
+    if (attachmentResult.source?.id && priorityMatch) {
+      await syncSourceWithPriorityMatch(attachmentResult.source.id, priorityMatch);
+    }
 
     attachmentSignalCount += attachmentResult.signal ? 1 : 0;
     attachmentPromotedCount += attachmentResult.transaction ? 1 : 0;
@@ -740,16 +780,21 @@ export async function syncGoogleFinanceMailbox(options?: {
   }
 
   if (usedFallback || messageIds.length === 0) {
+    const priorityTerms = await buildPrioritySourceSearchTerms();
     const afterDate =
       coerceValidDate(options?.dateFrom ? new Date(`${options.dateFrom}T00:00:00`) : null) ||
       subMonths(new Date(), syncLookbackMonths);
     const beforeDate = coerceValidDate(
       options?.dateTo ? new Date(`${options.dateTo}T00:00:00`) : null
     );
+    const combinedQuery =
+      priorityTerms.length > 0
+        ? `(${FINANCE_GMAIL_QUERY}) OR (${priorityTerms.join(" OR ")})`
+        : FINANCE_GMAIL_QUERY;
     const q = [
       `after:${afterDate.toISOString().slice(0, 10)}`,
       beforeDate ? `before:${beforeDate.toISOString().slice(0, 10)}` : null,
-      FINANCE_GMAIL_QUERY,
+      combinedQuery,
     ]
       .filter(Boolean)
       .join(" ");

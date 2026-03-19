@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { endOfDay, endOfMonth, startOfDay, startOfMonth, subDays } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { ingestFinanceCandidate } from "@/lib/finance/ingestion";
+import { ensurePaycheckAllocationRunForTransaction } from "@/lib/finance/planning";
 import { parseLocalDate } from "@/lib/utils";
 
 const POSTED_DOCUMENT_CLASSES = [
@@ -295,6 +296,18 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    if (result.transaction) {
+      await ensurePaycheckAllocationRunForTransaction({
+        transactionId: result.transaction.id,
+        grossAmount: Math.abs(result.transaction.amount),
+        category: result.transaction.category,
+        subcategory: result.transaction.subcategory,
+        description: result.transaction.description,
+        source: result.transaction.source,
+        type: result.transaction.type,
+      });
+    }
+
     return NextResponse.json(
       {
         transaction: result.transaction,
@@ -352,6 +365,16 @@ export async function PATCH(req: NextRequest) {
         data: { balance: { increment: nextAmount - existing.amount } },
       });
     }
+
+    await ensurePaycheckAllocationRunForTransaction({
+      transactionId: transaction.id,
+      grossAmount: Math.abs(transaction.amount),
+      category: transaction.category,
+      subcategory: transaction.subcategory,
+      description: transaction.description,
+      source: transaction.source,
+      type: transaction.type,
+    });
 
     return NextResponse.json(transaction);
   } catch (error) {

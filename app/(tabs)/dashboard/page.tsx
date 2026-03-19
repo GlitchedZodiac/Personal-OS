@@ -5,8 +5,10 @@ import { useMemo } from "react";
 import {
   ArrowUpRight,
   CheckSquare,
+  CalendarClock,
   Heart,
   LayoutDashboard,
+  Landmark,
   Receipt,
   Target,
   TrendingUp,
@@ -139,6 +141,8 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 gap-3">
               <ShortcutCard href="/finances/inbox" icon={Receipt} label="Finance Inbox" />
               <ShortcutCard href="/finances/transactions" icon={Wallet} label="Transactions" />
+              <ShortcutCard href="/finances/obligations" icon={CalendarClock} label="Obligations" />
+              <ShortcutCard href="/finances/pockets" icon={Landmark} label="Pockets" />
               <ShortcutCard href="/finances/merchants" icon={TrendingUp} label="Merchants" />
               <ShortcutCard href="/finances/reports" icon={Target} label="Reports" />
               <ShortcutCard href="/health" icon={Heart} label="Health" />

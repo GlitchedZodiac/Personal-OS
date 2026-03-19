@@ -319,7 +319,8 @@ model FinancialAccount {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  transactions FinancialTransaction[]
+  transactions        FinancialTransaction[]
+  scheduledObligations ScheduledObligation[]
 
   @@map("financial_accounts")
 }
@@ -376,6 +377,10 @@ model FinancialTransaction {
   updatedAt              DateTime               @updatedAt
   reviewItems            FinanceReviewItem[]
   changeLogs             TransactionChangeLog[]
+  learningEvents         FinanceLearningEvent[]
+  obligationOccurrences  ScheduledObligationOccurrence[]
+  paycheckAllocationRuns PaycheckAllocationRun[] @relation("PaycheckAllocationTransaction")
+  pocketEntries          PocketEntry[]            @relation("PocketEntrySourceTransaction")
 
   @@index([transactedAt])
   @@index([accountId])
@@ -608,6 +613,9 @@ model FinanceSource {
   isBiller           Boolean   @default(false)
   isIncomeSource     Boolean   @default(false)
   isRecurring        Boolean   @default(false)
+  isPriority         Boolean   @default(false)
+  prioritySourceRole String?
+  priorityInstitution String?
   documentCount      Int       @default(0)
   signalCount        Int       @default(0)
   confirmedCount     Int       @default(0)
@@ -619,6 +627,8 @@ model FinanceSource {
   firstSeenAt        DateTime  @default(now())
   lastSeenAt         DateTime  @default(now())
   notes              String?
+  reviewedAt         DateTime?
+  lastLearningEventAt DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -626,6 +636,7 @@ model FinanceSource {
   signals     FinanceSignal[]
   rules       FinanceRule[]
   reviewItems FinanceReviewItem[]
+  learningEvents FinanceLearningEvent[]
 
   @@index([trustLevel, defaultDisposition])
   @@index([senderDomain])
@@ -648,6 +659,7 @@ model FinanceRule {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   matchedSignals FinanceSignal[] @relation("MatchedRuleSignals")
+  learningEvents FinanceLearningEvent[]
 
   @@index([isActive, priority])
   @@index([merchantId])
@@ -704,6 +716,7 @@ model FinanceSignal {
   updatedAt              DateTime              @updatedAt
 
   reviewItems FinanceReviewItem[]
+  learningEvents FinanceLearningEvent[]
 
   @@index([documentId])
   @@index([sourceId, promotionState])
@@ -776,6 +789,166 @@ model TransactionChangeLog {
 
   @@index([transactionId, createdAt])
   @@map("transaction_change_logs")
+}
+
+model FinanceLearningEvent {
+  id            String               @id @default(uuid())
+  sourceId      String?
+  source        FinanceSource?       @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  ruleId        String?
+  rule          FinanceRule?         @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  signalId      String?
+  signal        FinanceSignal?       @relation(fields: [signalId], references: [id], onDelete: SetNull)
+  transactionId String?
+  transaction   FinancialTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  kind          String
+  summary       String
+  metadata      Json?
+  createdAt     DateTime             @default(now())
+
+  @@index([sourceId, createdAt])
+  @@index([ruleId, createdAt])
+  @@index([signalId, createdAt])
+  @@map("finance_learning_events")
+}
+
+model FinancePrioritySource {
+  id                 String   @id @default(uuid())
+  label              String
+  sourceRole         String
+  institution        String?
+  provider           String?
+  senderEmailPattern String?
+  senderDomainPattern String?
+  subjectPattern     String?
+  defaultDisposition String   @default("capture_only")
+  parserPriority     Int      @default(100)
+  isPinned           Boolean  @default(true)
+  active             Boolean  @default(true)
+  passwordSecretKey  String?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([active, parserPriority])
+  @@index([sourceRole])
+  @@map("finance_priority_sources")
+}
+
+model ScheduledObligation {
+  id               String                     @id @default(uuid())
+  name             String
+  amount           Float
+  currency         String                     @default("COP")
+  category         String
+  subcategory      String?
+  frequency        String
+  dueDay           Int?
+  nextOccurrenceAt DateTime?
+  defaultAccountId String?
+  defaultAccount   FinancialAccount?          @relation(fields: [defaultAccountId], references: [id], onDelete: SetNull)
+  notes            String?
+  active           Boolean                    @default(true)
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  occurrences ScheduledObligationOccurrence[]
+
+  @@index([active, nextOccurrenceAt])
+  @@map("scheduled_obligations")
+}
+
+model ScheduledObligationOccurrence {
+  id            String                 @id @default(uuid())
+  obligationId  String
+  obligation    ScheduledObligation    @relation(fields: [obligationId], references: [id], onDelete: Cascade)
+  dueDate       DateTime
+  expectedAmount Float
+  status        String                 @default("due")
+  paidAt        DateTime?
+  skippedAt     DateTime?
+  notes         String?
+  transactionId String?                @unique
+  transaction   FinancialTransaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@unique([obligationId, dueDate])
+  @@index([dueDate, status])
+  @@map("scheduled_obligation_occurrences")
+}
+
+model FundPocket {
+  id            String                  @id @default(uuid())
+  name          String
+  description   String?
+  icon          String?
+  color         String?
+  currentBalance Float                  @default(0)
+  targetAmount  Float?
+  active        Boolean                 @default(true)
+  sortOrder     Int                     @default(0)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  allocationRules PaycheckAllocationRule[]
+  entries         PocketEntry[]
+
+  @@index([active, sortOrder])
+  @@map("fund_pockets")
+}
+
+model PaycheckAllocationRule {
+  id              String     @id @default(uuid())
+  pocketId        String
+  pocket          FundPocket @relation(fields: [pocketId], references: [id], onDelete: Cascade)
+  name            String?
+  percentOfIncome Float
+  priority        Int        @default(0)
+  active          Boolean    @default(true)
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([active, priority])
+  @@map("paycheck_allocation_rules")
+}
+
+model PaycheckAllocationRun {
+  id                  String                @id @default(uuid())
+  sourceTransactionId String?               @unique
+  sourceTransaction   FinancialTransaction? @relation("PaycheckAllocationTransaction", fields: [sourceTransactionId], references: [id], onDelete: SetNull)
+  grossAmount         Float
+  suggestedAllocations Json?
+  status              String                @default("pending")
+  promptedAt          DateTime              @default(now())
+  confirmedAt         DateTime?
+  notes               String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  entries PocketEntry[]
+
+  @@index([status, promptedAt])
+  @@map("paycheck_allocation_runs")
+}
+
+model PocketEntry {
+  id                  String                @id @default(uuid())
+  pocketId            String
+  pocket              FundPocket            @relation(fields: [pocketId], references: [id], onDelete: Cascade)
+  allocationRunId     String?
+  allocationRun       PaycheckAllocationRun? @relation(fields: [allocationRunId], references: [id], onDelete: SetNull)
+  sourceTransactionId String?
+  sourceTransaction   FinancialTransaction? @relation("PocketEntrySourceTransaction", fields: [sourceTransactionId], references: [id], onDelete: SetNull)
+  amount              Float
+  entryType           String                @default("allocation")
+  occurredAt          DateTime              @default(now())
+  notes               String?
+  createdAt           DateTime              @default(now())
+
+  @@index([pocketId, occurredAt])
+  @@map("pocket_entries")
 }
 
 model ExchangeRateSnapshot {

@@ -24,6 +24,8 @@ import {
   Upload,
   Inbox,
   Workflow,
+  CalendarClock,
+  Landmark,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -392,7 +394,7 @@ export default function FinancesPage() {
           )}
 
           {/* Quick Links Grid */}
-          <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
+          <div className="grid grid-cols-3 lg:grid-cols-8 gap-2">
             <Link href="/finances/transactions">
               <Card className="hover:bg-accent/50 transition-all cursor-pointer group tap-scale">
                 <CardContent className="p-3 flex flex-col items-center gap-1.5">
@@ -433,13 +435,13 @@ export default function FinancesPage() {
                 </CardContent>
               </Card>
             </Link>
-            <Link href="/finances/inbox">
+            <Link href="/finances/obligations">
               <Card className="hover:bg-accent/50 transition-all cursor-pointer group tap-scale">
                 <CardContent className="p-3 flex flex-col items-center gap-1.5">
                   <div className="p-2 rounded-xl bg-amber-500/10 group-hover:bg-amber-500/20 transition-colors">
-                    <Receipt className="h-4 w-4 text-amber-500" />
+                    <CalendarClock className="h-4 w-4 text-amber-500" />
                   </div>
-                  <span className="text-[10px] font-medium">Inbox</span>
+                  <span className="text-[10px] font-medium">Obligations</span>
                 </CardContent>
               </Card>
             </Link>
@@ -450,6 +452,16 @@ export default function FinancesPage() {
                     <BarChart3 className="h-4 w-4 text-cyan-500" />
                   </div>
                   <span className="text-[10px] font-medium">Merchants</span>
+                </CardContent>
+              </Card>
+            </Link>
+            <Link href="/finances/pockets">
+              <Card className="hover:bg-accent/50 transition-all cursor-pointer group tap-scale">
+                <CardContent className="p-3 flex flex-col items-center gap-1.5">
+                  <div className="p-2 rounded-xl bg-violet-500/10 group-hover:bg-violet-500/20 transition-colors">
+                    <Landmark className="h-4 w-4 text-violet-400" />
+                  </div>
+                  <span className="text-[10px] font-medium">Pockets</span>
                 </CardContent>
               </Card>
             </Link>

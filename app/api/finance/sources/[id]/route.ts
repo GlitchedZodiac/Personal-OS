@@ -24,7 +24,11 @@ export async function PATCH(
         isBiller: body.isBiller ?? undefined,
         isIncomeSource: body.isIncomeSource ?? undefined,
         isRecurring: body.isRecurring ?? undefined,
+        isPriority: body.isPriority ?? undefined,
+        prioritySourceRole: body.prioritySourceRole ?? undefined,
+        priorityInstitution: body.priorityInstitution ?? undefined,
         notes: body.notes ?? undefined,
+        reviewedAt: new Date(),
       },
     });
 

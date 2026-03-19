@@ -29,6 +29,7 @@ import {
 } from "@/lib/finance/pipeline-utils";
 import { extractFinanceMoney, normalizeCurrencyCode } from "@/lib/finance/money";
 import { normalizeAmountToCop } from "@/lib/finance/fx";
+import { ensurePaycheckAllocationRunForTransaction } from "@/lib/finance/planning";
 import { upsertVaultSecret } from "@/lib/finance/vault";
 
 export {
@@ -1036,6 +1037,15 @@ async function promoteSignalToTransaction(params: {
   if (transaction.merchantId) {
     await refreshMerchantStats(transaction.merchantId);
   }
+  await ensurePaycheckAllocationRunForTransaction({
+    transactionId: transaction.id,
+    grossAmount: Math.abs(transaction.amount),
+    category: transaction.category,
+    subcategory: transaction.subcategory,
+    description: transaction.description,
+    source: transaction.source,
+    type: transaction.type,
+  });
   if (signal.sourceId) {
     await refreshSourceStats(signal.sourceId);
   }

@@ -183,6 +183,29 @@ export async function GET(req: NextRequest) {
       orderBy: { dueDate: "asc" },
       take: 5,
     });
+      const scheduledObligations = await safeSummaryQuery("scheduledObligations", [], () =>
+        db.scheduledObligationOccurrence.findMany({
+          where: {
+            dueDate: { gte: now },
+            status: { in: ["due", "overdue"] },
+          },
+          orderBy: { dueDate: "asc" },
+          take: 5,
+          include: {
+            obligation: {
+              select: {
+                name: true,
+                category: true,
+              },
+            },
+          },
+        })
+      );
+      const pendingAllocationRuns = await safeSummaryQuery("pendingAllocationRuns", 0, () =>
+        db.paycheckAllocationRun.count({
+          where: { status: "pending" },
+        })
+      );
 
       const reportSummary = await safeSummaryQuery(
         "reportSummary",
@@ -277,7 +300,7 @@ export async function GET(req: NextRequest) {
           savings: income - expenses,
           todaySpent: Math.abs(todayExpenses._sum.amount || 0),
           todayTransactions: todayExpenses._count,
-          pendingReviews,
+          pendingReviews: pendingReviews + pendingAllocationRuns,
           pendingSignals,
           ignoredSignals,
           provisionalSignals,
@@ -303,14 +326,26 @@ export async function GET(req: NextRequest) {
         recurringTransactions,
         savingsGoals,
         dailySpending: last7DaysSpending.reverse(),
-        upcomingPayments: upcomingPayments.map((payment) => ({
-          id: payment.id,
-          description: payment.description,
-          amount: payment.amount,
-          dueDate: payment.dueDate,
-          status: payment.status,
-          merchantName: payment.merchant?.name || null,
-        })),
+        upcomingPayments: [
+          ...upcomingPayments.map((payment) => ({
+            id: payment.id,
+            description: payment.description,
+            amount: payment.amount,
+            dueDate: payment.dueDate,
+            status: payment.status,
+            merchantName: payment.merchant?.name || null,
+          })),
+          ...scheduledObligations.map((occurrence) => ({
+            id: occurrence.id,
+            description: occurrence.obligation.name,
+            amount: occurrence.expectedAmount,
+            dueDate: occurrence.dueDate,
+            status: occurrence.status,
+            merchantName: null,
+          })),
+        ]
+          .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+          .slice(0, 8),
         topMerchants: reportSummary.topMerchants,
         budgetRisk: reportSummary.budgetRisk,
         possibleSavings: reportSummary.possibleSavings,
@@ -325,7 +360,8 @@ export async function GET(req: NextRequest) {
         pendingCounts: {
           reviews: pendingReviews,
           signals: pendingSignals,
-          upcomingBills: upcomingPayments.length,
+          upcomingBills: upcomingPayments.length + scheduledObligations.length,
+          paycheckAllocations: pendingAllocationRuns,
         },
         ignoredCounts: {
           signals: ignoredSignals,
