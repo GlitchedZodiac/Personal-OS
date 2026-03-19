@@ -19,6 +19,15 @@ const ACTIVE_TRANSACTION_FILTER: Prisma.FinancialTransactionWhereInput = {
   reviewState: "resolved",
 };
 
+async function safeSummaryQuery<T>(label: string, fallback: T, query: () => Promise<T>) {
+  try {
+    return await query();
+  } catch (error) {
+    console.error(`Finance summary partial failure (${label}):`, error);
+    return fallback;
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -175,35 +184,57 @@ export async function GET(req: NextRequest) {
       take: 5,
     });
 
-      const reportSummary = await getFinanceReportSummary(currentMonth, db);
-      const pendingSignals = await db.financeSignal.count({
-      where: { promotionState: "pending_review" },
-    });
-      const ignoredSignals = await db.financeSignal.count({
-      where: { promotionState: { in: ["ignored", "dismissed"] } },
-    });
-      const provisionalSignals = await db.financeSignal.count({
-      where: { settlementStatus: "provisional" },
-    });
-      const failedSignals = await db.financeSignal.count({
-      where: { settlementStatus: { in: ["failed", "rejected"] } },
-    });
-      const totalSources = await db.financeSource.count();
-      const trustedSources = await db.financeSource.count({
-      where: { trustLevel: "trusted" },
-    });
-      const ignoredSources = await db.financeSource.count({
-      where: { defaultDisposition: "always_ignore" },
-    });
-      const mailboxConnection = await db.googleMailboxConnection.findUnique({
-      where: { id: "default" },
-    });
-      const errorDocuments = await db.financeDocument.count({
-      where: { status: "error" },
-    });
-      const ignoredDocuments = await db.financeDocument.count({
-      where: { classification: "ignored" },
-    });
+      const reportSummary = await safeSummaryQuery(
+        "reportSummary",
+        {
+          monthLabel: format(currentMonth, "MMMM yyyy"),
+          pendingReviews: 0,
+          topMerchants: [],
+          merchantLeaderboard: [],
+          upcomingPayments: [],
+          budgetRisk: [],
+          possibleSavings: [],
+        },
+        () => getFinanceReportSummary(currentMonth, db)
+      );
+      const pendingSignals = await safeSummaryQuery("pendingSignals", 0, () =>
+        db.financeSignal.count({
+          where: { promotionState: "pending_review" },
+        })
+      );
+      const ignoredSignals = await safeSummaryQuery("ignoredSignals", 0, () =>
+        db.financeSignal.count({
+          where: { promotionState: { in: ["ignored", "dismissed"] } },
+        })
+      );
+      const provisionalSignals = await safeSummaryQuery("provisionalSignals", 0, () =>
+        db.financeSignal.count({
+          where: { settlementStatus: "provisional" },
+        })
+      );
+      const failedSignals = await safeSummaryQuery("failedSignals", 0, () =>
+        db.financeSignal.count({
+          where: { settlementStatus: { in: ["failed", "rejected"] } },
+        })
+      );
+      const totalSources = await safeSummaryQuery("totalSources", 0, () => db.financeSource.count());
+      const trustedSources = await safeSummaryQuery("trustedSources", 0, () =>
+        db.financeSource.count({
+          where: { trustLevel: "trusted" },
+        })
+      );
+      const ignoredSources = await safeSummaryQuery("ignoredSources", 0, () =>
+        db.financeSource.count({
+          where: { defaultDisposition: "always_ignore" },
+        })
+      );
+      const mailboxConnection = await safeSummaryQuery("mailboxConnection", null, () =>
+        db.googleMailboxConnection.findUnique({
+          where: { id: "default" },
+        })
+      );
+      const errorDocuments = 0;
+      const ignoredDocuments = 0;
 
       const budget = await db.budget.findUnique({
       where: {

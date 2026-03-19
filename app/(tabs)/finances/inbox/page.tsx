@@ -98,7 +98,7 @@ function formatSignalAmount(item: SignalItem) {
 
 export default function FinanceInboxPage() {
   const [passwordBySignal, setPasswordBySignal] = useState<Record<string, string>>({});
-  const { data, initialLoading, refresh } = useCachedFetch<InboxData>(
+  const { data, error, initialLoading, refresh } = useCachedFetch<InboxData>(
     useMemo(() => "/api/finance/inbox", []),
     { ttl: 20_000 }
   );
@@ -162,6 +162,22 @@ export default function FinanceInboxPage() {
       </div>
 
       <FinanceQuickCapture onSaved={refresh} compact />
+
+      {error && (
+        <Card className="border-amber-500/20 bg-amber-500/5">
+          <CardContent className="p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium">Inbox is in fallback mode.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Your imported finance data is still stored, but the review feed hit a backend timeout.
+              </p>
+            </div>
+            <Button variant="outline" onClick={refresh}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {initialLoading ? (
         <div className="space-y-3">

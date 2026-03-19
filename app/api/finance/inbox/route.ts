@@ -4,10 +4,20 @@ import { applyInboxAction } from "@/lib/finance/ingestion";
 import type { ReviewAction } from "@/lib/finance/constants";
 import { withRequestPrisma } from "@/lib/prisma-request";
 
+async function safeQuery<T>(label: string, fallback: T, query: () => Promise<T>) {
+  try {
+    return await query();
+  } catch (error) {
+    console.error(`Finance inbox partial failure (${label}):`, error);
+    return fallback;
+  }
+}
+
 export async function GET() {
   try {
     return await withRequestPrisma(async (db) => {
-      const newSources = await db.financeSource.findMany({
+      const newSources = await safeQuery("newSources", [], () =>
+        db.financeSource.findMany({
         where: {
           trustLevel: { in: ["new", "learning"] },
           defaultDisposition: { not: "always_ignore" },
@@ -25,9 +35,11 @@ export async function GET() {
           documentCount: true,
           signalCount: true,
         },
-      });
+        })
+      );
 
-      const pendingReviewItems = await db.financeReviewItem.findMany({
+      const pendingReviewItems = await safeQuery("pendingReviewItems", [], () =>
+        db.financeReviewItem.findMany({
         where: { status: "pending", signalId: { not: null } },
         orderBy: { createdAt: "desc" },
         take: 24,
@@ -78,13 +90,15 @@ export async function GET() {
             },
           },
         },
-      });
+        })
+      );
 
       const pendingSignals = pendingReviewItems
         .map((item) => item.signal)
         .filter((signal): signal is NonNullable<typeof pendingReviewItems[number]["signal"]> => Boolean(signal));
 
-      const upcomingPayments = await db.upcomingPayment.findMany({
+      const upcomingPayments = await safeQuery("upcomingPayments", [], () =>
+        db.upcomingPayment.findMany({
         where: {
           dueDate: { gte: new Date() },
           status: { in: ["detected", "confirmed"] },
@@ -126,7 +140,8 @@ export async function GET() {
             },
           },
         },
-      });
+        })
+      );
 
       const upcomingBills = upcomingPayments.map((payment) => ({
         id: payment.id,
@@ -158,7 +173,8 @@ export async function GET() {
         merchant: payment.merchant,
       }));
 
-      const ignoredNoise = await db.financeDocument.findMany({
+      const ignoredNoise = await safeQuery("ignoredNoise", [], () =>
+        db.financeDocument.findMany({
         where: { classification: "ignored" },
         orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
         take: 12,
@@ -176,9 +192,12 @@ export async function GET() {
             },
           },
         },
-      });
+        })
+      );
 
-      const pendingReviews = await db.financeReviewItem.count({ where: { status: "pending" } });
+      const pendingReviews = await safeQuery("pendingReviews", pendingSignals.length, () =>
+        db.financeReviewItem.count({ where: { status: "pending" } })
+      );
 
       return NextResponse.json({
         counts: {

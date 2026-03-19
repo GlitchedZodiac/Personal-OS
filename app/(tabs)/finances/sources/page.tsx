@@ -110,7 +110,7 @@ function summarizeRule(rule: FinanceRule) {
 export default function FinanceSourcesPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [ruleSavingKey, setRuleSavingKey] = useState<string | null>(null);
-  const { data, initialLoading, refresh } = useCachedFetch<{ sources: FinanceSource[] }>(
+  const { data, error, initialLoading, refresh } = useCachedFetch<{ sources: FinanceSource[] }>(
     useMemo(() => "/api/finance/sources", []),
     { ttl: 30_000 }
   );
@@ -210,6 +210,22 @@ export default function FinanceSourcesPage() {
           Set the source default here, then add second-layer rules for mixed senders like Amazon, payment processors, and billers with promos.
         </p>
       </div>
+
+      {error && (
+        <Card className="border-amber-500/20 bg-amber-500/5">
+          <CardContent className="p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium">Source examples are in fallback mode.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Your saved source data is still there, but the richer example feed had trouble loading.
+              </p>
+            </div>
+            <Button variant="outline" onClick={refresh}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {initialLoading ? (
         <div className="space-y-3">
@@ -441,6 +457,15 @@ export default function FinanceSourcesPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {source.signals.length === 0 && source.signalCount > 0 && (
+                  <div className="rounded-2xl border border-border/30 p-3">
+                    <p className="text-sm font-medium">Examples</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Stored history exists for this source, but the lightweight view only surfaced counts right now.
+                    </p>
                   </div>
                 )}
               </CardContent>
