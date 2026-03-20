@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { endOfDay, endOfMonth, startOfDay, startOfMonth, subDays } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { getCuratedPrimaryTransactionWhere, getCuratedSourceWhere } from "@/lib/finance/curated-mode";
 import { ingestFinanceCandidate } from "@/lib/finance/ingestion";
 import {
   assignTransactionToPocket,
@@ -122,12 +123,16 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "100", 10);
     const offset = parseInt(searchParams.get("offset") || "0", 10);
     const { dateStart, dateEnd } = getDateRange(searchParams);
+    const primaryAccount = await ensurePrimaryCashAccount();
+    const curatedTransactionFilter = getCuratedPrimaryTransactionWhere(primaryAccount.id);
+    const curatedSourceFilter = getCuratedSourceWhere();
 
     if (status === "pending" || status === "ignored") {
       const signalWhere = {
         transactedAt: { gte: dateStart, lte: dateEnd },
         category: category || undefined,
         type: type || undefined,
+        source: { is: curatedSourceFilter },
         promotionState:
           status === "pending"
             ? "pending_review"
@@ -187,6 +192,7 @@ export async function GET(req: NextRequest) {
       status: status === "all" ? undefined : status,
       reviewState: "resolved",
       settlementStatus: { notIn: ["provisional", "failed", "rejected", "ignored"] },
+      ...curatedTransactionFilter,
       OR: [
         { sourceDocumentId: null },
         {

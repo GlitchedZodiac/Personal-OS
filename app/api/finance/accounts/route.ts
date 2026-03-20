@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getVisibleFinanceAccountsWhere } from "@/lib/finance/curated-mode";
+import { ensurePrimaryCashAccount } from "@/lib/finance/planning";
 
 // GET /api/finance/accounts — list all accounts
 export async function GET() {
   try {
+    await ensurePrimaryCashAccount();
+
     const accounts = await prisma.financialAccount.findMany({
-      where: { isActive: true },
+      where: getVisibleFinanceAccountsWhere(),
       orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
       include: {
         _count: { select: { transactions: true } },

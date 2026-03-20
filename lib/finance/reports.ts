@@ -60,7 +60,8 @@ const ACTIVE_EXPENSE_FILTER: Prisma.FinancialTransactionWhereInput = {
 
 export async function getFinanceReportSummary(
   referenceDate = new Date(),
-  db: FinanceReportDb = prisma
+  db: FinanceReportDb = prisma,
+  scopedTransactionWhere: Prisma.FinancialTransactionWhereInput = {}
 ) {
   const monthStart = startOfMonth(referenceDate);
   const monthEnd = endOfMonth(referenceDate);
@@ -70,6 +71,7 @@ export async function getFinanceReportSummary(
     where: {
       transactedAt: { gte: monthStart, lte: monthEnd },
       ...ACTIVE_EXPENSE_FILTER,
+      ...scopedTransactionWhere,
     },
     _sum: {
       amount: true,
@@ -86,6 +88,7 @@ export async function getFinanceReportSummary(
     where: {
       transactedAt: { gte: monthStart, lte: monthEnd },
       ...ACTIVE_EXPENSE_FILTER,
+      ...scopedTransactionWhere,
     },
     _sum: { amount: true },
   });

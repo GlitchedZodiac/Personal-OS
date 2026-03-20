@@ -9,8 +9,13 @@ import {
   subDays,
   subMonths,
 } from "date-fns";
+import {
+  getCuratedPrimaryTransactionWhere,
+  getCuratedSourceWhere,
+  getVisibleFinanceAccountsWhere,
+} from "@/lib/finance/curated-mode";
 import { getFinanceReportSummary } from "@/lib/finance/reports";
-import { getPocketDashboardData } from "@/lib/finance/planning";
+import { ensurePrimaryCashAccount, getPocketDashboardData } from "@/lib/finance/planning";
 import { withRequestPrisma } from "@/lib/prisma-request";
 
 const ACTIVE_TRANSACTION_FILTER: Prisma.FinancialTransactionWhereInput = {
@@ -33,6 +38,9 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const monthParam = searchParams.get("month");
+    const primaryAccount = await ensurePrimaryCashAccount();
+    const curatedTransactionFilter = getCuratedPrimaryTransactionWhere(primaryAccount.id);
+    const curatedSourceFilter = getCuratedSourceWhere();
 
     const now = new Date();
     const currentMonth = monthParam
@@ -45,7 +53,7 @@ export async function GET(req: NextRequest) {
 
     return await withRequestPrisma(async (db) => {
       const accounts = await db.financialAccount.findMany({
-      where: { isActive: true },
+      where: getVisibleFinanceAccountsWhere(),
       select: {
         id: true,
         name: true,
@@ -64,6 +72,7 @@ export async function GET(req: NextRequest) {
         transactedAt: { gte: monthStart, lte: monthEnd },
         type: "income",
         ...ACTIVE_TRANSACTION_FILTER,
+        ...curatedTransactionFilter,
       },
       _sum: { amount: true },
       _count: true,
@@ -74,6 +83,7 @@ export async function GET(req: NextRequest) {
         transactedAt: { gte: monthStart, lte: monthEnd },
         type: "expense",
         ...ACTIVE_TRANSACTION_FILTER,
+        ...curatedTransactionFilter,
       },
       _sum: { amount: true },
       _count: true,
@@ -84,6 +94,7 @@ export async function GET(req: NextRequest) {
         transactedAt: { gte: prevMonthStart, lte: prevMonthEnd },
         type: "income",
         ...ACTIVE_TRANSACTION_FILTER,
+        ...curatedTransactionFilter,
       },
       _sum: { amount: true },
     });
@@ -93,6 +104,7 @@ export async function GET(req: NextRequest) {
         transactedAt: { gte: prevMonthStart, lte: prevMonthEnd },
         type: "expense",
         ...ACTIVE_TRANSACTION_FILTER,
+        ...curatedTransactionFilter,
       },
       _sum: { amount: true },
     });
@@ -102,6 +114,7 @@ export async function GET(req: NextRequest) {
         transactedAt: { gte: startOfDay(now), lte: endOfDay(now) },
         type: "expense",
         ...ACTIVE_TRANSACTION_FILTER,
+        ...curatedTransactionFilter,
       },
       _sum: { amount: true },
       _count: true,
@@ -113,6 +126,7 @@ export async function GET(req: NextRequest) {
         transactedAt: { gte: monthStart, lte: monthEnd },
         type: "expense",
         ...ACTIVE_TRANSACTION_FILTER,
+        ...curatedTransactionFilter,
       },
       _sum: { amount: true },
       _count: true,
@@ -120,7 +134,10 @@ export async function GET(req: NextRequest) {
     });
 
       const recentTransactions = await db.financialTransaction.findMany({
-      where: ACTIVE_TRANSACTION_FILTER,
+      where: {
+        ...ACTIVE_TRANSACTION_FILTER,
+        ...curatedTransactionFilter,
+      },
       orderBy: { transactedAt: "desc" },
       take: 8,
       select: {
@@ -174,7 +191,16 @@ export async function GET(req: NextRequest) {
       });
     }
 
-      const pendingReviews = await db.financeReviewItem.count({ where: { status: "pending" } });
+      const pendingReviews = await db.financeReviewItem.count({
+      where: {
+        status: "pending",
+        OR: [
+          { transaction: { is: { accountId: primaryAccount.id } } },
+          { source: { is: curatedSourceFilter } },
+          { signal: { is: { source: { is: curatedSourceFilter } } } },
+        ],
+      },
+    });
       const upcomingPayments = await db.upcomingPayment.findMany({
       where: {
         dueDate: { gte: now },
@@ -214,6 +240,7 @@ export async function GET(req: NextRequest) {
             type: "expense",
             cashImpactType: "cash",
             status: "posted",
+            accountId: primaryAccount.id,
           },
         })
       );
@@ -232,37 +259,55 @@ export async function GET(req: NextRequest) {
           budgetRisk: [],
           possibleSavings: [],
         },
-        () => getFinanceReportSummary(currentMonth, db)
+        () => getFinanceReportSummary(currentMonth, db, curatedTransactionFilter)
       );
       const pendingSignals = await safeSummaryQuery("pendingSignals", 0, () =>
         db.financeSignal.count({
-          where: { promotionState: "pending_review" },
+          where: {
+            promotionState: "pending_review",
+            source: { is: curatedSourceFilter },
+          },
         })
       );
       const ignoredSignals = await safeSummaryQuery("ignoredSignals", 0, () =>
         db.financeSignal.count({
-          where: { promotionState: { in: ["ignored", "dismissed"] } },
+          where: {
+            promotionState: { in: ["ignored", "dismissed"] },
+            source: { is: curatedSourceFilter },
+          },
         })
       );
       const provisionalSignals = await safeSummaryQuery("provisionalSignals", 0, () =>
         db.financeSignal.count({
-          where: { settlementStatus: "provisional" },
+          where: {
+            settlementStatus: "provisional",
+            source: { is: curatedSourceFilter },
+          },
         })
       );
       const failedSignals = await safeSummaryQuery("failedSignals", 0, () =>
         db.financeSignal.count({
-          where: { settlementStatus: { in: ["failed", "rejected"] } },
+          where: {
+            settlementStatus: { in: ["failed", "rejected"] },
+            source: { is: curatedSourceFilter },
+          },
         })
       );
-      const totalSources = await safeSummaryQuery("totalSources", 0, () => db.financeSource.count());
+      const totalSources = await safeSummaryQuery("totalSources", 0, () =>
+        db.financeSource.count({ where: curatedSourceFilter })
+      );
       const trustedSources = await safeSummaryQuery("trustedSources", 0, () =>
         db.financeSource.count({
-          where: { trustLevel: "trusted" },
+          where: {
+            AND: [curatedSourceFilter, { trustLevel: "trusted" }],
+          },
         })
       );
       const ignoredSources = await safeSummaryQuery("ignoredSources", 0, () =>
         db.financeSource.count({
-          where: { defaultDisposition: "always_ignore" },
+          where: {
+            AND: [curatedSourceFilter, { defaultDisposition: "always_ignore" }],
+          },
         })
       );
       const mailboxConnection = await safeSummaryQuery("mailboxConnection", null, () =>
