@@ -180,6 +180,7 @@ export async function GET(req: NextRequest) {
           transactedAt: { gte: startOfDay(day), lte: endOfDay(day) },
           type: "expense",
           ...ACTIVE_TRANSACTION_FILTER,
+          ...curatedTransactionFilter,
         },
         _sum: { amount: true },
       });
@@ -205,6 +206,13 @@ export async function GET(req: NextRequest) {
       where: {
         dueDate: { gte: now },
         status: { in: ["detected", "confirmed"] },
+        sourceDocument: {
+          is: {
+            sourceRef: {
+              is: curatedSourceFilter,
+            },
+          },
+        },
       },
       include: { merchant: true },
       orderBy: { dueDate: "asc" },
