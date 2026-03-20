@@ -209,6 +209,8 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "fund_pockets_pkey" PRIMARY KEY ("id")
   )`,
+  `ALTER TABLE "fund_pockets" ADD COLUMN IF NOT EXISTS "slug" TEXT`,
+  `ALTER TABLE "fund_pockets" ADD COLUMN IF NOT EXISTS "isCanonical" BOOLEAN NOT NULL DEFAULT FALSE`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "fund_pockets_slug_key" ON "fund_pockets" ("slug")`,
   `CREATE INDEX IF NOT EXISTS "fund_pockets_active_sortOrder_idx" ON "fund_pockets" ("active", "sortOrder")`,
   `CREATE TABLE IF NOT EXISTS "paycheck_allocation_rules" (
@@ -240,6 +242,7 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "paycheck_allocation_runs_pkey" PRIMARY KEY ("id")
   )`,
+  `ALTER TABLE "paycheck_allocation_runs" ADD COLUMN IF NOT EXISTS "runType" TEXT NOT NULL DEFAULT 'paycheck'`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "paycheck_allocation_runs_sourceTransactionId_key" ON "paycheck_allocation_runs" ("sourceTransactionId")`,
   `CREATE INDEX IF NOT EXISTS "paycheck_allocation_runs_status_promptedAt_idx" ON "paycheck_allocation_runs" ("status", "promptedAt")`,
   `CREATE INDEX IF NOT EXISTS "paycheck_allocation_runs_runType_status_idx" ON "paycheck_allocation_runs" ("runType", "status")`,
