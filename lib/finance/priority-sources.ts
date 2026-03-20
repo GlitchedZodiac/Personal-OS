@@ -104,7 +104,9 @@ export async function matchPrioritySource(params: {
     const senderEmailMatch = patternMatches(item.senderEmailPattern, sender);
     const senderDomainMatch = patternMatches(item.senderDomainPattern, senderDomain);
     const subjectMatch = patternMatches(item.subjectPattern, subject);
-    return senderEmailMatch || senderDomainMatch || subjectMatch;
+    if (senderEmailMatch || senderDomainMatch) return true;
+    const hasSenderPatterns = Boolean(item.senderEmailPattern || item.senderDomainPattern);
+    return !hasSenderPatterns && subjectMatch;
   });
 
   if (!match) return null;
@@ -153,6 +155,17 @@ export async function buildPrioritySourceSearchTerms() {
   const terms = new Set<string>();
 
   for (const source of active) {
+    const hadSenderPattern = Boolean(
+      source.senderEmailPattern || source.senderDomainPattern
+    );
+
+    if (source.senderEmailPattern) {
+      for (const email of source.senderEmailPattern.split("|")) {
+        const token = email.replace(/\\/g, "").replace(/[^a-zA-Z0-9@._+-]/g, "");
+        if (token.includes("@")) terms.add(`from:${token}`);
+      }
+    }
+
     if (source.senderDomainPattern) {
       for (const domain of source.senderDomainPattern.split("|")) {
         const cleaned = domain.replace(/\\/g, "").replace(/\./g, ".").replace(/\(\.co\)\?/g, ".co");
@@ -161,7 +174,7 @@ export async function buildPrioritySourceSearchTerms() {
       }
     }
 
-    if (source.subjectPattern) {
+    if (source.subjectPattern && !hadSenderPattern) {
       const subjectToken = source.subjectPattern
         .split("|")[0]
         ?.replace(/\\/g, "")
