@@ -104,6 +104,15 @@ function isReviewedSource(input: {
 export async function buildFinanceSourcesResponse(db: PrismaClient) {
   await ensurePrioritySourcesSeeded();
 
+  const settingsRow = await db.userSettings.findUnique({
+    where: { id: "default" },
+    select: { data: true },
+  });
+  const curatedOnly = Boolean(
+    (settingsRow?.data as { finance?: { gmailCuratedSyncOnly?: boolean } } | null)?.finance
+      ?.gmailCuratedSyncOnly ?? true
+  );
+
   const sources = await db.financeSource.findMany({
     orderBy: [{ isPriority: "desc" }, { signalCount: "desc" }, { documentCount: "desc" }, { lastSeenAt: "desc" }],
     take: 48,
@@ -303,8 +312,12 @@ export async function buildFinanceSourcesResponse(db: PrismaClient) {
     };
   });
 
-  const needsReview = mappedSources.filter((source) => !source.reviewed);
-  const reviewed = mappedSources.filter((source) => source.reviewed);
+  const visibleSources = curatedOnly
+    ? mappedSources.filter((source) => source.isPriority || source.reviewed)
+    : mappedSources;
+
+  const needsReview = visibleSources.filter((source) => !source.reviewed);
+  const reviewed = visibleSources.filter((source) => source.reviewed);
 
   return {
     sections: {
@@ -314,8 +327,8 @@ export async function buildFinanceSourcesResponse(db: PrismaClient) {
     summary: {
       needsReviewCount: needsReview.length,
       reviewedCount: reviewed.length,
-      priorityCount: mappedSources.filter((source) => source.isPriority).length,
-      totalCount: mappedSources.length,
+      priorityCount: visibleSources.filter((source) => source.isPriority).length,
+      totalCount: visibleSources.length,
     },
   };
 }

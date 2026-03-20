@@ -12,7 +12,9 @@ export async function POST(request: NextRequest) {
     const result = await syncGoogleFinanceMailbox({
       fullRescan: true,
       mode:
-        body?.mode === "source_discovery" || body?.mode === "full"
+        body?.mode === "source_discovery" ||
+        body?.mode === "full" ||
+        body?.mode === "priority_only"
           ? body.mode
           : "full",
       dateFrom: typeof body?.dateFrom === "string" ? body.dateFrom : null,

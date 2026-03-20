@@ -28,6 +28,7 @@ import { VoiceInput } from "@/components/voice-input";
 import { WaterTracker } from "@/components/water-tracker";
 import { QuickFavorites } from "@/components/quick-favorites";
 import { AIMealSuggestion } from "@/components/ai-meal-suggestion";
+import { HealthExportCard } from "@/components/health-export-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { getSettings, getMacroGrams, fetchServerSettings } from "@/lib/settings";
@@ -200,6 +201,8 @@ export default function HealthDashboard() {
           )}
         </div>
       </div>
+
+      <HealthExportCard />
 
       {/* ─── AI Morning Brief ─── */}
       {briefData && (

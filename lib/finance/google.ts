@@ -61,6 +61,7 @@ interface FinanceServerSettingsShape {
   finance?: {
     syncIntervalMinutes?: unknown;
     gmailLookbackMonths?: unknown;
+    gmailCuratedSyncOnly?: unknown;
   };
 }
 
@@ -74,6 +75,11 @@ interface FinanceGoogleSetupStatus {
 function coerceSettingNumber(value: unknown, fallback: number, min: number, max: number) {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function coerceSettingBoolean(value: unknown, fallback: boolean) {
+  if (typeof value === "boolean") return value;
+  return fallback;
 }
 
 function readFinanceSettings(data: unknown): FinanceServerSettingsShape["finance"] | null {
@@ -127,6 +133,7 @@ async function getFinanceSyncPreferences() {
       1,
       60
     ),
+    gmailCuratedSyncOnly: coerceSettingBoolean(finance?.gmailCuratedSyncOnly, true),
   };
 }
 
@@ -721,7 +728,7 @@ export async function syncGoogleFinanceMailbox(options?: {
   fullRescan?: boolean;
   dateFrom?: string | null;
   dateTo?: string | null;
-  mode?: "source_discovery" | "full";
+  mode?: "source_discovery" | "full" | "priority_only";
 }) {
   const setup = getGoogleFinanceSetupStatus();
   if (!setup.configured) {
@@ -736,6 +743,8 @@ export async function syncGoogleFinanceMailbox(options?: {
   const syncPreferences = await getFinanceSyncPreferences();
   const syncLookbackMonths = syncPreferences.syncLookbackMonths;
   const syncIntervalMinutes = syncPreferences.syncIntervalMinutes;
+  const curatedOnly =
+    syncPreferences.gmailCuratedSyncOnly || options?.mode === "priority_only";
 
   if (
     connection.syncLookbackMonths !== syncLookbackMonths ||
@@ -759,9 +768,9 @@ export async function syncGoogleFinanceMailbox(options?: {
 
   let messageIds: Array<{ id: string; threadId: string }> = [];
   let historyId = connection.historyId || null;
-  let usedFallback = Boolean(options?.fullRescan);
+  let usedFallback = Boolean(options?.fullRescan || curatedOnly);
 
-  if (!options?.fullRescan && historyId) {
+  if (!options?.fullRescan && historyId && !curatedOnly) {
     try {
       const history = await gmailFetch<{
         history?: Array<{ messagesAdded?: Array<{ message?: { id: string; threadId: string } }> }>;
@@ -787,8 +796,11 @@ export async function syncGoogleFinanceMailbox(options?: {
     const beforeDate = coerceValidDate(
       options?.dateTo ? new Date(`${options.dateTo}T00:00:00`) : null
     );
-    const combinedQuery =
-      priorityTerms.length > 0
+    const combinedQuery = curatedOnly
+      ? priorityTerms.length > 0
+        ? `(${priorityTerms.join(" OR ")})`
+        : FINANCE_GMAIL_QUERY
+      : priorityTerms.length > 0
         ? `(${FINANCE_GMAIL_QUERY}) OR (${priorityTerms.join(" OR ")})`
         : FINANCE_GMAIL_QUERY;
     const q = [

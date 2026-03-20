@@ -86,10 +86,11 @@ export function FinanceSettingsCard({
     setSyncing(true);
     try {
       const endpoint = fullRescan ? "/api/finance/google/rescan" : "/api/finance/google/sync";
+      const mode = settings.finance.gmailCuratedSyncOnly ? "priority_only" : "full";
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(fullRescan ? { mode: "full" } : { fullRescan: false }),
+        body: JSON.stringify(fullRescan ? { mode } : { fullRescan: false, mode }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Sync failed");
@@ -200,6 +201,26 @@ export function FinanceSettingsCard({
           <label className="flex items-center gap-2 text-xs">
             <input
               type="checkbox"
+              checked={settings.finance.gmailCuratedSyncOnly}
+              onChange={(event) =>
+                updateSettings({
+                  ...settings,
+                  finance: {
+                    ...settings.finance,
+                    gmailCuratedSyncOnly: event.target.checked,
+                  },
+                })
+              }
+            />
+            Curated Gmail sync only
+          </label>
+          <p className="text-[11px] text-muted-foreground -mt-2">
+            Limit Gmail sync to explicit priority sources like Bancolombia and Gusto while we build parser-first finance logic.
+          </p>
+
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
               checked={settings.finance.receiptRequireReview}
               onChange={(event) =>
                 updateSettings({
@@ -223,7 +244,7 @@ export function FinanceSettingsCard({
             Gmail Expense Sync
           </CardTitle>
           <p className="text-[10px] text-muted-foreground">
-            Direct inbox monitoring for receipts, statements, refunds, and bill notices.
+            Use curated Gmail sync for explicit finance senders now, then widen later once the hard parsers are reliable.
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -244,6 +265,9 @@ export function FinanceSettingsCard({
                   Every {googleStatus.syncIntervalMinutes ?? settings.finance.syncIntervalMinutes} min
                   {" · "}
                   Lookback {googleStatus.syncLookbackMonths ?? settings.finance.gmailLookbackMonths} month(s)
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Mode: {settings.finance.gmailCuratedSyncOnly ? "curated priority sources" : "broad discovery"}
                 </p>
                 {googleStatus.lastError && (
                   <p className="text-xs text-red-400 mt-2">{googleStatus.lastError}</p>
@@ -276,7 +300,7 @@ export function FinanceSettingsCard({
           ) : (
             <>
               <p className="text-xs text-muted-foreground">
-                Connect Gmail so finance can monitor purchase receipts, bills, statements, refunds, and attachment-based payment notices.
+                Connect Gmail so finance can sync your explicit finance senders first, then we can widen coverage later if needed.
               </p>
               {googleStatus?.setupMessage && (
                 <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200">

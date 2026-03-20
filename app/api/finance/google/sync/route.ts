@@ -11,6 +11,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const result = await syncGoogleFinanceMailbox({
       fullRescan: Boolean(body?.fullRescan),
+      mode:
+        body?.mode === "source_discovery" ||
+        body?.mode === "full" ||
+        body?.mode === "priority_only"
+          ? body.mode
+          : undefined,
     });
     return NextResponse.json(result);
   } catch (error) {

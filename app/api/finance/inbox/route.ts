@@ -16,12 +16,27 @@ async function safeQuery<T>(label: string, fallback: T, query: () => Promise<T>)
 export async function GET() {
   try {
     return await withRequestPrisma(async (db) => {
+      const settingsRow = await safeQuery("settings", null, () =>
+        db.userSettings.findUnique({
+          where: { id: "default" },
+          select: { data: true },
+        })
+      );
+      const curatedOnly = Boolean(
+        (
+          settingsRow as
+            | { data?: { finance?: { gmailCuratedSyncOnly?: boolean } } | null }
+            | null
+        )?.data?.finance?.gmailCuratedSyncOnly ?? true
+      );
+
       const newSources = await safeQuery("newSources", [], () =>
         db.financeSource.findMany({
         where: {
           trustLevel: { in: ["new", "learning"] },
           defaultDisposition: { not: "always_ignore" },
           documentCount: { gt: 0 },
+          ...(curatedOnly ? { isPriority: true } : {}),
         },
         orderBy: [{ documentCount: "desc" }, { lastSeenAt: "desc" }],
         take: 8,
@@ -40,7 +55,11 @@ export async function GET() {
 
       const pendingReviewItems = await safeQuery("pendingReviewItems", [], () =>
         db.financeReviewItem.findMany({
-        where: { status: "pending", signalId: { not: null } },
+        where: {
+          status: "pending",
+          signalId: { not: null },
+          ...(curatedOnly ? { signal: { source: { isPriority: true } } } : {}),
+        },
         orderBy: { createdAt: "desc" },
         take: 24,
         select: {
@@ -71,6 +90,7 @@ export async function GET() {
                   defaultDisposition: true,
                   documentCount: true,
                   signalCount: true,
+                  isPriority: true,
                 },
               },
               document: {
@@ -102,6 +122,9 @@ export async function GET() {
         where: {
           dueDate: { gte: new Date() },
           status: { in: ["detected", "confirmed"] },
+          ...(curatedOnly
+            ? { sourceDocument: { sourceRef: { is: { isPriority: true } } } }
+            : {}),
         },
         orderBy: { dueDate: "asc" },
         take: 12,
@@ -135,6 +158,7 @@ export async function GET() {
                   defaultDisposition: true,
                   documentCount: true,
                   signalCount: true,
+                  isPriority: true,
                 },
               },
             },
@@ -173,27 +197,29 @@ export async function GET() {
         merchant: payment.merchant,
       }));
 
-      const ignoredNoise = await safeQuery("ignoredNoise", [], () =>
-        db.financeDocument.findMany({
-        where: { classification: "ignored" },
-        orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
-        take: 12,
-        select: {
-          id: true,
-          sender: true,
-          subject: true,
-          classification: true,
-          sourceRef: {
+      const ignoredNoise = curatedOnly
+        ? []
+        : await safeQuery("ignoredNoise", [], () =>
+            db.financeDocument.findMany({
+            where: { classification: "ignored" },
+            orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
+            take: 12,
             select: {
               id: true,
-              label: true,
-              trustLevel: true,
-              defaultDisposition: true,
+              sender: true,
+              subject: true,
+              classification: true,
+              sourceRef: {
+                select: {
+                  id: true,
+                  label: true,
+                  trustLevel: true,
+                  defaultDisposition: true,
+                },
+              },
             },
-          },
-        },
-        })
-      );
+            })
+          );
 
       const pendingReviews = await safeQuery("pendingReviews", pendingSignals.length, () =>
         db.financeReviewItem.count({ where: { status: "pending" } })

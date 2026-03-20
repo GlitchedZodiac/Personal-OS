@@ -29,6 +29,7 @@ export interface FinanceSettings {
   defaultCurrency: string;
   syncIntervalMinutes: number;
   gmailLookbackMonths: number;
+  gmailCuratedSyncOnly: boolean;
   autoReviewThreshold: number;
   receiptRequireReview: boolean;
 }
@@ -84,6 +85,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     defaultCurrency: "COP",
     syncIntervalMinutes: 15,
     gmailLookbackMonths: 12,
+    gmailCuratedSyncOnly: true,
     autoReviewThreshold: 0.75,
     receiptRequireReview: true,
   },
