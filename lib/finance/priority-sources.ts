@@ -30,7 +30,8 @@ const DEFAULT_PRIORITY_SOURCES = [
     sourceRole: "card_statement",
     institution: "Bancolombia",
     provider: "Bancolombia",
-    senderDomainPattern: "bancolombia\\.com(\\.co)?|grupobancolombia\\.com|documenteme\\.co",
+    senderDomainPattern:
+      "bancolombia\\.com(\\.co)?|grupobancolombia\\.com|extractos\\.documentosbancolombia\\.com",
     subjectPattern:
       "estado de cuenta|minimo a pagar|m[ií]nimo a pagar|saldo total|extracto|facturaci[oó]n",
     defaultDisposition: "bill_notice",
@@ -74,11 +75,15 @@ export async function ensurePrioritySourcesSeeded() {
       },
     });
 
-    if (existing) continue;
+    if (existing) {
+      await prisma.financePrioritySource.update({
+        where: { id: existing.id },
+        data: source,
+      });
+      continue;
+    }
 
-    await prisma.financePrioritySource.create({
-      data: source,
-    });
+    await prisma.financePrioritySource.create({ data: source });
   }
 }
 
