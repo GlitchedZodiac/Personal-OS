@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { analyzeFinanceText } from "@/lib/finance/ai";
 import { ingestFinanceCandidate } from "@/lib/finance/ingestion";
+import { ensurePrimaryCashAccount } from "@/lib/finance/planning";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,9 +14,17 @@ export async function POST(request: NextRequest) {
 
     const parsed = await analyzeFinanceText(message, aiLanguage);
     if (parsed instanceof Response) return parsed;
+    const primaryAccount = await ensurePrimaryCashAccount();
+    const resolvedAccountId = accountId || primaryAccount.id;
+    const cashImpactType =
+      parsed.type === "expense" && resolvedAccountId === primaryAccount.id
+        ? "cash"
+        : "non_cash";
+    const needsCategorization =
+      parsed.type === "expense" && cashImpactType === "cash";
 
     const result = await ingestFinanceCandidate({
-      accountId: accountId || null,
+      accountId: resolvedAccountId,
       description: parsed.description,
       amount: parsed.amount,
       currency: parsed.currency,
@@ -23,6 +32,8 @@ export async function POST(request: NextRequest) {
       category: parsed.category,
       subcategory: parsed.subcategory,
       type: parsed.type,
+      cashImpactType,
+      needsCategorization,
       transactedAt: parsed.transactedAt ? new Date(parsed.transactedAt) : new Date(),
       taxAmount: parsed.taxAmount,
       tipAmount: parsed.tipAmount,

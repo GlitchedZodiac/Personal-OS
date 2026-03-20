@@ -46,10 +46,41 @@ interface Transaction {
   tags?: string;
   status?: string;
   reviewState?: string;
+  pocketId?: string | null;
+  needsCategorization?: boolean;
+  instrumentType?: string | null;
+  instrumentLast4?: string | null;
+  cashImpactType?: string | null;
   confidence?: number | null;
   signalKind?: string;
   documentClassification?: string | null;
+  pocket?: { id: string; name: string; slug?: string | null; color?: string | null } | null;
   account: { name: string; icon?: string | null; color?: string | null };
+}
+
+interface PocketOption {
+  id: string;
+  name: string;
+  slug?: string | null;
+  currentBalance: number;
+}
+
+interface PendingCategorizationItem {
+  id: string;
+  transactedAt: string;
+  amount: number;
+  description: string;
+  category: string;
+  subcategory?: string | null;
+  notes?: string | null;
+  suggestedPocketId?: string | null;
+  instrumentType?: string | null;
+  instrumentLast4?: string | null;
+  sourceDocument?: {
+    sender?: string | null;
+    subject?: string | null;
+    source?: string | null;
+  } | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -121,6 +152,13 @@ export default function TransactionsPage() {
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [income, setIncome] = useState(0);
   const [expenses, setExpenses] = useState(0);
+  const [pendingQueue, setPendingQueue] = useState<PendingCategorizationItem[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [pocketOptions, setPocketOptions] = useState<PocketOption[]>([]);
+  const [categorizationDrafts, setCategorizationDrafts] = useState<
+    Record<string, { category: string; pocketId: string; saveDefaultPocket: boolean }>
+  >({});
+  const [savingPendingId, setSavingPendingId] = useState<string | null>(null);
 
   // Check URL params for action=add
   useEffect(() => {
@@ -160,9 +198,40 @@ export default function TransactionsPage() {
     }
   }, [range, filter]);
 
+  const fetchPendingQueue = useCallback(async () => {
+    setPendingLoading(true);
+    try {
+      const res = await fetch("/api/finance/pending-categorization");
+      const data = await res.json();
+      setPendingQueue(data.pending || []);
+      setPocketOptions(data.pockets || []);
+      setCategorizationDrafts((current) => {
+        const next = { ...current };
+        for (const item of data.pending || []) {
+          if (!next[item.id]) {
+            next[item.id] = {
+              category: item.category || "other",
+              pocketId: item.suggestedPocketId || "",
+              saveDefaultPocket: false,
+            };
+          }
+        }
+        return next;
+      });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setPendingLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchTransactions();
   }, [fetchTransactions]);
+
+  useEffect(() => {
+    fetchPendingQueue();
+  }, [fetchPendingQueue]);
 
   // Filter by search
   const filtered = useMemo(() => {
@@ -199,6 +268,40 @@ export default function TransactionsPage() {
       }
     },
     [fetchTransactions]
+  );
+
+  const handleResolvePending = useCallback(
+    async (itemId: string) => {
+      const draft = categorizationDrafts[itemId];
+      if (!draft?.category || !draft?.pocketId) return;
+
+      setSavingPendingId(itemId);
+      try {
+        const res = await fetch("/api/finance/pending-categorization", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: itemId,
+            category: draft.category,
+            pocketId: draft.pocketId,
+            saveDefaultPocket: draft.saveDefaultPocket,
+          }),
+        });
+
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error || "Failed to categorize transaction");
+        }
+
+        fetchPendingQueue();
+        fetchTransactions();
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setSavingPendingId(null);
+      }
+    },
+    [categorizationDrafts, fetchPendingQueue, fetchTransactions]
   );
 
   return (
@@ -374,9 +477,126 @@ export default function TransactionsPage() {
             setShowAddForm(false);
             setEditingTx(null);
             fetchTransactions();
+            fetchPendingQueue();
           }}
         />
       )}
+
+      <Card>
+        <CardContent className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Pending Categorization</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Debit-cash purchases already hit your bank balance. Assign the category and pocket here so the right bolsillo gets reduced.
+              </p>
+            </div>
+            <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-400">
+              {pendingQueue.length} pending
+            </span>
+          </div>
+
+          {pendingLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ) : pendingQueue.length > 0 ? (
+            <div className="space-y-3">
+              {pendingQueue.map((item) => {
+                const draft = categorizationDrafts[item.id] || {
+                  category: item.category || "other",
+                  pocketId: item.suggestedPocketId || "",
+                  saveDefaultPocket: false,
+                };
+
+                return (
+                  <div key={item.id} className="rounded-2xl border border-border/30 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{item.description}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {new Date(item.transactedAt).toLocaleString()}
+                          {item.instrumentType && ` · ${item.instrumentType}`}
+                          {item.instrumentLast4 && ` · *${item.instrumentLast4}`}
+                          {item.sourceDocument?.sender && ` · ${item.sourceDocument.sender}`}
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold">{formatCOP(Math.abs(item.amount))}</p>
+                    </div>
+
+                    <div className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                      <select
+                        className="rounded-lg bg-secondary/50 px-3 py-2 text-xs"
+                        value={draft.category}
+                        onChange={(event) =>
+                          setCategorizationDrafts((current) => ({
+                            ...current,
+                            [item.id]: {
+                              ...draft,
+                              category: event.target.value,
+                            },
+                          }))
+                        }
+                      >
+                        {CATEGORIES.filter((category) => category !== "income" && category !== "transfer").map(
+                          (category) => (
+                            <option key={category} value={category}>
+                              {category.replace("_", " ")}
+                            </option>
+                          )
+                        )}
+                      </select>
+                      <select
+                        className="rounded-lg bg-secondary/50 px-3 py-2 text-xs"
+                        value={draft.pocketId}
+                        onChange={(event) =>
+                          setCategorizationDrafts((current) => ({
+                            ...current,
+                            [item.id]: { ...draft, pocketId: event.target.value },
+                          }))
+                        }
+                      >
+                        <option value="">Choose pocket</option>
+                        {pocketOptions.map((pocket) => (
+                          <option key={pocket.id} value={pocket.id}>
+                            {pocket.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => handleResolvePending(item.id)}
+                        disabled={savingPendingId === item.id || !draft.category || !draft.pocketId}
+                        className="rounded-lg bg-emerald-500/20 px-3 py-2 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/30 disabled:opacity-50"
+                      >
+                        {savingPendingId === item.id ? "Saving..." : "Assign"}
+                      </button>
+                    </div>
+
+                    <label className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={draft.saveDefaultPocket}
+                        onChange={(event) =>
+                          setCategorizationDrafts((current) => ({
+                            ...current,
+                            [item.id]: { ...draft, saveDefaultPocket: event.target.checked },
+                          }))
+                        }
+                      />
+                      Save this pocket as the default for this category
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No cash expenses are waiting for category and pocket assignment right now.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Transaction List */}
       {loading ? (
@@ -413,6 +633,8 @@ export default function TransactionsPage() {
                       <p className="text-xs font-medium truncate">{tx.description}</p>
                       <p className="text-[10px] text-muted-foreground">
                         {tx.account.name}
+                        {tx.pocket?.name && ` · ${tx.pocket.name}`}
+                        {tx.needsCategorization && " · pending pocket"}
                         {tx.isRecurring && " · 🔁"}
                         {tx.source !== "manual" && ` · ${tx.source}`}
                         {tx.documentClassification && ` · ${tx.documentClassification}`}

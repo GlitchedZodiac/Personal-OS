@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { TX_CATEGORY_TO_BUDGET_CATEGORY_NAME } from "@/lib/finance/constants";
 
 const DEFAULT_CATEGORIES: Prisma.BudgetCategoryCreateManyInput[] = [
   { name: "Housing", icon: "🏠", color: "#3b82f6", type: "expense", sortOrder: 1 },
@@ -42,6 +43,14 @@ const BUDGET_NAME_TO_TX_CATEGORY: Record<string, string[]> = {
   "Other Income": ["income"],
   Other: ["other"],
 };
+
+for (const [transactionCategory, budgetCategoryName] of Object.entries(
+  TX_CATEGORY_TO_BUDGET_CATEGORY_NAME
+)) {
+  if (!BUDGET_NAME_TO_TX_CATEGORY[budgetCategoryName]) {
+    BUDGET_NAME_TO_TX_CATEGORY[budgetCategoryName] = [transactionCategory];
+  }
+}
 
 async function ensureCategories() {
   const count = await prisma.budgetCategory.count();
@@ -138,6 +147,15 @@ export async function GET(req: NextRequest) {
       }),
       prisma.budgetCategory.findMany({
         orderBy: { sortOrder: "asc" },
+        include: {
+          defaultPocket: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
       }),
       prisma.merchant.findMany({
         orderBy: { totalSpent: "desc" },
@@ -179,6 +197,8 @@ export async function GET(req: NextRequest) {
         categoryColor: category.color,
         categoryType: category.type,
         isTaxRelevant: category.isTaxRelevant,
+        defaultPocketId: category.defaultPocketId,
+        defaultPocketName: category.defaultPocket?.name || null,
         planned,
         actual,
         transactionCount,

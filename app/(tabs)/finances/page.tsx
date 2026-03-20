@@ -89,6 +89,9 @@ interface FinanceSummary {
     todaySpent: number;
     todayTransactions: number;
     pendingReviews: number;
+    pendingCategorization?: number;
+    primaryCashBalance?: number;
+    unassignedCash?: number;
   };
   comparison: {
     incomeChange: number;
@@ -130,6 +133,13 @@ interface FinanceSummary {
     ignored: number;
     learning: number;
   };
+  pockets?: {
+    primaryCashBalance: number;
+    unassignedCash: number;
+    totalPocketBalance: number;
+    allocationPercentTotal: number;
+    rulesComplete: boolean;
+  } | null;
   backfillCoverage: {
     oldestSyncedDate?: string | null;
     lastBackfillAt?: string | null;
@@ -254,6 +264,39 @@ export default function FinancesPage() {
       </div>
 
       <FinanceQuickCapture />
+
+      {summary?.pockets && (
+        <Card>
+          <CardContent className="grid gap-3 p-4 lg:grid-cols-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Primary Cash</p>
+              <p className="mt-1 text-xl font-semibold">
+                {formatCOP(summary.pockets.primaryCashBalance)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Pocketed Cash</p>
+              <p className="mt-1 text-xl font-semibold">
+                {formatCOP(summary.pockets.totalPocketBalance)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Unassigned Cash</p>
+              <p
+                className={cn(
+                  "mt-1 text-xl font-semibold",
+                  summary.pockets.unassignedCash < 0 ? "text-red-400" : ""
+                )}
+              >
+                {formatCOP(summary.pockets.unassignedCash)}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {summary.overview.pendingCategorization || 0} transactions still need pocket assignment
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {summary?.backfillCoverage && (
         <Card>

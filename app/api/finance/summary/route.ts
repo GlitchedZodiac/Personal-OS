@@ -10,6 +10,7 @@ import {
   subMonths,
 } from "date-fns";
 import { getFinanceReportSummary } from "@/lib/finance/reports";
+import { getPocketDashboardData } from "@/lib/finance/planning";
 import { withRequestPrisma } from "@/lib/prisma-request";
 
 const ACTIVE_TRANSACTION_FILTER: Prisma.FinancialTransactionWhereInput = {
@@ -206,6 +207,19 @@ export async function GET(req: NextRequest) {
           where: { status: "pending" },
         })
       );
+      const pendingCategorization = await safeSummaryQuery("pendingCategorization", 0, () =>
+        db.financialTransaction.count({
+          where: {
+            needsCategorization: true,
+            type: "expense",
+            cashImpactType: "cash",
+            status: "posted",
+          },
+        })
+      );
+      const pocketSnapshot = await safeSummaryQuery("pocketSnapshot", null, () =>
+        getPocketDashboardData()
+      );
 
       const reportSummary = await safeSummaryQuery(
         "reportSummary",
@@ -300,11 +314,14 @@ export async function GET(req: NextRequest) {
           savings: income - expenses,
           todaySpent: Math.abs(todayExpenses._sum.amount || 0),
           todayTransactions: todayExpenses._count,
-          pendingReviews: pendingReviews + pendingAllocationRuns,
+          pendingReviews: pendingReviews + pendingAllocationRuns + pendingCategorization,
           pendingSignals,
           ignoredSignals,
           provisionalSignals,
           failedSignals,
+          pendingCategorization,
+          primaryCashBalance: pocketSnapshot?.primaryCashBalance || 0,
+          unassignedCash: pocketSnapshot?.unassignedCash || 0,
         },
         comparison: {
           incomeChange: prevIncome > 0 ? Math.round(((income - prevIncome) / prevIncome) * 100) : 0,
@@ -362,11 +379,21 @@ export async function GET(req: NextRequest) {
           signals: pendingSignals,
           upcomingBills: upcomingPayments.length + scheduledObligations.length,
           paycheckAllocations: pendingAllocationRuns,
+          pendingCategorization,
         },
         ignoredCounts: {
           signals: ignoredSignals,
           documents: ignoredDocuments,
         },
+        pockets: pocketSnapshot
+          ? {
+              primaryCashBalance: pocketSnapshot.primaryCashBalance,
+              unassignedCash: pocketSnapshot.unassignedCash,
+              totalPocketBalance: pocketSnapshot.totalPocketBalance,
+              allocationPercentTotal: pocketSnapshot.allocationPercentTotal,
+              rulesComplete: pocketSnapshot.allocationPercentTotal === 100,
+            }
+          : null,
         backfillCoverage: {
           oldestSyncedDate: null,
           lastBackfillAt: mailboxConnection?.lastBackfillAt || null,

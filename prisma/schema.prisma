@@ -308,6 +308,7 @@ model FinancialAccount {
   accountType  String // checking, savings, credit_card, cash, investment, loan
   currency     String    @default("COP") // ISO 4217
   balance      Float     @default(0) // current balance (updated manually or via sync)
+  isPrimary    Boolean   @default(false)
   creditLimit  Float? // for credit cards
   interestRate Float? // for loans/credit cards (APR %)
   institution  String? // "Bancolombia", "Nequi", "Davivienda"
@@ -338,6 +339,12 @@ model FinancialTransaction {
   category               String // food, transport, housing, entertainment, income, transfer, etc.
   subcategory            String? // "groceries", "dining_out", "salary", "freelance"
   type                   String // income, expense, transfer
+  pocketId               String?
+  pocket                 FundPocket?             @relation("AssignedPocketTransactions", fields: [pocketId], references: [id], onDelete: SetNull)
+  needsCategorization    Boolean                 @default(false)
+  instrumentType         String?
+  instrumentLast4        String?
+  cashImpactType         String                  @default("non_cash")
   isRecurring            Boolean                @default(false) // subscription, rent, salary
   merchant               String? // extracted merchant name
   reference              String? // bank reference number
@@ -389,6 +396,8 @@ model FinancialTransaction {
   @@index([status])
   @@index([settlementStatus])
   @@index([reviewState])
+  @@index([pocketId])
+  @@index([needsCategorization, transactedAt])
   @@index([sourceFingerprint])
   @@index([groupKey])
   @@map("financial_transactions")
@@ -399,9 +408,11 @@ model BudgetCategory {
   name          String // "Food & Groceries", "Transport", "Entertainment"
   icon          String? // emoji
   color         String? // hex color
-  type          String   @default("expense") // expense, income, savings
-  parentId      String? // for subcategories
-  isTaxRelevant Boolean  @default(false)
+  type            String   @default("expense") // expense, income, savings
+  parentId        String? // for subcategories
+  defaultPocketId String?
+  defaultPocket   FundPocket? @relation("BudgetCategoryDefaultPocket", fields: [defaultPocketId], references: [id], onDelete: SetNull)
+  isTaxRelevant   Boolean  @default(false)
   sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -691,6 +702,9 @@ model FinanceSignal {
   sourceCurrency         String?
   fxRate                 Float?
   fxDate                 DateTime?
+  instrumentType         String?
+  instrumentLast4        String?
+  cashImpactType         String                @default("non_cash")
   amountConfidence       Float?
   amountExtractionLabel  String?
   requiresCurrencyReview Boolean               @default(false)
@@ -881,9 +895,11 @@ model ScheduledObligationOccurrence {
 model FundPocket {
   id            String                  @id @default(uuid())
   name          String
+  slug          String?                 @unique
   description   String?
   icon          String?
   color         String?
+  isCanonical   Boolean                 @default(false)
   currentBalance Float                  @default(0)
   targetAmount  Float?
   active        Boolean                 @default(true)
@@ -891,8 +907,10 @@ model FundPocket {
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
 
-  allocationRules PaycheckAllocationRule[]
-  entries         PocketEntry[]
+  allocationRules   PaycheckAllocationRule[]
+  entries           PocketEntry[]
+  transactions      FinancialTransaction[] @relation("AssignedPocketTransactions")
+  defaultCategories BudgetCategory[]       @relation("BudgetCategoryDefaultPocket")
 
   @@index([active, sortOrder])
   @@map("fund_pockets")
@@ -918,6 +936,7 @@ model PaycheckAllocationRun {
   id                  String                @id @default(uuid())
   sourceTransactionId String?               @unique
   sourceTransaction   FinancialTransaction? @relation("PaycheckAllocationTransaction", fields: [sourceTransactionId], references: [id], onDelete: SetNull)
+  runType             String                @default("paycheck")
   grossAmount         Float
   suggestedAllocations Json?
   status              String                @default("pending")

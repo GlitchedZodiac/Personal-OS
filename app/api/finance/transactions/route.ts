@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { endOfDay, endOfMonth, startOfDay, startOfMonth, subDays } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { ingestFinanceCandidate } from "@/lib/finance/ingestion";
-import { ensurePaycheckAllocationRunForTransaction } from "@/lib/finance/planning";
+import {
+  assignTransactionToPocket,
+  ensurePaycheckAllocationRunForTransaction,
+  ensurePrimaryCashAccount,
+  removePocketEffectsForTransaction,
+  syncPocketEffectsForTransactionUpdate,
+} from "@/lib/finance/planning";
 import { parseLocalDate } from "@/lib/utils";
 
 const POSTED_DOCUMENT_CLASSES = [
@@ -203,6 +209,7 @@ export async function GET(req: NextRequest) {
         skip: offset,
         include: {
           account: { select: { name: true, icon: true, color: true } },
+          pocket: { select: { id: true, name: true, slug: true, color: true } },
           merchantRef: { select: { id: true, name: true, normalizedName: true } },
           sourceDocument: {
             select: {
@@ -257,8 +264,19 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const primaryAccount = await ensurePrimaryCashAccount();
+    const resolvedAccountId = body.accountId || primaryAccount.id;
+    const cashImpactType =
+      body.cashImpactType ||
+      (resolvedAccountId === primaryAccount.id && body.type === "expense"
+        ? "cash"
+        : "non_cash");
+    const needsCategorization =
+      body.needsCategorization ??
+      (body.type === "expense" && cashImpactType === "cash" && !body.pocketId);
+
     const result = await ingestFinanceCandidate({
-      accountId: body.accountId,
+      accountId: resolvedAccountId,
       transactedAt: body.transactedAt ? new Date(body.transactedAt) : new Date(),
       amount: typeof body.amount === "number" ? Math.abs(body.amount) : Number(body.amount),
       currency: body.currency || "COP",
@@ -266,6 +284,11 @@ export async function POST(req: NextRequest) {
       category: body.category,
       subcategory: body.subcategory ?? null,
       type: body.type,
+      pocketId: body.pocketId ?? null,
+      needsCategorization,
+      instrumentType: body.instrumentType ?? null,
+      instrumentLast4: body.instrumentLast4 ?? null,
+      cashImpactType,
       isRecurring: body.isRecurring ?? false,
       merchant: body.merchant ?? body.description,
       reference: body.reference ?? null,
@@ -297,6 +320,20 @@ export async function POST(req: NextRequest) {
     });
 
     if (result.transaction) {
+      if (
+        result.transaction.type === "expense" &&
+        result.transaction.cashImpactType === "cash" &&
+        result.transaction.pocketId
+      ) {
+        await assignTransactionToPocket({
+          transactionId: result.transaction.id,
+          pocketId: result.transaction.pocketId,
+          category: result.transaction.category,
+          subcategory: result.transaction.subcategory,
+          notes: result.transaction.notes,
+        });
+      }
+
       await ensurePaycheckAllocationRunForTransaction({
         transactionId: result.transaction.id,
         grossAmount: Math.abs(result.transaction.amount),
@@ -332,7 +369,15 @@ export async function PATCH(req: NextRequest) {
 
     const existing = await prisma.financialTransaction.findUnique({
       where: { id },
-      select: { amount: true, accountId: true },
+      select: {
+        amount: true,
+        accountId: true,
+        pocketId: true,
+        cashImpactType: true,
+        type: true,
+        transactedAt: true,
+        notes: true,
+      },
     });
 
     if (!existing) {
@@ -347,12 +392,22 @@ export async function PATCH(req: NextRequest) {
           ? Math.abs(Number(updates.amount))
           : Number(updates.amount)
         : undefined;
+    const nextType = updates.type || existing.type;
+    const nextCashImpactType = updates.cashImpactType || existing.cashImpactType;
+    const nextPocketId =
+      updates.pocketId !== undefined ? updates.pocketId : existing.pocketId;
+    const nextNeedsCategorization =
+      updates.needsCategorization ??
+      (nextType === "expense" && nextCashImpactType === "cash" && !nextPocketId);
 
     const transaction = await prisma.financialTransaction.update({
       where: { id },
       data: {
         ...updates,
         amount: nextAmount,
+        pocketId: nextPocketId,
+        cashImpactType: nextCashImpactType,
+        needsCategorization: nextNeedsCategorization,
         transactedAt: updates.transactedAt ? new Date(updates.transactedAt) : undefined,
         reviewState: updates.reviewState || "resolved",
         status: updates.status || "posted",
@@ -365,6 +420,20 @@ export async function PATCH(req: NextRequest) {
         data: { balance: { increment: nextAmount - existing.amount } },
       });
     }
+
+    await syncPocketEffectsForTransactionUpdate({
+      transactionId: transaction.id,
+      previousAmount: existing.amount,
+      previousPocketId: existing.pocketId,
+      previousCashImpactType: existing.cashImpactType,
+      previousType: existing.type,
+      nextAmount: transaction.amount,
+      nextPocketId: transaction.pocketId,
+      nextCashImpactType: transaction.cashImpactType,
+      nextType: transaction.type,
+      transactedAt: transaction.transactedAt,
+      notes: transaction.notes,
+    });
 
     await ensurePaycheckAllocationRunForTransaction({
       transactionId: transaction.id,
@@ -401,6 +470,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
+    await removePocketEffectsForTransaction(id);
     await prisma.financialTransaction.delete({ where: { id } });
     await prisma.financialAccount.update({
       where: { id: tx.accountId },

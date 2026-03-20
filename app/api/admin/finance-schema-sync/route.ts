@@ -3,17 +3,26 @@ import { withRequestPrisma } from "@/lib/prisma-request";
 
 const STATEMENT_GROUPS: Record<string, string[]> = {
   transactions: [
+  `ALTER TABLE "financial_accounts" ADD COLUMN IF NOT EXISTS "isPrimary" BOOLEAN NOT NULL DEFAULT FALSE`,
+  `CREATE INDEX IF NOT EXISTS "financial_accounts_isPrimary_idx" ON "financial_accounts" ("isPrimary")`,
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "settlementStatus" TEXT NOT NULL DEFAULT 'settled'`,
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "sourceAmount" DOUBLE PRECISION`,
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "sourceCurrency" TEXT`,
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "fxRate" DOUBLE PRECISION`,
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "fxDate" TIMESTAMP(3)`,
+  `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "pocketId" TEXT`,
+  `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "needsCategorization" BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "instrumentType" TEXT`,
+  `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "instrumentLast4" TEXT`,
+  `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "cashImpactType" TEXT NOT NULL DEFAULT 'non_cash'`,
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "amountConfidence" DOUBLE PRECISION`,
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "amountExtractionLabel" TEXT`,
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "requiresCurrencyReview" BOOLEAN NOT NULL DEFAULT FALSE`,
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "groupKey" TEXT`,
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "orderRef" TEXT`,
   `ALTER TABLE "financial_transactions" ADD COLUMN IF NOT EXISTS "chargeRef" TEXT`,
+  `CREATE INDEX IF NOT EXISTS "financial_transactions_pocketId_idx" ON "financial_transactions" ("pocketId")`,
+  `CREATE INDEX IF NOT EXISTS "financial_transactions_needsCategorization_transactedAt_idx" ON "financial_transactions" ("needsCategorization", "transactedAt" DESC)`,
   `CREATE INDEX IF NOT EXISTS "financial_transactions_settlementStatus_idx" ON "financial_transactions" ("settlementStatus")`,
   `CREATE INDEX IF NOT EXISTS "financial_transactions_groupKey_idx" ON "financial_transactions" ("groupKey")`,
   `CREATE INDEX IF NOT EXISTS "financial_transactions_activity_window_idx" ON "financial_transactions" ("type", "status", "reviewState", "settlementStatus", "transactedAt" DESC)`,
@@ -54,6 +63,9 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
   `ALTER TABLE "finance_signals" ADD COLUMN IF NOT EXISTS "sourceCurrency" TEXT`,
   `ALTER TABLE "finance_signals" ADD COLUMN IF NOT EXISTS "fxRate" DOUBLE PRECISION`,
   `ALTER TABLE "finance_signals" ADD COLUMN IF NOT EXISTS "fxDate" TIMESTAMP(3)`,
+  `ALTER TABLE "finance_signals" ADD COLUMN IF NOT EXISTS "instrumentType" TEXT`,
+  `ALTER TABLE "finance_signals" ADD COLUMN IF NOT EXISTS "instrumentLast4" TEXT`,
+  `ALTER TABLE "finance_signals" ADD COLUMN IF NOT EXISTS "cashImpactType" TEXT NOT NULL DEFAULT 'non_cash'`,
   `ALTER TABLE "finance_signals" ADD COLUMN IF NOT EXISTS "amountConfidence" DOUBLE PRECISION`,
   `ALTER TABLE "finance_signals" ADD COLUMN IF NOT EXISTS "amountExtractionLabel" TEXT`,
   `ALTER TABLE "finance_signals" ADD COLUMN IF NOT EXISTS "requiresCurrencyReview" BOOLEAN NOT NULL DEFAULT FALSE`,
@@ -139,6 +151,7 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
   ],
 
   planning: [
+  `ALTER TABLE "budget_categories" ADD COLUMN IF NOT EXISTS "defaultPocketId" TEXT`,
   `CREATE TABLE IF NOT EXISTS "scheduled_obligations" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -183,9 +196,11 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
   `CREATE TABLE IF NOT EXISTS "fund_pockets" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "slug" TEXT,
     "description" TEXT,
     "icon" TEXT,
     "color" TEXT,
+    "isCanonical" BOOLEAN NOT NULL DEFAULT FALSE,
     "currentBalance" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "targetAmount" DOUBLE PRECISION,
     "active" BOOLEAN NOT NULL DEFAULT TRUE,
@@ -194,6 +209,7 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "fund_pockets_pkey" PRIMARY KEY ("id")
   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "fund_pockets_slug_key" ON "fund_pockets" ("slug")`,
   `CREATE INDEX IF NOT EXISTS "fund_pockets_active_sortOrder_idx" ON "fund_pockets" ("active", "sortOrder")`,
   `CREATE TABLE IF NOT EXISTS "paycheck_allocation_rules" (
     "id" TEXT NOT NULL,
@@ -213,6 +229,7 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
   `CREATE TABLE IF NOT EXISTS "paycheck_allocation_runs" (
     "id" TEXT NOT NULL,
     "sourceTransactionId" TEXT,
+    "runType" TEXT NOT NULL DEFAULT 'paycheck',
     "grossAmount" DOUBLE PRECISION NOT NULL,
     "suggestedAllocations" JSONB,
     "status" TEXT NOT NULL DEFAULT 'pending',
@@ -225,6 +242,7 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "paycheck_allocation_runs_sourceTransactionId_key" ON "paycheck_allocation_runs" ("sourceTransactionId")`,
   `CREATE INDEX IF NOT EXISTS "paycheck_allocation_runs_status_promptedAt_idx" ON "paycheck_allocation_runs" ("status", "promptedAt")`,
+  `CREATE INDEX IF NOT EXISTS "paycheck_allocation_runs_runType_status_idx" ON "paycheck_allocation_runs" ("runType", "status")`,
   `ALTER TABLE "paycheck_allocation_runs" DROP CONSTRAINT IF EXISTS "paycheck_allocation_runs_sourceTransactionId_fkey"`,
   `ALTER TABLE "paycheck_allocation_runs" ADD CONSTRAINT "paycheck_allocation_runs_sourceTransactionId_fkey" FOREIGN KEY ("sourceTransactionId") REFERENCES "financial_transactions"("id") ON DELETE SET NULL ON UPDATE CASCADE`,
   `CREATE TABLE IF NOT EXISTS "pocket_entries" (
@@ -246,6 +264,11 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
   `ALTER TABLE "pocket_entries" ADD CONSTRAINT "pocket_entries_allocationRunId_fkey" FOREIGN KEY ("allocationRunId") REFERENCES "paycheck_allocation_runs"("id") ON DELETE SET NULL ON UPDATE CASCADE`,
   `ALTER TABLE "pocket_entries" DROP CONSTRAINT IF EXISTS "pocket_entries_sourceTransactionId_fkey"`,
   `ALTER TABLE "pocket_entries" ADD CONSTRAINT "pocket_entries_sourceTransactionId_fkey" FOREIGN KEY ("sourceTransactionId") REFERENCES "financial_transactions"("id") ON DELETE SET NULL ON UPDATE CASCADE`,
+  `ALTER TABLE "budget_categories" DROP CONSTRAINT IF EXISTS "budget_categories_defaultPocketId_fkey"`,
+  `ALTER TABLE "budget_categories" ADD CONSTRAINT "budget_categories_defaultPocketId_fkey" FOREIGN KEY ("defaultPocketId") REFERENCES "fund_pockets"("id") ON DELETE SET NULL ON UPDATE CASCADE`,
+  `CREATE INDEX IF NOT EXISTS "budget_categories_defaultPocketId_idx" ON "budget_categories" ("defaultPocketId")`,
+  `ALTER TABLE "financial_transactions" DROP CONSTRAINT IF EXISTS "financial_transactions_pocketId_fkey"`,
+  `ALTER TABLE "financial_transactions" ADD CONSTRAINT "financial_transactions_pocketId_fkey" FOREIGN KEY ("pocketId") REFERENCES "fund_pockets"("id") ON DELETE SET NULL ON UPDATE CASCADE`,
   ],
 };
 

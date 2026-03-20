@@ -5,6 +5,15 @@ export async function GET() {
   try {
     const categories = await prisma.budgetCategory.findMany({
       orderBy: [{ type: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
+      include: {
+        defaultPocket: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+      },
     });
     return NextResponse.json({ categories });
   } catch (error) {
@@ -27,6 +36,7 @@ export async function POST(request: NextRequest) {
         color: body.color ?? null,
         type: body.type ?? "expense",
         parentId: body.parentId ?? null,
+        defaultPocketId: body.defaultPocketId ?? null,
         isTaxRelevant: body.isTaxRelevant ?? false,
         sortOrder: body.sortOrder ?? (maxSortOrder._max.sortOrder || 0) + 1,
       },
@@ -54,6 +64,8 @@ export async function PATCH(request: NextRequest) {
         color: body.color ?? undefined,
         type: body.type ?? undefined,
         parentId: body.parentId ?? undefined,
+        defaultPocketId:
+          body.defaultPocketId !== undefined ? body.defaultPocketId : undefined,
         isTaxRelevant: body.isTaxRelevant ?? undefined,
         sortOrder: body.sortOrder ?? undefined,
       },

@@ -78,6 +78,11 @@ export interface FinanceIngestionCandidate {
   category?: string | null;
   subcategory?: string | null;
   type?: "income" | "expense" | "transfer";
+  pocketId?: string | null;
+  needsCategorization?: boolean;
+  instrumentType?: string | null;
+  instrumentLast4?: string | null;
+  cashImpactType?: "cash" | "credit_pending" | "non_cash";
   signalKind?: FinanceSignalKind | null;
   messageSubtype?: FinanceMessageSubtype | null;
   documentClassification?: FinanceDocumentClassification | null;
@@ -796,12 +801,14 @@ function shouldAutoPromoteSignal(params: {
   settlementStatus: FinanceSettlementStatus;
   confidence: number;
   amount?: number | null;
+  cashImpactType?: FinanceIngestionCandidate["cashImpactType"];
   requiresCurrencyReview?: boolean;
   sourceDisposition: FinanceSourceDisposition;
   promotionPreference?: FinanceIngestionCandidate["promotionPreference"];
 }) {
   if (
     params.settlementStatus !== "settled" ||
+    params.cashImpactType === "credit_pending" ||
     params.requiresCurrencyReview ||
     ["bill_due", "statement"].includes(params.signalKind)
   ) {
@@ -864,6 +871,13 @@ async function promoteSignalToTransaction(params: {
       : nextType === "income"
       ? Math.abs(nextAmountBase)
       : nextAmountBase;
+  const nextPocketId =
+    params.fields?.pocketId ?? signal.transaction?.pocketId ?? null;
+  const nextCashImpactType =
+    params.fields?.cashImpactType || signal.cashImpactType || "non_cash";
+  const nextNeedsCategorization =
+    params.fields?.needsCategorization ??
+    (nextType === "expense" && nextCashImpactType === "cash" && !nextPocketId);
 
   const fingerprint = buildSourceFingerprint({
     source: signal.document.source,
@@ -908,6 +922,17 @@ async function promoteSignalToTransaction(params: {
         category: params.fields?.category || signal.category || existing.category,
         subcategory: params.fields?.subcategory ?? signal.subcategory ?? existing.subcategory,
         type: nextType,
+        pocketId: nextPocketId,
+        needsCategorization: nextNeedsCategorization,
+        instrumentType:
+          params.fields?.instrumentType ??
+          signal.instrumentType ??
+          existing.instrumentType,
+        instrumentLast4:
+          params.fields?.instrumentLast4 ??
+          signal.instrumentLast4 ??
+          existing.instrumentLast4,
+        cashImpactType: nextCashImpactType,
         isRecurring: params.fields?.isRecurring ?? existing.isRecurring,
         merchant: params.fields?.merchant || signal.merchant?.name || existing.merchant,
         merchantId: signal.merchantId ?? existing.merchantId,
@@ -961,6 +986,11 @@ async function promoteSignalToTransaction(params: {
         category: params.fields?.category || signal.category || "other",
         subcategory: params.fields?.subcategory ?? signal.subcategory ?? null,
         type: nextType,
+        pocketId: nextPocketId,
+        needsCategorization: nextNeedsCategorization,
+        instrumentType: params.fields?.instrumentType ?? signal.instrumentType ?? null,
+        instrumentLast4: params.fields?.instrumentLast4 ?? signal.instrumentLast4 ?? null,
+        cashImpactType: nextCashImpactType,
         isRecurring: params.fields?.isRecurring ?? false,
         merchant: params.fields?.merchant || signal.merchant?.name || null,
         merchantId: signal.merchantId ?? null,
@@ -1565,6 +1595,9 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
           sourceCurrency: sourceCurrency ?? null,
           fxRate: normalizedMoney.fxRate ?? null,
           fxDate: normalizedMoney.fxDate ?? null,
+          instrumentType: candidate.instrumentType ?? null,
+          instrumentLast4: candidate.instrumentLast4 ?? null,
+          cashImpactType: candidate.cashImpactType || "non_cash",
           amountConfidence: money.amountConfidence ?? confidence,
           amountExtractionLabel: money.amountExtractionLabel ?? null,
           requiresCurrencyReview: normalizedMoney.requiresCurrencyReview,
@@ -1609,6 +1642,9 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
           sourceCurrency: sourceCurrency ?? null,
           fxRate: normalizedMoney.fxRate ?? null,
           fxDate: normalizedMoney.fxDate ?? null,
+          instrumentType: candidate.instrumentType ?? null,
+          instrumentLast4: candidate.instrumentLast4 ?? null,
+          cashImpactType: candidate.cashImpactType || "non_cash",
           amountConfidence: money.amountConfidence ?? confidence,
           amountExtractionLabel: money.amountExtractionLabel ?? null,
           requiresCurrencyReview: normalizedMoney.requiresCurrencyReview,
@@ -1644,6 +1680,7 @@ export async function ingestFinanceCandidate(candidate: FinanceIngestionCandidat
     settlementStatus,
     confidence,
     amount: resolvedAmount,
+    cashImpactType: candidate.cashImpactType,
     requiresCurrencyReview: normalizedMoney.requiresCurrencyReview,
     sourceDisposition: resolvedDisposition,
     promotionPreference: candidate.promotionPreference,

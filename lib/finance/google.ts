@@ -7,6 +7,8 @@ import {
 } from "@/lib/finance/constants";
 import { ingestFinanceCandidate } from "@/lib/finance/ingestion";
 import { extractPdfText, isEncryptedPdf } from "@/lib/finance/pdf";
+import { buildCuratedFinanceCandidate } from "@/lib/finance/curated-parsers";
+import { ensurePrimaryCashAccount } from "@/lib/finance/planning";
 import {
   coerceValidDate,
   extractDueDateFromText,
@@ -527,7 +529,12 @@ function buildFinanceCandidateFromText(params: {
   } as const;
 }
 
-async function processGmailMessage(accessToken: string, message: GmailMessage, connectionId: string) {
+async function processGmailMessage(
+  accessToken: string,
+  message: GmailMessage,
+  connectionId: string,
+  options?: { curatedOnly?: boolean }
+) {
   const full = await gmailFetch<GmailMessage>(accessToken, `messages/${message.id}?format=full`);
   const sender = getHeader(full.payload, "From");
   const subject = getHeader(full.payload, "Subject");
@@ -543,18 +550,13 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
     subject,
   });
 
-  if (!priorityMatch && !looksFinancial(`${subject} ${text}`)) {
-    return { documents: 0, signals: 0, promotedTransactions: 0, reviews: 0, upcoming: 0 };
-  }
-
-  const baseCandidate = buildFinanceCandidateFromText({
-    source: "email",
+  const primaryCashAccount = await ensurePrimaryCashAccount();
+  const curatedCandidate = buildCuratedFinanceCandidate({
     sender,
     subject,
     text,
     receivedAt,
-    priorityRole: priorityMatch?.sourceRole || null,
-    priorityDisposition: priorityMatch?.defaultDisposition || null,
+    primaryCashAccountId: primaryCashAccount.id,
     document: {
       source: "gmail_email",
       externalId: messageExternalId,
@@ -569,6 +571,39 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
       mailConnectionId: connectionId,
     },
   });
+
+  if (!curatedCandidate && options?.curatedOnly) {
+    return { documents: 0, signals: 0, promotedTransactions: 0, reviews: 0, upcoming: 0 };
+  }
+
+  if (!curatedCandidate && !priorityMatch && !looksFinancial(`${subject} ${text}`)) {
+    return { documents: 0, signals: 0, promotedTransactions: 0, reviews: 0, upcoming: 0 };
+  }
+
+  const baseCandidate =
+    curatedCandidate ||
+    buildFinanceCandidateFromText({
+      source: "email",
+      sender,
+      subject,
+      text,
+      receivedAt,
+      priorityRole: priorityMatch?.sourceRole || null,
+      priorityDisposition: priorityMatch?.defaultDisposition || null,
+      document: {
+        source: "gmail_email",
+        externalId: messageExternalId,
+        documentType: "email",
+        messageId: full.id,
+        threadId: full.threadId,
+        sender,
+        subject,
+        receivedAt,
+        contentText: text,
+        status: "processed",
+        mailConnectionId: connectionId,
+      },
+    });
 
   const messageResult = await ingestFinanceCandidate(baseCandidate);
   if (messageResult.source?.id && priorityMatch) {
@@ -588,6 +623,16 @@ async function processGmailMessage(accessToken: string, message: GmailMessage, c
   let attachmentPromotedCount = 0;
   let attachmentReviewCount = 0;
   let upcomingCount = 0;
+
+  if (options?.curatedOnly) {
+    return {
+      documents: 1,
+      signals: messageResult.signal ? 1 : 0,
+      promotedTransactions: messageResult.transaction ? 1 : 0,
+      reviews: messageResult.reviewItems.length,
+      upcoming: extractDueDate(`${subject} ${text}`) ? 1 : 0,
+    };
+  }
 
   for (const part of collectAttachments(full.payload)) {
     const filename = part.filename || "attachment";
@@ -827,7 +872,12 @@ export async function syncGoogleFinanceMailbox(options?: {
 
   for (const message of messageIds) {
     try {
-      const result = await processGmailMessage(accessToken, message as GmailMessage, connection.id);
+      const result = await processGmailMessage(
+        accessToken,
+        message as GmailMessage,
+        connection.id,
+        { curatedOnly }
+      );
       documents += result.documents;
       signals += result.signals;
       promotedTransactions += result.promotedTransactions;

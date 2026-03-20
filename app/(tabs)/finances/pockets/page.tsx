@@ -2,32 +2,39 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, PiggyBank, Plus, Wallet } from "lucide-react";
+import { ArrowLeft, PiggyBank, RefreshCw, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { invalidateCache, useCachedFetch } from "@/lib/cache";
 
+interface PocketRule {
+  id: string;
+  name?: string | null;
+  percentOfIncome: number;
+  priority: number;
+  active: boolean;
+}
+
 interface Pocket {
   id: string;
   name: string;
+  slug?: string | null;
   description?: string | null;
+  icon?: string | null;
+  color?: string | null;
   currentBalance: number;
   targetAmount?: number | null;
   active: boolean;
-  allocationRules: Array<{
-    id: string;
-    name?: string | null;
-    percentOfIncome: number;
-    priority: number;
-    active: boolean;
-  }>;
+  allocationRules: PocketRule[];
 }
 
 interface PendingRun {
   id: string;
+  runType: string;
   grossAmount: number;
+  notes?: string | null;
   suggestedAllocations?: Array<{ pocketId: string; amount: number; percentOfIncome: number }>;
   sourceTransaction?: {
     id: string;
@@ -37,9 +44,19 @@ interface PendingRun {
   } | null;
 }
 
-interface PocketsResponse {
+interface PocketResponse {
   pockets: Pocket[];
   pendingRuns: PendingRun[];
+  primaryAccount: {
+    id: string;
+    name: string;
+    balance: number;
+  };
+  primaryCashBalance: number;
+  totalPocketBalance: number;
+  unassignedCash: number;
+  allocationPercentTotal: number;
+  rulesComplete: boolean;
 }
 
 function formatCOP(amount: number) {
@@ -52,82 +69,59 @@ function formatCOP(amount: number) {
 }
 
 export default function FinancePocketsPage() {
-  const [saving, setSaving] = useState(false);
-  const [pocketForm, setPocketForm] = useState({
-    name: "",
-    description: "",
-    targetAmount: "",
-  });
-  const [ruleForm, setRuleForm] = useState({
-    pocketId: "",
-    percentOfIncome: "",
-    priority: "",
-    name: "",
-  });
+  const [savingPocketId, setSavingPocketId] = useState<string | null>(null);
+  const [confirmingRunId, setConfirmingRunId] = useState<string | null>(null);
+  const [draftPercents, setDraftPercents] = useState<Record<string, string>>({});
 
-  const { data, initialLoading, refresh } = useCachedFetch<PocketsResponse>(
+  const { data, initialLoading, refresh } = useCachedFetch<PocketResponse>(
     useMemo(() => "/api/finance/pockets", []),
-    { ttl: 30_000 }
+    { ttl: 20_000 }
   );
 
-  const createPocket = async () => {
-    if (!pocketForm.name) return;
-    setSaving(true);
+  const saveRule = async (pocket: Pocket) => {
+    const rule = pocket.allocationRules[0];
+    const value = draftPercents[pocket.id] ?? String(rule?.percentOfIncome ?? 0);
+    const percentOfIncome = Number(value);
+
+    if (!Number.isFinite(percentOfIncome) || percentOfIncome < 0) {
+      toast.error("Enter a valid percentage");
+      return;
+    }
+
+    setSavingPocketId(pocket.id);
     try {
-      const res = await fetch("/api/finance/pockets", {
-        method: "POST",
+      const res = await fetch("/api/finance/paycheck-allocation-rules", {
+        method: rule?.id ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: pocketForm.name,
-          description: pocketForm.description || null,
-          targetAmount: pocketForm.targetAmount ? Number(pocketForm.targetAmount) : null,
+          id: rule?.id,
+          pocketId: pocket.id,
+          percentOfIncome,
+          priority: rule?.priority ?? pocket.allocationRules[0]?.priority ?? 0,
+          name: rule?.name || `${pocket.name} allocation`,
+          active: true,
         }),
       });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload.error || "Failed to create pocket");
-      toast.success(`Added ${pocketForm.name}`);
-      setPocketForm({ name: "", description: "", targetAmount: "" });
+      if (!res.ok) {
+        throw new Error(payload.error || "Failed to save percentage");
+      }
+
+      toast.success(`Saved ${pocket.name} at ${percentOfIncome}%`);
       invalidateCache("/api/finance/pockets");
+      invalidateCache("/api/finance/paycheck-allocation-rules");
       invalidateCache("/api/finance/summary");
       refresh();
     } catch (error) {
       console.error(error);
-      toast.error(error instanceof Error ? error.message : "Failed to create pocket");
+      toast.error(error instanceof Error ? error.message : "Failed to save percentage");
     } finally {
-      setSaving(false);
-    }
-  };
-
-  const createRule = async () => {
-    if (!ruleForm.pocketId || !ruleForm.percentOfIncome) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/finance/paycheck-allocation-rules", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pocketId: ruleForm.pocketId,
-          percentOfIncome: Number(ruleForm.percentOfIncome),
-          priority: ruleForm.priority ? Number(ruleForm.priority) : 0,
-          name: ruleForm.name || null,
-        }),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload.error || "Failed to create allocation rule");
-      toast.success("Added paycheck allocation rule");
-      setRuleForm({ pocketId: "", percentOfIncome: "", priority: "", name: "" });
-      invalidateCache("/api/finance/pockets");
-      refresh();
-    } catch (error) {
-      console.error(error);
-      toast.error(error instanceof Error ? error.message : "Failed to create allocation rule");
-    } finally {
-      setSaving(false);
+      setSavingPocketId(null);
     }
   };
 
   const confirmRun = async (runId: string) => {
-    setSaving(true);
+    setConfirmingRunId(runId);
     try {
       const res = await fetch(`/api/finance/paycheck-allocation-runs/${runId}/confirm`, {
         method: "POST",
@@ -135,17 +129,21 @@ export default function FinancePocketsPage() {
         body: JSON.stringify({}),
       });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload.error || "Failed to confirm allocation");
-      toast.success("Pocket allocations confirmed");
+      if (!res.ok) {
+        throw new Error(payload.error || "Failed to confirm allocation");
+      }
+
+      toast.success("Pocket balances updated");
       invalidateCache("/api/finance/pockets");
       invalidateCache("/api/finance/summary");
       invalidateCache("/api/finance/transactions");
+      invalidateCache("/api/finance/pending-categorization");
       refresh();
     } catch (error) {
       console.error(error);
       toast.error(error instanceof Error ? error.message : "Failed to confirm allocation");
     } finally {
-      setSaving(false);
+      setConfirmingRunId(null);
     }
   };
 
@@ -160,138 +158,233 @@ export default function FinancePocketsPage() {
         <div>
           <h1 className="text-2xl font-bold">Pockets</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Set aside paycheck percentages into bolsillos without counting those moves as spending.
+            Split paycheck income into your five bolsillos, then deduct cash expenses from the right one after categorizing them.
           </p>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card>
-          <CardContent className="space-y-4 p-4">
-            <div className="flex items-center gap-2">
-              <PiggyBank className="h-4 w-4 text-emerald-400" />
-              <p className="text-sm font-semibold">Add Pocket</p>
+          <CardContent className="space-y-2 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Wallet className="h-4 w-4 text-emerald-400" />
+              Primary Cash
             </div>
-            <input className="rounded-xl border border-border/40 bg-background px-3 py-2 text-sm" placeholder="Emergency fund, taxes, travel, etc." value={pocketForm.name} onChange={(event) => setPocketForm((current) => ({ ...current, name: event.target.value }))} />
-            <input className="rounded-xl border border-border/40 bg-background px-3 py-2 text-sm" placeholder="Description (optional)" value={pocketForm.description} onChange={(event) => setPocketForm((current) => ({ ...current, description: event.target.value }))} />
-            <input className="rounded-xl border border-border/40 bg-background px-3 py-2 text-sm" type="number" placeholder="Target amount (optional)" value={pocketForm.targetAmount} onChange={(event) => setPocketForm((current) => ({ ...current, targetAmount: event.target.value }))} />
-            <Button onClick={createPocket} disabled={saving || !pocketForm.name}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              {saving ? "Saving..." : "Add Pocket"}
-            </Button>
+            {initialLoading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <>
+                <p className="text-2xl font-bold">{formatCOP(data?.primaryCashBalance || 0)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {data?.primaryAccount?.name || "Bancolombia Available Cash"}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="space-y-4 p-4">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-4 w-4 text-cyan-400" />
-              <p className="text-sm font-semibold">Paycheck Allocation Rule</p>
+          <CardContent className="space-y-2 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <PiggyBank className="h-4 w-4 text-cyan-400" />
+              Pocketed Cash
             </div>
-            <select className="rounded-xl border border-border/40 bg-background px-3 py-2 text-sm" value={ruleForm.pocketId} onChange={(event) => setRuleForm((current) => ({ ...current, pocketId: event.target.value }))}>
-              <option value="">Choose pocket</option>
-              {(data?.pockets || []).map((pocket) => (
-                <option key={pocket.id} value={pocket.id}>{pocket.name}</option>
-              ))}
-            </select>
-            <input className="rounded-xl border border-border/40 bg-background px-3 py-2 text-sm" placeholder="Rule label (optional)" value={ruleForm.name} onChange={(event) => setRuleForm((current) => ({ ...current, name: event.target.value }))} />
-            <div className="grid gap-3 md:grid-cols-2">
-              <input className="rounded-xl border border-border/40 bg-background px-3 py-2 text-sm" type="number" placeholder="% of paycheck" value={ruleForm.percentOfIncome} onChange={(event) => setRuleForm((current) => ({ ...current, percentOfIncome: event.target.value }))} />
-              <input className="rounded-xl border border-border/40 bg-background px-3 py-2 text-sm" type="number" placeholder="Priority order" value={ruleForm.priority} onChange={(event) => setRuleForm((current) => ({ ...current, priority: event.target.value }))} />
+            {initialLoading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <>
+                <p className="text-2xl font-bold">{formatCOP(data?.totalPocketBalance || 0)}</p>
+                <p className="text-xs text-muted-foreground">
+                  Confirmed across the five canonical pockets
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className={(data?.unassignedCash || 0) < 0 ? "border-red-500/30" : undefined}>
+          <CardContent className="space-y-2 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <RefreshCw className="h-4 w-4 text-amber-400" />
+              Unassigned Cash
             </div>
-            <Button onClick={createRule} disabled={saving || !ruleForm.pocketId || !ruleForm.percentOfIncome}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Add Allocation Rule
-            </Button>
+            {initialLoading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <>
+                <p
+                  className={`text-2xl font-bold ${
+                    (data?.unassignedCash || 0) < 0 ? "text-red-400" : ""
+                  }`}
+                >
+                  {formatCOP(data?.unassignedCash || 0)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Cash already in the bank but not yet assigned to a pocket
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardContent className="space-y-4 p-4">
-          <p className="text-sm font-semibold">Pending Paycheck Prompts</p>
-          {initialLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Paycheck Split Percentages</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                These percentages are used every time a Gusto paycheck lands or when you seed your current cash balance.
+              </p>
             </div>
-          ) : data?.pendingRuns?.length ? (
-            <div className="space-y-3">
-              {data.pendingRuns.map((run) => (
-                <div key={run.id} className="rounded-2xl border border-border/30 p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium">{run.sourceTransaction?.description || "Manual income"}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {run.sourceTransaction?.transactedAt ? new Date(run.sourceTransaction.transactedAt).toLocaleDateString() : "New paycheck"}
-                      </p>
-                    </div>
-                    <p className="text-sm font-semibold">{formatCOP(run.grossAmount)}</p>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {(run.suggestedAllocations || []).map((allocation, index) => {
-                      const pocket = data.pockets.find((item) => item.id === allocation.pocketId);
-                      return (
-                        <div key={`${run.id}:${allocation.pocketId}:${index}`} className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{pocket?.name || "Pocket"} - {allocation.percentOfIncome}% suggested</span>
-                          <span>{formatCOP(allocation.amount)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <Button className="mt-3" size="sm" variant="outline" disabled={saving} onClick={() => confirmRun(run.id)}>
-                    Confirm Allocation
-                  </Button>
-                </div>
+            {!initialLoading && (
+              <div className="text-right">
+                <p
+                  className={`text-sm font-semibold ${
+                    data?.rulesComplete ? "text-emerald-400" : "text-amber-400"
+                  }`}
+                >
+                  {data?.allocationPercentTotal || 0}%
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {data?.rulesComplete ? "Ready to confirm" : "Must total 100%"}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {initialLoading ? (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Skeleton key={index} className="h-36 w-full" />
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No pending paycheck allocation prompts right now.</p>
+            <div className="grid gap-3 lg:grid-cols-2">
+              {(data?.pockets || []).map((pocket) => {
+                const rule = pocket.allocationRules[0];
+                const draftValue =
+                  draftPercents[pocket.id] ?? String(rule?.percentOfIncome ?? 0);
+
+                return (
+                  <div key={pocket.id} className="rounded-2xl border border-border/30 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold">{pocket.name}</p>
+                        {pocket.description ? (
+                          <p className="mt-1 text-xs text-muted-foreground">{pocket.description}</p>
+                        ) : null}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">{formatCOP(pocket.currentBalance)}</p>
+                        <p className="text-[11px] text-muted-foreground">current balance</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex items-end gap-2">
+                      <label className="flex-1">
+                        <span className="mb-1 block text-[11px] text-muted-foreground">
+                          % of paycheck
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="w-full rounded-xl border border-border/40 bg-background px-3 py-2 text-sm"
+                          value={draftValue}
+                          onChange={(event) =>
+                            setDraftPercents((current) => ({
+                              ...current,
+                              [pocket.id]: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <Button
+                        size="sm"
+                        disabled={savingPocketId === pocket.id}
+                        onClick={() => saveRule(pocket)}
+                      >
+                        {savingPocketId === pocket.id ? "Saving..." : "Save"}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>
 
       <Card>
         <CardContent className="space-y-4 p-4">
-          <p className="text-sm font-semibold">Pocket Balances</p>
+          <p className="text-sm font-semibold">Pending Allocation Prompts</p>
           {initialLoading ? (
             <div className="space-y-3">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
             </div>
-          ) : data?.pockets?.length ? (
-            <div className="grid gap-3 lg:grid-cols-2">
-              {data.pockets.map((pocket) => (
-                <div key={pocket.id} className="rounded-2xl border border-border/30 p-3">
+          ) : data?.pendingRuns?.length ? (
+            <div className="space-y-3">
+              {data.pendingRuns.map((run) => (
+                <div key={run.id} className="rounded-2xl border border-border/30 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium">{pocket.name}</p>
-                      {pocket.description && (
-                        <p className="mt-1 text-xs text-muted-foreground">{pocket.description}</p>
-                      )}
+                      <p className="text-sm font-semibold">
+                        {run.runType === "initial_seed"
+                          ? "Seed current cash into pockets"
+                          : run.sourceTransaction?.description || "Paycheck allocation"}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {run.runType === "initial_seed"
+                          ? "Use your saved percentages to reflect the current bank balance in your bolsillos."
+                          : run.sourceTransaction?.transactedAt
+                          ? new Date(run.sourceTransaction.transactedAt).toLocaleDateString()
+                          : "New paycheck"}
+                      </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold">{formatCOP(pocket.currentBalance)}</p>
-                      {pocket.targetAmount ? (
-                        <p className="text-[11px] text-muted-foreground">target {formatCOP(pocket.targetAmount)}</p>
-                      ) : null}
-                    </div>
+                    <p className="text-sm font-semibold">{formatCOP(run.grossAmount)}</p>
                   </div>
-                  {pocket.allocationRules.length > 0 && (
-                    <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                      {pocket.allocationRules.map((rule) => (
-                        <div key={rule.id} className="flex items-center justify-between">
-                          <span>{rule.name || "Paycheck rule"} - priority {rule.priority}</span>
-                          <span>{rule.percentOfIncome}% </span>
+
+                  <div className="mt-3 space-y-2">
+                    {(run.suggestedAllocations || []).map((allocation, index) => {
+                      const pocket = data.pockets.find((item) => item.id === allocation.pocketId);
+                      return (
+                        <div
+                          key={`${run.id}:${allocation.pocketId}:${index}`}
+                          className="flex items-center justify-between text-xs text-muted-foreground"
+                        >
+                          <span>
+                            {pocket?.name || "Pocket"} - {allocation.percentOfIncome}%
+                          </span>
+                          <span>{formatCOP(allocation.amount)}</span>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <p className="text-[11px] text-muted-foreground">
+                      {data.rulesComplete
+                        ? "Confirm after you have mirrored the split in your bank pockets."
+                        : "Set your five percentages to a full 100% before confirming."}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={confirmingRunId === run.id || !data.rulesComplete}
+                      onClick={() => confirmRun(run.id)}
+                    >
+                      {confirmingRunId === run.id ? "Confirming..." : "Confirm Allocation"}
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Add your first bolsillo to start reserving income outside the expense budget.</p>
+            <p className="text-sm text-muted-foreground">
+              No pending paycheck or seed prompts right now.
+            </p>
           )}
         </CardContent>
       </Card>

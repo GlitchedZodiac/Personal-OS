@@ -86,6 +86,77 @@ export const DEFAULT_FINANCE_ACCOUNT = {
   icon: "📥",
 };
 
+export const PRIMARY_CASH_ACCOUNT = {
+  name: "Bancolombia Available Cash",
+  accountType: "cash",
+  currency: "COP",
+  institution: "Bancolombia",
+  icon: "🏦",
+} as const;
+
+export const PRIMARY_CASH_BALANCE_SEED = 8_399_224;
+
+export const CANONICAL_FUND_POCKETS = [
+  {
+    slug: "safety-net",
+    name: "Safety Net",
+    description: "Emergency buffer and resilience cash.",
+    icon: "🛡️",
+    color: "#22c55e",
+    sortOrder: 1,
+  },
+  {
+    slug: "fixed-costs-obligations",
+    name: "Fixed Costs/Obligations",
+    description: "Rent, utilities, subscriptions, and committed monthly bills.",
+    icon: "🧾",
+    color: "#3b82f6",
+    sortOrder: 2,
+  },
+  {
+    slug: "goals-and-planned-expenses",
+    name: "Goals and Planned Expenses",
+    description: "Planned purchases, travel, and medium-term goals.",
+    icon: "🎯",
+    color: "#f59e0b",
+    sortOrder: 3,
+  },
+  {
+    slug: "debt-minimum-payments",
+    name: "Debt Minimum Payments",
+    description: "Minimum required debt and card payments.",
+    icon: "💳",
+    color: "#ef4444",
+    sortOrder: 4,
+  },
+  {
+    slug: "fun-money",
+    name: "Fun Money",
+    description: "Lifestyle spending with permission and limits.",
+    icon: "🎉",
+    color: "#a855f7",
+    sortOrder: 5,
+  },
+] as const;
+
+export const TX_CATEGORY_TO_BUDGET_CATEGORY_NAME: Record<string, string> = {
+  housing: "Housing",
+  food: "Food & Groceries",
+  dining_out: "Dining Out",
+  transport: "Transport",
+  utilities: "Utilities",
+  entertainment: "Entertainment",
+  health: "Health & Fitness",
+  education: "Education",
+  shopping: "Shopping",
+  personal: "Personal Care",
+  insurance: "Insurance",
+  debt_payment: "Debt Payments",
+  savings: "Savings",
+  income: "Salary",
+  other: "Other",
+};
+
 export const REVIEW_ACTIONS = [
   "confirm",
   "edit",
