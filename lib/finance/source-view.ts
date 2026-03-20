@@ -313,7 +313,9 @@ export async function buildFinanceSourcesResponse(db: PrismaClient) {
   });
 
   const visibleSources = curatedOnly
-    ? mappedSources.filter((source) => source.isPriority || source.reviewed)
+    ? mappedSources.filter(
+        (source) => Boolean(source.prioritySourceRole || source.priorityInstitution)
+      )
     : mappedSources;
 
   const needsReview = visibleSources.filter((source) => !source.reviewed);

@@ -36,7 +36,7 @@ export async function GET() {
           trustLevel: { in: ["new", "learning"] },
           defaultDisposition: { not: "always_ignore" },
           documentCount: { gt: 0 },
-          ...(curatedOnly ? { isPriority: true } : {}),
+          ...(curatedOnly ? { prioritySourceRole: { not: null } } : {}),
         },
         orderBy: [{ documentCount: "desc" }, { lastSeenAt: "desc" }],
         take: 8,
@@ -58,7 +58,9 @@ export async function GET() {
         where: {
           status: "pending",
           signalId: { not: null },
-          ...(curatedOnly ? { signal: { source: { isPriority: true } } } : {}),
+          ...(curatedOnly
+            ? { signal: { source: { prioritySourceRole: { not: null } } } }
+            : {}),
         },
         orderBy: { createdAt: "desc" },
         take: 24,
@@ -123,7 +125,11 @@ export async function GET() {
           dueDate: { gte: new Date() },
           status: { in: ["detected", "confirmed"] },
           ...(curatedOnly
-            ? { sourceDocument: { sourceRef: { is: { isPriority: true } } } }
+            ? {
+                sourceDocument: {
+                  sourceRef: { is: { prioritySourceRole: { not: null } } },
+                },
+              }
             : {}),
         },
         orderBy: { dueDate: "asc" },
