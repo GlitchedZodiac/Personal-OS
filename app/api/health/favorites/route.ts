@@ -1,16 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// GET - Get favorite foods (sorted by most used)
-export async function GET() {
+// GET - Favorites, most-used first. `?id=` returns one WITH its label
+// photo; the list omits photoData so 20 base64 labels can't bloat the
+// payload the Food screen loads on every visit.
+export async function GET(request: NextRequest) {
   try {
     if (!prisma.favoriteFoods) {
       return NextResponse.json([]);
     }
 
+    const id = new URL(request.url).searchParams.get("id");
+    if (id) {
+      const favorite = await prisma.favoriteFoods.findUnique({ where: { id } });
+      if (!favorite) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      return NextResponse.json(favorite);
+    }
+
     const favorites = await prisma.favoriteFoods.findMany({
       orderBy: { usageCount: "desc" },
       take: 20,
+      select: {
+        id: true,
+        foodDescription: true,
+        mealType: true,
+        calories: true,
+        proteinG: true,
+        carbsG: true,
+        fatG: true,
+        usageCount: true,
+        kind: true,
+        servingLabel: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     return NextResponse.json(favorites);
@@ -25,21 +50,51 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { foodDescription, mealType, calories, proteinG, carbsG, fatG, logNow, loggedAt } = body;
+    const {
+      foodDescription,
+      mealType,
+      calories,
+      proteinG,
+      carbsG,
+      fatG,
+      logNow,
+      loggedAt,
+      // Products (scanned nutrition labels): macros above are PER SERVING,
+      // and `servings` scales what actually gets logged.
+      kind,
+      servingLabel,
+      photoData,
+      servings,
+    } = body;
+
+    const isProduct = kind === "product";
+    const multiplier =
+      isProduct && Number.isFinite(Number(servings)) && Number(servings) > 0
+        ? Number(servings)
+        : 1;
+    const round = (n: number) => Math.round((n || 0) * multiplier * 10) / 10;
 
     // Optionally also log it as a food entry right now
     if (logNow) {
+      const servingNote =
+        isProduct && servingLabel
+          ? `${multiplier} × ${servingLabel}`
+          : "Logged from favorites";
       await prisma.foodLog.create({
         data: {
           loggedAt: loggedAt ? new Date(loggedAt) : undefined,
           mealType: mealType || "snack",
-          foodDescription,
-          calories: calories || 0,
-          proteinG: proteinG || 0,
-          carbsG: carbsG || 0,
-          fatG: fatG || 0,
-          source: "favorite",
-          notes: "Logged from favorites",
+          foodDescription:
+            isProduct && multiplier !== 1
+              ? `${foodDescription} (${multiplier}×)`
+              : foodDescription,
+          calories: round(calories),
+          proteinG: round(proteinG),
+          carbsG: round(carbsG),
+          fatG: round(fatG),
+          // Drives the design's "usual" pill on the Food timeline.
+          source: "usual",
+          notes: servingNote,
         },
       });
     }
@@ -58,7 +113,14 @@ export async function POST(request: NextRequest) {
       if (favorite) {
         favorite = await prisma.favoriteFoods.update({
           where: { id: favorite.id },
-          data: { usageCount: favorite.usageCount + 1 },
+          data: {
+            usageCount: favorite.usageCount + 1,
+            // A re-scan refreshes the stored label/serving without
+            // clobbering them when the caller doesn't supply them.
+            ...(photoData ? { photoData } : {}),
+            ...(servingLabel ? { servingLabel } : {}),
+            ...(kind ? { kind } : {}),
+          },
         });
       } else {
         favorite = await prisma.favoriteFoods.create({
@@ -70,6 +132,9 @@ export async function POST(request: NextRequest) {
             carbsG: carbsG || 0,
             fatG: fatG || 0,
             usageCount: 1,
+            kind: isProduct ? "product" : "meal",
+            servingLabel: servingLabel || null,
+            photoData: photoData || null,
           },
         });
       }
