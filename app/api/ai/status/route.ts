@@ -19,11 +19,29 @@ export const maxDuration = 15;
  * spend here is metered locally from per-call token usage at published
  * rates, and the billing link is where top-ups happen.
  */
+function withDeadline<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 export async function GET() {
+  // A diagnostics endpoint must never hang: every check races a deadline so
+  // the response always arrives, reporting the slow dependency as down.
   const [ai, db, spend] = await Promise.all([
-    checkOpenAI(),
-    checkDatabase(),
-    getAISpend().catch(() => null),
+    withDeadline(checkOpenAI(), 8_000, {
+      ok: false,
+      kind: "network" as const,
+      detail: "OpenAI check timed out after 8s.",
+      latencyMs: 8_000,
+    }),
+    withDeadline(checkDatabase(), 8_000, {
+      ok: false,
+      detail: "Database check timed out after 8s.",
+      latencyMs: 8_000,
+    }),
+    withDeadline(getAISpend().catch(() => null), 8_000, null),
   ]);
 
   return NextResponse.json({
@@ -48,7 +66,7 @@ async function checkOpenAI() {
   const t0 = Date.now();
   try {
     // models.list is free and fast — proves key validity + reachability.
-    await openai.models.list();
+    await openai.models.list({ timeout: 6_000, maxRetries: 0 });
     return { ok: true, kind: null, detail: "Connected", latencyMs: Date.now() - t0 };
   } catch (error) {
     const { kind, userMessage } = classifyOpenAIError(error);

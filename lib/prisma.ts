@@ -45,10 +45,15 @@ export function createPrismaAdapter() {
     connectionString,
     ssl,
     // Single-user app on serverless functions hitting the Supabase
-    // transaction pooler: keep per-instance pools small and release idle
-    // connections quickly.
+    // transaction pooler: small per-instance pools, and fail-fast timeouts —
+    // Vercel freezes instances after responding, so a thawed instance can
+    // hold dead idle sockets; without these, a reused dead connection hangs
+    // the function until FUNCTION_INVOCATION_TIMEOUT.
     max: 5,
-    idleTimeoutMillis: 30_000,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 5_000,
+    query_timeout: 8_000,
+    keepAlive: true,
   });
 }
 
