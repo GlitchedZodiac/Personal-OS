@@ -4,8 +4,11 @@ Cross-session queue. Format:
 `- **[YYYY-MM-DD] [source]** — what | why deferred | where to pick it up`
 Newest at top. Annotate `[resolved by X, date]` instead of deleting.
 
-- **[2026-08-08] [phase1]** — Prisma 5→7 migration + real migration history | two-major jump touching the client engine; deserves its own careful session with DB backup first | task #4; baseline from `prisma/manual-migrations/` + live schema
-- **[2026-08-08] [phase1]** — TypeScript 5→7 upgrade | isolate from the feature branch; verify build/vitest/eslint fallout separately | task #5
+- **[2026-08-08] [phase1b]** — TypeScript 7 flip | typescript-eslint hard-blocks below 7.1 (their #10940); Next 16.3 PROVEN type-checking on TS 7.0.2 in 210ms — flip root `typescript` to ^7 the moment typescript-eslint ships support | package.json + run build/eslint/vitest
+- **[2026-08-08] [phase1b]** — finance inbox lint errors | 5 `react-hooks/static-components` errors + 24 warnings repo-wide, all pre-existing; finance is frozen per health-first direction | `app/(tabs)/finances/inbox/page.tsx`, polish batch when finance thaws
+- **[2026-08-08] [phase1b]** — branch unpushed: `mike-bsg-integrator` lacks write access to GlitchedZodiac/Personal-OS | prod deploys done via `vercel deploy --prod` from the committed tree meanwhile; once collaborator access lands: push branch, open PR, merge to main, and let git-driven deploys take over | `git push -u origin claude/phase1-modernization`
+- **[2026-08-08] [phase1]** — Prisma 5→7 migration + real migration history | two-major jump touching the client engine; deserves its own careful session with DB backup first | task #4 [resolved by phase1b session, 2026-08-08: v7.9.1 + adapter-pg, 0_init baseline, drift healed +25 FKs]
+- **[2026-08-08] [phase1]** — TypeScript 5→7 upgrade | isolate from the feature branch; verify build/vitest/eslint fallout separately | task #5 [resolved by phase1b session, 2026-08-08: landed 6.0.3; 7 blocked by typescript-eslint — see phase1b entry above]
 - **[2026-08-08] [phase1]** — `app/api/health/workout-plan/trends/route.ts` `toISOString().split` sites | verified SAFE (scheduledDate is a date-only round-trip) — convert anyway when touching that file for consistency with `lib/timezone.ts` helpers | that file, lines ~93/103
 - **[2026-08-08] [phase1]** — Strava callback route appears to skip OAuth `state` validation | pre-existing; Strava is slated for replacement by the watch app (Phase 3/4) | `app/api/strava/callback/route.ts`
 - **[2026-08-08] [phase1]** — `NEXT_PUBLIC_SUPABASE_*` env vars now unused (dead client removed) | prune from Vercel + `.env.example` after confirming nothing else reads them; consider rotating the anon key since RLS now denies it anyway | Vercel dashboard → env

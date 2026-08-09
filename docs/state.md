@@ -5,12 +5,40 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-08
-**Current phase:** Phase 1 (solidify + modernize) — mostly complete; Prisma 7
-and TS 7 upgrades remain. Phase 2 (health redesign + real chat) unblocked:
-design brief ready at `docs/design/claude-design-brief.md`.
-**Branch in flight:** `claude/phase1-modernization` (pushed; preview only —
-NOT merged to main/prod yet).
+**Last updated:** 2026-08-08 (phase1b session)
+**Current phase:** Phase 1 COMPLETE. Phase 2 is next: Michael is running the
+design brief through Claude design; 2b (chat surface) can start once the AI
+provider decision lands.
+**Branch in flight:** `claude/phase1-modernization` — deployed to prod via
+`vercel deploy --prod` (twice); UNPUSHED to GitHub (403 — collaborator access
+pending, see deferred-items).
+
+## 2026-08-08 — Phase 1b session (Prisma 7, TS 6, tests, prod deploys)
+
+Michael approved "run phase 1" and took the design brief to Claude design.
+
+- **Prod deploy #1** (pre-Prisma work): security middleware + AI layer live.
+  Verified: prod `/api/todos` 401 (was publicly 200!), PIN page renders, cron
+  end-to-end 200 with real CRON_SECRET.
+- **Prisma 5.22 → 7.9.1**: `prisma.config.ts` (URLs out of schema;
+  `process.loadEnvFile` locally, platform env on Vercel); driver adapter
+  `@prisma/adapter-pg` (engine-era URL params stripped, pool max 5) in
+  `lib/prisma.ts` + `lib/prisma-request.ts`; **client-bundle leak fixed** —
+  `route-map.tsx` (client) imported `lib/strava` → prisma → pg; extracted
+  `decodePolyline` to client-safe `lib/polyline.ts`.
+- **Migration history established**: JSON backup of all 43 models (1,698 rows)
+  to `~/VibeCoding/personal-os-backups/` first; `0_init` baseline; **live-DB
+  drift healed** — 25 missing FKs added (zero-orphan-verified), indexes
+  renamed to Prisma conventions, `updatedAt` defaults dropped; drift re-diff
+  now empty; archived as `manual-migrations/20260808_align_db_to_schema.sql`.
+- **TypeScript 5 → 6.0.3**: TS 7.0.2 proven (Next typecheck 210ms native)
+  but typescript-eslint blocks <7.1 — flip deferred. ESLint runs again;
+  pre-existing finance-inbox errors deferred.
+- **Tests 13 → 43**: extracted food-timing inference from the chat route to
+  `lib/food-timing.ts`; new suites: food-timing (14), timezone (7),
+  health-tools contract (5), strava/polyline (4). Caught own vitest-green/
+  tsc-broken cast bug — the exact trap the TPL merge gate exists for.
+- **Prod deploy #2**: full Phase 1 state live. Self-smoke on prod after.
 
 ## 2026-08-08 — Phase 1 modernization session (Claude, hands-off evening run)
 
