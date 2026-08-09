@@ -31,6 +31,7 @@ import {
   Loader2,
   Heart,
   Mountain,
+  Play,
   TrendingUp,
   Zap,
   Timer,
@@ -42,6 +43,11 @@ import {
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { VoiceInput } from "@/components/voice-input";
+import {
+  GuidedRoutine,
+  unlockGuidedAudio,
+  type RoutineExercise,
+} from "@/components/guided-routine";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { RouteMap } from "@/components/route-map";
 import { WhisperButton } from "@/components/whisper-button";
@@ -185,6 +191,35 @@ function formatDuration(seconds: number): string {
   return `${s}s`;
 }
 
+// ─── Built-in guided routines ───────────────────────────────────────────
+
+interface BuiltInRoutine {
+  id: string;
+  name: string;
+  summary: string;
+  totalMinutes: number;
+  intervalSeconds: number;
+  workoutType: string;
+  exercises: RoutineExercise[];
+}
+
+const BUILT_IN_ROUTINES: BuiltInRoutine[] = [
+  {
+    id: "kb-emom-20",
+    name: "20-Min Kettlebell EMOM",
+    summary: "20 swings · 10 snatches L · 10 snatches R · 15 goblet squats",
+    totalMinutes: 20,
+    intervalSeconds: 60,
+    workoutType: "hiit",
+    exercises: [
+      { name: "Kettlebell Swings", reps: 20 },
+      { name: "Kettlebell Snatches (Left)", reps: 10 },
+      { name: "Kettlebell Snatches (Right)", reps: 10 },
+      { name: "Goblet Squats", reps: 15 },
+    ],
+  },
+];
+
 // ─── Component ──────────────────────────────────────────────────────────
 export default function WorkoutsPage() {
   const { data: entries, loading, refresh: fetchEntries } =
@@ -207,6 +242,9 @@ export default function WorkoutsPage() {
   });
   const [stravaConnected, setStravaConnected] = useState(false);
   const [stravaSyncing, setStravaSyncing] = useState(false);
+  const [guidedRoutine, setGuidedRoutine] = useState<BuiltInRoutine | null>(
+    null
+  );
 
   useEffect(() => {
     fetch("/api/strava/status")
@@ -477,10 +515,10 @@ export default function WorkoutsPage() {
 
       {/* AI Plan Banner */}
       <Link href="/health/workouts/plan">
-        <Card className="border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 transition-colors cursor-pointer">
+        <Card className="border-pitaya/20 bg-pitaya/5 hover:bg-pitaya/10 transition-colors cursor-pointer">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-purple-500/10">
-              <Sparkles className="h-5 w-5 text-purple-400" />
+            <div className="p-2 rounded-xl bg-pitaya/10">
+              <Sparkles className="h-5 w-5 text-pitaya" />
             </div>
             <div className="flex-1">
               <p className="text-sm font-medium">AI Workout Plan</p>
@@ -488,10 +526,44 @@ export default function WorkoutsPage() {
                 Get a personalized training plan, track progress, and level up
               </p>
             </div>
-            <span className="text-xs text-purple-400">Open →</span>
+            <span className="text-xs text-pitaya-deep">Open →</span>
           </CardContent>
         </Card>
       </Link>
+
+      {/* Guided Routines — press start and just follow along */}
+      <Card className="border-pitaya/20 bg-pitaya/5">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Timer className="h-4 w-4 text-pitaya" />
+            <p className="text-sm font-medium">Routines</p>
+          </div>
+          {BUILT_IN_ROUTINES.map((routine) => (
+            <div
+              key={routine.id}
+              className="flex items-center gap-3 p-3 rounded-xl bg-secondary/20"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{routine.name}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {routine.summary}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="h-9 gap-1.5 shrink-0"
+                onClick={() => {
+                  // Must run inside the tap so iOS lets the timer beep
+                  unlockGuidedAudio();
+                  setGuidedRoutine(routine);
+                }}
+              >
+                <Play className="h-3.5 w-3.5" /> Start
+              </Button>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {/* Strava Sync */}
       {stravaConnected && (
@@ -1001,6 +1073,50 @@ export default function WorkoutsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Guided Routine Session */}
+      {guidedRoutine && (
+        <GuidedRoutine
+          title={guidedRoutine.name}
+          exercises={guidedRoutine.exercises}
+          totalMinutes={guidedRoutine.totalMinutes}
+          intervalSeconds={guidedRoutine.intervalSeconds}
+          workoutType={guidedRoutine.workoutType}
+          onFinish={async (data) => {
+            try {
+              const exerciseCount = guidedRoutine.exercises.length;
+              const res = await fetch("/api/health/workouts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  workoutType: guidedRoutine.workoutType,
+                  durationMinutes: data.durationMinutes,
+                  caloriesBurned: data.caloriesBurned,
+                  description: `${guidedRoutine.name} — guided, ${data.roundsCompleted}/${data.totalRounds} rounds`,
+                  exercises: guidedRoutine.exercises.map((ex, i) => ({
+                    name: ex.name,
+                    reps: ex.reps,
+                    sets:
+                      Math.floor(data.roundsCompleted / exerciseCount) +
+                      (i < data.roundsCompleted % exerciseCount ? 1 : 0),
+                  })),
+                  source: "guided",
+                }),
+              });
+              if (!res.ok) return false;
+              invalidateHealthCache();
+              fetchEntries();
+              toast.success(
+                `Routine logged! ${data.durationMinutes} min • ~${data.caloriesBurned} cal 💪`
+              );
+              return true;
+            } catch {
+              return false;
+            }
+          }}
+          onExit={() => setGuidedRoutine(null)}
+        />
+      )}
 
       {/* Voice Input */}
       <VoiceInput onDataLogged={() => { invalidateHealthCache(); fetchEntries(); }} />

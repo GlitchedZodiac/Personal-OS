@@ -5,12 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   ArrowLeft,
   Calendar,
   Check,
@@ -22,6 +16,7 @@ import {
   Flame,
   Loader2,
   Mic,
+  Play,
   Sparkles,
   Target,
   Trophy,
@@ -45,7 +40,8 @@ import {
   type ChatMessage,
   type WorkoutChatResponse,
 } from "@/components/workout-voice-input";
-import { ActiveWorkout, estimateCaloriesBurned } from "@/components/active-workout";
+import { ActiveWorkout } from "@/components/active-workout";
+import { GuidedRoutine, unlockGuidedAudio } from "@/components/guided-routine";
 import {
   addDays,
   startOfWeek,
@@ -66,6 +62,9 @@ interface ScheduleDay {
   estimatedCalories: number;
   warmup?: string;
   exercises: ExerciseData[];
+  /** Optional guided-session hints (AI plans may set these) */
+  format?: string;
+  intervalSeconds?: number;
 }
 
 interface WorkoutPlan {
@@ -160,13 +159,13 @@ function ChatBubble({
       <div
         className={cn(
           "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
-          isUser ? "bg-primary/20" : "bg-purple-500/20"
+          isUser ? "bg-primary/20" : "bg-pitaya/15"
         )}
       >
         {isUser ? (
           <User className="h-3.5 w-3.5 text-primary" />
         ) : (
-          <Bot className="h-3.5 w-3.5 text-purple-400" />
+          <Bot className="h-3.5 w-3.5 text-pitaya-deep" />
         )}
       </div>
       <div
@@ -209,6 +208,10 @@ export default function WorkoutPlanPage() {
   });
   const [units, setUnits] = useState<"metric" | "imperial">("metric");
   const [activeWorkout, setActiveWorkout] = useState<{
+    date: Date;
+    scheduleDay: ScheduleDay;
+  } | null>(null);
+  const [guidedWorkout, setGuidedWorkout] = useState<{
     date: Date;
     scheduleDay: ScheduleDay;
   } | null>(null);
@@ -535,10 +538,10 @@ export default function WorkoutPlanPage() {
           </div>
         ) : (
           /* Empty state — encourage voice interaction */
-          <Card className="border-dashed border-purple-500/20">
+          <Card className="border-dashed border-pitaya/20">
             <CardContent className="py-12 text-center space-y-4">
-              <div className="mx-auto w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center">
-                <Mic className="h-8 w-8 text-purple-400" />
+              <div className="mx-auto w-16 h-16 rounded-2xl bg-pitaya/10 flex items-center justify-center">
+                <Mic className="h-8 w-8 text-pitaya-deep" />
               </div>
               <div>
                 <h2 className="text-lg font-bold">Tell me what you want</h2>
@@ -665,10 +668,10 @@ export default function WorkoutPlanPage() {
         </div>
 
         {/* Plan preview */}
-        <Card className="border-purple-500/30 bg-purple-500/5">
+        <Card className="border-pitaya/25 bg-pitaya/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-purple-400" />
+              <Sparkles className="h-4 w-4 text-pitaya-deep" />
               Plan Preview
             </CardTitle>
             <div className="flex gap-2 mt-1">
@@ -693,7 +696,7 @@ export default function WorkoutPlanPage() {
                 key={i}
                 className="flex items-center gap-3 p-3 rounded-xl bg-secondary/20"
               >
-                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-xs font-bold text-purple-400">
+                <div className="w-8 h-8 rounded-lg bg-pitaya/15 flex items-center justify-center text-xs font-bold text-pitaya-deep">
                   D{i + 1}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -775,9 +778,9 @@ export default function WorkoutPlanPage() {
 
       {/* Streak + Stats Row */}
       <div className="grid grid-cols-4 gap-2">
-        <Card className="border-orange-500/20 bg-orange-500/5">
+        <Card className="border-pitaya/20 bg-pitaya/5">
           <CardContent className="p-3 text-center">
-            <p className="text-xl font-bold text-orange-400">
+            <p className="text-xl font-bold text-pitaya">
               {streak.currentStreak}
             </p>
             <p className="text-[9px] text-muted-foreground">🔥 Streak</p>
@@ -795,9 +798,9 @@ export default function WorkoutPlanPage() {
             <p className="text-[9px] text-muted-foreground">This Month</p>
           </CardContent>
         </Card>
-        <Card className="border-purple-500/20 bg-purple-500/5">
+        <Card className="border-pitaya/20 bg-pitaya/5">
           <CardContent className="p-3 text-center">
-            <p className="text-xl font-bold text-purple-400">
+            <p className="text-xl font-bold text-pitaya-deep">
               {streak.totalWorkouts}
             </p>
             <p className="text-[9px] text-muted-foreground">Total</p>
@@ -810,7 +813,7 @@ export default function WorkoutPlanPage() {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-blue-500" />
+              <Calendar className="h-4 w-4 text-pitaya-deep" />
               Weekly Schedule
             </CardTitle>
             <div className="flex items-center gap-1">
@@ -869,8 +872,8 @@ export default function WorkoutPlanPage() {
                     today && "ring-2 ring-primary/50",
                     isScheduled &&
                       !completed &&
-                      "bg-purple-500/10 hover:bg-purple-500/20",
-                    completed && "bg-green-500/10",
+                      "bg-pitaya/10 hover:bg-pitaya/15",
+                    completed && "bg-pitaya/10",
                     !isScheduled && "opacity-50",
                     isPast &&
                       !completed &&
@@ -886,7 +889,7 @@ export default function WorkoutPlanPage() {
                     className={cn(
                       "text-sm font-bold",
                       today && "text-primary",
-                      completed && "text-green-400"
+                      completed && "text-pitaya-deep"
                     )}
                   >
                     {format(date, "d")}
@@ -894,9 +897,9 @@ export default function WorkoutPlanPage() {
                   {isScheduled && (
                     <div className="h-4 w-4 flex items-center justify-center">
                       {completed ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-400" />
+                        <CheckCircle2 className="h-4 w-4 text-pitaya-deep" />
                       ) : (
-                        <Dumbbell className="h-3 w-3 text-purple-400" />
+                        <Dumbbell className="h-3 w-3 text-pitaya-deep" />
                       )}
                     </div>
                   )}
@@ -909,7 +912,7 @@ export default function WorkoutPlanPage() {
 
       {/* Selected Day Detail */}
       {selectedDay && (
-        <Card className="border-purple-500/20">
+        <Card className="border-pitaya/20">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium">
@@ -941,8 +944,8 @@ export default function WorkoutPlanPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {selectedDay.scheduleDay.warmup && (
-              <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-3 mb-3">
-                <p className="text-xs font-medium text-amber-400 mb-1">
+              <div className="bg-accent/60 border border-pitaya/10 rounded-xl p-3 mb-3">
+                <p className="text-xs font-medium text-pitaya-deep mb-1">
                   🔥 Warm-up
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -965,39 +968,102 @@ export default function WorkoutPlanPage() {
               selectedDay.date,
               selectedDay.scheduleDay.dayIndex
             ) ? (
-              <div className="flex items-center justify-center gap-2 py-3 text-green-400">
+              <div className="flex items-center justify-center gap-2 py-3 text-pitaya-deep">
                 <CheckCircle2 className="h-5 w-5" />
                 <span className="text-sm font-medium">Completed!</span>
               </div>
             ) : (
-              <div className="flex gap-2 mt-2">
+              <div className="space-y-2 mt-2">
                 <Button
-                  className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
+                  className="w-full h-11 gap-2"
                   onClick={() => {
-                    setActiveWorkout({
+                    // Must run inside the tap so iOS lets the timer beep
+                    unlockGuidedAudio();
+                    setGuidedWorkout({
                       date: selectedDay.date,
                       scheduleDay: selectedDay.scheduleDay,
                     });
                     setSelectedDay(null);
                   }}
                 >
-                  <Zap className="h-4 w-4" />
-                  Start Workout
+                  <Play className="h-4 w-4" />
+                  Start Routine
                 </Button>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() =>
-                    handleComplete(selectedDay.date, selectedDay.scheduleDay)
-                  }
-                >
-                  <Check className="h-4 w-4" />
-                  Quick Log
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 gap-2"
+                    onClick={() => {
+                      setActiveWorkout({
+                        date: selectedDay.date,
+                        scheduleDay: selectedDay.scheduleDay,
+                      });
+                      setSelectedDay(null);
+                    }}
+                  >
+                    <Zap className="h-4 w-4" />
+                    Track Sets
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 gap-2"
+                    onClick={() =>
+                      handleComplete(selectedDay.date, selectedDay.scheduleDay)
+                    }
+                  >
+                    <Check className="h-4 w-4" />
+                    Quick Log
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Guided Routine Mode — dive in, no set-by-set logging */}
+      {guidedWorkout && (
+        <GuidedRoutine
+          title={guidedWorkout.scheduleDay.label}
+          exercises={guidedWorkout.scheduleDay.exercises}
+          totalMinutes={Math.min(
+            90,
+            Math.max(5, guidedWorkout.scheduleDay.estimatedDuration || 20)
+          )}
+          intervalSeconds={guidedWorkout.scheduleDay.intervalSeconds || 60}
+          workoutType="hiit"
+          units={units}
+          onFinish={async (data) => {
+            if (!plan) return false;
+            try {
+              const res = await fetch("/api/health/workout-plan/complete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  planId: plan.id,
+                  scheduledDate: guidedWorkout.date.toISOString(),
+                  dayIndex: guidedWorkout.scheduleDay.dayIndex,
+                  dayLabel: guidedWorkout.scheduleDay.label,
+                  completed: true,
+                  actualExercises: guidedWorkout.scheduleDay.exercises,
+                  caloriesBurned: data.caloriesBurned,
+                  durationMinutes: data.durationMinutes,
+                  userNotes: `Guided routine — ${data.roundsCompleted}/${data.totalRounds} rounds`,
+                }),
+              });
+              if (!res.ok) return false;
+              toast.success(
+                `Routine logged! ${data.durationMinutes} min • ~${data.caloriesBurned} cal 💪`
+              );
+              fetchPlan();
+              fetchStreak();
+              return true;
+            } catch {
+              return false;
+            }
+          }}
+          onExit={() => setGuidedWorkout(null)}
+        />
       )}
 
       {/* Active Workout Mode */}
@@ -1048,7 +1114,7 @@ export default function WorkoutPlanPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Bot className="h-4 w-4 text-purple-500" />
+              <Bot className="h-4 w-4 text-pitaya-deep" />
               AI Trainer Chat
             </CardTitle>
           </CardHeader>
@@ -1066,7 +1132,7 @@ export default function WorkoutPlanPage() {
         <Card className="border-amber-500/20 bg-amber-500/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Trophy className="h-4 w-4 text-amber-400" />
+              <Trophy className="h-4 w-4 text-pitaya-deep" />
               Personal Records
             </CardTitle>
           </CardHeader>
@@ -1104,7 +1170,7 @@ export default function WorkoutPlanPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-blue-500" />
+              <TrendingUp className="h-4 w-4 text-pitaya-deep" />
               Recent Progress
             </CardTitle>
           </CardHeader>
@@ -1118,12 +1184,12 @@ export default function WorkoutPlanPage() {
                   <span className="text-muted-foreground">{t.date}</span>
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1">
-                      <Zap className="h-3 w-3 text-blue-400" />
+                      <Zap className="h-3 w-3 text-pitaya" />
                       {t.totalVolume.toLocaleString()} vol
                     </span>
                     {t.caloriesBurned > 0 && (
                       <span className="flex items-center gap-1">
-                        <Flame className="h-3 w-3 text-orange-400" />
+                        <Flame className="h-3 w-3 text-pitaya" />
                         {Math.round(t.caloriesBurned)} cal
                       </span>
                     )}
@@ -1139,7 +1205,7 @@ export default function WorkoutPlanPage() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Dumbbell className="h-4 w-4 text-purple-500" />
+            <Dumbbell className="h-4 w-4 text-pitaya-deep" />
             Plan Overview
           </CardTitle>
         </CardHeader>
@@ -1153,7 +1219,7 @@ export default function WorkoutPlanPage() {
               }
               className="w-full flex items-center gap-3 p-3 rounded-xl bg-secondary/20 hover:bg-secondary/40 transition-colors text-left"
             >
-              <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-xs font-bold text-purple-400">
+              <div className="w-8 h-8 rounded-lg bg-pitaya/15 flex items-center justify-center text-xs font-bold text-pitaya-deep">
                 D{day.dayIndex + 1}
               </div>
               <div className="flex-1 min-w-0">
