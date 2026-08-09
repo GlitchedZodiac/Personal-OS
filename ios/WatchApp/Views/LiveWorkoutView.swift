@@ -116,24 +116,31 @@ struct ControlsPage: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                controlButton(
-                    "End", icon: "xmark", iconColor: Theme.danger, bg: Theme.dangerDim
-                ) {
+                controlButton("End", bg: Theme.dangerDim, glyph: {
+                    PitayaGlyph(
+                        paths: Glyphs.endX, style: .stroke(width: 2.6),
+                        color: Theme.danger, size: 15
+                    )
+                }) {
                     Task { await model.finishWorkout(kind) }
                 }
                 pauseResume
             }
             HStack(spacing: 8) {
-                controlButton(
-                    "Lock", icon: "drop.fill", iconColor: Theme.water, bg: Theme.waterDim
-                ) {
+                controlButton("Lock", bg: Theme.waterDim, glyph: {
+                    PitayaGlyph(paths: Glyphs.drop, style: .fill, color: Theme.water, size: 15)
+                }) {
                     WKInterfaceDevice.current().enableWaterLock()
                 }
                 if kind == .kettlebell {
-                    controlButton(
-                        "Repeat set", icon: "arrow.counterclockwise",
-                        iconColor: Theme.accent, bg: Theme.accentDim
-                    ) {
+                    // The design's 4th control is a Lap flag; kettlebell has
+                    // no laps, so this slot repeats the last set (deviation
+                    // surfaced in state.md; glyph is undesigned → SF).
+                    controlButton("Repeat set", bg: Theme.accentDim, glyph: {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Theme.accent)
+                    }) {
                         model.repeatLastSet()
                     }
                 } else {
@@ -146,27 +153,27 @@ struct ControlsPage: View {
 
     private var pauseResume: some View {
         let paused = recorder.phase == .paused
-        return controlButton(
-            paused ? "Resume" : "Pause",
-            icon: paused ? "play.fill" : "pause.fill",
-            iconColor: Theme.textPrimary,
-            bg: Theme.elementDim
-        ) {
+        return controlButton(paused ? "Resume" : "Pause", bg: Theme.elementDim, glyph: {
+            if paused {
+                PlayGlyph(color: Theme.textPrimary, size: 15)
+            } else {
+                PauseGlyph(color: Theme.textPrimary, size: 15)
+            }
+        }) {
             paused ? recorder.resume() : recorder.pause()
         }
     }
 
     private func controlButton(
-        _ label: String, icon: String, iconColor: Color, bg: Color,
+        _ label: String, bg: Color,
+        @ViewBuilder glyph: @escaping () -> some View,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             VStack(spacing: 4) {
                 ZStack {
                     Circle().fill(bg)
-                    Image(systemName: icon)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(iconColor)
+                    glyph()
                 }
                 .frame(width: 44, height: 44)
                 Text(label)

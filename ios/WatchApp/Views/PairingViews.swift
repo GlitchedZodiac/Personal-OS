@@ -143,9 +143,10 @@ struct PairedView: View {
         VStack(spacing: 0) {
             ZStack {
                 Circle().stroke(Theme.mint, lineWidth: 2)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.mint)
+                PitayaGlyph(
+                    paths: Glyphs.check, style: .stroke(width: 3),
+                    color: Theme.mint, size: 16
+                )
             }
             .frame(width: 36, height: 36)
 
@@ -181,9 +182,10 @@ struct PairedView: View {
 
     private func checkRow(_ text: String) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(Theme.mint)
+            PitayaGlyph(
+                paths: Glyphs.check, style: .stroke(width: 3),
+                color: Theme.mint, size: 9
+            )
             Text(text)
                 .font(Theme.text(10))
                 .foregroundStyle(Theme.textPrimary)

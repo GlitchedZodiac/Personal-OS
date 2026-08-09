@@ -50,20 +50,38 @@ public enum Theme {
     public static let waterDim = Color(hex: 0x14212B)
 
     // ── Type ──────────────────────────────────────────────────────────
-    // Design uses Familjen Grotesk (display) + Instrument Sans (text).
-    // Until those are bundled as assets, both route to the system face at
-    // matching weights — swap the two functions below to adopt the fonts.
+    // Familjen Grotesk (display/numerals) + Instrument Sans (text), bundled
+    // in WatchApp/Fonts and registered via UIAppFonts. PostScript names
+    // verified from the TTF name tables.
+    private static func familjen(_ weight: Font.Weight) -> String {
+        switch weight {
+        case .bold, .heavy, .black: return "FamiljenGrotesk-Bold"
+        case .semibold: return "FamiljenGrotesk-SemiBold"
+        case .medium: return "FamiljenGrotesk-Medium"
+        default: return "FamiljenGrotesk-Regular"
+        }
+    }
+
+    private static func instrument(_ weight: Font.Weight) -> String {
+        switch weight {
+        case .bold, .heavy, .black, .semibold: return "InstrumentSans-SemiBold"
+        case .medium: return "InstrumentSans-Medium"
+        default: return "InstrumentSans-Regular"
+        }
+    }
+
     public static func display(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
-        .system(size: size, weight: weight)
+        .custom(familjen(weight), size: size)
     }
 
     public static func text(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight)
+        .custom(instrument(weight), size: size)
     }
 
-    /// Tabular-numeral display face for timers and live metrics.
+    /// Tabular-numeral display face for timers and live metrics (Familjen
+    /// carries tabular figures; monospacedDigit engages them).
     public static func numeric(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
-        .system(size: size, weight: weight).monospacedDigit()
+        .custom(familjen(weight), size: size).monospacedDigit()
     }
 
     // ── Shape ─────────────────────────────────────────────────────────

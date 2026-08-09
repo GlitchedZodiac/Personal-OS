@@ -30,6 +30,12 @@ enum Smoke {
             }
         }
 
+        // Any smoke-driven workout syncs under its own externalSource so
+        // test rows are unmistakable and cleanup can never touch real data.
+        if env["PITAYA_SMOKE_HOLD"] == "1" || env["PITAYA_SMOKE_AUTORUN"] == "1" {
+            model.externalSourceOverride = "watch_smoke"
+        }
+
         // HOLD variant: start a kettlebell session, log one set, and stay on
         // the live set-logger screen (for visual verification runs).
         if env["PITAYA_SMOKE_HOLD"] == "1", model.phase == .home {
@@ -65,8 +71,9 @@ enum Smoke {
         await model.finishWorkout(.kettlebell)
 
         let prs = model.summary?.prs ?? []
-        log("finished — sets=\(model.summary?.setCount ?? 0) volume=\(model.summary?.totalVolumeKg ?? 0) prs=\(prs.map { "\($0.exerciseId)/\($0.kind)=\($0.value)" }.joined(separator: ","))")
-        log("syncState=\(String(describing: model.syncState))")
+        let source = model.syncState == .synced ? "SERVER-CONFIRMED" : "local-estimate"
+        log("finished — sets=\(model.summary?.setCount ?? 0) volume=\(model.summary?.totalVolumeKg ?? 0) prs(\(source))=\(prs.map { "\($0.exerciseId)/\($0.kind)=\($0.value)" }.joined(separator: ","))")
+        log("syncState=\(String(describing: model.syncState)) baselineExercises=\(model.prExerciseCount)")
         #endif
     }
 

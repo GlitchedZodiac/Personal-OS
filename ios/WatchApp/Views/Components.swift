@@ -94,9 +94,7 @@ struct BeatingHeart: View {
     @State private var beat = false
 
     var body: some View {
-        Image(systemName: "heart.fill")
-            .font(.system(size: size))
-            .foregroundStyle(color)
+        PitayaGlyph(paths: Glyphs.heart, style: .fill, color: color, size: size)
             .scaleEffect(beat ? 1.18 : 1.0)
             .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: beat)
             .onAppear { beat = true }

@@ -101,6 +101,14 @@ public actor MobileAPIClient {
         )
     }
 
+    /// Server-truth PR baselines (bearer mirror of /api/health/prs).
+    public func fetchPRs() async throws -> PRListResponse {
+        try await send(
+            path: "/api/mobile/prs", method: "GET",
+            body: Optional<Int>.none, authorized: true
+        )
+    }
+
     public func syncDailyHealth(_ payload: DailyHealthSnapshotPayload) async throws {
         struct AnyResponse: Decodable {}
         let _: AnyResponse = try await send(

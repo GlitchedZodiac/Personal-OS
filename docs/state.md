@@ -5,14 +5,58 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 (PITAYA Stage A web + [watch] app live E2E in sim)
-**Current phase:** Phase 1 complete; AI provider decided (all-OpenAI, 5.6
-tiers, live on prod). Web: Pitaya Stage A shipped, next stages queued. Watch
-Phase 3 STARTED — core loop (pair → record → kettlebell sets → PR haptic →
-sync) working in simulator against prod, Pitaya watch design implemented.
-**Branch in flight:** `claude/phase1-modernization` (web, deployed to prod
-via `vercel deploy --prod`; UNPUSHED to GitHub — 403, collaborator access
-pending, see deferred-items) · `claude/watch-app` (watch lane, local).
+**Last updated:** 2026-08-09 ([watch] server-truth PRs + PORT GATE parity;
+device install runbook ready — next watch session needs Michael present)
+**Current phase:** Watch: simulator-complete (core loop + server-truth PRs +
+fonts/glyphs); real-device install is the next step (docs/
+watch-device-runbook.md). Web: Pitaya stages continuing per 09f order.
+**Branch in flight:** `claude/phase1-modernization` (web) ·
+`claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch).
+
+## 2026-08-09g — [watch] Server-truth PRs adopted, PORT GATE parity, runbook
+
+Post-worktree-split session in the new lane home. Both new backend
+contracts adopted and proven against prod; the watch now matches the design
+per THE PORT GATE; everything short of Michael-present device signing is
+done (runbook: docs/watch-device-runbook.md).
+
+- **Server-truth PRs** (contract § ownership): baselines now come from
+  `GET /api/mobile/prs` (verified identical to the local engine's view — 7
+  records matched exactly), disk-cached (`PRBaselineCache`) so offline
+  cold-starts still know the bests; the top-100 history rebuild is deleted.
+  Sync response `prs: [{externalId,newPRs}]` decodes and REPLACES the local
+  estimate on the summary (server wins on drift); live-set haptics stay
+  local for offline instantness. Smoke proof: paired fresh → server
+  detection wrote swing 48 kg (prev 20) + volume 240 to personal_records →
+  summary showed the server-confirmed banners → then FULL RESTORE (rows
+  deleted, `/api/health/prs/backfill` re-run, `/api/mobile/prs` diffed
+  byte-identical to the pre-smoke snapshot).
+- **PORT GATE parity**: `WatchApp/Views/PitayaGlyphs.swift` — a tiny SVG
+  path renderer + every glyph EXTRACTED verbatim from pitaya-watch.dc.html
+  (kettlebell = the app design's Train icon, trail mountain, walk figure,
+  filled heart, check, end ✕, pause bars, water drop, play, lap flag).
+  dumbbell.fill and all other SF substitutions on designed surfaces are
+  gone (SF remains only on undesigned elements: chevron, repeat-set arrow,
+  queue badge — listed in ios/README). Home is the design's row list
+  (Kettlebell / Trail Run / Walk) with real-history subtitles ("1.9 km ·
+  Wed" from his actual last run). Fonts BUNDLED: Familjen Grotesk +
+  Instrument Sans (7 static TTFs, OFL, PostScript names verified) via
+  UIAppFonts + the Theme seam — visible in the new screenshots.
+- **Smoke hygiene hardened after an incident** (owned in the report to
+  Michael): a cleanup sweep keyed on externalSource `app_watch` deleted an
+  empty test row (07:28 this morning, strength, 0 sets, no description)
+  that was NOT this lane's — almost certainly Michael's own morning
+  simulator test (his 12:28Z device session was found and KEPT). His PR
+  table was unaffected (backfill-verified). Fix shipped: smoke workouts now
+  sync as externalSource `watch_smoke`, never `app_watch`, and session
+  cleanup lists-then-deletes only rows attributable to the running session.
+  Also: keychain resets during smoke un-paired his sim app — he'll re-pair
+  on next open (fresh welcome screen left, new build installed).
+- Sequences/rest-timer/sleep: WAITING on the Train-stage API per contract.
+- Both targets build green; sim left at welcome on the new build.
+
+Next: the device session (Michael present) — runbook has signing, Developer
+Mode, install, HK prompts, and the 8-point real-hardware validation table.
 
 ## 2026-08-09e — [watch] Pitaya watch app: core loop live in simulator
 

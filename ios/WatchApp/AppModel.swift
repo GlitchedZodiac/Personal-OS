@@ -55,15 +55,6 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         }
     }
 
-    public var systemImage: String {
-        switch self {
-        case .kettlebell: return "dumbbell.fill"
-        case .walk: return "figure.walk"
-        case .run: return "figure.run"
-        case .hike: return "mountain.2.fill"
-        case .other: return "flame.fill"
-        }
-    }
 }
 
 // MARK: - Kettlebell session state
@@ -114,6 +105,7 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var historyCount = 0
     @Published public private(set) var prExerciseCount = 0
     @Published public private(set) var lastKettlebell: Date?
+    @Published public private(set) var lastRun: (at: Date, km: Double)?
     @Published public private(set) var syncState: SyncState = .idle
     @Published public private(set) var summary: WorkoutSummary?
 
@@ -130,6 +122,12 @@ public final class AppModel: ObservableObject {
     private let sessionStore: any SessionStore
     private let api: MobileAPIClient
     private let queue: OfflineWorkoutQueue?
+    private let prCache: PRBaselineCache?
+    /// Smoke runs set this to "watch_smoke" so test rows NEVER share the real
+    /// app's externalSource namespace — cleanup can then target watch_smoke
+    /// alone (a real 07:28 row was once deleted by an app_watch-wide sweep;
+    /// never again).
+    var externalSourceOverride: String?
     private var baselines = PRBaselines()
     private var prFlashTask: Task<Void, Never>?
     private var workoutStartedAt = Date()
@@ -142,12 +140,19 @@ public final class AppModel: ObservableObject {
         self.sessionStore = store
         self.api = MobileAPIClient(baseURL: baseURL, sessionStore: store)
         self.queue = try? OfflineWorkoutQueue()
+        self.prCache = try? PRBaselineCache()
     }
 
     // MARK: - Boot & pairing
 
     public func bootstrap() async {
         if await sessionStore.load() != nil {
+            // Cached baselines first so an offline cold start still knows
+            // the bests; the network refresh replaces them when reachable.
+            if let cached = await prCache?.load() {
+                baselines = PRBaselines(cached: cached)
+                prExerciseCount = baselines.best.count
+            }
             phase = .home
             await refreshHistory()
             await drainQueue()
@@ -190,24 +195,42 @@ public final class AppModel: ObservableObject {
 
     public func unpair() async {
         await sessionStore.clear()
+        await prCache?.clear()
         historyCount = 0
         baselines = PRBaselines()
         phase = .welcome
     }
 
+    /// Refresh server-truth PR baselines (GET /api/mobile/prs) and the
+    /// workout history facts the home screen shows. Offline keeps the last
+    /// known state (disk-cached baselines survive relaunches).
     public func refreshHistory() async {
         do {
-            let list = try await api.fetchWorkouts(limit: 100)
+            let prList = try await api.fetchPRs()
+            baselines = PRBaselines(records: prList.records)
+            prExerciseCount = Set(prList.records.map(\.exercise)).count
+            await prCache?.save(baselines.best)
+        } catch MobileAPIClient.ClientError.unauthorized {
+            await unpair()
+            return
+        } catch {
+            // Offline is fine — cached baselines stand.
+        }
+
+        do {
+            let list = try await api.fetchWorkouts(limit: 50)
             historyCount = list.entries.count
-            baselines = PRBaselines(history: list.entries)
-            prExerciseCount = baselines.best.count
             lastKettlebell = list.entries.first {
                 $0.workoutType == "strength" && !$0.exercises.isEmpty
             }?.startedAt
-        } catch MobileAPIClient.ClientError.unauthorized {
-            await unpair()
+            lastRun = list.entries.first {
+                ($0.workoutType == "run" || $0.workoutType == "cardio")
+                    && ($0.distanceMeters ?? 0) > 0
+            }.flatMap { row in
+                row.distanceMeters.map { (row.startedAt, $0 / 1000) }
+            }
         } catch {
-            // Offline is fine — baselines stay at their last computed state.
+            // Offline — home facts stay stale, nothing breaks.
         }
     }
 
@@ -285,6 +308,7 @@ public final class AppModel: ObservableObject {
         )
 
         let item = WorkoutSyncItem(
+            externalSource: externalSourceOverride ?? "app_watch",
             startedAt: started,
             endedAt: ended,
             durationMinutes: max(1, Int((duration / 60).rounded())),
@@ -302,7 +326,7 @@ public final class AppModel: ObservableObject {
         if !prs.isEmpty {
             WKInterfaceDevice.current().play(.notification)
         }
-        await sync(item)
+        await sync(item, reconcilePRsFor: item.externalId)
     }
 
     public func dismissSummary() {
@@ -314,24 +338,58 @@ public final class AppModel: ObservableObject {
 
     // MARK: - Sync
 
-    private func sync(_ item: WorkoutSyncItem) async {
+    private func sync(_ item: WorkoutSyncItem, reconcilePRsFor externalId: String? = nil) async {
         try? await queue?.enqueue(item)
-        await drainQueue()
+        await drainQueue(reconcilePRsFor: externalId)
     }
 
-    public func drainQueue() async {
+    public func drainQueue(reconcilePRsFor externalId: String? = nil) async {
         guard let queue else { return }
         let pending = await queue.load()
         guard !pending.isEmpty else { return }
 
         syncState = .syncing
         do {
-            _ = try await api.syncWorkouts(pending)
+            let response = try await api.syncWorkouts(pending)
             try? await queue.removeSynced(pending)
             syncState = .synced
+            reconcileSummaryPRs(from: response, matching: externalId)
         } catch {
             syncState = .queued(pending.count)
         }
+    }
+
+    /// The server is the PR source of truth: when the just-finished workout's
+    /// sync response includes its PR verdict, it replaces the local estimate
+    /// on the summary screen (they agree in the common case; the server wins
+    /// on any drift — e.g. a web edit the watch hasn't seen).
+    private func reconcileSummaryPRs(from response: WorkoutSyncResponse, matching externalId: String?) {
+        guard
+            let externalId,
+            let current = summary,
+            let serverResult = response.prs?.first(where: { $0.externalId == externalId })
+        else { return }
+
+        let serverPRs = serverResult.newPRs.map { pr in
+            PRBaselines.SessionPR(
+                exerciseId: pr.exercise,
+                exerciseName: pr.exerciseName,
+                kind: pr.kind,
+                value: pr.value,
+                previousValue: pr.previousValue
+            )
+        }.sorted { $0.exerciseName < $1.exerciseName }
+
+        summary = WorkoutSummary(
+            kind: current.kind,
+            durationSeconds: current.durationSeconds,
+            calories: current.calories,
+            avgHeartRate: current.avgHeartRate,
+            distanceMeters: current.distanceMeters,
+            totalVolumeKg: current.totalVolumeKg,
+            setCount: current.setCount,
+            prs: serverPRs
+        )
     }
 
     // MARK: - Helpers

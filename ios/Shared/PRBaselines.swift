@@ -1,15 +1,19 @@
-// Local personal-record engine — the wrist must celebrate a PR the moment a
-// set is logged, including fully offline, so baselines are computed on-watch
-// from synced history rather than fetched (`/api/health/prs` is cookie-gated
-// and unreachable with a bearer token today; a mobile mirror is a filed ask).
+// Local personal-record engine. The SERVER is the source of truth
+// (per docs/watch-contract.md): baselines come from GET /api/mobile/prs and
+// are cached to disk for offline cold-starts; the sync response's `prs`
+// array carries server-confirmed celebrations. This engine keeps only what
+// the wrist needs instantly and offline — evaluate a set the moment it's
+// logged (haptic), estimate session PRs when a finish can't reach the
+// server, and absorb finished sessions so back-to-back offline workouts
+// compare against today's numbers.
 //
-// Semantics mirror lib/prs.ts exactly:
+// Semantics mirror lib/prs.ts:
 //   weight — heaviest load ever used on the canonical exercise
 //   volume — best single-entry tonnage (sets × reps × weightKg)
 
 import Foundation
 
-public struct PRBest: Hashable, Sendable {
+public struct PRBest: Codable, Hashable, Sendable {
     public var weightKg: Double
     public var volume: Double
 }
@@ -19,28 +23,21 @@ public struct PRBaselines: Sendable {
 
     public init() {}
 
-    /// Build baselines from server workout history. Only entries whose name
-    /// maps to a canonical catalog exercise count — same rule as the server.
-    public init(history: [MobileWorkoutRow]) {
-        for row in history {
-            for entry in row.exercises {
-                fold(entry)
+    /// Build from server personal_records rows (GET /api/mobile/prs).
+    public init(records: [PersonalRecordRow]) {
+        for record in records {
+            var current = best[record.exercise] ?? PRBest(weightKg: 0, volume: 0)
+            switch record.kind {
+            case "weight": current.weightKg = max(current.weightKg, record.value)
+            case "volume": current.volume = max(current.volume, record.value)
+            default: continue
             }
+            best[record.exercise] = current
         }
     }
 
-    private mutating func fold(_ entry: ExerciseEntry) {
-        guard
-            let def = ExerciseCatalog.normalize(entry.name),
-            let weight = entry.weightKg, weight > 0
-        else { return }
-
-        var current = best[def.id] ?? PRBest(weightKg: 0, volume: 0)
-        current.weightKg = max(current.weightKg, weight)
-        if let sets = entry.sets, let reps = entry.reps, sets > 0, reps > 0 {
-            current.volume = max(current.volume, Double(sets * reps) * weight)
-        }
-        best[def.id] = current
+    public init(cached: [String: PRBest]) {
+        best = cached
     }
 
     // MARK: - Live evaluation
@@ -69,9 +66,9 @@ public struct PRBaselines: Sendable {
         public let previousValue: Double?
     }
 
-    /// Compare a finished session's aggregated entries against baselines,
-    /// mirroring lib/prs.ts extraction (best weight + best single-entry
-    /// volume per exercise across the session).
+    /// Offline estimate of a finished session's PRs, mirroring lib/prs.ts
+    /// extraction. Used only when the sync response (server truth) isn't
+    /// available; the server result replaces it on the next successful sync.
     public func sessionPRs(entries: [ExerciseEntry]) -> [SessionPR] {
         struct Candidate { var name: String; var weight = 0.0; var volume = 0.0 }
         var perExercise: [String: Candidate] = [:]
@@ -95,13 +92,15 @@ public struct PRBaselines: Sendable {
             if c.weight > (prior?.weightKg ?? 0) {
                 out.append(SessionPR(
                     exerciseId: id, exerciseName: c.name, kind: "weight",
-                    value: c.weight, previousValue: prior.map(\.weightKg).flatMap { $0 > 0 ? $0 : nil }
+                    value: c.weight,
+                    previousValue: prior.map(\.weightKg).flatMap { $0 > 0 ? $0 : nil }
                 ))
             }
             if c.volume > 0, c.volume > (prior?.volume ?? 0) {
                 out.append(SessionPR(
                     exerciseId: id, exerciseName: c.name, kind: "volume",
-                    value: c.volume, previousValue: prior.map(\.volume).flatMap { $0 > 0 ? $0 : nil }
+                    value: c.volume,
+                    previousValue: prior.map(\.volume).flatMap { $0 > 0 ? $0 : nil }
                 ))
             }
         }
@@ -109,8 +108,50 @@ public struct PRBaselines: Sendable {
     }
 
     /// Fold a finished session's entries into the local baseline so the very
-    /// next workout compares against today's numbers even before a re-fetch.
+    /// next offline workout compares against today's numbers.
     public mutating func absorb(entries: [ExerciseEntry]) {
-        for entry in entries { fold(entry) }
+        for entry in entries {
+            guard
+                let def = ExerciseCatalog.normalize(entry.name),
+                let weight = entry.weightKg, weight > 0
+            else { continue }
+            var current = best[def.id] ?? PRBest(weightKg: 0, volume: 0)
+            current.weightKg = max(current.weightKg, weight)
+            if let sets = entry.sets, let reps = entry.reps, sets > 0, reps > 0 {
+                current.volume = max(current.volume, Double(sets * reps) * weight)
+            }
+            best[def.id] = current
+        }
+    }
+}
+
+// MARK: - Disk cache (offline cold-start)
+
+public actor PRBaselineCache {
+    private let fileURL: URL
+
+    public init(filename: String = "pr-baselines.json") throws {
+        let supportURL = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        fileURL = supportURL.appendingPathComponent(filename)
+    }
+
+    public func load() -> [String: PRBest]? {
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return try? JSONDecoder().decode([String: PRBest].self, from: data)
+    }
+
+    public func save(_ best: [String: PRBest]) {
+        if let data = try? JSONEncoder().encode(best) {
+            try? data.write(to: fileURL, options: .atomic)
+        }
+    }
+
+    public func clear() {
+        try? FileManager.default.removeItem(at: fileURL)
     }
 }

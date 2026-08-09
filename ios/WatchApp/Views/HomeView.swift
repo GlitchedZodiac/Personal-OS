@@ -1,6 +1,8 @@
-// Home — pick a workout. Design screen 04, trimmed to what's real today:
-// no Sequences row (no backend contract yet) and no Today's-Plan card (plan
-// data isn't in the mobile surface); both slot back in when their data lands.
+// Home — design screen 04's workout list, ported per THE PORT GATE: the
+// design's rows (Kettlebell / Trail Run / Walk) with its own glyphs. The
+// design's Sequences row and Today's-Plan card return when their backend
+// contracts ship (watch-contract.md); until then this list is exactly what
+// works. Row subtitles carry real history facts like the design's do.
 
 #if os(watchOS)
 import SwiftUI
@@ -16,8 +18,14 @@ struct HomeView: View {
                     .foregroundStyle(Theme.textBright)
                     .padding(.horizontal, 4)
 
-                ForEach(WorkoutKind.allCases) { kind in
-                    workoutRow(kind)
+                row(kind: .kettlebell, title: "Kettlebell", subtitle: kettlebellSubtitle) {
+                    PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 13)
+                }
+                row(kind: .run, title: "Trail Run", subtitle: runSubtitle) {
+                    PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 13)
+                }
+                row(kind: .walk, title: "Walk", subtitle: "open goal") {
+                    WalkGlyph(color: Theme.accent, size: 13)
                 }
 
                 footer
@@ -26,24 +34,25 @@ struct HomeView: View {
         }
     }
 
-    private func workoutRow(_ kind: WorkoutKind) -> some View {
+    private func row(
+        kind: WorkoutKind, title: String, subtitle: String,
+        @ViewBuilder glyph: () -> some View
+    ) -> some View {
         Button {
             Task { await model.startWorkout(kind) }
         } label: {
             HStack(spacing: 8) {
                 ZStack {
                     Circle().fill(Theme.accentDim)
-                    Image(systemName: kind.systemImage)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
+                    glyph()
                 }
                 .frame(width: 26, height: 26)
 
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(kind.title)
+                    Text(title)
                         .font(Theme.text(12, weight: .semibold))
                         .foregroundStyle(Theme.textBright)
-                    Text(subtitle(for: kind))
+                    Text(subtitle)
                         .font(Theme.text(8.5))
                         .foregroundStyle(Theme.textTertiary)
                 }
@@ -78,20 +87,22 @@ struct HomeView: View {
         .padding(.top, 5)
     }
 
-    private func subtitle(for kind: WorkoutKind) -> String {
-        switch kind {
-        case .kettlebell:
-            if let last = model.lastKettlebell {
-                let f = RelativeDateTimeFormatter()
-                f.unitsStyle = .short
-                return "last · " + f.localizedString(for: last, relativeTo: Date())
-            }
-            return "sets · crown weight · PRs"
-        case .walk: return "open goal"
-        case .run: return "pace & heart rate"
-        case .hike: return "elevation & heart rate"
-        case .other: return "time & calories"
+    private var kettlebellSubtitle: String {
+        if let last = model.lastKettlebell {
+            let f = RelativeDateTimeFormatter()
+            f.unitsStyle = .short
+            return "last · " + f.localizedString(for: last, relativeTo: Date())
         }
+        return "sets · crown weight · PRs"
+    }
+
+    private var runSubtitle: String {
+        if let run = model.lastRun {
+            let f = DateFormatter()
+            f.dateFormat = "EEE"
+            return String(format: "%.1f km · %@", run.km, f.string(from: run.at))
+        }
+        return "GPS coming · HR live"
     }
 }
 #endif

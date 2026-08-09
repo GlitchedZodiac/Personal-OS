@@ -52,6 +52,9 @@ targets:
     sources:
       - path: WatchApp
       - path: Shared
+      - path: WatchApp/Fonts
+        type: folder
+        buildPhase: resources
     info:
       path: WatchApp/Info.plist
       properties:
@@ -61,6 +64,14 @@ targets:
         # above is a sibling, not a host; revisit if we ever embed).
         WKWatchOnly: true
         WKBackgroundModes: [workout-processing]
+        UIAppFonts:
+          - FamiljenGrotesk-Regular.ttf
+          - FamiljenGrotesk-Medium.ttf
+          - FamiljenGrotesk-SemiBold.ttf
+          - FamiljenGrotesk-Bold.ttf
+          - InstrumentSans-Regular.ttf
+          - InstrumentSans-Medium.ttf
+          - InstrumentSans-SemiBold.ttf
         NSHealthShareUsageDescription: >-
           Pitaya reads heart rate and calories to show live workout metrics.
         NSHealthUpdateUsageDescription: >-

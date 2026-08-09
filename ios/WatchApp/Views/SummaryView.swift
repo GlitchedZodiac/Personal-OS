@@ -64,9 +64,10 @@ struct SummaryView: View {
         HStack(spacing: 8) {
             ZStack {
                 Circle().stroke(Theme.mint, lineWidth: 2)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Theme.mint)
+                PitayaGlyph(
+                    paths: Glyphs.check, style: .stroke(width: 3),
+                    color: Theme.mint, size: 11
+                )
             }
             .frame(width: 26, height: 26)
 

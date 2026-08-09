@@ -213,10 +213,47 @@ public struct WorkoutSyncRequest: Codable, Sendable {
     public init(items: [WorkoutSyncItem]) { self.items = items }
 }
 
+/// One new PR as detected server-side (lib/prs.ts NewPR shape).
+public struct NewPRPayload: Codable, Hashable, Sendable {
+    public let exercise: String
+    public let exerciseName: String
+    public let kind: String // "weight" | "volume"
+    public let value: Double
+    public let unit: String
+    public let previousValue: Double?
+}
+
+/// Per-item PR results in the sync response.
+public struct SyncPRResult: Codable, Hashable, Sendable {
+    public let externalId: String?
+    public let newPRs: [NewPRPayload]
+}
+
 public struct WorkoutSyncResponse: Codable, Hashable, Sendable {
     public let created: Int
     public let updated: Int
     public let total: Int
+    /// Server-side PR detection per synced item (2026-08-09 contract);
+    /// optional so an older server never breaks decode.
+    public let prs: [SyncPRResult]?
+}
+
+// MARK: - Personal records (GET /api/mobile/prs)
+
+/// A personal_records row — same payload as /api/health/prs.
+public struct PersonalRecordRow: Codable, Hashable, Sendable {
+    public let exercise: String // canonical id
+    public let exerciseName: String
+    public let kind: String // "weight" | "volume"
+    public let value: Double
+    public let unit: String
+    public let previousValue: Double?
+    public let achievedAt: Date
+}
+
+public struct PRListResponse: Codable, Sendable {
+    public let records: [PersonalRecordRow]
+    public let recent: [PersonalRecordRow]
 }
 
 // MARK: - Daily health snapshot
