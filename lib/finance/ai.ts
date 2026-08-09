@@ -1,4 +1,4 @@
-import { openai } from "@/lib/openai";
+import { openai, CHAT_MODEL } from "@/lib/openai";
 import {
   capDemoCompletionTokens,
   enforceDemoAIBudget,
@@ -173,7 +173,7 @@ export async function analyzeFinanceText(message: string, aiLanguage = "english"
   if (blocked) return blocked;
 
   const response = await openai.chat.completions.create({
-    model: getDemoChatModel("gpt-5.2"),
+    model: getDemoChatModel(CHAT_MODEL),
     response_format: { type: "json_object" },
     max_completion_tokens: capDemoCompletionTokens(800),
     messages: [
@@ -191,7 +191,7 @@ export async function analyzeFinanceReceipt(image: string, aiLanguage = "english
   if (blocked) return blocked;
 
   const response = await openai.chat.completions.create({
-    model: getDemoChatModel("gpt-5.2"),
+    model: getDemoChatModel(CHAT_MODEL),
     response_format: { type: "json_object" },
     max_completion_tokens: capDemoCompletionTokens(1000),
     messages: [
@@ -228,7 +228,7 @@ export async function analyzeFinanceDocument(input: {
   }
 
   const response = await openai.chat.completions.create({
-    model: getDemoChatModel("gpt-5.2"),
+    model: getDemoChatModel(CHAT_MODEL),
     response_format: { type: "json_object" },
     max_completion_tokens: capDemoCompletionTokens(900),
     messages: [

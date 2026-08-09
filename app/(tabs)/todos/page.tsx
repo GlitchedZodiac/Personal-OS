@@ -252,7 +252,7 @@ export default function TodosPage() {
                 key={template.id}
                 className="flex items-center gap-3 rounded-xl border border-amber-500/10 bg-amber-500/5 p-3"
               >
-                <span className="text-lg">{template.icon || "ðŸ”"}</span>
+                <span className="text-lg">{template.icon || "🔁"}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm leading-tight">{template.title}</p>
                   <p className="mt-0.5 flex items-center gap-1 text-[10px] capitalize text-amber-400">

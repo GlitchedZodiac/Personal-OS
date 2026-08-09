@@ -43,7 +43,9 @@ export default function DailyLogPage() {
   };
 
   const isToday = (dateStr: string) => {
-    const today = new Date().toISOString().split("T")[0];
+    // Local-date key, not UTC — after 7 PM in UTC-5 the UTC date is tomorrow
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     return dateStr === today;
   };
 

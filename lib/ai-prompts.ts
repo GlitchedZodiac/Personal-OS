@@ -372,6 +372,19 @@ export const REMINDER_FUNCTION = {
   },
 };
 
+/**
+ * Domain vocabulary hint passed to the transcription model. Biases speech
+ * recognition toward the words this app actually hears — kettlebell training,
+ * macro tracking, and Colombian food terms — which is where generic
+ * transcription misses most.
+ */
+export const TRANSCRIBE_PROMPT =
+  "Personal health log dictation. Vocabulary: kettlebell, swings, goblet squat, " +
+  "Turkish get-up, clean and press, snatch, deadlift, superset, reps, sets, RPE, " +
+  "PR, bodyweight, kilos, pounds, protein, carbs, fats, macros, calories, " +
+  "arepa, bandeja paisa, sancocho, ajiaco, patacones, chicharrón, buñuelos, " +
+  "pandebono, almojábana, jugo de lulo, agua de panela.";
+
 export const GENERAL_CHAT_FUNCTION = {
   name: "general_response",
   description: "Respond to general health questions, nutrition advice, or conversation that doesn't involve logging data or managing todos",
@@ -386,3 +399,18 @@ export const GENERAL_CHAT_FUNCTION = {
     required: ["message"],
   },
 };
+
+/**
+ * The same definitions in the modern Chat Completions `tools` shape.
+ * The legacy `functions` API these were written for is deprecated.
+ */
+export const HEALTH_TOOLS = [
+  FOOD_LOG_FUNCTION,
+  BODY_MEASUREMENT_FUNCTION,
+  WORKOUT_LOG_FUNCTION,
+  WATER_LOG_FUNCTION,
+  GENERAL_CHAT_FUNCTION,
+  TODO_FUNCTION,
+  WORKOUT_PLAN_QUERY_FUNCTION,
+  REMINDER_FUNCTION,
+].map((fn) => ({ type: "function" as const, function: fn }));

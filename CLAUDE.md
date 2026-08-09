@@ -1,0 +1,117 @@
+# CLAUDE.md
+
+Operating model for Claude sessions on Personal OS. Read this first, every
+session, before writing code. Adapted from the Process Lounge operating model
+(`~/VibeCoding/TheProcessLounge/CLAUDE.md`) for a solo, single-user app —
+lighter ceremony, same principles.
+
+## Context
+
+Personal OS is Michael's single-user life dashboard — a Next.js PWA behind a
+PIN, deployed on Vercel (`personal-os` project, prod:
+https://personal-os-plum.vercel.app), data in Supabase Postgres via Prisma.
+
+**Current direction (2026-08): the app is being refocused as a lifelong
+HEALTH app** — workouts (kettlebell especially) and calorie/macro tracking,
+with pinpoint voice + photo logging and a real conversational AI. Finance and
+todo modules stay functional but get no investment. See
+[`docs/MODERNIZATION-PLAN.md`](docs/MODERNIZATION-PLAN.md) for the phased
+plan, and [`docs/design/claude-design-brief.md`](docs/design/claude-design-brief.md)
+for the visual redesign direction.
+
+Stack: Next.js 16 (App Router, Turbopack) · React 19 · Tailwind 4 + shadcn ·
+Prisma → Supabase Postgres (43 models) · OpenAI (models centralized in
+`lib/openai.ts`) · Strava + Gmail integrations · Vercel crons · PWA service
+worker · Swift scaffold in `ios/` for the future watch app.
+
+## Before any work
+
+1. Read [`docs/state.md`](docs/state.md) — what shipped last, what's in flight.
+2. Read [`docs/deferred-items.md`](docs/deferred-items.md) — known follow-ups;
+   check before filing a "we should fix X later" note (the slot may exist).
+3. For AI-layer work: models and API patterns live in `lib/openai.ts` (single
+   registry — never hardcode a model id in a route).
+4. For anything user-facing: the design direction in
+   `docs/design/claude-design-brief.md` is the standard once Phase 2 lands.
+
+## Commands
+
+```bash
+npm run dev        # dev server on :3000
+npm run build      # prisma generate + next build — MUST pass before commit
+npm run test       # vitest
+npm run test:e2e   # playwright
+```
+
+Env: `.env.local` (gitignored) holds real secrets. `vercel env pull` restores
+most; `DATABASE_URL`/`DIRECT_URL` are Sensitive in Vercel (write-only) — they
+come from Supabase (session pooler :5432 for DIRECT_URL, transaction pooler
+:6543 + `pgbouncer=true` for DATABASE_URL). `.env.example` documents the
+contract.
+
+## Rules of engagement
+
+**Halt on discovery.** When a finding invalidates the task's premise — the
+file/route doesn't exist, the design doc disagrees with the code, a fix needs
+a schema change that wasn't cleared — halt and surface it in chat. Don't
+improvise a workaround. A halt costs nothing; a workaround creates a hidden
+debt site.
+
+**Discovery-first investigation.** Before claiming a fix: reproduce, trace the
+real code path end-to-end (UI → handler → lib → DB), form a hypothesis,
+confirm it, fix at the root layer. Never fix from the symptom or the doc alone.
+
+**Self-smoke before "done."** Build green + tests green is the floor, not the
+finish. Drive the running app (or curl the API with a locally minted auth
+cookie — see `lib/auth.ts` token shape) and verify the change actually works.
+Report "self-smoke caught/fixed: X" when it catches something.
+
+**Prove data-flow claims.** "The field flows to the UI" is proven by asserting
+the API response contains it — not by the existence of wiring code.
+
+**Use existing patterns.** Grep before inventing: shadcn primitives in
+`components/ui/`, timezone helpers in `lib/timezone.ts` (never
+`toISOString().split("T")[0]` for a local day), Prisma singleton in
+`lib/prisma.ts`, the confirmation-dock UX in `components/voice-input.tsx`
+(AI proposes → user confirms → then it persists — keep this shape).
+
+**Auth is server-side.** `proxy.ts` gates all `/api/*` behind the signed
+cookie except self-authenticating routes (auth, cron w/ CRON_SECRET, mobile
+bearer tokens, OAuth callbacks). A new API route is protected by default; a
+new self-authenticating route must verify its own credential AND be added to
+the allowlist knowingly.
+
+**Every upgrade ships its check.** A change to user-visible behavior ends with
+a 3–7 item plain-language checklist for Michael ("open X → do Y → see Z") —
+his review is judgment (does it feel right), not bug-hunting; the bug-hunting
+already happened in self-smoke.
+
+**Scope discipline.** Small related cleanup (<30 min, same files, no new blast
+radius) may fold into the current work. Anything bigger goes to
+`docs/deferred-items.md` with a pickup hint. Don't mass-restyle surfaces
+mid-task.
+
+## Commits, branches
+
+- Branch `claude/<short-slug>` off `main`. Push branches freely (Vercel only
+  builds previews); **merging/deploying to prod main waits for Michael's go.**
+- Commit messages: imperative subject ≤70 chars; body explains the *why*; end
+  with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`. Never amend,
+  never `--no-verify`.
+
+## Completion report
+
+End every session with:
+
+```
+## Session report
+- Scope: <what this session set out to do>
+- Shipped: <bullets>
+- Build/tests: <pass|fail, N/N>
+- Self-smoke: <what was driven and what it proved>
+- Deferred: <items added to deferred-items.md>
+- Michael's checklist: <3–7 plain-language confirmations>
+- Next: <recommended next step>
+```
+
+Update `docs/state.md` (top entry) in the same session.

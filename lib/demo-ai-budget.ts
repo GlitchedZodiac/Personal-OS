@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { CHAT_MODEL } from "@/lib/openai";
 
 const DEMO_SPEND_CACHE_KEY = "demo_ai_spend_usd_v1";
 
@@ -92,7 +93,7 @@ export function isDemoModeServer(): boolean {
   );
 }
 
-export function getDemoChatModel(defaultModel = "gpt-5.2"): string {
+export function getDemoChatModel(defaultModel = CHAT_MODEL): string {
   const demoModel = cleanEnv(process.env.DEMO_OPENAI_MODEL);
   const openaiModel = cleanEnv(process.env.OPENAI_MODEL);
   if (!isDemoModeServer()) {

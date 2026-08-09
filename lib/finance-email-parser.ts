@@ -1,4 +1,4 @@
-import { hasOpenAIKey, openai } from "@/lib/openai";
+import { hasOpenAIKey, openai, CHAT_MODEL } from "@/lib/openai";
 import type { FinanceInboxParsedTransaction, FinanceTransactionType } from "@/lib/finance-inbox";
 
 export const FINANCE_CATEGORY_OPTIONS = [
@@ -228,7 +228,7 @@ export async function parseTransactionsFromEmail(input: {
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: CHAT_MODEL,
       max_completion_tokens: 2500,
       response_format: { type: "json_object" },
       messages: [

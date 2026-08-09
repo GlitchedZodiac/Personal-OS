@@ -1,4 +1,4 @@
-import { openai } from "@/lib/openai";
+import { openai, CHAT_MODEL } from "@/lib/openai";
 
 type ChatTextMessage = {
   role: "system" | "user" | "assistant";
@@ -14,7 +14,7 @@ type GenerateChatTextInput = {
 
 export async function generateChatText({
   messages,
-  model = "gpt-5.2",
+  model = CHAT_MODEL,
   maxCompletionTokens,
   retryMaxCompletionTokens,
 }: GenerateChatTextInput) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { openai } from "@/lib/openai";
+import { openai, CHAT_MODEL } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
 import {
   capDemoCompletionTokens,
@@ -70,7 +70,7 @@ Adjust the exercises based on the feedback and return the updated plan.`;
     if (blocked) return blocked;
 
     const completion = await openai.chat.completions.create({
-      model: getDemoChatModel("gpt-5.2"),
+      model: getDemoChatModel(CHAT_MODEL),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },

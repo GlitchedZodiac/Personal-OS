@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { openai } from "@/lib/openai";
+import { openai, CHAT_MODEL } from "@/lib/openai";
 import {
   capDemoCompletionTokens,
   enforceDemoAIBudget,
@@ -7,8 +7,38 @@ import {
   recordDemoAISpend,
 } from "@/lib/demo-ai-budget";
 
-// Allow up to 60s for GPT-5.2 vision analysis (Vercel Pro)
+// Allow up to 60s for vision analysis (Vercel Pro)
 export const maxDuration = 60;
+
+const MEAL_ANALYSIS_SCHEMA = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          foodDescription: {
+            type: "string",
+            description: "Food name with estimated portion",
+          },
+          calories: { type: "number" },
+          proteinG: { type: "number" },
+          carbsG: { type: "number" },
+          fatG: { type: "number" },
+        },
+        required: ["foodDescription", "calories", "proteinG", "carbsG", "fatG"],
+        additionalProperties: false,
+      },
+    },
+    summary: {
+      type: "string",
+      description: "Brief one-line description of the meal",
+    },
+  },
+  required: ["items", "summary"],
+  additionalProperties: false,
+} as const;
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +61,7 @@ export async function POST(request: NextRequest) {
     if (blocked) return blocked;
 
     const completion = await openai.chat.completions.create({
-      model: getDemoChatModel("gpt-5.2"),
+      model: getDemoChatModel(CHAT_MODEL),
       messages: [
         {
           role: "system",
@@ -39,25 +69,12 @@ export async function POST(request: NextRequest) {
 
 RULES:
 - List EACH distinct food item separately (e.g. "Grilled chicken breast" and "White rice" as separate items)
-- Estimate realistic portion sizes from the photo
+- Estimate realistic portion sizes from the photo — use visible reference objects (plate diameter, cutlery, hands) to calibrate
 - Be specific about the food (e.g. "Pan-seared salmon fillet ~6oz" not just "fish")
+- You are an expert in Colombian and Latin American cuisine (arepas, bandeja paisa, sancocho, patacones, etc.)
 - Include sauces, dressings, beverages if visible
 - If unsure about a portion, estimate conservatively
-- Round calories to nearest 5, macros to nearest 1g
-
-Respond ONLY with valid JSON in this exact format:
-{
-  "items": [
-    {
-      "foodDescription": "Food name with estimated portion",
-      "calories": 000,
-      "proteinG": 00,
-      "carbsG": 00,
-      "fatG": 00
-    }
-  ],
-  "summary": "Brief one-line description of the meal"
-}`,
+- Round calories to nearest 5, macros to nearest 1g`,
         },
         {
           role: "user",
@@ -80,21 +97,22 @@ Respond ONLY with valid JSON in this exact format:
       ],
       temperature: 0.3,
       max_completion_tokens: capDemoCompletionTokens(1000),
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "meal_analysis",
+          strict: true,
+          schema: MEAL_ANALYSIS_SCHEMA as unknown as Record<string, unknown>,
+        },
+      },
     });
     await recordDemoAISpend(completion.usage);
 
     const raw = completion.choices[0].message?.content?.trim() || "";
 
-    // Parse the JSON response — strip markdown fences if present
-    const jsonStr = raw
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/\s*```$/i, "")
-      .trim();
-
     let parsed: { items: Array<{ foodDescription: string; calories: number; proteinG: number; carbsG: number; fatG: number }>; summary: string };
     try {
-      parsed = JSON.parse(jsonStr);
+      parsed = JSON.parse(raw);
     } catch {
       console.error("[analyze-photo] Failed to parse AI response:", raw);
       return NextResponse.json(

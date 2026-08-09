@@ -111,6 +111,9 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  // Rolling conversation memory so follow-ups work ("actually make that 2 eggs").
+  // Sent to the chat API with every message; capped there to the last 12 turns.
+  const historyRef = useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const activeMimeRef = useRef<string>("");
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -276,6 +279,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
+          history: historyRef.current,
           customInstructions: settings.aiInstructions?.health || "",
           aiLanguage: settings.aiLanguage || "english",
           timeZone: settings.timeZone,
@@ -284,6 +288,13 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
 
       if (!chatRes.ok) throw new Error("AI processing failed");
       const response: AIResponse = await chatRes.json();
+
+      // Remember this exchange for follow-up context
+      historyRef.current = [
+        ...historyRef.current,
+        { role: "user" as const, content: text },
+        { role: "assistant" as const, content: response.message || "" },
+      ].slice(-12);
 
       setAiResponse(response);
 
@@ -933,7 +944,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
                     Analyzing your meal...
                   </p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    GPT-5.2 Vision is identifying food items
+                    AI vision is identifying food items
                   </p>
                 </div>
                 <Loader2 className="h-5 w-5 animate-spin text-amber-400 shrink-0" />

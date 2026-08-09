@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { openai } from "@/lib/openai";
+import { openai, CHAT_MODEL } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
 import {
   addDaysToDateString,
@@ -8,17 +8,7 @@ import {
   zonedLocalDateTimeToUtc,
 } from "@/lib/timezone";
 import { getUserTimeZone } from "@/lib/server-timezone";
-import {
-  HEALTH_SYSTEM_PROMPT,
-  FOOD_LOG_FUNCTION,
-  BODY_MEASUREMENT_FUNCTION,
-  WORKOUT_LOG_FUNCTION,
-  WATER_LOG_FUNCTION,
-  GENERAL_CHAT_FUNCTION,
-  TODO_FUNCTION,
-  WORKOUT_PLAN_QUERY_FUNCTION,
-  REMINDER_FUNCTION,
-} from "@/lib/ai-prompts";
+import { HEALTH_SYSTEM_PROMPT, HEALTH_TOOLS } from "@/lib/ai-prompts";
 
 // Allow up to 60s for AI generation (Vercel Pro)
 export const maxDuration = 60;
@@ -228,6 +218,23 @@ export async function POST(request: NextRequest) {
     const requestedTimeZone =
       typeof body.timeZone === "string" ? body.timeZone : null;
 
+    // Optional prior turns so follow-ups work ("actually make that 2 eggs").
+    // Capped to the last 12 messages to bound tokens.
+    const history: Array<{ role: "user" | "assistant"; content: string }> =
+      Array.isArray(body.history)
+        ? body.history
+            .filter(
+              (m: unknown): m is { role: "user" | "assistant"; content: string } =>
+                !!m &&
+                typeof m === "object" &&
+                ((m as { role?: unknown }).role === "user" ||
+                  (m as { role?: unknown }).role === "assistant") &&
+                typeof (m as { content?: unknown }).content === "string" &&
+                ((m as { content: string }).content.trim().length > 0)
+            )
+            .slice(-12)
+        : [];
+
     if (!message) {
       return NextResponse.json({ error: "No message provided" }, { status: 400 });
     }
@@ -254,29 +261,22 @@ export async function POST(request: NextRequest) {
     }
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: CHAT_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
+        ...history,
         { role: "user", content: message },
       ],
-      functions: [
-        FOOD_LOG_FUNCTION,
-        BODY_MEASUREMENT_FUNCTION,
-        WORKOUT_LOG_FUNCTION,
-        WATER_LOG_FUNCTION,
-        GENERAL_CHAT_FUNCTION,
-        TODO_FUNCTION,
-        WORKOUT_PLAN_QUERY_FUNCTION,
-        REMINDER_FUNCTION,
-      ],
-      function_call: "auto",
+      tools: HEALTH_TOOLS,
+      tool_choice: "auto",
     });
 
     const responseMessage = completion.choices[0].message;
+    const toolCall = responseMessage.tool_calls?.[0];
 
-    if (responseMessage.function_call) {
-      const functionName = responseMessage.function_call.name;
-      let args = JSON.parse(responseMessage.function_call.arguments || "{}");
+    if (toolCall && toolCall.type === "function") {
+      const functionName = toolCall.function.name;
+      let args = JSON.parse(toolCall.function.arguments || "{}");
 
       if (functionName === "log_food") {
         args = {

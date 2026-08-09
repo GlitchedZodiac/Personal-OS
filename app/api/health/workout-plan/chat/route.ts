@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { openai } from "@/lib/openai";
+import { openai, CHAT_MODEL } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
+import { getDateStringInTimeZone } from "@/lib/timezone";
+import { getUserTimeZone } from "@/lib/server-timezone";
 import {
   capDemoCompletionTokens,
   enforceDemoAIBudget,
@@ -194,8 +196,12 @@ const WORKOUT_CHAT_FUNCTIONS = [
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, conversationHistory, currentPlan, customInstructions, aiLanguage } =
+    const { message, conversationHistory, currentPlan, customInstructions, aiLanguage, timeZone } =
       await request.json();
+
+    const userTimeZone = await getUserTimeZone(
+      typeof timeZone === "string" ? timeZone : null
+    );
 
     if (!message) {
       return NextResponse.json({ error: "No message provided" }, { status: 400 });
@@ -225,7 +231,7 @@ export async function POST(request: NextRequest) {
       });
       if (recentLogs.length > 0) {
         const logLines = recentLogs.map((l) => {
-          const date = l.startedAt.toISOString().split("T")[0];
+          const date = getDateStringInTimeZone(l.startedAt, userTimeZone);
           const desc = l.description ? ` — ${l.description}` : "";
           return `  ${date}: ${l.workoutType} ${l.durationMinutes}min${l.caloriesBurned ? ` (${Math.round(l.caloriesBurned)} cal)` : ""} [${l.source}]${desc}`;
         });
@@ -289,7 +295,7 @@ ${planContext}${recentWorkoutsContext}`;
     if (blocked) return blocked;
 
     const completion = await openai.chat.completions.create({
-      model: getDemoChatModel("gpt-5.2"),
+      model: getDemoChatModel(CHAT_MODEL),
       messages,
       functions: WORKOUT_CHAT_FUNCTIONS,
       function_call: "auto",
