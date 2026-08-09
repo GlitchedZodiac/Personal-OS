@@ -309,6 +309,51 @@ main {
   }
 }
 
+/* Verbatim from the design (pitaya-app.dc.html) */
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes vu {
+  0%,
+  100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes soft-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sheet-up {
+  animation: sheetUp 0.38s cubic-bezier(0.3, 0.9, 0.3, 1) both;
+}
+
 .shimmer {
   position: relative;
   overflow: hidden;

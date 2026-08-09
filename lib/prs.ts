@@ -13,6 +13,7 @@ export interface RawExercise {
   sets?: number | string;
   reps?: number | string;
   weightKg?: number | string;
+  weight?: number | string; // legacy rows pre-catalog
 }
 
 export interface PRCandidate {
@@ -80,6 +81,23 @@ export function extractPRCandidates(exercises: unknown): PRCandidate[] {
     }
   }
   return candidates;
+}
+
+/**
+ * Total tonnage of one workout (sets × reps × kg summed across rows).
+ * Missing sets count as 1; rows without weight+reps contribute nothing.
+ */
+export function sessionVolumeKg(exercises: unknown): number {
+  if (!Array.isArray(exercises)) return 0;
+  let total = 0;
+  for (const raw of exercises as RawExercise[]) {
+    if (!raw || typeof raw !== "object") continue;
+    const weight = toNum(raw.weightKg) ?? toNum(raw.weight);
+    const reps = toNum(raw.reps);
+    if (weight == null || reps == null) continue;
+    total += (toNum(raw.sets) ?? 1) * reps * weight;
+  }
+  return Math.round(total);
 }
 
 /**

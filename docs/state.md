@@ -5,14 +5,102 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 (PITAYA Stage A web + [watch] app live E2E in sim)
+**Last updated:** 2026-08-09 (Settings/Train/Today full ports + sequences API live)
 **Current phase:** Phase 1 complete; AI provider decided (all-OpenAI, 5.6
-tiers, live on prod). Web: Pitaya Stage A shipped, next stages queued. Watch
-Phase 3 STARTED — core loop (pair → record → kettlebell sets → PR haptic →
-sync) working in simulator against prod, Pitaya watch design implemented.
+tiers, live on prod). Web: Pitaya Settings + Train + Today are FULL ports
+now (Michael's locked order), sequences/habits/journal backends live —
+next: Chat rebuild (2b), then Body, then Food. Watch Phase 3 running in
+parallel — core loop works in simulator; sequences API is now live so the
+wrist routines UI is unblocked.
 **Branch in flight:** `claude/phase1-modernization` (web, deployed to prod
 via `vercel deploy --prod`; UNPUSHED to GitHub — 403, collaborator access
 pending, see deferred-items) · `claude/watch-app` (watch lane, local).
+
+## 2026-08-09f — Settings/Train/Today full ports + sequences backend on prod
+
+The build block Michael ordered ("train and today full are the primary
+focuses… settings also needs to be fully adopted"). All three screens are
+now extraction-grade ports of pitaya-app.dc.html; the watch's missing
+sequences contract is implemented and deployed.
+
+Backend (all cookie-gated via proxy.ts unless noted; all verified on prod):
+- **Migration `sequences_habits_journal`**: `Sequence` (name/kind/steps Json/
+  restSecondsDefault/isArchived), `HabitCheck` (@@unique [name, localDate]),
+  `JournalEntry` (localDate @unique).
+- **lib/sequences.ts** — SEQUENCE_KINDS (straight/emom/tabata/circuit),
+  validateSequence(): catalog-normalizes step exercises via
+  normalizeExerciseName (falls back to free-form), steps carry
+  sets/reps/seconds/weightKg/restSeconds, reps-or-seconds required,
+  ≤40 steps, name ≤60. 8 new vitest cases (61 total green).
+- **/api/health/sequences** (GET/POST/PATCH incl. archive) — web CRUD.
+- **/api/mobile/sequences** (GET, bearer) — the watch-contract v1 payload;
+  401s without a device token (verified).
+- **/api/health/habits** (GET ?date / POST toggle) and **/api/health/journal**
+  (GET ?date / POST upsert+append; journalling auto-ticks the "journal"
+  habit).
+- **/api/health/devices** (GET active DeviceSessions / DELETE revoke) —
+  powers the Settings pairing card; "Unpair" is real revocation.
+- **Composite screen endpoints** so each screen is one fetch:
+  `GET /api/health/today` (zone-aware food streak, calorie ring + P/C/F
+  from UserSettings targets, train tile, weight tile + 12-point spark,
+  journal state + day number, habit ticks) and `GET /api/health/train`
+  (ISO week number, Mon-start weekly tonnage via new sessionVolumeKg() in
+  lib/prs.ts, latest-PR banner data (≤7 days old), today's session rows
+  with per-row PR flags from personal_records.workoutLogId, 8-week volume
+  buckets + pct change, latest trail). Both take ?date&tz from the client.
+
+Screens (all Familjen/Instrument, light-only per design "Night — next build"):
+- **Settings** — CONNECTIONS & APP header; drawn-watch pairing card with the
+  design's exact SVG + state colors (face #A63D63 when paired, card
+  #F0F7F1); five-row feature list flips off→ON with the connection; DATA
+  card (CSV import → /settings/import, Weekly PDF Export = pending toast,
+  Strava row kept as surfaced deviation — still the GPS source); APP list
+  (PIN lock expands the real changer, Units tap-toggles, Appearance shows
+  the design's literal "Day · Night — next build", Chat language EN/ES);
+  AI status card stays (accepted deviation). The watch lane's simulator
+  session appeared live in the card during verification — pairing state is
+  real end-to-end.
+- **Train** — WEEK n · KETTLEBELL BLOCK header + weekly-volume pill;
+  "● Start live workout" + "Routines"; shimmer NEW PR banner (only when
+  ≤7 days fresh); today's-session card with PR chips + #FDF7FA row tint;
+  VOLUME · 8 WEEKS bars in the design's exact color ramp; TRAILS card from
+  real workout rows (title trimmed at Strava's "•"), Record = pending
+  toast (watch owns recording). **Live workout sheet**: routine picker →
+  elapsed clock, CURRENT · SET n OF x, −/+ set logging, prev/next
+  movement, End & save → POST /api/health/workouts → PR toasts from
+  newPRs. **Routines sheet** per design + builder page at
+  /health/workouts/routines (kind pills, movement rows with
+  sets/reps/secs/kg, datalist over the 48-movement catalog, archive).
+- **Today** — SUN · AUGUST 9 header + diamond streak pill (hidden at 0);
+  150px calorie ring (dasharray 339.3, tap-to-flip eaten↔remaining);
+  P/C/F bars (#A63D63/#232227/#A9A7AE) against settings-derived gram
+  goals; TRAIN tile (kettlebell icon, week volume, PR count) + WEIGHT tile
+  (latest, delta, real sparkline); TONIGHT'S PAGE · DAY n with a **real
+  voice memo** (MediaRecorder → /api/ai/transcribe → journal append →
+  "✓ appended" state, VU bars while listening) + "+" text sheet; HABITS
+  tap-to-tick 40px tiles (Creatine/Mobility/10k steps/Journal); Sunday
+  Report row (PDF = pending toast).
+- Design keyframes added verbatim (sheetUp/vu/soft-pulse/fadeUp); radius
+  audit — the app's --radius scale rendered 12px-design corners at 20px,
+  swept all four new pages to exact px values (rounded-[16px]/[12px]/[8px],
+  bars rounded-t-[6px]).
+
+Verification: tsc clean · 61/61 vitest · clean `next build` · dev-server
+smoke with minted cookie (sequence create normalized "two hand swings"→
+kb-swing; habit toggle; journal append auto-ticked habit; smoke rows
+cleaned from DB after) · mobile endpoint 401 gate · all three screens
+screenshotted in the browser at 375px · prod deploy Ready + prod smoke of
+today/train/sequences (200s with real data) and mobile 401.
+
+Notes: legacy 1,009-line workouts page replaced wholesale (git history
+keeps it; manual editing returns with chat 2b). Old /api/health/streak
+still exists but Today computes its own zone-aware streak. Next dev now
+appends a Next.js agent-rules block to CLAUDE.md (self-regenerating,
+harmless). Trail elevation sparkline intentionally omitted until real
+elevation-series data exists (PORT GATE: no fake data).
+
+Watch lane: sequences deferred item marked resolved — wrist routines UI
+can start against `GET /api/mobile/sequences`.
 
 ## 2026-08-09e — [watch] Pitaya watch app: core loop live in simulator
 

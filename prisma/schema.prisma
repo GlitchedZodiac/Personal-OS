@@ -1015,3 +1015,37 @@ model PersonalRecord {
   @@unique([exercise, kind])
   @@map("personal_records")
 }
+
+model Sequence {
+  id                 String   @id @default(uuid())
+  name               String
+  kind               String // straight | emom | tabata | circuit
+  restSecondsDefault Int?
+  steps              Json // ordered [{ exercise, reps?, seconds?, weightKg?, restSeconds? }]
+  isArchived         Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("sequences")
+}
+
+model HabitCheck {
+  id        String   @id @default(uuid())
+  name      String // creatine | mobility | steps | journal (free-form)
+  localDate String // YYYY-MM-DD in the user's timezone
+  createdAt DateTime @default(now())
+
+  @@unique([name, localDate])
+  @@index([localDate])
+  @@map("habit_checks")
+}
+
+model JournalEntry {
+  id        String   @id @default(uuid())
+  localDate String   @unique // YYYY-MM-DD
+  text      String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("journal_entries")
+}
