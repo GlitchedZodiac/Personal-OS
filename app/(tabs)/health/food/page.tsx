@@ -1,51 +1,21 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-  ArrowLeft,
-  Plus,
-  Trash2,
-  Search,
-  Filter,
-  Clock,
-  Mic,
-  RotateCcw,
-  ChevronDown,
-  ChevronUp,
-  ChevronLeft,
-  ChevronRight,
-  Star,
-  Pencil,
-  Zap,
-  X,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useDataLoggedListener } from "@/components/use-data-logged";
+import { SheetPortal } from "@/components/sheet-portal";
 import { MacroTargetsSheet } from "@/components/macro-targets-sheet";
-import { ConfirmDelete } from "@/components/confirm-delete";
-import Link from "next/link";
-import { addDays, format, isToday, subDays } from "date-fns";
-import { cn } from "@/lib/utils";
-import { getSettings, getMacroGrams, fetchServerSettings } from "@/lib/settings";
-import { useCachedFetch, invalidateHealthCache } from "@/lib/cache";
+
+// Pitaya Food — port of the design's Food screen (docs/design/
+// pitaya-app.dc.html, screen 2): date header + kcal pill, the day
+// timeline with per-meal colour tiles and usual / via-chat pills, the
+// dashed not-logged row, MY USUALS, and SUPPLEMENTS.
+//
+// Surfaced deviations (not in the design, added on Michael's ask):
+// nutrition-label scanning — a label photo becomes a reusable PRODUCT in
+// MY USUALS (per-serving macros + the stored label), so a scanned tub of
+// whey is re-logged with one tap forever. Supplements ride on the same
+// habit_checks rows Today uses, so a tick is a tick on both screens.
 
 interface FoodEntry {
   id: string;
@@ -60,7 +30,7 @@ interface FoodEntry {
   source: string;
 }
 
-interface FavoriteFood {
+interface Favorite {
   id: string;
   foodDescription: string;
   mealType: string;
@@ -69,442 +39,142 @@ interface FavoriteFood {
   carbsG: number;
   fatG: number;
   usageCount: number;
+  kind: string;
+  servingLabel: string | null;
 }
 
-const mealConfig: Record<
-  string,
-  { label: string; icon: string; color: string; bgColor: string; order: number }
-> = {
-  breakfast: {
-    label: "Breakfast",
-    icon: "🌅",
-    color: "text-amber-400",
-    bgColor: "bg-amber-500/10 border-amber-500/20",
-    order: 0,
-  },
-  lunch: {
-    label: "Lunch",
-    icon: "☀️",
-    color: "text-green-400",
-    bgColor: "bg-green-500/10 border-green-500/20",
-    order: 1,
-  },
-  dinner: {
-    label: "Dinner",
-    icon: "🌙",
-    color: "text-blue-400",
-    bgColor: "bg-blue-500/10 border-blue-500/20",
-    order: 2,
-  },
-  snack: {
-    label: "Snack",
-    icon: "🍿",
-    color: "text-purple-400",
-    bgColor: "bg-purple-500/10 border-purple-500/20",
-    order: 3,
-  },
+interface LabelReading {
+  productName: string;
+  servingLabel: string;
+  servingsPerContainer: number | null;
+  perServing: {
+    calories: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  };
+  confident: boolean;
+}
+
+// Design's per-meal tile palette (screen 2 rows, top to bottom).
+const MEAL_TILE: Record<string, { bg: string; fg: string }> = {
+  breakfast: { bg: "#E8D9C8", fg: "#8A7355" },
+  lunch: { bg: "#C8D6C6", fg: "#55704F" },
+  dinner: { bg: "#6B4A5C", fg: "#F0E8EC" },
+  snack: { bg: "#D8CBE0", fg: "#6E5A7A" },
 };
 
-function MacroBar({
-  protein,
-  carbs,
-  fat,
-}: {
-  protein: number;
-  carbs: number;
-  fat: number;
-}) {
-  const total = protein * 4 + carbs * 4 + fat * 9;
-  if (total === 0) return null;
-  const pPct = ((protein * 4) / total) * 100;
-  const cPct = ((carbs * 4) / total) * 100;
-  const fPct = ((fat * 9) / total) * 100;
+// The design shows dinner as the "not logged" prompt; Michael eats lunch
+// and dinner, so those two are the slots worth nagging about.
+const PROMPTED_MEALS = ["lunch", "dinner"] as const;
 
-  return (
-    <div className="w-full h-1.5 rounded-full bg-secondary/50 overflow-hidden flex">
-      <div
-        className="h-full bg-blue-400 transition-all"
-        style={{ width: `${pPct}%` }}
-      />
-      <div
-        className="h-full bg-amber-400 transition-all"
-        style={{ width: `${cPct}%` }}
-      />
-      <div
-        className="h-full bg-rose-400 transition-all"
-        style={{ width: `${fPct}%` }}
-      />
-    </div>
-  );
+const SUPPLEMENTS = [
+  { key: "creatine", label: "Creatine · 5g" },
+  { key: "omega-3", label: "Omega-3" },
+  { key: "vitamin-d", label: "Vitamin D" },
+  { key: "magnesium", label: "Magnesium · evening" },
+];
+
+const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
+
+function localDateStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function MealSection({
-  mealType,
-  entries,
-  onDelete,
-  onRelog,
-  onSaveFavorite,
-  onEdit,
-  collapsed,
-  onToggle,
-}: {
-  mealType: string;
-  entries: FoodEntry[];
-  onDelete: (id: string) => void;
-  onRelog: (entry: FoodEntry) => void;
-  onSaveFavorite: (entry: FoodEntry) => void;
-  onEdit: (entry: FoodEntry) => void;
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
-  const config = mealConfig[mealType] || mealConfig.snack;
-  const subtotal = entries.reduce((sum, e) => sum + e.calories, 0);
-  const subProtein = entries.reduce((sum, e) => sum + e.proteinG, 0);
-  const subCarbs = entries.reduce((sum, e) => sum + e.carbsG, 0);
-  const subFat = entries.reduce((sum, e) => sum + e.fatG, 0);
-
-  return (
-    <div className={cn("rounded-xl border", config.bgColor)}>
-      {/* Section header */}
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3"
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-base">{config.icon}</span>
-          <span className={cn("font-semibold text-sm", config.color)}>
-            {config.label}
-          </span>
-          <Badge variant="secondary" className="text-[10px] h-5">
-            {entries.length}
-          </Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold">{Math.round(subtotal)}</span>
-          <span className="text-xs text-muted-foreground">cal</span>
-          {collapsed ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
-          )}
-        </div>
-      </button>
-
-      {/* Items */}
-      {!collapsed && (
-        <div className="px-3 pb-3 space-y-2">
-          {entries.map((entry) => (
-            <div
-              key={entry.id}
-              className="bg-background/60 rounded-lg p-3 space-y-2"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium leading-tight">
-                    {entry.foodDescription}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Clock className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] text-muted-foreground">
-                      {format(new Date(entry.loggedAt), "h:mm a")}
-                    </span>
-                    {(entry.source === "ai" || entry.source === "voice") && (
-                      <Badge
-                        variant="secondary"
-                        className="text-[9px] h-4 px-1 bg-primary/10 text-primary"
-                      >
-                        <Mic className="h-2 w-2 mr-0.5" />
-                        AI
-                      </Badge>
-                    )}
-                    {entry.source === "photo" && (
-                      <Badge
-                        variant="secondary"
-                        className="text-[9px] h-4 px-1 bg-amber-500/10 text-amber-400"
-                      >
-                        📸 Photo
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                <span className="text-base font-bold whitespace-nowrap">
-                  {Math.round(entry.calories)}
-                </span>
-              </div>
-
-              {/* Macro bar */}
-              <MacroBar
-                protein={entry.proteinG}
-                carbs={entry.carbsG}
-                fat={entry.fatG}
-              />
-
-              {/* Macro numbers & actions */}
-              <div className="flex items-center justify-between">
-                <div className="flex gap-3 text-[10px]">
-                  <span className="text-blue-400">
-                    P {Math.round(entry.proteinG)}g
-                  </span>
-                  <span className="text-amber-400">
-                    C {Math.round(entry.carbsG)}g
-                  </span>
-                  <span className="text-rose-400">
-                    F {Math.round(entry.fatG)}g
-                  </span>
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => onEdit(entry)}
-                    className="p-1 rounded hover:bg-blue-500/10 transition-colors"
-                    title="Edit entry"
-                  >
-                    <Pencil className="h-3 w-3 text-blue-400/70" />
-                  </button>
-                  <button
-                    onClick={() => onSaveFavorite(entry)}
-                    className="p-1 rounded hover:bg-amber-500/10 transition-colors"
-                    title="Save to favorites"
-                  >
-                    <Star className="h-3 w-3 text-amber-400/70" />
-                  </button>
-                  <button
-                    onClick={() => onRelog(entry)}
-                    className="p-1 rounded hover:bg-secondary/80 transition-colors"
-                    title="Log again"
-                  >
-                    <RotateCcw className="h-3 w-3 text-muted-foreground" />
-                  </button>
-                  <ConfirmDelete
-                    onConfirm={() => onDelete(entry.id)}
-                    itemName={entry.foodDescription}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {/* Section subtotals */}
-          <div className="flex items-center justify-between px-2 pt-1 text-[10px] text-muted-foreground">
-            <div className="flex gap-3">
-              <span>P {Math.round(subProtein)}g</span>
-              <span>C {Math.round(subCarbs)}g</span>
-              <span>F {Math.round(subFat)}g</span>
-            </div>
-            <span className="font-medium">{Math.round(subtotal)} cal</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+function clockLabel(iso: string) {
+  return new Date(iso)
+    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    .replace(/\s?[AP]M$/i, "");
 }
 
-export default function FoodLogPage() {
-  const tzOffsetMinutes = new Date().getTimezoneOffset();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [mealFilter, setMealFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState(
-    format(new Date(), "yyyy-MM-dd")
-  );
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [collapsedMeals, setCollapsedMeals] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [newEntry, setNewEntry] = useState({
-    mealType: "lunch",
-    foodDescription: "",
-    calories: "",
-    proteinG: "",
-    carbsG: "",
-    fatG: "",
-    notes: "",
+function macroLine(e: { proteinG: number; carbsG: number; fatG: number }) {
+  return `${Math.round(e.proteinG)}P · ${Math.round(e.carbsG)}C · ${Math.round(e.fatG)}F`;
+}
+
+// Compress to a data URL — same shape as the journal photo path.
+function compressImage(file: File, maxW = 1100): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const w = Math.min(img.width, maxW);
+        const h = Math.round((img.height * w) / img.width);
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("no canvas"));
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.75));
+      };
+      img.onerror = () => reject(new Error("bad image"));
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.readAsDataURL(file);
   });
-  const [calTarget, setCalTarget] = useState(2000);
-  const [macroTargets, setMacroTargets] = useState({ proteinG: 150, carbsG: 200, fatG: 67 });
-  const [showQuickLog, setShowQuickLog] = useState(false);
+}
+
+export default function FoodPage() {
+  const [entries, setEntries] = useState<FoodEntry[] | null>(null);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [supplementsDone, setSupplementsDone] = useState<string[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [reading, setReading] = useState<LabelReading | null>(null);
+  const [labelPhoto, setLabelPhoto] = useState<string | null>(null);
+  const [servings, setServings] = useState(1);
+  const [savingScan, setSavingScan] = useState(false);
+  const [saveUsualFor, setSaveUsualFor] = useState<FoodEntry | null>(null);
   const [showTargets, setShowTargets] = useState(false);
-  const [quickLogLoading, setQuickLogLoading] = useState<string | null>(null);
-  const [editEntry, setEditEntry] = useState<FoodEntry | null>(null);
-  const [editForm, setEditForm] = useState({
-    foodDescription: "",
-    mealType: "",
-    calories: "",
-    proteinG: "",
-    carbsG: "",
-    fatG: "",
-    loggedAt: "",
-    notes: "",
-  });
+  const labelInputRef = useRef<HTMLInputElement>(null);
+  const dateStr = localDateStr();
 
-  // Build cached fetch URL from current filters
-  const foodUrl = useMemo(() => {
-    const params = new URLSearchParams();
-    if (dateFilter) params.set("date", dateFilter);
-    params.set("tzOffsetMinutes", String(tzOffsetMinutes));
-    if (mealFilter !== "all") params.set("mealType", mealFilter);
-    if (searchQuery) params.set("search", searchQuery);
-    return `/api/health/food?${params.toString()}`;
-  }, [dateFilter, mealFilter, searchQuery, tzOffsetMinutes]);
+  const load = useCallback(() => {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    fetch(`/api/health/food?date=${dateStr}&timeZone=${encodeURIComponent(tz)}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => setEntries(Array.isArray(rows) ? rows : []))
+      .catch(() => setEntries([]));
+    fetch("/api/health/favorites")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => setFavorites(Array.isArray(rows) ? rows : []))
+      .catch(() => setFavorites([]));
+    fetch(`/api/health/habits?date=${dateStr}`)
+      .then((r) => (r.ok ? r.json() : { checked: [] }))
+      .then((d) => setSupplementsDone(d.checked ?? []))
+      .catch(() => setSupplementsDone([]));
+  }, [dateStr]);
 
-  const { data: entries, initialLoading, refresh: fetchEntries } =
-    useCachedFetch<FoodEntry[]>(foodUrl, { ttl: 60_000 });
-  useDataLoggedListener(fetchEntries);
+  useEffect(load, [load]);
+  useDataLoggedListener(load);
 
-  const { data: favorites, refresh: refreshFavorites } =
-    useCachedFetch<FavoriteFood[]>("/api/health/favorites", { ttl: 300_000 });
+  const dayTotal = useMemo(
+    () => (entries ?? []).reduce((sum, e) => sum + (e.calories || 0), 0),
+    [entries]
+  );
 
-  useEffect(() => {
-    const local = getSettings();
-    setCalTarget(local.calorieTarget);
-    setMacroTargets(getMacroGrams(local));
+  // Oldest first — the design reads the day downward.
+  const timeline = useMemo(
+    () =>
+      [...(entries ?? [])].sort(
+        (a, b) => new Date(a.loggedAt).getTime() - new Date(b.loggedAt).getTime()
+      ),
+    [entries]
+  );
 
-    fetchServerSettings().then((s) => {
-      setCalTarget(s.calorieTarget);
-      setMacroTargets(getMacroGrams(s));
-    });
-  }, []);
+  const missingMeals = PROMPTED_MEALS.filter(
+    (m) => !(entries ?? []).some((e) => e.mealType === m)
+  );
 
-  const handleDelete = async (id: string) => {
-    try {
-      const res = await fetch(`/api/health/food?id=${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        invalidateHealthCache();
-        fetchEntries();
-      }
-    } catch (error) {
-      console.error("Failed to delete:", error);
-    }
-  };
+  const dateHeader = new Date()
+    .toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric" })
+    .toUpperCase()
+    .replace(",", " ·");
 
-  const handleRelog = async (entry: FoodEntry) => {
-    try {
-      const res = await fetch("/api/health/food", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mealType: entry.mealType,
-          foodDescription: entry.foodDescription,
-          calories: entry.calories,
-          proteinG: entry.proteinG,
-          carbsG: entry.carbsG,
-          fatG: entry.fatG,
-          notes: "Re-logged",
-          source: entry.source,
-        }),
-      });
-      if (res.ok) {
-        invalidateHealthCache();
-        fetchEntries();
-      }
-    } catch (error) {
-      console.error("Failed to relog:", error);
-    }
-  };
-
-  const handleSaveFavorite = async (entry: FoodEntry) => {
-    try {
-      const res = await fetch("/api/health/favorites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          foodDescription: entry.foodDescription,
-          mealType: entry.mealType,
-          calories: entry.calories,
-          proteinG: entry.proteinG,
-          carbsG: entry.carbsG,
-          fatG: entry.fatG,
-          logNow: false,
-        }),
-      });
-      if (res.ok) {
-        const { toast } = await import("sonner");
-        toast.success(`⭐ Saved "${entry.foodDescription}" to favorites!`);
-      }
-    } catch (error) {
-      console.error("Failed to save favorite:", error);
-    }
-  };
-
-  const handleStartEdit = (entry: FoodEntry) => {
-    setEditEntry(entry);
-    setEditForm({
-      foodDescription: entry.foodDescription,
-      mealType: entry.mealType,
-      calories: String(entry.calories),
-      proteinG: String(entry.proteinG),
-      carbsG: String(entry.carbsG),
-      fatG: String(entry.fatG),
-      loggedAt: format(new Date(entry.loggedAt), "yyyy-MM-dd'T'HH:mm"),
-      notes: entry.notes || "",
-    });
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editEntry) return;
-    try {
-      const res = await fetch(`/api/health/food?id=${editEntry.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          foodDescription: editForm.foodDescription,
-          mealType: editForm.mealType,
-          calories: parseFloat(editForm.calories) || 0,
-          proteinG: parseFloat(editForm.proteinG) || 0,
-          carbsG: parseFloat(editForm.carbsG) || 0,
-          fatG: parseFloat(editForm.fatG) || 0,
-          loggedAt: editForm.loggedAt ? new Date(editForm.loggedAt).toISOString() : undefined,
-          notes: editForm.notes || null,
-        }),
-      });
-      if (res.ok) {
-        setEditEntry(null);
-        invalidateHealthCache();
-        fetchEntries();
-        const { toast } = await import("sonner");
-        toast.success("Food entry updated!");
-      }
-    } catch (error) {
-      console.error("Failed to update:", error);
-    }
-  };
-
-  const handleAddManual = async () => {
-    try {
-      const res = await fetch("/api/health/food", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...newEntry,
-          calories: parseFloat(newEntry.calories) || 0,
-          proteinG: parseFloat(newEntry.proteinG) || 0,
-          carbsG: parseFloat(newEntry.carbsG) || 0,
-          fatG: parseFloat(newEntry.fatG) || 0,
-          source: "manual",
-        }),
-      });
-      if (res.ok) {
-        setShowAddDialog(false);
-        setNewEntry({
-          mealType: "lunch",
-          foodDescription: "",
-          calories: "",
-          proteinG: "",
-          carbsG: "",
-          fatG: "",
-          notes: "",
-        });
-        invalidateHealthCache();
-        fetchEntries();
-      }
-    } catch (error) {
-      console.error("Failed to add entry:", error);
-    }
-  };
-
-  const handleQuickLog = async (fav: FavoriteFood) => {
-    setQuickLogLoading(fav.id);
+  // ── Log a usual / product with one tap ──
+  const logFavorite = async (fav: Favorite, servingCount = 1) => {
     try {
       const res = await fetch("/api/health/favorites", {
         method: "POST",
@@ -516,603 +186,426 @@ export default function FoodLogPage() {
           proteinG: fav.proteinG,
           carbsG: fav.carbsG,
           fatG: fav.fatG,
+          kind: fav.kind,
+          servingLabel: fav.servingLabel,
+          servings: servingCount,
           logNow: true,
         }),
       });
-      if (res.ok) {
-        invalidateHealthCache();
-        fetchEntries();
-        refreshFavorites();
-        const { toast } = await import("sonner");
-        toast.success(`⚡ Logged "${fav.foodDescription}"!`);
-      }
-    } catch (error) {
-      console.error("Quick log failed:", error);
-    } finally {
-      setQuickLogLoading(null);
+      if (!res.ok) throw new Error();
+      toast.success(`${fav.foodDescription} logged`);
+      load();
+    } catch {
+      toast.error("Couldn't log that one");
     }
   };
 
-  const handleDeleteFavorite = async (id: string) => {
+  // ── Save an existing entry as a usual ──
+  const saveAsUsual = async (entry: FoodEntry) => {
     try {
-      const res = await fetch(`/api/health/favorites?id=${id}`, {
+      const res = await fetch("/api/health/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          foodDescription: entry.foodDescription,
+          mealType: entry.mealType,
+          calories: entry.calories,
+          proteinG: entry.proteinG,
+          carbsG: entry.carbsG,
+          fatG: entry.fatG,
+          kind: "meal",
+          logNow: false,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(`"${entry.foodDescription}" saved to your usuals`);
+      setSaveUsualFor(null);
+      load();
+    } catch {
+      toast.error("Couldn't save that usual");
+    }
+  };
+
+  const deleteEntry = async (entry: FoodEntry) => {
+    try {
+      const res = await fetch(`/api/health/food?id=${entry.id}`, {
         method: "DELETE",
       });
-      if (res.ok) {
-        refreshFavorites();
-        const { toast } = await import("sonner");
-        toast.success("Removed from favorites");
-      }
-    } catch (error) {
-      console.error("Failed to delete favorite:", error);
+      if (!res.ok) throw new Error();
+      toast.success("Entry removed");
+      setSaveUsualFor(null);
+      load();
+    } catch {
+      toast.error("Couldn't remove that entry");
     }
   };
 
-  const toggleMealCollapse = (mealType: string) => {
-    setCollapsedMeals((prev) => ({
-      ...prev,
-      [mealType]: !prev[mealType],
-    }));
+  // ── Scan a nutrition label ──
+  const handleLabel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setScanning(true);
+    try {
+      const dataUrl = await compressImage(file);
+      setLabelPhoto(dataUrl);
+      const res = await fetch("/api/health/food/scan-label", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error);
+      setReading(body as LabelReading);
+      setServings(1);
+    } catch (err) {
+      setLabelPhoto(null);
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : "Couldn't read that label"
+      );
+    } finally {
+      setScanning(false);
+    }
   };
 
-  // Group entries by meal type
-  const safeEntries = entries ?? [];
-  const groupedEntries = safeEntries.reduce<Record<string, FoodEntry[]>>(
-    (groups, entry) => {
-      const key = entry.mealType || "snack";
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(entry);
-      return groups;
-    },
-    {}
-  );
-
-  // Sort meal groups by order
-  const sortedMealTypes = Object.keys(groupedEntries).sort(
-    (a, b) =>
-      (mealConfig[a]?.order ?? 99) - (mealConfig[b]?.order ?? 99)
-  );
-
-  const totals = safeEntries.reduce(
-    (acc, e) => ({
-      calories: acc.calories + e.calories,
-      protein: acc.protein + e.proteinG,
-      carbs: acc.carbs + e.carbsG,
-      fat: acc.fat + e.fatG,
-    }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0 }
-  );
-
-  const calPct = Math.min((totals.calories / calTarget) * 100, 100);
-  const proteinPct = macroTargets.proteinG > 0 ? Math.min((totals.protein / macroTargets.proteinG) * 100, 100) : 0;
-  const carbsBarPct = macroTargets.carbsG > 0 ? Math.min((totals.carbs / macroTargets.carbsG) * 100, 100) : 0;
-  const fatBarPct = macroTargets.fatG > 0 ? Math.min((totals.fat / macroTargets.fatG) * 100, 100) : 0;
-  const selectedDate = new Date(`${dateFilter}T00:00:00`);
-
-  const goToPreviousDay = () => {
-    setDateFilter(format(subDays(selectedDate, 1), "yyyy-MM-dd"));
+  const confirmScan = async () => {
+    if (!reading) return;
+    setSavingScan(true);
+    try {
+      const res = await fetch("/api/health/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          foodDescription: reading.productName,
+          mealType: "snack",
+          calories: reading.perServing.calories,
+          proteinG: reading.perServing.proteinG,
+          carbsG: reading.perServing.carbsG,
+          fatG: reading.perServing.fatG,
+          kind: "product",
+          servingLabel: reading.servingLabel,
+          photoData: labelPhoto,
+          servings,
+          logNow: true,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(`${reading.productName} logged and saved`);
+      setReading(null);
+      setLabelPhoto(null);
+      load();
+    } catch {
+      toast.error("Couldn't save that scan");
+    } finally {
+      setSavingScan(false);
+    }
   };
 
-  const goToNextDay = () => {
-    setDateFilter(format(addDays(selectedDate, 1), "yyyy-MM-dd"));
-  };
-
-  const goToToday = () => {
-    setDateFilter(format(new Date(), "yyyy-MM-dd"));
+  const toggleSupplement = async (key: string) => {
+    setSupplementsDone((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+    try {
+      await fetch("/api/health/habits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: key, localDate: dateStr }),
+      });
+    } catch {
+      load();
+    }
   };
 
   return (
-    <div className="space-y-4 px-4 pt-12 pb-36 lg:space-y-6 lg:px-0 lg:pt-10 lg:pb-10">
+    // pb-44: the floating dock sits over the last card at pb-32 (the
+    // supplements rows were unreachable behind the mic).
+    <div className="px-4 pb-44 pt-12 lg:px-0 lg:pt-8 max-w-lg lg:max-w-2xl">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Link href="/dashboard">
-          <Button variant="ghost" size="icon" className="h-9 w-9">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold">Food Log</h1>
-          <p className="text-xs text-muted-foreground">
-            {format(selectedDate, "EEEE, MMM d")}
-          </p>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="micro-label">{dateHeader}</p>
+          <h1
+            className="mt-0.5 text-3xl font-bold tracking-[-0.02em]"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Food
+          </h1>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 rounded-full px-3 text-xs font-semibold"
-          onClick={() => setShowTargets(true)}
-          title="Calorie & macro targets"
-        >
-          Targets
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          className={cn("h-9 w-9", showQuickLog && "border-amber-500/50 text-amber-400")}
-          onClick={() => setShowQuickLog(!showQuickLog)}
-          title="Quick log favorites"
-        >
-          <Zap className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-9 w-9"
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          <Filter className="h-4 w-4" />
-        </Button>
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="h-9">
-              <Plus className="h-4 w-4 mr-1" /> Add
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle>Add Food Entry</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div>
-                <Label>Meal Type</Label>
-                <Select
-                  value={newEntry.mealType}
-                  onValueChange={(v) =>
-                    setNewEntry({ ...newEntry, mealType: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="breakfast">🌅 Breakfast</SelectItem>
-                    <SelectItem value="lunch">☀️ Lunch</SelectItem>
-                    <SelectItem value="dinner">🌙 Dinner</SelectItem>
-                    <SelectItem value="snack">🍿 Snack</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Food Description</Label>
-                <Input
-                  value={newEntry.foodDescription}
-                  onChange={(e) =>
-                    setNewEntry({
-                      ...newEntry,
-                      foodDescription: e.target.value,
-                    })
-                  }
-                  placeholder="e.g., Arroz con pollo, bandeja paisa..."
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label>Calories</Label>
-                  <Input
-                    type="number"
-                    value={newEntry.calories}
-                    onChange={(e) =>
-                      setNewEntry({ ...newEntry, calories: e.target.value })
-                    }
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <Label>Protein (g)</Label>
-                  <Input
-                    type="number"
-                    value={newEntry.proteinG}
-                    onChange={(e) =>
-                      setNewEntry({ ...newEntry, proteinG: e.target.value })
-                    }
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <Label>Carbs (g)</Label>
-                  <Input
-                    type="number"
-                    value={newEntry.carbsG}
-                    onChange={(e) =>
-                      setNewEntry({ ...newEntry, carbsG: e.target.value })
-                    }
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <Label>Fat (g)</Label>
-                  <Input
-                    type="number"
-                    value={newEntry.fatG}
-                    onChange={(e) =>
-                      setNewEntry({ ...newEntry, fatG: e.target.value })
-                    }
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label>Notes (optional)</Label>
-                <Input
-                  value={newEntry.notes}
-                  onChange={(e) =>
-                    setNewEntry({ ...newEntry, notes: e.target.value })
-                  }
-                  placeholder="Any notes..."
-                />
-              </div>
-              <Button onClick={handleAddManual} className="w-full">
-                Save Entry
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          {/* Kept from his bug sweep — the only place to set calorie/macro goals */}
+          <button
+            onClick={() => setShowTargets(true)}
+            className="rounded-full border border-border px-3 py-[5px] text-xs font-semibold text-secondary-foreground"
+          >
+            Targets
+          </button>
+          <span className="rounded-full bg-accent px-3 py-[5px] text-xs font-semibold tabular-nums text-[#8C2F51]">
+            {fmt(dayTotal)} kcal
+          </span>
+        </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6">
-        <div className="space-y-4 lg:sticky lg:top-6">
+      {/* Day timeline */}
+      <div className="mt-[18px] overflow-hidden rounded-[18px] bg-card shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+        {timeline.map((entry) => {
+          const tile = MEAL_TILE[entry.mealType] ?? MEAL_TILE.snack;
+          return (
+            <button
+              key={entry.id}
+              onClick={() => setSaveUsualFor(entry)}
+              className="flex w-full items-center justify-between border-b border-muted px-4 py-3.5 text-left last:border-b-0"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <div
+                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] text-[9px] tracking-[0.08em]"
+                  style={{ background: tile.bg, color: tile.fg }}
+                >
+                  {clockLabel(entry.loggedAt)}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[13.5px] font-semibold text-foreground">
+                    {entry.foodDescription}{" "}
+                    {entry.source === "usual" && (
+                      <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-[#8C2F51]">
+                        usual
+                      </span>
+                    )}
+                    {(entry.source === "ai" || entry.source === "chat") && (
+                      <span className="rounded-full bg-[#EAF3ED] px-1.5 py-px text-[10px] font-semibold text-[#3E7A54]">
+                        via chat ✓
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {macroLine(entry)}
+                  </p>
+                </div>
+              </div>
+              <span className="ml-2 shrink-0 text-[13.5px] font-semibold tabular-nums text-foreground">
+                {fmt(entry.calories)}
+              </span>
+            </button>
+          );
+        })}
 
-      {/* Always-visible date navigation for history */}
-      <Card className="border-border/50">
-        <CardContent className="p-3 flex items-center gap-2">
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToPreviousDay}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="flex-1 h-8"
-          />
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToNextDay}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          {!isToday(selectedDate) && (
-            <Button variant="secondary" size="sm" className="h-8" onClick={goToToday}>
-              Today
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Daily Summary Card */}
-      <Card className="overflow-hidden">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="text-3xl font-bold tracking-tight">
-                {Math.round(totals.calories)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                of {calTarget} kcal target
-              </p>
-            </div>
-            {totals.calories < calTarget && (
-              <div className="text-right">
-                <p className="text-sm font-semibold text-green-500">
-                  {Math.round(calTarget - totals.calories)}
+        {/* Not-logged prompts — the design's dashed row */}
+        {missingMeals.map((meal) => (
+          <div
+            key={meal}
+            className="flex items-center justify-between border-b border-muted px-4 py-3.5 last:border-b-0"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-[42px] w-[42px] items-center justify-center rounded-[10px] border-[1.5px] border-dashed border-[#D9D7DC] text-[18px] text-muted-foreground">
+                +
+              </div>
+              <div>
+                <p className="text-[13.5px] font-semibold text-muted-foreground">
+                  <span className="capitalize">{meal}</span> — not logged
                 </p>
-                <p className="text-[10px] text-muted-foreground">remaining</p>
+                <p className="mt-0.5 text-[11px] text-[#B9B7BE]">the mic knows</p>
               </div>
-            )}
+            </div>
           </div>
-          <div className="w-full h-2 rounded-full bg-secondary overflow-hidden">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all duration-700",
-                calPct >= 100
-                  ? "bg-red-500"
-                  : calPct >= 80
-                  ? "bg-orange-500"
-                  : "bg-green-500"
-              )}
-              style={{ width: `${calPct}%` }}
-            />
-          </div>
+        ))}
 
-          {/* Macro progress bars */}
-          <div className="grid grid-cols-3 gap-3 pt-1">
-            <div>
-              <div className="flex items-center gap-1 mb-1">
-                <div className="w-2 h-2 rounded-full bg-blue-400" />
-                <span className="text-[10px] text-muted-foreground">Protein</span>
-              </div>
-              <p className="text-sm font-semibold">{Math.round(totals.protein)}g</p>
-              <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden mt-0.5">
-                <div className="h-full bg-blue-400 rounded-full transition-all duration-700" style={{ width: `${proteinPct}%` }} />
-              </div>
-              <p className="text-[9px] text-muted-foreground mt-0.5">{Math.round(totals.protein)} / {macroTargets.proteinG}g</p>
-            </div>
-            <div>
-              <div className="flex items-center gap-1 mb-1">
-                <div className="w-2 h-2 rounded-full bg-amber-400" />
-                <span className="text-[10px] text-muted-foreground">Carbs</span>
-              </div>
-              <p className="text-sm font-semibold">{Math.round(totals.carbs)}g</p>
-              <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden mt-0.5">
-                <div className="h-full bg-amber-400 rounded-full transition-all duration-700" style={{ width: `${carbsBarPct}%` }} />
-              </div>
-              <p className="text-[9px] text-muted-foreground mt-0.5">{Math.round(totals.carbs)} / {macroTargets.carbsG}g</p>
-            </div>
-            <div>
-              <div className="flex items-center gap-1 mb-1">
-                <div className="w-2 h-2 rounded-full bg-rose-400" />
-                <span className="text-[10px] text-muted-foreground">Fat</span>
-              </div>
-              <p className="text-sm font-semibold">{Math.round(totals.fat)}g</p>
-              <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden mt-0.5">
-                <div className="h-full bg-rose-400 rounded-full transition-all duration-700" style={{ width: `${fatBarPct}%` }} />
-              </div>
-              <p className="text-[9px] text-muted-foreground mt-0.5">{Math.round(totals.fat)} / {macroTargets.fatG}g</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-            {/* Filters (collapsible) */}
-      <div
-        className={cn(
-          "space-y-2",
-          showFilters ? "animate-in slide-in-from-top-2 duration-200" : "hidden lg:block"
+        {entries !== null && timeline.length === 0 && missingMeals.length === 0 && (
+          <p className="px-4 py-6 text-center text-[12.5px] text-muted-foreground">
+            Nothing logged yet today.
+          </p>
         )}
-      >
-          <Select value={mealFilter} onValueChange={setMealFilter}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Meals</SelectItem>
-              <SelectItem value="breakfast">Breakfast</SelectItem>
-              <SelectItem value="lunch">Lunch</SelectItem>
-              <SelectItem value="dinner">Dinner</SelectItem>
-              <SelectItem value="snack">Snack</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search foods..."
-              className="pl-9"
-            />
-          </div>
-        </div>
+      </div>
 
-      {/* Quick Log Favorites Panel */}
-      <Card
-        className={cn(
-          "border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-orange-500/5",
-          showQuickLog ? "animate-in slide-in-from-top-2 duration-200" : "hidden lg:block"
-        )}
-      >
-          <CardHeader className="pb-2 pt-3 px-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Zap className="h-4 w-4 text-amber-400" />
-                Quick Log
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setShowQuickLog(false)}
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
-            {!favorites || favorites.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-3 text-center">
-                No favorites yet! Tap ⭐ on any food entry to save it.
-              </p>
-            ) : (
-              <div className="space-y-1.5 max-h-56 overflow-y-auto">
-                {favorites.map((fav) => (
-                  <div
-                    key={fav.id}
-                    className="flex items-center gap-2 bg-background/60 rounded-lg px-3 py-2 group"
-                  >
-                    <button
-                      onClick={() => handleQuickLog(fav)}
-                      disabled={quickLogLoading === fav.id}
-                      className="flex-1 min-w-0 text-left"
-                    >
-                      <p className="text-sm font-medium truncate">
-                        {fav.foodDescription}
-                      </p>
-                      <div className="flex gap-2 text-[10px] text-muted-foreground mt-0.5">
-                        <span>{Math.round(fav.calories)} cal</span>
-                        <span className="text-blue-400">P{Math.round(fav.proteinG)}g</span>
-                        <span className="text-amber-400">C{Math.round(fav.carbsG)}g</span>
-                        <span className="text-rose-400">F{Math.round(fav.fatG)}g</span>
-                      </div>
-                    </button>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {fav.usageCount > 1 && (
-                        <span className="text-[9px] text-muted-foreground">
-                          ×{fav.usageCount}
-                        </span>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 px-2 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
-                        onClick={() => handleQuickLog(fav)}
-                        disabled={quickLogLoading === fav.id}
-                      >
-                        {quickLogLoading === fav.id ? (
-                          <div className="h-3 w-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Plus className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 px-1.5 text-muted-foreground hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => handleDeleteFavorite(fav.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        </div>
-
-        <div className="space-y-4">
-
-      {/* Meal-grouped entries */}
-      {initialLoading ? (
-        <div className="py-12 text-center text-muted-foreground">
-          <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-          Loading...
-        </div>
-      ) : safeEntries.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">No food entries yet.</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Tap the microphone or Add to log food.
+      {/* MY USUALS */}
+      <p className="micro-label mb-2.5 mt-5">My usuals</p>
+      <div className="flex gap-2.5 overflow-x-auto pb-1">
+        {favorites.map((fav) => (
+          <button
+            key={fav.id}
+            onClick={() => logFavorite(fav)}
+            className="flex-none rounded-[14px] bg-card px-3.5 py-3 text-left shadow-[0_2px_12px_rgba(35,34,39,0.06)]"
+          >
+            <p className="text-[12.5px] font-semibold text-foreground">
+              {fav.foodDescription}
             </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {sortedMealTypes.map((mealType) => (
-            <MealSection
-              key={mealType}
-              mealType={mealType}
-              entries={groupedEntries[mealType]}
-              onDelete={handleDelete}
-              onRelog={handleRelog}
-              onSaveFavorite={handleSaveFavorite}
-              onEdit={handleStartEdit}
-              collapsed={!!collapsedMeals[mealType]}
-              onToggle={() => toggleMealCollapse(mealType)}
-            />
-          ))}
+            <p className="mt-0.5 text-[10.5px] text-muted-foreground">
+              {fmt(fav.calories)} · {Math.round(fav.proteinG)}P
+              {fav.kind === "product" && fav.servingLabel
+                ? ` · ${fav.servingLabel}`
+                : ""}
+            </p>
+          </button>
+        ))}
+        <button
+          onClick={() => labelInputRef.current?.click()}
+          disabled={scanning}
+          className="flex flex-none items-center rounded-[14px] border-[1.5px] border-dashed border-[#D9D7DC] px-3.5 py-3 text-[12.5px] text-muted-foreground disabled:opacity-60"
+        >
+          {scanning ? "Reading label…" : "+ scan a label"}
+        </button>
+      </div>
+      <input
+        ref={labelInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleLabel}
+      />
+
+      {/* SUPPLEMENTS */}
+      <div className="mt-4 rounded-[16px] bg-card p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+        <p className="micro-label mb-2.5">Supplements</p>
+        <div className="grid gap-2.5">
+          {SUPPLEMENTS.map(({ key, label }) => {
+            const done = supplementsDone.includes(key);
+            return (
+              <button
+                key={key}
+                onClick={() => toggleSupplement(key)}
+                className="flex items-center justify-between text-left"
+              >
+                <span className="text-[13px] text-[#454349]">{label}</span>
+                <span
+                  className="text-[11.5px] font-semibold"
+                  style={{ color: done ? "#5E9B72" : "#96949B" }}
+                >
+                  {done ? "✓ taken" : "tap when taken"}
+                </span>
+              </button>
+            );
+          })}
         </div>
+      </div>
+
+      {/* ——— Label reading confirm (AI proposes → you confirm → it saves) ——— */}
+      {reading && (
+        <SheetPortal>
+          <div
+            className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
+            onClick={() => !savingScan && setReading(null)}
+          />
+          <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
+            <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
+            <p className="micro-label">
+              Label read{reading.confident ? "" : " · check these numbers"}
+            </p>
+            <p
+              className="mt-1 text-xl font-bold text-foreground"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {reading.productName}
+            </p>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              per {reading.servingLabel}
+              {reading.servingsPerContainer
+                ? ` · ${reading.servingsPerContainer} per container`
+                : ""}
+            </p>
+
+            <div className="mt-3.5 rounded-[16px] bg-accent p-4">
+              <div className="flex items-center gap-3.5">
+                <button
+                  onClick={() => setServings((s) => Math.max(0.5, s - 0.5))}
+                  className="h-11 w-11 rounded-[12px] bg-card text-[22px] leading-none text-[#8C2F51]"
+                >
+                  −
+                </button>
+                <div className="flex-1 text-center">
+                  <p
+                    className="text-[26px] font-bold tabular-nums text-foreground"
+                    style={{ fontFamily: "var(--font-display)" }}
+                  >
+                    {servings} × serving{servings === 1 ? "" : "s"}
+                  </p>
+                  <p className="text-[11px] font-semibold text-[#8C2F51]">
+                    {fmt(reading.perServing.calories * servings)} kcal ·{" "}
+                    {Math.round(reading.perServing.proteinG * servings)}P ·{" "}
+                    {Math.round(reading.perServing.carbsG * servings)}C ·{" "}
+                    {Math.round(reading.perServing.fatG * servings)}F
+                  </p>
+                </div>
+                <button
+                  onClick={() => setServings((s) => s + 0.5)}
+                  className="h-11 w-11 rounded-[12px] bg-primary text-[22px] leading-none text-white"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={confirmScan}
+              disabled={savingScan}
+              className="mt-4 w-full rounded-[12px] bg-foreground py-[13px] text-sm font-semibold text-background disabled:opacity-60"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {savingScan ? "Saving…" : "Log it & save the product"}
+            </button>
+            <button
+              onClick={() => {
+                setReading(null);
+                setLabelPhoto(null);
+              }}
+              disabled={savingScan}
+              className="mx-auto mt-3 block text-[12.5px] font-semibold text-muted-foreground"
+            >
+              Discard scan
+            </button>
+          </div>
+        </SheetPortal>
       )}
 
-        </div>
-      </div>
-
-      {/* Edit Dialog */}
-      <Dialog open={!!editEntry} onOpenChange={(open) => { if (!open) setEditEntry(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Edit Food Entry</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Date & Time</Label>
-              <Input
-                type="datetime-local"
-                value={editForm.loggedAt}
-                onChange={(e) => setEditForm({ ...editForm, loggedAt: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Meal Type</Label>
-              <Select
-                value={editForm.mealType}
-                onValueChange={(v) => setEditForm({ ...editForm, mealType: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="breakfast">🌅 Breakfast</SelectItem>
-                  <SelectItem value="lunch">☀️ Lunch</SelectItem>
-                  <SelectItem value="dinner">🌙 Dinner</SelectItem>
-                  <SelectItem value="snack">🍿 Snack</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Food Description</Label>
-              <Input
-                value={editForm.foodDescription}
-                onChange={(e) => setEditForm({ ...editForm, foodDescription: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Calories</Label>
-                <Input
-                  type="number"
-                  value={editForm.calories}
-                  onChange={(e) => setEditForm({ ...editForm, calories: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Protein (g)</Label>
-                <Input
-                  type="number"
-                  value={editForm.proteinG}
-                  onChange={(e) => setEditForm({ ...editForm, proteinG: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Carbs (g)</Label>
-                <Input
-                  type="number"
-                  value={editForm.carbsG}
-                  onChange={(e) => setEditForm({ ...editForm, carbsG: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Fat (g)</Label>
-                <Input
-                  type="number"
-                  value={editForm.fatG}
-                  onChange={(e) => setEditForm({ ...editForm, fatG: e.target.value })}
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Notes (optional)</Label>
-              <Input
-                value={editForm.notes}
-                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={handleSaveEdit} className="flex-1">
-                Save Changes
-              </Button>
-              {editEntry && (
-                <ConfirmDelete
-                  onConfirm={async () => {
-                    await handleDelete(editEntry.id);
-                    setEditEntry(null);
-                  }}
-                  itemName="this food entry"
-                  trigger={
-                    <Button variant="destructive" className="px-3">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  }
-                />
-              )}
-            </div>
+      {/* ——— Save an entry as a usual ——— */}
+      {saveUsualFor && (
+        <SheetPortal>
+          <div
+            className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
+            onClick={() => setSaveUsualFor(null)}
+          />
+          <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
+            <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
+            <p
+              className="text-xl font-bold text-foreground"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {saveUsualFor.foodDescription}
+            </p>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              {fmt(saveUsualFor.calories)} kcal · {macroLine(saveUsualFor)}
+            </p>
+            <button
+              onClick={() => saveAsUsual(saveUsualFor)}
+              className="mt-4 w-full rounded-[12px] bg-foreground py-[13px] text-sm font-semibold text-background"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Save to my usuals
+            </button>
+            {/* The design's Food screen has no edit/delete affordance —
+                logging is a mic job. A wrong row still has to be fixable,
+                so removal lives here rather than on the timeline. */}
+            <button
+              onClick={() => deleteEntry(saveUsualFor)}
+              className="mx-auto mt-3 block text-[12.5px] font-semibold text-destructive"
+            >
+              Delete this entry
+            </button>
+            <button
+              onClick={() => setSaveUsualFor(null)}
+              className="mx-auto mt-3 block text-[12.5px] font-semibold text-muted-foreground"
+            >
+              Close
+            </button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetPortal>
+      )}
 
       <MacroTargetsSheet
         open={showTargets}
         onClose={() => setShowTargets(false)}
-        onSaved={fetchEntries}
+        onSaved={load}
       />
     </div>
   );
 }
-
