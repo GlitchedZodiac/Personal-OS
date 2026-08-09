@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { decodePolyline } from "@/lib/strava";
+import { decodePolyline } from "@/lib/polyline";
 
 interface RouteMapProps {
   polyline: string;
