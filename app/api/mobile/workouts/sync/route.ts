@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { requireMobileSession } from "@/lib/mobile-session";
 import { prisma } from "@/lib/prisma";
+import { detectAndRecordPRs, type NewPR } from "@/lib/prs";
 
 type MobileWorkoutPayload = {
   externalId?: string;
@@ -52,6 +53,9 @@ export async function POST(request: NextRequest) {
 
     let created = 0;
     let updated = 0;
+    // Per-item PR results, keyed by externalId (or index when absent) so the
+    // watch can celebrate server-confirmed records after sync.
+    const prResults: Array<{ externalId: string | null; newPRs: NewPR[] }> = [];
 
     for (const item of items) {
       const externalSource =
@@ -107,6 +111,7 @@ export async function POST(request: NextRequest) {
             : "mobile",
       };
 
+      let workoutId: string;
       if (externalId) {
         const existing = await prisma.workoutLog.findFirst({
           where: { externalSource, externalId },
@@ -119,18 +124,37 @@ export async function POST(request: NextRequest) {
             data,
           });
           updated++;
-          continue;
+          workoutId = existing.id;
+        } else {
+          const entry = await prisma.workoutLog.create({ data });
+          created++;
+          workoutId = entry.id;
         }
+      } else {
+        const entry = await prisma.workoutLog.create({ data });
+        created++;
+        workoutId = entry.id;
       }
 
-      await prisma.workoutLog.create({ data });
-      created++;
+      // Server-side PR detection — same engine as web logging, so wrist
+      // sessions land in personal_records too. Never blocks the sync.
+      try {
+        const newPRs = await detectAndRecordPRs({
+          workoutLogId: workoutId,
+          exercises: data.exercises === Prisma.JsonNull ? null : data.exercises,
+          achievedAt: data.startedAt,
+        });
+        if (newPRs.length > 0) prResults.push({ externalId, newPRs });
+      } catch (error) {
+        console.warn("Sync PR detection failed:", (error as Error)?.message);
+      }
     }
 
     return NextResponse.json({
       created,
       updated,
       total: items.length,
+      prs: prResults,
     });
   } catch (error) {
     console.error("Mobile workout sync error:", error);

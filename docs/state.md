@@ -67,6 +67,29 @@ Not built yet (design exists): sequences/EMOM timers (no backend contract —
 deferred), rest timer, GPS routes (3.5), sleep/recovery screens, iPhone app,
 complications. Watch sim left booted at the fresh welcome screen for Michael.
 
+## 2026-08-09f — Lanes untangled, watch contract signed, order locked
+
+Michael set the build order: **Train + Today-full first, then Chat rebuild,
+then Body, finally Food** — with a FULL Settings port (it still leans on
+legacy data/structures) leading the next block. PORT GATE to be propagated
+to TheProcessLounge + The Foundry per his ask.
+
+- **Worktree split DONE** (the [BOTH LANES] hazard): both branches aligned
+  at superset tip bebd92a; this directory stays main-lane on
+  claude/phase1-modernization; the watch lane's home is now
+  `~/VibeCoding/personal-os-watch` (worktree, claude/watch-app). CLAUDE.md
+  updated with lane directories + never-switch-in-the-other-lane's-dir rule.
+- **docs/watch-contract.md** — ownership map + sequences contract v1
+  (main builds model/API/iPhone builder in the Train stage; watch runs them
+  read-only) + pairing-code contract v2 (deferred until iPhone Devices UI)
+  + dispositions for all five [watch] items.
+- **Shipped for the watch**: PR detection now runs in
+  `/api/mobile/workouts/sync` (returns `prs[]` per item) and
+  `GET /api/mobile/prs` (bearer) serves baselines — two of the five [watch]
+  asks closed.
+- Answered: ONE repo forever; the watch app never touches Vercel (Xcode
+  builds it), so the single free Vercel project stays.
+
 ## 2026-08-09e — Design-parity fixes after Michael's review
 
 Michael flagged: nav icons and logo weren't from the design, Body/Food still

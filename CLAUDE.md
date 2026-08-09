@@ -118,9 +118,17 @@ Two Claude sessions may run against this repo at once:
 
 - **Main lane** (web + backend): owns `app/**`, `lib/**`, `prisma/**`,
   `components/**`, `proxy.ts`, deploys, and the `/api/mobile/*` contracts.
+  Directory: `~/VibeCoding/Mikes Personal OS` (branch
+  `claude/phase1-modernization`).
 - **Watch lane** (native Apple): owns `ios/**`, the Xcode workspace, and
-  `docs/watch-*.md`; branch `claude/watch-app`. Kickoff prompt:
-  `docs/watch-kickoff-prompt.md`.
+  `docs/watch-*.md`. Directory: `~/VibeCoding/personal-os-watch` — a git
+  worktree on branch `claude/watch-app`. Kickoff prompt:
+  `docs/watch-kickoff-prompt.md`; ownership contracts:
+  `docs/watch-contract.md`.
+
+**NEVER switch branches in the other lane's directory** — the 2026-08-09
+shared-checkout collision (a lane's `checkout -b` yanked the branch out from
+under the other mid-commit) is why each lane has its own worktree.
 
 Cross-lane work is never edited directly — file a `docs/deferred-items.md`
 entry (tagged `[watch]` or `[main]`) and surface it to Michael. Both lanes
