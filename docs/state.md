@@ -67,6 +67,27 @@ Not built yet (design exists): sequences/EMOM timers (no backend contract —
 deferred), rest timer, GPS routes (3.5), sleep/recovery screens, iPhone app,
 complications. Watch sim left booted at the fresh welcome screen for Michael.
 
+## 2026-08-09e — Design-parity fixes after Michael's review
+
+Michael flagged: nav icons and logo weren't from the design, Body/Food still
+old pages, coach remnants visible. Fixes:
+- THE PORT GATE added to CLAUDE.md — designs are ported verbatim (assets
+  extracted from the design file, never substituted); "close enough" is a
+  defect. Applies to both lanes.
+- components/pitaya-icons.tsx — every icon extracted verbatim: tab bar
+  (Body person, Food bowl, Today circle-dot, Train KETTLEBELL, Settings
+  sun-gear), dock (chat bubble, white mic, camera), and the REAL logo: the
+  dragonfruit (raspberry tile, white flesh, 4 seeds, 2 leaves) found on the
+  design's lock screen. The uploaded PNG turned out to be the color muse
+  (a Dragon Fruit-finish guitar), not a logo.
+- Tab bar rebuilt: five even tabs, design icons, no invented center diamond.
+- Dock rebuilt to design: floating pill, chat 46 · raspberry mic 54 ·
+  camera 46, design glyphs.
+- PIN gate + sidebar + app icons (qlmanage SVG render) now use the
+  dragonfruit; sidebar carries the design icon set.
+- Health hub: AI Morning Brief card stripped (his no-popup-AI rule).
+- Body/Food/Train screens confirmed to Michael as STAGED (not missed):
+  next build order agreed below.
 ## 2026-08-09d — PITAYA: design landed, Stage A shipped
 
 Michael's Claude-design arrived (project "Pitaya") and he mandated radical

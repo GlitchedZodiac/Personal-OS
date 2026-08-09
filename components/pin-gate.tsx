@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { PitayaLogo } from "@/components/pitaya-icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { demoText } from "@/lib/demo-client";
@@ -107,16 +108,11 @@ export function PinGate({ children }: PinGateProps) {
         <CardHeader className="pb-4 text-center">
           <div
             className={cn(
-              "mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full transition-all duration-300",
-              success ? "bg-[#5E9B72]/15" : "bg-accent"
+              "mx-auto mb-4 transition-all duration-300",
+              success && "scale-110"
             )}
           >
-            <span
-              className={cn(
-                "block h-5 w-5 rotate-45 transition-all duration-300",
-                success ? "bg-[#5E9B72] rotate-[135deg]" : "bg-primary"
-              )}
-            />
+            <PitayaLogo size={76} />
           </div>
           <CardTitle
             className="text-xl font-bold tracking-[0.22em]"

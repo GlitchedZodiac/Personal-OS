@@ -91,6 +91,27 @@ radius) may fold into the current work. Anything bigger goes to
 `docs/deferred-items.md` with a pickup hint. Don't mass-restyle surfaces
 mid-task.
 
+## Design parity (THE PORT GATE)
+
+**Codified 2026-08-09 after the Pitaya Stage A miss** (generic lucide icons
+and an invented diamond logo shipped where the design had its own icons and
+a dragonfruit mark). When a Claude-design source exists in `docs/design/`,
+implementation is a **port, not an interpretation**:
+
+1. **Assets come from the design file verbatim.** Icons, logos, and marks are
+   extracted from the design's own SVG — never substituted from an icon
+   library, never re-drawn from memory. `components/pitaya-icons.tsx` is the
+   only icon source for designed surfaces; add to it by extraction.
+2. **Before building any screen, re-read its slice of the design file** and
+   list the elements it contains. Build to that list.
+3. **"Close enough" is a defect.** If the design and the implementation
+   disagree, either fix the implementation or surface the deviation to
+   Michael explicitly — never ship it silently.
+4. **Old-identity remnants are bugs.** Teal/amber/graphite styling, lucide
+   icons on designed surfaces, or stripped-feature UI resurfacing all count.
+5. Screens not yet rebuilt to the design are listed in `docs/state.md` as
+   pending stages — that's the only sanctioned gap between design and app.
+
 ## Parallel lanes
 
 Two Claude sessions may run against this repo at once:

@@ -17,6 +17,7 @@ import {
   Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CameraIcon, ChatBubbleIcon, MicIcon } from "@/components/pitaya-icons";
 import { toast } from "sonner";
 import { getSettings } from "@/lib/settings";
 import { deactivateMicrophoneStream, getOrCreateMicrophoneStream } from "@/lib/microphone";
@@ -972,69 +973,65 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
           onChange={handlePhotoSelect}
         />
 
-        {/* Main controls */}
-        <div className="floating-action-dock flex items-center justify-center gap-4 rounded-[32px] px-4 py-3">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-11 w-11 rounded-full border-white/10 bg-white/4 shadow-md"
+        {/* Main dock — design: floating pill, chat 46 · mic 54 raspberry · camera 46 */}
+        <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-border bg-card/95 p-[7px] shadow-[0_10px_30px_rgba(35,34,39,0.16)] backdrop-blur-xl">
+          <button
+            type="button"
             onClick={() => setShowTextInput(!showTextInput)}
+            className={cn(
+              "flex h-[46px] w-[46px] items-center justify-center rounded-full transition-all duration-200 hover:scale-105",
+              showTextInput
+                ? "bg-accent text-accent-foreground"
+                : "text-[#8C2F51] hover:bg-secondary"
+            )}
           >
-            <MessageSquare className={cn("h-4 w-4", showTextInput && "text-teal-300")} />
-          </Button>
+            <ChatBubbleIcon size={20} />
+          </button>
 
           <div className="relative flex items-center justify-center">
             {/* Audio level ring — pulses with actual mic input */}
             {isRecording && (
               <div
-                className="absolute rounded-full bg-red-500/20 transition-transform duration-100"
+                className="absolute rounded-full bg-primary/20 transition-transform duration-100"
                 style={{
-                  width: `${64 + audioLevel * 48}px`,
-                  height: `${64 + audioLevel * 48}px`,
+                  width: `${58 + audioLevel * 44}px`,
+                  height: `${58 + audioLevel * 44}px`,
                   opacity: 0.3 + audioLevel * 0.5,
                 }}
               />
             )}
-            <Button
-              size="icon"
+            <button
+              type="button"
               className={cn(
-                "h-16 w-16 rounded-full shadow-lg transition-all duration-200 relative z-10",
-                isRecording
-                  ? "bg-red-500 hover:bg-red-600 shadow-red-500/30"
-                  : "bg-teal-500 hover:bg-teal-400 shadow-teal-500/20",
+                "relative z-10 flex h-[54px] w-[54px] items-center justify-center rounded-full transition-all duration-200 hover:scale-105",
+                isRecording ? "bg-[#8C2F51] animate-pulse" : "bg-primary",
                 (isProcessing || isTranscribing || isAnalyzingPhoto) && "opacity-60"
               )}
               onClick={isRecording ? stopRecording : startRecording}
               disabled={isProcessing || isTranscribing || isAnalyzingPhoto}
             >
-              {isTranscribing ? (
-                <Loader2 className="h-7 w-7 animate-spin" />
-              ) : isProcessing ? (
-                <Loader2 className="h-7 w-7 animate-spin" />
+              {isTranscribing || isProcessing ? (
+                <Loader2 className="h-6 w-6 animate-spin text-primary-foreground" />
               ) : isRecording ? (
-                <MicOff className="h-7 w-7" />
+                <MicOff className="h-6 w-6 text-primary-foreground" />
               ) : (
-                <Mic className="h-7 w-7" />
+                <MicIcon size={22} />
               )}
-            </Button>
+            </button>
           </div>
 
-          <Button
-            variant="outline"
-            size="icon"
-            className={cn(
-              "h-11 w-11 rounded-full border-white/10 bg-white/4 shadow-md",
-              isAnalyzingPhoto && "border-amber-500/50"
-            )}
+          <button
+            type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessing || isTranscribing || isRecording || isAnalyzingPhoto}
+            className="flex h-[46px] w-[46px] items-center justify-center rounded-full text-[#8C2F51] transition-all duration-200 hover:scale-105 hover:bg-secondary disabled:opacity-50"
           >
             {isAnalyzingPhoto ? (
-              <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
             ) : (
-              <Camera className="h-4 w-4" />
+              <CameraIcon size={20} />
             )}
-          </Button>
+          </button>
         </div>
 
         {isRecording && (

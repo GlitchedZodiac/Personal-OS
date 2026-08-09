@@ -59,14 +59,6 @@ interface StreakData {
   loggedToday: boolean;
 }
 
-interface DailyBrief {
-  greeting: string;
-  summary: string;
-  tip: string;
-  todosToday: number;
-  topPriority: string | null;
-}
-
 interface Achievement {
   id: string;
   icon: string;
@@ -115,14 +107,6 @@ export default function HealthDashboard() {
     useCachedFetch<DailySummary>(`/api/health/summary?date=${today}&tzOffsetMinutes=${tzOffsetMinutes}`, { ttl: 60_000 });
   const { data: streakData, refresh: refreshStreak } =
     useCachedFetch<StreakData>("/api/health/streak", { ttl: 60_000 });
-  const briefUrl = useMemo(() => {
-    const now = new Date();
-    const localDate = format(now, "yyyy-MM-dd");
-    const localHour = now.getHours();
-    return `/api/health/daily-brief?localDate=${localDate}&localHour=${localHour}`;
-  }, []);
-  const { data: briefData } =
-    useCachedFetch<DailyBrief>(briefUrl, { ttl: 300_000 });
   const { data: achievementsData } =
     useCachedFetch<AchievementsData>("/api/health/achievements", { ttl: 300_000 });
 
@@ -203,37 +187,6 @@ export default function HealthDashboard() {
       </div>
 
       <HealthExportCard />
-
-      {/* ─── AI Morning Brief ─── */}
-      {briefData && (
-        <Card className="border-purple-500/20 bg-gradient-to-br from-purple-500/5 to-indigo-500/5 glow-purple overflow-hidden">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-purple-500/10 shrink-0 mt-0.5">
-                <Sparkles className="h-4 w-4 text-purple-400" />
-              </div>
-              <div className="space-y-1.5 min-w-0">
-                <p className="text-sm font-medium text-purple-300">Daily Brief</p>
-                <p className="text-sm leading-relaxed text-foreground/80">
-                  {briefData.summary}
-                </p>
-                {briefData.tip && (
-                  <p className="text-xs text-muted-foreground italic">
-                    {briefData.tip}
-                  </p>
-                )}
-                {briefData.todosToday > 0 && (
-                  <Link href="/todos" className="inline-flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 mt-1">
-                    <Bell className="h-3 w-3" />
-                    {briefData.todosToday} task{briefData.todosToday > 1 ? "s" : ""} today
-                    {briefData.topPriority && ` — "${briefData.topPriority}"`}
-                  </Link>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="grid gap-4 lg:grid-cols-12 lg:items-start">
         <div className="space-y-4 lg:col-span-8">
@@ -545,7 +498,7 @@ export default function HealthDashboard() {
       </div>
 
       {/* ─── Quick Tip (empty state) ─── */}
-      {!initialLoading && summary.mealCount === 0 && !briefData && (
+      {!initialLoading && summary.mealCount === 0 && (
         <Card className="border-dashed border-primary/20">
           <CardContent className="p-4 text-center">
             <TrendingUp className="h-8 w-8 text-primary/30 mx-auto mb-2" />
