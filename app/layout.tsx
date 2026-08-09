@@ -69,7 +69,14 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         {children}
-        <Toaster position="top-center" richColors />
+        {/* Bottom placement: top toasts hide under the Dynamic Island on
+            iPhone; the offset floats them above the dock + tab bar. */}
+        <Toaster
+          position="bottom-center"
+          richColors
+          offset="216px"
+          mobileOffset="216px"
+        />
         <ServiceWorkerRegister />
       </body>
     </html>

@@ -1056,6 +1056,7 @@ model JournalEntry {
   id        String   @id @default(uuid())
   localDate String   @unique // YYYY-MM-DD
   text      String   @default("")
+  photoData String? // one compressed base64 photo per day — the habit anchor
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

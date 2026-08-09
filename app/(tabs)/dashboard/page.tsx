@@ -30,7 +30,12 @@ interface TodayData {
   };
   train: { weekVolumeKg: number; weekPRCount: number };
   weight: { latestKg: number | null; deltaKg: number | null; spark: number[] };
-  journal: { exists: boolean; text: string; dayNumber: number };
+  journal: {
+    exists: boolean;
+    text: string;
+    photo: string | null;
+    dayNumber: number;
+  };
   habits: string[];
 }
 
@@ -88,6 +93,8 @@ export default function TodayPage() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const memoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [photoSaving, setPhotoSaving] = useState(false);
 
   const dateStr = localDateStr();
 
@@ -217,6 +224,50 @@ export default function TodayPage() {
   const openJournal = () => {
     setJournalDraft(data?.journal.text ?? "");
     setShowJournal(true);
+  };
+
+  // One photo per day, compressed client-side — the habit anchor.
+  const handleJournalPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setPhotoSaving(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const maxW = 900;
+            const w = Math.min(img.width, maxW);
+            const h = Math.round((img.height * w) / img.width);
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return reject(new Error("no canvas"));
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL("image/jpeg", 0.72));
+          };
+          img.onerror = () => reject(new Error("bad image"));
+          img.src = reader.result as string;
+        };
+        reader.onerror = () => reject(new Error("read failed"));
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch("/api/health/journal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ localDate: dateStr, photoData: dataUrl }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Photo on tonight's page.");
+      load();
+    } catch {
+      toast.error("Couldn't attach the photo");
+    } finally {
+      setPhotoSaving(false);
+    }
   };
 
   const saveJournal = async () => {
@@ -513,11 +564,47 @@ export default function TodayPage() {
             </span>
           </button>
           <button
+            onClick={() => photoInputRef.current?.click()}
+            disabled={photoSaving}
+            className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[12px] border-[1.5px] border-dashed border-[#D9D7DC]"
+          >
+            {data?.journal.photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={data.journal.photo}
+                alt="Tonight's photo"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={photoSaving ? "#A63D63" : "#96949B"}
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 8.5a2 2 0 0 1 2-2h1.6l1.4-2h8l1.4 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+                <circle cx="12" cy="13" r="3.6" />
+              </svg>
+            )}
+          </button>
+          <button
             onClick={openJournal}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border-[1.5px] border-dashed border-[#D9D7DC]"
           >
             <span className="text-xl leading-none text-muted-foreground">+</span>
           </button>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleJournalPhoto}
+          />
         </div>
       </div>
 
@@ -581,10 +668,10 @@ export default function TodayPage() {
       {showJournal && (
         <>
           <div
-            className="fixed inset-0 z-[70] bg-[rgba(27,21,24,0.45)]"
+            className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
             onClick={() => setShowJournal(false)}
           />
-          <div className="sheet-up fixed inset-x-0 bottom-0 z-[71] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
+          <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
             <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
             <p
               className="text-xl font-bold text-foreground"

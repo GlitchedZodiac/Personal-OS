@@ -101,6 +101,27 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const router = useRouter();
   const pathname = usePathname();
   const onChatScreen = pathname === "/chat";
+
+  // Voice and text from the dock land in the chat thread (2b fold) — the
+  // conversational proposal cards replace the dock's old review UI, and
+  // follow-ups ("make it two eggs") work by just talking again.
+  const handOffToChat = useCallback(
+    (text: string, source: "text" | "voice") => {
+      if (onChatScreen) {
+        window.dispatchEvent(
+          new CustomEvent("pitaya:chat-send", { detail: { text, source } })
+        );
+      } else {
+        sessionStorage.setItem(
+          "pitaya:pending-chat",
+          JSON.stringify({ text, source })
+        );
+        router.push("/chat");
+      }
+    },
+    [onChatScreen, router]
+  );
+
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -255,14 +276,11 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
         return;
       }
 
-      // Show transcribed text in input for review before sending
-      setTextInput(text.trim());
-      setShowTextInput(true);
       setLastFailedText(null);
       setIsTranscribing(false);
 
-      // Auto-send to AI (text is preserved in input if it fails)
-      await processText(text.trim());
+      // Into the chat thread — proposals render there, follow-ups by voice.
+      handOffToChat(text.trim(), "voice");
     } catch (error) {
       console.error("Transcription failed:", error);
       const msg = error instanceof Error ? error.message : "Failed to transcribe audio";
@@ -273,64 +291,9 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
     }
   };
 
-  // Step 2: Send text to AI — if it fails, text stays in the input
-  const processText = async (text: string) => {
-    setIsProcessing(true);
-    setLastFailedText(null);
-    try {
-      const settings = getSettings();
-      const chatRes = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          history: historyRef.current,
-          customInstructions: settings.aiInstructions?.health || "",
-          aiLanguage: settings.aiLanguage || "english",
-          timeZone: settings.timeZone,
-        }),
-      });
-
-      if (!chatRes.ok) {
-        // Server classifies OpenAI failures (quota/auth/rate-limit/...) into
-        // actionable messages — show those instead of a generic failure.
-        const errBody = await chatRes.json().catch(() => ({}));
-        throw new Error(errBody.error || "AI processing failed");
-      }
-      const response: AIResponse = await chatRes.json();
-
-      // Remember this exchange for follow-up context
-      historyRef.current = [
-        ...historyRef.current,
-        { role: "user" as const, content: text },
-        { role: "assistant" as const, content: response.message || "" },
-      ].slice(-12);
-
-      setAiResponse(response);
-
-      if (response.type === "general") {
-        toast.info(response.message);
-        setTextInput("");
-        setIsProcessing(false);
-      } else {
-        setShowConfirmation(true);
-        setTextInput("");
-        setIsProcessing(false);
-      }
-    } catch (error) {
-      console.error("AI processing failed:", error);
-      // Keep text in the input so user can retry
-      setLastFailedText(text);
-      setTextInput(text);
-      setShowTextInput(true);
-      const detail =
-        error instanceof Error && error.message !== "AI processing failed"
-          ? error.message
-          : "AI failed to process — your text is saved. Edit or tap send to retry.";
-      toast.error(detail, { duration: 8000 });
-      setIsProcessing(false);
-    }
-  };
+  // The legacy /api/ai/chat review flow now serves ONLY the camera path
+  // (photo → analyze → confirm card); voice and text go through the chat
+  // thread via handOffToChat.
 
   // ── Photo handling ──────────────────────────────────────────────────
   const compressImage = useCallback(
@@ -581,16 +544,14 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const handleTextSubmit = async () => {
     if (!textInput.trim()) return;
     const text = textInput.trim();
-    // Don't clear text yet — keep it until AI succeeds
-    await processText(text);
+    setTextInput("");
+    setShowTextInput(false);
+    handOffToChat(text, "text");
   };
 
   const handleRetry = async () => {
-    if (lastFailedText) {
-      await processText(lastFailedText);
-    } else if (textInput.trim()) {
-      await processText(textInput.trim());
-    }
+    const text = lastFailedText || textInput.trim();
+    if (text) handOffToChat(text, "text");
   };
 
   // Editing overlay for a food item

@@ -109,6 +109,11 @@ export default function ChatPage() {
 
   useEffect(scrollDown, [messages, streamText, scrollDown]);
 
+  // Dock hand-off: voice/text spoken anywhere in the app arrives here —
+  // as a pending payload when the dock navigated, or live via event when
+  // already on this screen.
+  const sendRef = useRef<typeof send | null>(null);
+
   const send = useCallback(
     async (text: string, source: "text" | "voice") => {
       const clean = text.trim();
@@ -219,6 +224,30 @@ export default function ChatPage() {
     },
     [busy]
   );
+  sendRef.current = send;
+
+  useEffect(() => {
+    const pending = sessionStorage.getItem("pitaya:pending-chat");
+    if (pending) {
+      sessionStorage.removeItem("pitaya:pending-chat");
+      try {
+        const { text, source } = JSON.parse(pending);
+        if (text) sendRef.current?.(text, source === "voice" ? "voice" : "text");
+      } catch {
+        // malformed handoff — ignore
+      }
+    }
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as
+        | { text?: string; source?: string }
+        | undefined;
+      if (detail?.text) {
+        sendRef.current?.(detail.text, detail.source === "voice" ? "voice" : "text");
+      }
+    };
+    window.addEventListener("pitaya:chat-send", handler);
+    return () => window.removeEventListener("pitaya:chat-send", handler);
+  }, []);
 
   // ——— voice (tap to talk, tap to stop) ———
   const startVoice = async () => {
@@ -551,7 +580,14 @@ export default function ChatPage() {
               ) : (
                 Object.entries(data)
                   .filter(([k, v]) => k !== "message" && v != null && typeof v !== "object")
-                  .map(([k, v]) => `${k}: ${v}`)
+                  .map(([k, v]) => {
+                    // "waistCm: 88" reads like a debug dump — humanize.
+                    if (k.endsWith("Kg")) return `${k.slice(0, -2)} ${v} kg`;
+                    if (k.endsWith("Cm")) return `${k.slice(0, -2)} ${v} cm`;
+                    if (k.endsWith("Pct")) return `${k.slice(0, -3)} ${v}%`;
+                    if (k.endsWith("Minutes")) return `${v} min`;
+                    return `${k} ${v}`;
+                  })
                   .join(" · ")
               )}
             </div>
@@ -605,7 +641,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col px-4 pb-32 pt-12 lg:px-0 lg:pt-8 max-w-lg lg:max-w-2xl">
+    <div className="flex min-h-dvh flex-col px-4 pb-60 pt-12 lg:px-0 lg:pt-8 max-w-lg lg:max-w-2xl">
       <p className="micro-label">The notebook that talks back</p>
       <h1
         className="mt-0.5 text-3xl font-bold tracking-[-0.02em]"
@@ -669,7 +705,8 @@ export default function ChatPage() {
           e.preventDefault();
           send(draft, "text");
         }}
-        className="sticky bottom-[168px] mt-4 flex items-center gap-2.5 rounded-full border border-border bg-card py-2 pl-[18px] pr-2 shadow-[0_6px_20px_rgba(35,34,39,0.08)]"
+        className="sticky mt-4 flex items-center gap-2.5 rounded-full border border-border bg-card py-2 pl-[18px] pr-2 shadow-[0_6px_20px_rgba(35,34,39,0.08)]"
+        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 12.5rem)" }}
       >
         <input
           value={draft}

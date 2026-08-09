@@ -142,8 +142,9 @@ export async function GET(request: NextRequest) {
           .reverse(),
       },
       journal: {
-        exists: Boolean(journalEntry?.text),
+        exists: Boolean(journalEntry?.text || journalEntry?.photoData),
         text: journalEntry?.text ?? "",
+        photo: journalEntry?.photoData ?? null,
         dayNumber: journalCount + (journalEntry ? 0 : 1),
       },
       habits: habitChecks.map((h) => h.name),

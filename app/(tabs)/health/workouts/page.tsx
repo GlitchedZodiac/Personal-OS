@@ -451,10 +451,10 @@ export default function TrainPage() {
       {showRoutines && (
         <>
           <div
-            className="fixed inset-0 z-[70] bg-[rgba(27,21,24,0.45)]"
+            className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
             onClick={() => setShowRoutines(false)}
           />
-          <div className="sheet-up fixed inset-x-0 bottom-0 z-[71] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
+          <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
             <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
             <p
               className="text-xl font-bold text-foreground"
@@ -510,10 +510,10 @@ export default function TrainPage() {
       {showStartPicker && (
         <>
           <div
-            className="fixed inset-0 z-[70] bg-[rgba(27,21,24,0.45)]"
+            className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
             onClick={() => setShowStartPicker(false)}
           />
-          <div className="sheet-up fixed inset-x-0 bottom-0 z-[71] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
+          <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
             <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
             <p
               className="text-xl font-bold text-foreground"
@@ -545,8 +545,8 @@ export default function TrainPage() {
       {/* ——— Live workout sheet ——— */}
       {live && liveStep && (
         <>
-          <div className="fixed inset-0 z-[70] bg-[rgba(27,21,24,0.45)]" />
-          <div className="sheet-up fixed inset-x-0 bottom-0 z-[71] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
+          <div className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]" />
+          <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
             <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
             <div className="flex items-center justify-between">
               <p

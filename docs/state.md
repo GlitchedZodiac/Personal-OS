@@ -17,6 +17,57 @@ crude (calories/macros by input) until 2c. PR #1 open to main.
 prod deploys via `vercel deploy --prod`; merge awaits Michael) ·
 `claude/watch-app` (watch lane, local).
 
+## 2026-08-09i — Michael's first on-phone bug sweep, fixed same-day
+
+He used prod on his iPhone; his list, dispositions:
+
+- **"Opens to a legacy page"** — root already redirects to /dashboard; the
+  culprits were the home-screen icon (iOS pins start_url at INSTALL time —
+  his icon predates the /dashboard manifest) and the v2 service worker
+  precaching legacy routes with OFFLINE_URL /health. SW rebuilt as
+  **pitaya-v3** (Pitaya precache set, /dashboard offline). The legacy
+  /health hub page is SUNSET → server redirect to /dashboard (old page in
+  git history). **He must delete + re-add the home icon once** — that also
+  clears the stale JS bundle that caused several of his symptoms (the old
+  dock composer/review UI he screenshotted can't render from current code).
+- **"Voice showed the old review card / input didn't store in chat /
+  routine wasn't stored"** — the dock-fold deferred item, done: dock voice
+  + text now hand off to the chat thread (sessionStorage handoff +
+  navigate, or a window event when already there). Proposals render as
+  chat cards with voice-back editing; routine asks made by dock voice now
+  actually reach create_routine. The legacy /api/ai/chat flow serves ONLY
+  the camera path now (photo→analyze→confirm card; folding that too is a
+  follow-up). processText removed from voice-input.
+- **"Sheets/toasts blocked by the mic node / Dynamic Island"** — all
+  bottom sheets raised to z-80/81 (decisively above the z-60 dock); chat
+  composer repositioned above the dock (safe-area + 12.5rem) with page
+  padding to match; **Toaster moved top→bottom-center at 216px offset**
+  (top toasts hid under the Dynamic Island).
+- **"Journal should take one picture"** — JournalEntry.photoData migration
+  (`journal_photo`); journal POST accepts photo-only or text (photo-only
+  still auto-ticks the journal habit); Today's card grew a camera button
+  (design's camera glyph, client-side canvas compress to ≤900px jpeg)
+  that becomes the day's thumbnail; today composite returns the photo.
+- **"No place to set calorie/macro targets"** — components/
+  macro-targets-sheet.tsx (calories + P/C/F % with live gram preview,
+  sum-to-100 guard) wired into the Food page header as "Targets"; the
+  ring/bars/chat goals all read the same settings. Food back-arrow now
+  points to /dashboard.
+- **"Log tape by voice"** — already works via chat's log_measurement
+  proposal; with the dock fold it now works from ANY screen's mic.
+  Measurement card labels humanized (waistCm 88 → "waist 88 cm").
+
+Verification: tsc clean · 68/68 vitest · clean build · smokes: /health →
+/dashboard redirect, photo-only journal POST + auto-tick (rows cleaned),
+Today card shows camera button + live streak pill. Deployed to prod.
+
+Open questions answered in chat (not code): chat stays ONE rolling thread
+(logs render as cards in it; splitting log-chat/coach-chat adds input
+friction he explicitly doesn't want); Apple Health without the companion
+app = possible via an iOS Shortcuts automation POSTing Health samples
+(weight/steps/sleep) to a Pitaya endpoint — queued as the bridge until
+the companion ships.
+
 ## 2026-08-09h — Body port + EMOM duration + chat designs routines
 
 Michael's direction: Body stays simple (daily weight + tape → trends);
