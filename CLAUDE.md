@@ -91,6 +91,22 @@ radius) may fold into the current work. Anything bigger goes to
 `docs/deferred-items.md` with a pickup hint. Don't mass-restyle surfaces
 mid-task.
 
+## Parallel lanes
+
+Two Claude sessions may run against this repo at once:
+
+- **Main lane** (web + backend): owns `app/**`, `lib/**`, `prisma/**`,
+  `components/**`, `proxy.ts`, deploys, and the `/api/mobile/*` contracts.
+- **Watch lane** (native Apple): owns `ios/**`, the Xcode workspace, and
+  `docs/watch-*.md`; branch `claude/watch-app`. Kickoff prompt:
+  `docs/watch-kickoff-prompt.md`.
+
+Cross-lane work is never edited directly — file a `docs/deferred-items.md`
+entry (tagged `[watch]` or `[main]`) and surface it to Michael. Both lanes
+read `docs/state.md` at session start and write entries when they ship.
+`/api/mobile/*` payload shapes are the inter-lane contract: the main lane
+implements changes, the watch lane requests them.
+
 ## Commits, branches
 
 - Branch `claude/<short-slug>` off `main`. Push branches freely (Vercel only

@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 (prod P1011 fix + AI status/metering session)
+**Last updated:** 2026-08-09 (2d kettlebell/PR backend + watch lane opened)
 **Current phase:** Phase 1 complete; AI provider decided (all-OpenAI, 5.6
 tiers, live on prod). Michael is iterating on design (2a). Next hands-off
 work: 2d kettlebell catalog/PR backend + 2b editing tools (design-independent).
@@ -13,6 +13,32 @@ Watch phase blocked on Michael installing full Xcode.
 **Branch in flight:** `claude/phase1-modernization` — deployed to prod via
 `vercel deploy --prod` (twice); UNPUSHED to GitHub (403 — collaborator access
 pending, see deferred-items).
+
+## 2026-08-09c — Kettlebell catalog + PR system live; watch lane opened
+
+Michael greenlit parallel work: main lane continues here; a dedicated watch
+lane starts from `docs/watch-kickoff-prompt.md` (Xcode now installed).
+CLAUDE.md gained a **Parallel lanes** section (main owns web/backend, watch
+owns ios/** on branch `claude/watch-app`; /api/mobile/* is the contract;
+cross-lane asks go through deferred-items).
+
+Shipped (2d backend, design-independent):
+- `lib/exercises.ts` — canonical exercise catalog (48 movements, kettlebell
+  first-class) with EN/ES aliases + accent/hyphen-folding normalizer; the
+  shared vocabulary for voice, PRs, plan imageKeys, and the watch app.
+- `personal_records` table (migration 3) + `lib/prs.ts` — weight + volume
+  records per canonical exercise; detection runs on workout create and
+  returns `newPRs` in the POST response (celebration hook for UI/watch).
+- `/api/health/prs` (bests + recent) and `/api/health/prs/backfill`
+  (idempotent rebuild from full history — rerun when the catalog grows).
+- Backfilled from his real history: 72 workouts scanned → 7 true records
+  (20kg swing & goblet squat, 16kg press/clean, 12kg halo...).
+- Self-smoke: below-best workout fired no weight PR; above-best fired with
+  correct previousValue; test workouts deleted and backfill re-run clean.
+- Tests 43 → 53 (catalog normalization EN/ES + PR extraction edge cases).
+
+Remaining for 2d-adjacent: chat query tool ("what's my swing PR?") lands
+with the 2b Responses-API rebuild; PR celebration UI lands with 2a design.
 
 ## 2026-08-09b — Prod DB outage fixed + AI status & spend metering
 

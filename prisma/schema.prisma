@@ -998,3 +998,20 @@ model AIUsageEvent {
   @@index([createdAt])
   @@map("ai_usage_events")
 }
+
+model PersonalRecord {
+  id            String   @id @default(uuid())
+  exercise      String // canonical id from lib/exercises.ts
+  exerciseName  String
+  kind          String // weight | volume
+  value         Float
+  unit          String // kg | kg-reps
+  previousValue Float?
+  workoutLogId  String?
+  achievedAt    DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([exercise, kind])
+  @@map("personal_records")
+}
