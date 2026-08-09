@@ -5,6 +5,7 @@ import {
   TRANSCRIBE_FALLBACK_MODEL,
 } from "@/lib/openai";
 import { TRANSCRIBE_PROMPT } from "@/lib/ai-prompts";
+import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -80,6 +81,13 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Transcribe] Success: "${transcription.text?.substring(0, 60)}..."`);
 
+    const duration = (transcription as { duration?: number }).duration;
+    recordAIUsage({
+      surface: "transcribe",
+      model: TRANSCRIBE_MODEL,
+      audioSeconds: typeof duration === "number" ? duration : null,
+    });
+
     return NextResponse.json({ text: transcription.text });
   } catch (error: unknown) {
     console.error("Transcription error:", error);
@@ -87,10 +95,11 @@ export async function POST(request: NextRequest) {
     const errMsg =
       error instanceof Error ? error.message : "Failed to transcribe audio";
 
-    // Provide a user-friendly error message
+    // Format problems get a specific hint; everything else gets classified
+    // (quota, auth, network...) so the UI can say what's actually wrong.
     const userMsg = errMsg.includes("could not be decoded")
       ? "Audio format not supported. Please try typing your message instead."
-      : errMsg;
+      : classifyOpenAIError(error).userMessage;
 
     return NextResponse.json({ error: userMsg }, { status: 500 });
   } finally {

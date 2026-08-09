@@ -49,6 +49,7 @@ import { toast } from "sonner";
 import { getSettings, saveSettingsToServer, getMacroGrams, fetchServerSettings, type AppSettings } from "@/lib/settings";
 import { MacroSlider } from "@/components/macro-slider";
 import { FinanceSettingsCard } from "@/components/finance-settings-card";
+import { AIStatusCard } from "@/components/ai-status-card";
 import Link from "next/link";
 
 interface BalanceInfo {
@@ -332,6 +333,9 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
+
+      {/* AI & system health — connection clarity + spend visibility */}
+      <AIStatusCard />
 
       {/* Nutrition Targets */}
       <Card>

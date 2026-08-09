@@ -175,6 +175,7 @@ No bullet points. No headers. No invented numbers.`;
       messages: [{ role: "user", content: prompt }],
       model: COACH_MODEL,
       reasoningEffort: "medium",
+      surface: "insights",
       // Reasoning tokens share this budget — sized for medium effort + short text
       maxCompletionTokens: 1200,
       retryMaxCompletionTokens: 2000,

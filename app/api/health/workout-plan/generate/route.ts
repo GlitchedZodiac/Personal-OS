@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai, COACH_MODEL } from "@/lib/openai";
+import { recordAIUsage } from "@/lib/ai-usage";
 import {
   capDemoCompletionTokens,
   enforceDemoAIBudget,
@@ -120,6 +121,12 @@ The "imageKey" should be one of: bench_press, squat, deadlift, overhead_press, b
       max_completion_tokens: capDemoCompletionTokens(4000),
     });
     await recordDemoAISpend(completion.usage);
+    recordAIUsage({
+      surface: "plan",
+      model: getDemoChatModel(COACH_MODEL),
+      inputTokens: completion.usage?.prompt_tokens ?? 0,
+      outputTokens: completion.usage?.completion_tokens ?? 0,
+    });
 
     const content = completion.choices[0]?.message?.content || "";
 

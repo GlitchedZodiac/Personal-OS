@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai, CHAT_MODEL } from "@/lib/openai";
+import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 import {
   capDemoCompletionTokens,
   enforceDemoAIBudget,
@@ -107,6 +108,12 @@ RULES:
       },
     });
     await recordDemoAISpend(completion.usage);
+    recordAIUsage({
+      surface: "photo",
+      model: getDemoChatModel(CHAT_MODEL),
+      inputTokens: completion.usage?.prompt_tokens ?? 0,
+      outputTokens: completion.usage?.completion_tokens ?? 0,
+    });
 
     const raw = completion.choices[0].message?.content?.trim() || "";
 
@@ -134,9 +141,10 @@ RULES:
     });
   } catch (error) {
     console.error("Photo analysis error:", error);
+    const { kind, userMessage } = classifyOpenAIError(error);
     return NextResponse.json(
-      { error: "Failed to analyze photo. Please try again." },
-      { status: 500 }
+      { error: kind === "unknown" ? "Failed to analyze photo. Please try again." : userMessage, kind },
+      { status: kind === "unknown" ? 500 : 502 }
     );
   }
 }

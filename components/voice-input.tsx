@@ -286,7 +286,12 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
         }),
       });
 
-      if (!chatRes.ok) throw new Error("AI processing failed");
+      if (!chatRes.ok) {
+        // Server classifies OpenAI failures (quota/auth/rate-limit/...) into
+        // actionable messages — show those instead of a generic failure.
+        const errBody = await chatRes.json().catch(() => ({}));
+        throw new Error(errBody.error || "AI processing failed");
+      }
       const response: AIResponse = await chatRes.json();
 
       // Remember this exchange for follow-up context
@@ -313,7 +318,11 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
       setLastFailedText(text);
       setTextInput(text);
       setShowTextInput(true);
-      toast.error("AI failed to process — your text is saved. Edit or tap send to retry.");
+      const detail =
+        error instanceof Error && error.message !== "AI processing failed"
+          ? error.message
+          : "AI failed to process — your text is saved. Edit or tap send to retry.";
+      toast.error(detail, { duration: 8000 });
       setIsProcessing(false);
     }
   };

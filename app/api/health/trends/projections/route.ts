@@ -178,6 +178,7 @@ HABITS (last 90 days averages):
         const completion = await generateChatText({
           model: COACH_MODEL,
           reasoningEffort: "medium",
+      surface: "projections",
           messages: [
             {
               role: "system",

@@ -1,4 +1,5 @@
 import { openai, CHAT_MODEL } from "@/lib/openai";
+import { recordAIUsage } from "@/lib/ai-usage";
 
 type ChatTextMessage = {
   role: "system" | "user" | "assistant";
@@ -12,6 +13,8 @@ type GenerateChatTextInput = {
   retryMaxCompletionTokens?: number;
   /** GPT-5.6 reasoning depth. Text-only calls may reason; default off for speed. */
   reasoningEffort?: "none" | "low" | "medium" | "high";
+  /** Metering label shown in AI usage stats. */
+  surface?: string;
 };
 
 export async function generateChatText({
@@ -20,6 +23,7 @@ export async function generateChatText({
   maxCompletionTokens,
   retryMaxCompletionTokens,
   reasoningEffort = "none",
+  surface = "text",
 }: GenerateChatTextInput) {
   const budgets = Array.from(
     new Set(
@@ -40,6 +44,13 @@ export async function generateChatText({
       messages,
       reasoning_effort: reasoningEffort,
       max_completion_tokens: budget,
+    });
+
+    recordAIUsage({
+      surface,
+      model,
+      inputTokens: completion.usage?.prompt_tokens ?? 0,
+      outputTokens: completion.usage?.completion_tokens ?? 0,
     });
 
     const choice = completion.choices[0];

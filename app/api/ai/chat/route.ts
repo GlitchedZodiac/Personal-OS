@@ -8,6 +8,7 @@ import {
 import { getUserTimeZone } from "@/lib/server-timezone";
 import { HEALTH_SYSTEM_PROMPT, HEALTH_TOOLS } from "@/lib/ai-prompts";
 import { normalizeFoodItemsWithTiming } from "@/lib/food-timing";
+import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 
 // Allow up to 60s for AI generation (Vercel Pro)
 export const maxDuration = 60;
@@ -111,6 +112,13 @@ export async function POST(request: NextRequest) {
       // Token discipline: a logging turn never needs more than this — caps
       // both cost and worst-case latency on the everyday path.
       max_completion_tokens: 1500,
+    });
+
+    recordAIUsage({
+      surface: "chat",
+      model: CHAT_MODEL,
+      inputTokens: completion.usage?.prompt_tokens ?? 0,
+      outputTokens: completion.usage?.completion_tokens ?? 0,
     });
 
     const responseMessage = completion.choices[0].message;
@@ -308,9 +316,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("AI chat error:", error);
+    const { kind, userMessage } = classifyOpenAIError(error);
     return NextResponse.json(
-      { error: "Failed to process message" },
-      { status: 500 }
+      { error: userMessage, kind },
+      { status: kind === "unknown" ? 500 : 502 }
     );
   }
 }
