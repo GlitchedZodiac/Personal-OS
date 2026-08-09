@@ -5,8 +5,8 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 (Body port live; EMOM duration + chat routine
-design; PAUSE for Michael's stress test)
+**Last updated:** 2026-08-09 (EMOM runner live-session UX on web — the
+training block's first REMAINING item; from a cloud session)
 **Current phase:** All five Pitaya screens + Chat are now design ports on
 prod. **Michael is pausing to use the app and run a bug sweep.** Next block
 (his 90-day priority, spec captured in deferred-items): training + Today
@@ -15,7 +15,42 @@ protocol-true EMOM/circuit runners on web + watch. Food stays deliberately
 crude (calories/macros by input) until 2c. PR #1 open to main.
 **Branch in flight:** `claude/phase1-modernization` (pushed; PR #1 open;
 prod deploys via `vercel deploy --prod`; merge awaits Michael) ·
-`claude/watch-app` (watch lane, local).
+`claude/watch-app` (watch lane, local) · `claude/emom-guided-runner`
+(cloud session; PR into phase1).
+
+## 2026-08-09k — EMOM runner: the clock IS the log (web half)
+
+Michael's ask from the road (cloud session): "start routine" on an EMOM
+must dive into the protocol, not into set-counting busywork — 3-2-1,
+minute wheel, per-round movement cycling, congratulations, one-tap save.
+
+- **components/emom-runner.tsx** — full-screen dark live surface ported
+  from the watch design's sequence-live screens (pitaya-watch 05/08/09):
+  #DC74A0 minute ring draining on the :60 over the #2A1420 track, ROUND
+  X/Y micro, :SS Familjen countdown, raspberry movement line, "next ·"
+  preview. Phone adaptations (no web comp exists — surfaced deviation):
+  3-2-1 GET READY intro, pause/mute/end controls, save panel. Wall-clock
+  engine (throttle-proof), screen wake lock, WebAudio cues (unlocked in
+  the launch tap for iOS) + vibration + spoken round announcements
+  (muteable, persisted).
+- **Train page** — `startLive` routes EMOM routines into the runner —
+  matched by `kind === "emom"` OR a name containing "emom" (the builder
+  defaults kind to "straight", so routines built before the kind
+  selector would otherwise fall silently to the manual sheet), with
+  length defaulting to 20 min when durationMinutes is unset; the start
+  picker's "EMOM · guided" chip shows which routines run guided; sets derive from rounds completed (round i → step
+  i mod n) and save through the shared path with
+  `metricsData.emom = {roundsCompleted, totalRounds}`. Ending early
+  always offers Finish & save — a session is never silently discarded.
+  Manual sheet unchanged for straight/circuit/tabata, but a logged set
+  now starts a sage REST :ss countdown chip (step.restSeconds ??
+  routine.restSecondsDefault, skippable, beeps out the last 3s) — the
+  spec's circuit-rest-timer half.
+- **globals.css** — sonner toast width pinned so the on-phone
+  one-character-per-line vertical toast ("Nothing logged — session
+  discarded." screenshot) can't happen.
+- Watch half of the runner + HR/zones into the live screen remain with
+  the watch lane (contract unchanged).
 
 ## 2026-08-09j — Sweep 2 fixed (portal sheets, chat send) + ZONES LIVE
 
