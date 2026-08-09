@@ -13,6 +13,29 @@ provider decision lands.
 `vercel deploy --prod` (twice); UNPUSHED to GitHub (403 — collaborator access
 pending, see deferred-items).
 
+## 2026-08-09 — AI provider decision + GPT-5.6 tier upgrade
+
+Michael decided: **all-OpenAI, one bill** — bilingual voice quality is the
+deciding factor (no Anthropic audio API), and the reasoning need is coaching/
+math-grade. Budget target ≤ $0.50/day.
+
+- **GPT-5.6 tier system wired** (probed live on his key; pricing per OpenAI
+  July 2026 cuts): `terra` ($2/$12) = everyday CHAT_MODEL (chat parsing, meal
+  photos — vision verified); `sol` ($5/$30) = COACH_MODEL (workout-plan
+  generation, trends insights/projections, reasoningEffort medium); `luna`
+  ($0.20/$1.20) available via env. Overrides: OPENAI_MODEL / OPENAI_COACH_MODEL.
+- **5.6 API rule discovered**: tools + reasoning not supported on
+  chat-completions → chat route sets reasoning_effort "none" (right for parse
+  turns anyway); Responses API migration queued for the 2b rebuild.
+- **Token discipline**: 1500-token cap on chat turns; synthesis budgets raised
+  (1200/2000, 1400/2200) because reasoning tokens share max_completion_tokens
+  — a 220-token cap would have returned empty insights.
+- Live-verified: Spanish breakfast parse (2 items, Colombian-aware macros,
+  3.7s) + Spanish follow-up correction re-totaled correctly (2.3s). 2-3×
+  faster than 5.5.
+- Deploy #3 to prod. Xcode NOT installed on this Mac (CLT only) — full Xcode
+  is Michael's action item before the watch phase.
+
 ## 2026-08-08 — Phase 1b session (Prisma 7, TS 6, tests, prod deploys)
 
 Michael approved "run phase 1" and took the design brief to Claude design.

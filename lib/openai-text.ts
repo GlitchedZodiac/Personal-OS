@@ -10,6 +10,8 @@ type GenerateChatTextInput = {
   model?: string;
   maxCompletionTokens: number;
   retryMaxCompletionTokens?: number;
+  /** GPT-5.6 reasoning depth. Text-only calls may reason; default off for speed. */
+  reasoningEffort?: "none" | "low" | "medium" | "high";
 };
 
 export async function generateChatText({
@@ -17,6 +19,7 @@ export async function generateChatText({
   model = CHAT_MODEL,
   maxCompletionTokens,
   retryMaxCompletionTokens,
+  reasoningEffort = "none",
 }: GenerateChatTextInput) {
   const budgets = Array.from(
     new Set(
@@ -35,7 +38,7 @@ export async function generateChatText({
     const completion = await openai.chat.completions.create({
       model,
       messages,
-      reasoning_effort: "none",
+      reasoning_effort: reasoningEffort,
       max_completion_tokens: budget,
     });
 

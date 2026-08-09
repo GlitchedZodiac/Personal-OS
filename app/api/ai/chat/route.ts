@@ -104,6 +104,13 @@ export async function POST(request: NextRequest) {
       ],
       tools: HEALTH_TOOLS,
       tool_choice: "auto",
+      // GPT-5.6 requires effort "none" when combining tools with
+      // chat-completions (reasoning+tools lives on the Responses API — the
+      // Phase 2b rebuild target). Parsing turns don't need reasoning anyway.
+      reasoning_effort: "none",
+      // Token discipline: a logging turn never needs more than this — caps
+      // both cost and worst-case latency on the everyday path.
+      max_completion_tokens: 1500,
     });
 
     const responseMessage = completion.choices[0].message;

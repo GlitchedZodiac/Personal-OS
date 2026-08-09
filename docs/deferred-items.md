@@ -4,6 +4,8 @@ Cross-session queue. Format:
 `- **[YYYY-MM-DD] [source]** — what | why deferred | where to pick it up`
 Newest at top. Annotate `[resolved by X, date]` instead of deleting.
 
+- **[2026-08-09] [ai-5.6]** — chat route executes only tool_calls[0] | a mixed message ("logged food AND a workout") silently drops the second action; the 2b agent loop must execute ALL parallel tool calls and the response contract must carry multiple result types | app/api/ai/chat/route.ts
+- **[2026-08-09] [ai-5.6]** — migrate chat to OpenAI Responses API in 2b | chat-completions can't combine tools with reasoning on 5.6; Responses API is also where agentic loop features live | Phase 2b rebuild
 - **[2026-08-08] [phase1b]** — TypeScript 7 flip | typescript-eslint hard-blocks below 7.1 (their #10940); Next 16.3 PROVEN type-checking on TS 7.0.2 in 210ms — flip root `typescript` to ^7 the moment typescript-eslint ships support | package.json + run build/eslint/vitest
 - **[2026-08-08] [phase1b]** — finance inbox lint errors | 5 `react-hooks/static-components` errors + 24 warnings repo-wide, all pre-existing; finance is frozen per health-first direction | `app/(tabs)/finances/inbox/page.tsx`, polish batch when finance thaws
 - **[2026-08-08] [phase1b]** — branch unpushed: `mike-bsg-integrator` lacks write access to GlitchedZodiac/Personal-OS | prod deploys done via `vercel deploy --prod` from the committed tree meanwhile; once collaborator access lands: push branch, open PR, merge to main, and let git-driven deploys take over | `git push -u origin claude/phase1-modernization`

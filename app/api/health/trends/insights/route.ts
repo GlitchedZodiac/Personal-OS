@@ -3,6 +3,7 @@ import { endOfDay, format, startOfDay, subDays } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
 import { buildCoachStyleGuide, getCoachLanguageLabel } from "@/lib/health-coach";
 import { generateChatText } from "@/lib/openai-text";
+import { COACH_MODEL } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
 
 // Allow up to 60s for AI generation (Vercel Pro)
@@ -172,8 +173,11 @@ No bullet points. No headers. No invented numbers.`;
 
     const completion = await generateChatText({
       messages: [{ role: "user", content: prompt }],
-      maxCompletionTokens: 220,
-      retryMaxCompletionTokens: 320,
+      model: COACH_MODEL,
+      reasoningEffort: "medium",
+      // Reasoning tokens share this budget — sized for medium effort + short text
+      maxCompletionTokens: 1200,
+      retryMaxCompletionTokens: 2000,
     });
 
     const insight =

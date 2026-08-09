@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { openai, CHAT_MODEL } from "@/lib/openai";
+import { openai, COACH_MODEL } from "@/lib/openai";
 import {
   capDemoCompletionTokens,
   enforceDemoAIBudget,
@@ -111,7 +111,7 @@ The "imageKey" should be one of: bench_press, squat, deadlift, overhead_press, b
     if (blocked) return blocked;
 
     const completion = await openai.chat.completions.create({
-      model: getDemoChatModel(CHAT_MODEL),
+      model: getDemoChatModel(COACH_MODEL),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
