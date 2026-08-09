@@ -1,9 +1,14 @@
+// Offline-first sync queue: finished workouts persist to Application Support
+// immediately and drain to POST /api/mobile/workouts/sync whenever the watch
+// has connectivity. Upsert key is (externalSource, externalId) — the server
+// dedupes on the same pair, so re-syncing after a half-failed drain is safe.
+
 import Foundation
 
 public actor OfflineWorkoutQueue {
     private let fileURL: URL
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
+    private let encoder = PitayaJSON.encoder()
+    private let decoder = PitayaJSON.decoder()
 
     public init(filename: String = "offline-workout-queue.json") throws {
         let supportURL = try FileManager.default.url(
@@ -13,37 +18,34 @@ public actor OfflineWorkoutQueue {
             create: true
         )
         fileURL = supportURL.appendingPathComponent(filename)
-        encoder.dateEncodingStrategy = .iso8601
-        decoder.dateDecodingStrategy = .iso8601
     }
 
-    public func load() -> [MobileWorkoutPayload] {
-        guard let data = try? Data(contentsOf: fileURL) else {
-            return []
-        }
-
-        return (try? decoder.decode([MobileWorkoutPayload].self, from: data)) ?? []
+    public func load() -> [WorkoutSyncItem] {
+        guard let data = try? Data(contentsOf: fileURL) else { return [] }
+        return (try? decoder.decode([WorkoutSyncItem].self, from: data)) ?? []
     }
 
-    public func enqueue(_ payload: MobileWorkoutPayload) throws {
+    public func enqueue(_ item: WorkoutSyncItem) throws {
         var items = load()
-
-        if let index = items.firstIndex(where: { $0.externalId == payload.externalId && $0.externalSource == payload.externalSource }) {
-            items[index] = payload
+        if let index = items.firstIndex(where: {
+            $0.externalId == item.externalId && $0.externalSource == item.externalSource
+        }) {
+            items[index] = item
         } else {
-            items.append(payload)
+            items.append(item)
         }
-
         try persist(items)
     }
 
-    public func removeSynced(_ payloads: [MobileWorkoutPayload]) throws {
-        let keys = Set(payloads.map { "\($0.externalSource)|\($0.externalId)" })
+    public func removeSynced(_ items: [WorkoutSyncItem]) throws {
+        let keys = Set(items.map { "\($0.externalSource)|\($0.externalId)" })
         let remaining = load().filter { !keys.contains("\($0.externalSource)|\($0.externalId)") }
         try persist(remaining)
     }
 
-    private func persist(_ items: [MobileWorkoutPayload]) throws {
+    public func count() -> Int { load().count }
+
+    private func persist(_ items: [WorkoutSyncItem]) throws {
         let data = try encoder.encode(items)
         try data.write(to: fileURL, options: .atomic)
     }

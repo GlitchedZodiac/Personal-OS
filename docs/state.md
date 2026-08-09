@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 (2d kettlebell/PR backend + watch lane opened)
+**Last updated:** 2026-08-09 (PITAYA Stage A live — rebrand + IA strip)
 **Current phase:** Phase 1 complete; AI provider decided (all-OpenAI, 5.6
 tiers, live on prod). Michael is iterating on design (2a). Next hands-off
 work: 2d kettlebell catalog/PR backend + 2b editing tools (design-independent).
@@ -13,6 +13,36 @@ Watch phase blocked on Michael installing full Xcode.
 **Branch in flight:** `claude/phase1-modernization` — deployed to prod via
 `vercel deploy --prod` (twice); UNPUSHED to GitHub (403 — collaborator access
 pending, see deferred-items).
+
+## 2026-08-09d — PITAYA: design landed, Stage A shipped
+
+Michael's Claude-design arrived (project "Pitaya") and he mandated radical
+simplification: strip finances/todos/AI-trainer surfaces, follow the design
+~99%. Imported via DesignSync into docs/design/: pitaya-app.dc.html,
+pitaya-watch.dc.html (FOR THE WATCH LANE — read it!), pitaya-tokens.md
+(extracted spec: raspberry #A63D63 family, ink #232227, bg #F2F1F2, pills,
+Familjen Grotesk + Instrument Sans, light-first).
+
+Stage A shipped:
+- globals.css → full Pitaya token set (light default + warm night .dark);
+  legacy utility classes kept but restyled so unrebuilt pages stay coherent.
+- Fonts swapped (Familjen Grotesk display / Instrument Sans body); metadata,
+  manifest, theme colors → Pitaya; new diamond app icons (pure-node PNG).
+- IA: 5 tabs Body | Food | Today (center diamond) | Train | Settings —
+  finances/todos/trends/coach REMOVED from all nav (routes + data intact).
+- PIN gate rebranded (diamond mark, PITAYA, bilingual tagline).
+- Dashboard → Today v1: date header, 4 stat tiles, "notebook that talks
+  back" card, VoiceInput chat dock mounted (was only on /health).
+- Settings rewritten (1054 → ~350 lines) per design sections: WATCH (honest
+  "Soon" rows), DATA (CSV import, Strava, export), APP (PIN, units,
+  appearance Day/Night/Auto wired to html.dark, chat language EN/ES),
+  SYSTEM (AI status card). Macro sliders/coach instructions/finance settings
+  gone from UI (values persist in stored settings JSON).
+
+Verified: build green, PIN gate visually confirmed in Pitaya skin.
+Next stages: Today full build (habits/journal/supplements/voice memo +
+schema), Food (usuals + supplements), Train (routines/PRs/trails), Body
+(charts/body map/recovery), Chat rebuild (2b), weekly PDF.
 
 ## 2026-08-09c — Kettlebell catalog + PR system live; watch lane opened
 

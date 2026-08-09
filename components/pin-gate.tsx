@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Lock, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { demoText } from "@/lib/demo-client";
@@ -107,17 +107,25 @@ export function PinGate({ children }: PinGateProps) {
         <CardHeader className="pb-4 text-center">
           <div
             className={cn(
-              "mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl transition-all duration-300",
-              success ? "bg-green-500/20" : "bg-primary/10"
+              "mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full transition-all duration-300",
+              success ? "bg-[#5E9B72]/15" : "bg-accent"
             )}
           >
-            <Lock
-              className={cn("h-7 w-7 transition-colors", success ? "text-green-500" : "text-primary")}
+            <span
+              className={cn(
+                "block h-5 w-5 rotate-45 transition-all duration-300",
+                success ? "bg-[#5E9B72] rotate-[135deg]" : "bg-primary"
+              )}
             />
           </div>
-          <CardTitle className="text-xl">Personal OS</CardTitle>
+          <CardTitle
+            className="text-xl font-bold tracking-[0.22em]"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            PITAYA
+          </CardTitle>
           <p className="text-sm text-muted-foreground">
-            {demoText("Enter your PIN to continue", "Ingresa tu PIN para continuar")}
+            {demoText("It's just you. Prove it.", "Solo eres tú. Demuéstralo.")}
           </p>
         </CardHeader>
         <CardContent>
