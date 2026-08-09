@@ -45,6 +45,13 @@ can store, meals set by voice, reusable defaults, meal slots.
   first port dropped it; self-smoke caught it. Delete lives in the
   entry sheet since the design's timeline has no edit affordance
   (surfaced deviation).
+- **Build now runs `prisma migrate deploy`** before generate/build.
+  Vercel only ran `prisma generate`, so a schema-bearing deploy would
+  have shipped code whose columns didn't exist yet (favorites GET
+  selects them → the usuals list would have come back empty). Applies
+  on CLI `vercel deploy --prod` too, since both use this script. A
+  failed migration now fails the build loudly rather than degrading the
+  app silently.
 - Self-smoke: 14 assertions on the running build (pills, totals,
   supplement state, product serving line) plus POST payload proofs —
   a usual logs with source=usual, a scan posts kind=product with
