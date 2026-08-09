@@ -1,14 +1,18 @@
 {
   "name": "PerOps",
   "short_name": "PerOps",
-  "description": "Your personal operating system — health, fitness, todos, and AI coaching",
+  "description": "Your personal operating system \u2014 health, fitness, todos, and AI coaching",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#0a0a0a",
+  "background_color": "#f4f1f2",
+  "theme_color": "#f4f1f2",
   "orientation": "portrait-primary",
-  "categories": ["health", "fitness", "productivity"],
+  "categories": [
+    "health",
+    "fitness",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -28,25 +32,45 @@
       "name": "Dashboard",
       "short_name": "Dashboard",
       "url": "/dashboard",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Log Food",
       "short_name": "Food",
       "url": "/health/food",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Todos",
       "short_name": "Todos",
       "url": "/todos",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Workouts",
       "short_name": "Workout",
       "url": "/health/workouts",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

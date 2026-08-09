@@ -115,11 +115,11 @@ function RestTimer({ seconds, onDone }: { seconds: number; onDone: () => void })
 
   return (
     <div className="flex flex-col items-center gap-2 py-4">
-      <Timer className="h-5 w-5 text-blue-400" />
-      <p className="text-3xl font-bold font-mono text-blue-400">{formatTime(remaining)}</p>
+      <Timer className="h-5 w-5 text-pitaya" />
+      <p className="text-3xl font-bold font-mono text-pitaya">{formatTime(remaining)}</p>
       <div className="w-32 h-1.5 rounded-full bg-secondary overflow-hidden">
         <div
-          className="h-full bg-blue-400 rounded-full transition-all duration-1000"
+          className="h-full bg-pitaya rounded-full transition-all duration-1000"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -260,7 +260,7 @@ export function ActiveWorkout({
   // ─── Pre-start screen ───────────────────────────────────────────
   if (!isActive) {
     return (
-      <Card className="border-purple-500/20 bg-purple-500/5">
+      <Card className="border-pitaya/20 bg-pitaya/5">
         <CardContent className="p-5 space-y-4">
           <div className="text-center">
             <h3 className="text-lg font-bold">{dayLabel}</h3>
@@ -280,7 +280,7 @@ export function ActiveWorkout({
           <div className="space-y-2">
             {exercises.map((ex, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary/20 text-sm">
-                <span className="w-6 h-6 rounded-md bg-purple-500/20 flex items-center justify-center text-xs font-bold text-purple-400">
+                <span className="w-6 h-6 rounded-md bg-pitaya/15 flex items-center justify-center text-xs font-bold text-pitaya-deep">
                   {i + 1}
                 </span>
                 <span className="flex-1 font-medium">{ex.name}</span>
@@ -307,7 +307,7 @@ export function ActiveWorkout({
 
   // ─── Active workout ──────────────────────────────────────────────
   return (
-    <Card className="border-green-500/20 bg-green-500/5">
+    <Card className="border-pitaya/20 bg-card">
       <CardContent className="p-4 space-y-4">
         {/* Timer + Progress Header */}
         <div className="flex items-center justify-between">
@@ -330,7 +330,7 @@ export function ActiveWorkout({
               onClick={handleFinish}
               variant="default"
               size="icon"
-              className="h-10 w-10 rounded-full bg-green-600 hover:bg-green-700"
+              className="h-10 w-10 rounded-full"
             >
               <Square className="h-4 w-4" />
             </Button>
@@ -340,7 +340,7 @@ export function ActiveWorkout({
         {/* Overall progress bar */}
         <div className="w-full h-2 rounded-full bg-secondary overflow-hidden">
           <div
-            className="h-full bg-green-500 rounded-full transition-all duration-500"
+            className="h-full bg-pitaya rounded-full transition-all duration-500"
             style={{ width: `${progressPct}%` }}
           />
         </div>
@@ -352,10 +352,10 @@ export function ActiveWorkout({
 
         {/* PR Alerts */}
         {newPRs.length > 0 && (
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-amber-400 shrink-0" />
+          <div className="bg-pitaya/10 border border-pitaya/20 rounded-xl p-3 flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-pitaya shrink-0" />
             <div>
-              <p className="text-xs font-semibold text-amber-400">New Personal Record!</p>
+              <p className="text-xs font-semibold text-pitaya-deep">New Personal Record!</p>
               <p className="text-[10px] text-muted-foreground">{newPRs.join(", ")}</p>
             </div>
           </div>
@@ -376,9 +376,9 @@ export function ActiveWorkout({
                   i === currentExIndex
                     ? "bg-primary text-primary-foreground"
                     : allDone
-                    ? "bg-green-500/20 text-green-400"
+                    ? "bg-pitaya/15 text-pitaya-deep"
                     : someDone
-                    ? "bg-amber-500/10 text-amber-400"
+                    ? "bg-accent text-accent-foreground"
                     : "bg-secondary/30 text-muted-foreground"
                 )}
               >
@@ -419,7 +419,7 @@ export function ActiveWorkout({
             {/* PR reference */}
             {personalRecords[currentExercise.name.toLowerCase()] && (
               <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                <Trophy className="h-3 w-3 text-amber-400" />
+                <Trophy className="h-3 w-3 text-pitaya" />
                 PR: {personalRecords[currentExercise.name.toLowerCase()].weight}kg ×{" "}
                 {personalRecords[currentExercise.name.toLowerCase()].reps}
               </p>
@@ -438,7 +438,7 @@ export function ActiveWorkout({
                   key={si}
                   className={cn(
                     "grid grid-cols-[2rem_1fr_1fr_3rem] gap-2 items-center px-1 py-1.5 rounded-lg transition-colors",
-                    set.completed ? "bg-green-500/10" : "bg-secondary/20"
+                    set.completed ? "bg-pitaya/10" : "bg-secondary/20"
                   )}
                 >
                   <span className="text-xs font-bold text-center">{set.setNumber}</span>
@@ -467,7 +467,7 @@ export function ActiveWorkout({
                     size="icon"
                     className={cn(
                       "h-8 w-8",
-                      set.completed && "bg-green-600 hover:bg-green-700"
+                      set.completed && "bg-pitaya hover:bg-pitaya/90 text-white border-transparent"
                     )}
                   >
                     <Check className="h-3.5 w-3.5" />
