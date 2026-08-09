@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 (GPT-5.6 upgrade session)
+**Last updated:** 2026-08-09 (prod P1011 fix + AI status/metering session)
 **Current phase:** Phase 1 complete; AI provider decided (all-OpenAI, 5.6
 tiers, live on prod). Michael is iterating on design (2a). Next hands-off
 work: 2d kettlebell catalog/PR backend + 2b editing tools (design-independent).
@@ -13,6 +13,30 @@ Watch phase blocked on Michael installing full Xcode.
 **Branch in flight:** `claude/phase1-modernization` — deployed to prod via
 `vercel deploy --prod` (twice); UNPUSHED to GitHub (403 — collaborator access
 pending, see deferred-items).
+
+## 2026-08-09b — Prod DB outage fixed + AI status & spend metering
+
+Michael hit "a failure" testing prod — root cause found in Vercel function
+logs: **P1011, self-signed certificate**. The stored prod DATABASE_URL
+carries sslmode=require; Prisma 5's engine encrypted without CA-verifying,
+node-postgres verified and rejected Supabase's chain — every DB call 500'd
+in prod while local (no sslmode) worked plaintext. Fix: adapter always
+encrypts with rejectUnauthorized:false (except sslmode=disable), matching
+engine semantics; verified both URL shapes locally; deploy #4 restored prod.
+Vercel DATABASE_URL/DIRECT_URL values replaced with our verified aws-1 URLs
+(still marked Sensitive, but now byte-identical to .env.local — no mystery).
+
+His feature ask (connection clarity + balance visibility) shipped, deploy #5:
+- `ai_usage_events` table (migration 2) — every AI call meters surface/model/
+  tokens/cost at published 5.6 rates; recordAIUsage is fire-and-forget and
+  hardened against stale clients.
+- `/api/ai/status` + Settings "AI & System Status" card: OpenAI + DB health
+  with latency, configured tiers, today/30d spend, Test button, top-up link.
+  (OpenAI exposes no balance to API keys — metered locally, link out to top up.)
+- classifyOpenAIError: chat/transcribe/photo now return actionable messages
+  (quota/auth/rate-limit/network) surfaced in the voice-input toast.
+
+Verified on prod: status OK/OK with spend flowing, chat write path in Spanish.
 
 ## 2026-08-09 — AI provider decision + GPT-5.6 tier upgrade
 
