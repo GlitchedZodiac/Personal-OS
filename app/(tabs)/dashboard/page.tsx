@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { TrainIcon } from "@/components/pitaya-icons";
+import { useDataLoggedListener } from "@/components/use-data-logged";
 import {
   getOrCreateMicrophoneStream,
   deactivateMicrophoneStream,
@@ -99,6 +100,7 @@ export default function TodayPage() {
   }, [dateStr]);
 
   useEffect(load, [load]);
+  useDataLoggedListener(load);
 
   const prompt =
     JOURNAL_PROMPTS[

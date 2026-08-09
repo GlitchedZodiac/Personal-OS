@@ -38,7 +38,7 @@ import {
   Zap,
   X,
 } from "lucide-react";
-import { VoiceInput } from "@/components/voice-input";
+import { useDataLoggedListener } from "@/components/use-data-logged";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import Link from "next/link";
 import { addDays, format, isToday, subDays } from "date-fns";
@@ -346,6 +346,7 @@ export default function FoodLogPage() {
 
   const { data: entries, initialLoading, refresh: fetchEntries } =
     useCachedFetch<FoodEntry[]>(foodUrl, { ttl: 60_000 });
+  useDataLoggedListener(fetchEntries);
 
   const { data: favorites, refresh: refreshFavorites } =
     useCachedFetch<FavoriteFood[]>("/api/health/favorites", { ttl: 300_000 });
@@ -1096,7 +1097,7 @@ export default function FoodLogPage() {
       </Dialog>
 
       {/* Voice Input */}
-      <VoiceInput onDataLogged={() => { invalidateHealthCache(); fetchEntries(); }} />
+
     </div>
   );
 }

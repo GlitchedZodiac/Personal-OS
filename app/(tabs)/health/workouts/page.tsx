@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useDataLoggedListener } from "@/components/use-data-logged";
 import type { SequenceStep } from "@/lib/sequences";
 
 // Pitaya Train — full port of the design's Train screen (docs/design/
@@ -114,6 +115,7 @@ export default function TrainPage() {
   }, []);
 
   useEffect(load, [load]);
+  useDataLoggedListener(load);
 
   // Live session clock
   useEffect(() => {

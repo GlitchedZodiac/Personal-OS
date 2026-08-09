@@ -25,7 +25,7 @@ import {
   ChevronUp,
   Pencil,
 } from "lucide-react";
-import { VoiceInput } from "@/components/voice-input";
+import { useDataLoggedListener } from "@/components/use-data-logged";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { MeasurementWizard } from "@/components/measurement-wizard";
 import {
@@ -64,6 +64,7 @@ interface BodyEntry {
 export default function BodyMeasurementsPage() {
   const { data: entries, initialLoading, refresh: fetchEntries } =
     useCachedFetch<BodyEntry[]>("/api/health/body", { ttl: 60_000 });
+  useDataLoggedListener(fetchEntries);
   const [showWizard, setShowWizard] = useState(false);
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
   const [units] = useState<"metric" | "imperial">(() => getSettings().units);
@@ -598,7 +599,7 @@ export default function BodyMeasurementsPage() {
       />
 
       {/* Voice Input */}
-      <VoiceInput onDataLogged={() => { invalidateHealthCache(); fetchEntries(); }} />
+
     </div>
   );
 }

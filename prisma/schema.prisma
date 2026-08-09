@@ -1016,6 +1016,17 @@ model PersonalRecord {
   @@map("personal_records")
 }
 
+model ChatMessage {
+  id        String   @id @default(uuid())
+  role      String // user | assistant | proposal
+  content   String
+  meta      Json? // {source} for user msgs; {kind, data, status} for proposals
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("chat_messages")
+}
+
 model Sequence {
   id                 String   @id @default(uuid())
   name               String

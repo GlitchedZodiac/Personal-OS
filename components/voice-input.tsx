@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -97,6 +98,9 @@ interface AIResponse {
 
 export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const floatingBottomClass = "bottom-[calc(env(safe-area-inset-bottom,0px)+7.25rem)]";
+  const router = useRouter();
+  const pathname = usePathname();
+  const onChatScreen = pathname === "/chat";
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -975,13 +979,16 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
 
         {/* Main dock — design: floating pill, chat 46 · mic 54 raspberry · camera 46 */}
         <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-border bg-card/95 p-[7px] shadow-[0_10px_30px_rgba(35,34,39,0.16)] backdrop-blur-xl">
+          {/* Chat bubble → the Chat screen (design: dock chat active on it) */}
           <button
             type="button"
-            onClick={() => setShowTextInput(!showTextInput)}
+            onClick={() => {
+              if (!onChatScreen) router.push("/chat");
+            }}
             className={cn(
               "flex h-[46px] w-[46px] items-center justify-center rounded-full transition-all duration-200 hover:scale-105",
-              showTextInput
-                ? "bg-accent text-accent-foreground"
+              onChatScreen
+                ? "bg-primary text-primary-foreground"
                 : "text-[#8C2F51] hover:bg-secondary"
             )}
           >

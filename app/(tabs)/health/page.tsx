@@ -24,7 +24,7 @@ import {
   ChevronUp,
   Droplets,
 } from "lucide-react";
-import { VoiceInput } from "@/components/voice-input";
+import { useDataLoggedListener } from "@/components/use-data-logged";
 import { WaterTracker } from "@/components/water-tracker";
 import { QuickFavorites } from "@/components/quick-favorites";
 import { AIMealSuggestion } from "@/components/ai-meal-suggestion";
@@ -124,6 +124,7 @@ export default function HealthDashboard() {
     refreshSummary();
     refreshStreak();
   };
+  useDataLoggedListener(fetchData);
 
   useEffect(() => {
     void fetchServerSettings().then((s) => {
@@ -671,8 +672,6 @@ export default function HealthDashboard() {
         </Card>
       )}
 
-      {/* ─── Voice Input ─── */}
-      <VoiceInput onDataLogged={fetchData} />
     </div>
   );
 }

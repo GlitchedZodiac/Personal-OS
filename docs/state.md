@@ -5,16 +5,88 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 (Settings/Train/Today full ports + sequences API live)
-**Current phase:** Phase 1 complete; AI provider decided (all-OpenAI, 5.6
-tiers, live on prod). Web: Pitaya Settings + Train + Today are FULL ports
-now (Michael's locked order), sequences/habits/journal backends live —
-next: Chat rebuild (2b), then Body, then Food. Watch Phase 3 running in
-parallel — core loop works in simulator; sequences API is now live so the
-wrist routines UI is unblocked.
-**Branch in flight:** `claude/phase1-modernization` (web, deployed to prod
-via `vercel deploy --prod`; UNPUSHED to GitHub — 403, collaborator access
-pending, see deferred-items) · `claude/watch-app` (watch lane, local).
+**Last updated:** 2026-08-09 (Chat 2b live: Responses API loop, /chat screen)
+**Current phase:** Phase 1 complete; AI on all-OpenAI 5.6 tiers. Web: Pitaya
+Settings + Train + Today are full ports; **Chat 2b is live** (Responses API
+agentic loop, streaming, real data answers, edit/delete via chat, rolling
+persisted thread at /chat). Next per Michael's order: Body, then Food (2c).
+Watch Phase 3 in parallel — sequences API live, wrist routines unblocked.
+**Branch in flight:** `claude/phase1-modernization` — now PUSHED to GitHub
+(collaborator access granted 2026-08-09); prod deploys still via
+`vercel deploy --prod`; merge to main awaits Michael's go.
+`claude/watch-app` (watch lane, local).
+
+## 2026-08-09g — Chat 2b: Responses-API agentic loop + the /chat screen
+
+The chat rebuild ("the notebook that talks back"), per the locked order.
+GitHub collaborator access landed → branch pushed.
+
+Backend:
+- **`POST /api/ai/chat/stream`** — SSE streaming loop on
+  `openai.responses.create` (CHAT_MODEL gpt-5.6-terra): tools + reasoning
+  {effort: low} combine (the thing chat-completions rejects on 5.6);
+  stateless multi-turn via echoing output + `include:
+  reasoning.encrypted_content`; `store: false`; max 5 turns; ALL function
+  calls per turn processed (the old first-call-only bug is gone on this
+  path). Events: delta / tool / proposal / done / error. Usage metered per
+  call into ai_usage_events (surface "chat"); errors classified.
+- **Tool surface v2** (lib/ai-prompts.ts `CHAT_RESPONSES_TOOLS`, flat
+  Responses shapes): `get_health_data` (read: today_summary / prs /
+  recent_food / recent_workouts / weight_trend — executed server-side in
+  lib/chat-tools.ts, ids included), proposals log_food / log_measurement /
+  log_workout / log_water (legacy schemas reused), NEW `edit_food_log` +
+  `delete_entry` (confirm-first, target real row ids), set_reminder
+  (direct). manage_todo / workout_plan_query / general_response are GONE
+  from chat — stripped surfaces stay stripped (test-pinned).
+- **CHAT_SYSTEM_PROMPT** — wry-warm voice, plain-text-only (bubbles render
+  raw), read-before-answer rule, pending-vs-saved amendment rule (pending →
+  re-propose; saved → edit/delete, never re-log), bilingual mirroring
+  (default to the setting, mirror EN↔ES when the user switches).
+- **`ChatMessage` migration** (roles user/assistant/proposal, meta carries
+  {kind, data, status}) + `/api/ai/chat/messages` (GET thread · PATCH
+  proposal status saved/rejected · DELETE clear).
+- Legacy `/api/ai/chat` untouched — the dock still runs it (fold deferred).
+
+Screen (`/chat`, design screen 1 port):
+- Header "THE NOTEBOOK THAT TALKS BACK / Chat"; raspberry user bubbles
+  (r18/18/5/18, "via voice" tag) vs white assistant bubbles (r18/18/18/5);
+  dashed hint card on empty thread (honest copy — surfaced deviation);
+  streaming text grows in-bubble; "checking your data…" line during reads.
+- **Proposal cards in-thread** (design verbatim): #F6E3EB header strip
+  "PROPOSED LOG · TIME", item rows w/ macro micro-lines, Total row,
+  Confirm/Edit/Reject; Edit mode = design's −/+ steppers (scale item ±25%,
+  macros follow); saved → green "✓ Saved" strip; rejected → "Discarded.
+  Nothing saved." Confirms persist through the SAME endpoints the dock
+  uses (food/batch, body, workouts w/ PR toasts, water), edits via
+  `PATCH /api/health/food?id=`, deletes via `?id=` DELETEs; card status
+  PATCHed so reloads show resolved state.
+- Composer pill ("Type, or tap the mic…" + #F6E3EB mic circle) — mic
+  records → gpt-transcribe → sends as voice-tagged message.
+- **Dock now global** (components/global-dock.tsx in the tabs layout — the
+  design shows it on every screen; before it lived on only 3 legacy pages).
+  Chat bubble navigates to /chat and lights raspberry there. Pages refresh
+  on a "pitaya:logged" window event (components/use-data-logged.ts);
+  Today/Train/health/body/food all listen.
+
+Verification: tsc clean · 66/66 vitest (5 new: tool shapes, stripped
+surfaces pinned, proposal classification) · clean build · live smokes on
+dev with minted cookie: PR question → get_health_data(prs) → streamed
+"20 kg, May 5, previous 16 kg"; food log → pending proposal card w/
+Colombian portions; "fix the orange juice to two glasses" → recent_food
+read → edit_food_log proposal targeting the REAL row id (after the
+pending-vs-saved prompt rule — first attempt re-proposed, fixed);
+"delete the arepas" → delete_entry w/ correct id; browser round-trip on
+/chat at 375px (streamed real answer rendered in design bubbles). Fixed
+during smoke: weight_trend window removed (weigh-ins older than 30 days
+read as "none"), plain-text rule (markdown ** rendered raw), food PATCH
+uses ?id= query param. Prod deploy + prod smoke (Spanish PR question →
+Spanish answer w/ real values) · smoke rows and thread cleaned after.
+
+Notes: one Armenian token ("նախկին") appeared mid-stream in an early dev
+smoke — 5.6-terra sampling artifact at low effort, not reproduced since;
+watch if it recurs. Sessions = one rolling thread (single-user app).
+
+## 2026-08-09f — Settings/Train/Today full ports + sequences backend on prod
 
 ## 2026-08-09f — Settings/Train/Today full ports + sequences backend on prod
 
