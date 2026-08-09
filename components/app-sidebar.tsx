@@ -13,12 +13,12 @@ import {
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Health", href: "/health", icon: Heart },
-  { label: "Trends", href: "/trends", icon: TrendingUp },
-  { label: "Todos", href: "/todos", icon: CheckSquare },
-  { label: "Finances", href: "/finances", icon: Wallet },
-  { label: "Settings", href: "/settings", icon: Settings },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, color: "text-cyan-400" },
+  { label: "Health", href: "/health", icon: Heart, color: "text-rose-400" },
+  { label: "Trends", href: "/trends", icon: TrendingUp, color: "text-blue-400" },
+  { label: "Todos", href: "/todos", icon: CheckSquare, color: "text-green-400" },
+  { label: "Finances", href: "/finances", icon: Wallet, color: "text-emerald-400" },
+  { label: "Settings", href: "/settings", icon: Settings, color: "text-purple-400" },
 ];
 
 export function AppSidebar() {
@@ -46,7 +46,7 @@ export function AppSidebar() {
                 isActive ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
               )}
             >
-              <item.icon className={cn("h-4 w-4", isActive ? "text-pitaya-deep" : "text-muted-foreground")} />
+              <item.icon className={cn("h-4 w-4", isActive ? item.color : "text-muted-foreground")} />
               <span className="font-medium">{item.label}</span>
             </Link>
           );

@@ -727,12 +727,12 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
                   </span>
                 )}
                 {aiResponse.measurement.bodyFatPct && (
-                  <span className="rounded-lg bg-pitaya/15 px-3 py-1.5 font-medium text-pitaya-deep">
+                  <span className="rounded-lg bg-cyan-500/20 px-3 py-1.5 font-medium text-cyan-300">
                     {aiResponse.measurement.bodyFatPct}% body fat
                   </span>
                 )}
                 {aiResponse.measurement.waistCm && (
-                  <span className="bg-accent text-accent-foreground rounded-lg px-3 py-1.5 font-medium">
+                  <span className="bg-green-500/20 text-green-400 rounded-lg px-3 py-1.5 font-medium">
                     {aiResponse.measurement.waistCm} cm waist
                   </span>
                 )}
@@ -741,7 +741,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
 
             {/* Workout preview */}
             {aiResponse.type === "workout" && aiResponse.workout && (
-              <div className="space-y-1 rounded-lg bg-pitaya/10 p-3">
+              <div className="space-y-1 rounded-lg bg-cyan-500/10 p-3">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="capitalize font-medium">
                     {aiResponse.workout.workoutType}
@@ -784,7 +784,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
 
             {/* Todo preview */}
             {aiResponse.type === "todo" && (aiResponse.todos?.length || aiResponse.todo) && (
-              <div className="bg-accent/60 rounded-lg p-3 space-y-2">
+              <div className="bg-green-500/10 rounded-lg p-3 space-y-2">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="font-medium">
                     {(aiResponse.todos?.[0] || aiResponse.todo)?.action === "add"
@@ -794,7 +794,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
                 </div>
                 {(aiResponse.todos || (aiResponse.todo ? [aiResponse.todo] : [])).map((item, i) => (
                   <div key={i} className="flex items-start gap-2 text-xs">
-                    <span className="text-pitaya mt-0.5">•</span>
+                    <span className="text-green-400 mt-0.5">•</span>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium">{item.title}</p>
                       <div className="flex gap-2 text-[10px] text-muted-foreground">
@@ -960,7 +960,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
             className="h-11 w-11 rounded-full border-white/10 bg-white/4 shadow-md"
             onClick={() => setShowTextInput(!showTextInput)}
           >
-            <MessageSquare className={cn("h-4 w-4", showTextInput && "text-pitaya")} />
+            <MessageSquare className={cn("h-4 w-4", showTextInput && "text-teal-300")} />
           </Button>
 
           <div className="relative flex items-center justify-center">
@@ -981,7 +981,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
                 "h-16 w-16 rounded-full shadow-lg transition-all duration-200 relative z-10",
                 isRecording
                   ? "bg-red-500 hover:bg-red-600 shadow-red-500/30"
-                  : "bg-pitaya hover:bg-pitaya/90 shadow-pitaya/25",
+                  : "bg-teal-500 hover:bg-teal-400 shadow-teal-500/20",
                 (isProcessing || isTranscribing || isAnalyzingPhoto) && "opacity-60"
               )}
               onClick={isRecording ? stopRecording : startRecording}

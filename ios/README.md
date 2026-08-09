@@ -44,10 +44,4 @@ It is intentionally source-only from Windows:
 
 ## Design note
 
-The web app uses the **pitaya** design system — light-first, dragon-fruit
-inspired: warm off-white background ("flesh"), near-black ink for text and
-primary buttons ("seeds"), and pitaya pink / deep berry accents ("skin").
-Tokens live in `app/globals.css` (`--pitaya`, `--pitaya-deep`, and the
-shadcn token set). The native app should mirror this palette and metric
-hierarchy rather than reverting to default Apple blue. The former
-graphite/teal/amber system is sunset — do not reintroduce it.
+The web app now uses the graphite/teal/amber visual system. The native app should mirror that palette and the same metric hierarchy rather than reverting to default Apple blue.

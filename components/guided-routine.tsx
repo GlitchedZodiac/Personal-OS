@@ -417,10 +417,10 @@ export function GuidedRoutine({
         className={cn(
           "pointer-events-none absolute inset-0 transition-colors duration-500",
           urgent
-            ? "bg-pitaya-deep/10"
+            ? "bg-amber-500/10"
             : phase === "done"
-            ? "bg-pitaya/10"
-            : "bg-pitaya/5"
+            ? "bg-green-500/10"
+            : "bg-teal-500/5"
         )}
       />
 
@@ -469,8 +469,8 @@ export function GuidedRoutine({
       {/* ─── Done: congratulations + log ─── */}
       {phase === "done" && stats ? (
         <div className="relative flex-1 flex flex-col items-center justify-center gap-6 px-6 text-center">
-          <div className="w-24 h-24 rounded-full bg-pitaya/15 flex items-center justify-center">
-            <Trophy className="h-12 w-12 text-pitaya" />
+          <div className="w-24 h-24 rounded-full bg-green-500/15 flex items-center justify-center">
+            <Trophy className="h-12 w-12 text-green-400" />
           </div>
           <div>
             <h3 className="text-2xl font-bold">
@@ -487,19 +487,19 @@ export function GuidedRoutine({
 
           <div className="flex items-center gap-6 text-sm">
             <span className="flex flex-col items-center gap-1">
-              <Clock className="h-4 w-4 text-pitaya-deep" />
+              <Clock className="h-4 w-4 text-teal-400" />
               <span className="font-mono font-bold">
                 {formatClock(Math.round(stats.elapsedMs / 1000))}
               </span>
             </span>
             <span className="flex flex-col items-center gap-1">
-              <RotateCw className="h-4 w-4 text-pitaya-deep" />
+              <RotateCw className="h-4 w-4 text-teal-400" />
               <span className="font-mono font-bold">
                 {stats.rounds}/{totalRounds}
               </span>
             </span>
             <span className="flex flex-col items-center gap-1">
-              <Flame className="h-4 w-4 text-pitaya" />
+              <Flame className="h-4 w-4 text-orange-400" />
               <span className="font-mono font-bold">
                 ~
                 {estimateCaloriesBurned(
@@ -578,7 +578,7 @@ export function GuidedRoutine({
                 strokeDashoffset={CIRC * (1 - roundProgress)}
                 className={cn(
                   "transition-[stroke-dashoffset] duration-100 ease-linear",
-                  urgent ? "stroke-pitaya-deep" : "stroke-pitaya"
+                  urgent ? "stroke-amber-400" : "stroke-teal-400"
                 )}
               />
             </svg>
@@ -590,7 +590,7 @@ export function GuidedRoutine({
                   </p>
                   <p
                     key={countdownNumber}
-                    className="text-8xl font-bold font-mono text-pitaya count-up"
+                    className="text-8xl font-bold font-mono text-teal-400 count-up"
                   >
                     {countdownNumber}
                   </p>
@@ -603,7 +603,7 @@ export function GuidedRoutine({
                   <p
                     className={cn(
                       "text-7xl font-bold font-mono tabular-nums",
-                      urgent && "text-pitaya-deep"
+                      urgent && "text-amber-400"
                     )}
                   >
                     {secondsLeftInRound}
@@ -641,7 +641,7 @@ export function GuidedRoutine({
               </p>
             )}
             {!inCountdown && isFinalRound && (
-              <p className="inline-flex items-center gap-1.5 text-xs text-pitaya-deep bg-pitaya/10 rounded-full px-3 py-1.5">
+              <p className="inline-flex items-center gap-1.5 text-xs text-amber-400 bg-amber-500/10 rounded-full px-3 py-1.5">
                 Final round — empty the tank 🔥
               </p>
             )}
@@ -651,7 +651,7 @@ export function GuidedRoutine({
           <div className="w-full max-w-xs">
             <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
               <div
-                className="h-full bg-pitaya rounded-full transition-all duration-500"
+                className="h-full bg-teal-400 rounded-full transition-all duration-500"
                 style={{
                   width: `${
                     inCountdown ? 0 : ((roundIndex + roundProgress) / totalRounds) * 100

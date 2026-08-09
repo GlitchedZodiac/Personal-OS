@@ -13,14 +13,49 @@ import {
 import { cn } from "@/lib/utils";
 import { demoText } from "@/lib/demo-client";
 
-// Pitaya: one accent for every tab — berry ink on a pale pink tint
 const navItems = [
-  { label: demoText("Hub", "Centro"), href: "/dashboard", icon: LayoutDashboard },
-  { label: demoText("Health", "Salud"), href: "/health", icon: Heart },
-  { label: demoText("Trends", "Tendencias"), href: "/trends", icon: TrendingUp },
-  { label: demoText("Todos", "Tareas"), href: "/todos", icon: CheckSquare },
-  { label: demoText("Finances", "Finanzas"), href: "/finances", icon: Wallet },
-  { label: demoText("Settings", "Ajustes"), href: "/settings", icon: Settings },
+  {
+    label: demoText("Hub", "Centro"),
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    activeColor: "text-cyan-400",
+    activeBg: "bg-cyan-500/10",
+  },
+  {
+    label: demoText("Health", "Salud"),
+    href: "/health",
+    icon: Heart,
+    activeColor: "text-rose-400",
+    activeBg: "bg-rose-500/10",
+  },
+  {
+    label: demoText("Trends", "Tendencias"),
+    href: "/trends",
+    icon: TrendingUp,
+    activeColor: "text-blue-400",
+    activeBg: "bg-blue-500/10",
+  },
+  {
+    label: demoText("Todos", "Tareas"),
+    href: "/todos",
+    icon: CheckSquare,
+    activeColor: "text-green-400",
+    activeBg: "bg-green-500/10",
+  },
+  {
+    label: demoText("Finances", "Finanzas"),
+    href: "/finances",
+    icon: Wallet,
+    activeColor: "text-emerald-400",
+    activeBg: "bg-emerald-500/10",
+  },
+  {
+    label: demoText("Settings", "Ajustes"),
+    href: "/settings",
+    icon: Settings,
+    activeColor: "text-purple-400",
+    activeBg: "bg-purple-500/10",
+  },
 ];
 
 export function BottomNav() {
@@ -37,13 +72,13 @@ export function BottomNav() {
               href={item.href}
               className={cn(
                 "flex flex-col items-center justify-center gap-1 py-2 rounded-2xl transition-all duration-200 tap-scale",
-                isActive ? "text-pitaya-deep" : "text-muted-foreground hover:text-foreground"
+                isActive ? item.activeColor : "text-muted-foreground hover:text-foreground"
               )}
             >
               <div
                 className={cn(
                   "relative p-1.5 rounded-xl transition-all duration-300",
-                  isActive && "bg-pitaya/10"
+                  isActive && item.activeBg
                 )}
               >
                 <item.icon

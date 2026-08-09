@@ -159,13 +159,13 @@ function ChatBubble({
       <div
         className={cn(
           "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
-          isUser ? "bg-primary/20" : "bg-pitaya/15"
+          isUser ? "bg-primary/20" : "bg-purple-500/20"
         )}
       >
         {isUser ? (
           <User className="h-3.5 w-3.5 text-primary" />
         ) : (
-          <Bot className="h-3.5 w-3.5 text-pitaya-deep" />
+          <Bot className="h-3.5 w-3.5 text-purple-400" />
         )}
       </div>
       <div
@@ -538,10 +538,10 @@ export default function WorkoutPlanPage() {
           </div>
         ) : (
           /* Empty state — encourage voice interaction */
-          <Card className="border-dashed border-pitaya/20">
+          <Card className="border-dashed border-purple-500/20">
             <CardContent className="py-12 text-center space-y-4">
-              <div className="mx-auto w-16 h-16 rounded-2xl bg-pitaya/10 flex items-center justify-center">
-                <Mic className="h-8 w-8 text-pitaya-deep" />
+              <div className="mx-auto w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center">
+                <Mic className="h-8 w-8 text-purple-400" />
               </div>
               <div>
                 <h2 className="text-lg font-bold">Tell me what you want</h2>
@@ -668,10 +668,10 @@ export default function WorkoutPlanPage() {
         </div>
 
         {/* Plan preview */}
-        <Card className="border-pitaya/25 bg-pitaya/5">
+        <Card className="border-purple-500/30 bg-purple-500/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-pitaya-deep" />
+              <Sparkles className="h-4 w-4 text-purple-400" />
               Plan Preview
             </CardTitle>
             <div className="flex gap-2 mt-1">
@@ -696,7 +696,7 @@ export default function WorkoutPlanPage() {
                 key={i}
                 className="flex items-center gap-3 p-3 rounded-xl bg-secondary/20"
               >
-                <div className="w-8 h-8 rounded-lg bg-pitaya/15 flex items-center justify-center text-xs font-bold text-pitaya-deep">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-xs font-bold text-purple-400">
                   D{i + 1}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -778,9 +778,9 @@ export default function WorkoutPlanPage() {
 
       {/* Streak + Stats Row */}
       <div className="grid grid-cols-4 gap-2">
-        <Card className="border-pitaya/20 bg-pitaya/5">
+        <Card className="border-orange-500/20 bg-orange-500/5">
           <CardContent className="p-3 text-center">
-            <p className="text-xl font-bold text-pitaya">
+            <p className="text-xl font-bold text-orange-400">
               {streak.currentStreak}
             </p>
             <p className="text-[9px] text-muted-foreground">🔥 Streak</p>
@@ -798,9 +798,9 @@ export default function WorkoutPlanPage() {
             <p className="text-[9px] text-muted-foreground">This Month</p>
           </CardContent>
         </Card>
-        <Card className="border-pitaya/20 bg-pitaya/5">
+        <Card className="border-purple-500/20 bg-purple-500/5">
           <CardContent className="p-3 text-center">
-            <p className="text-xl font-bold text-pitaya-deep">
+            <p className="text-xl font-bold text-purple-400">
               {streak.totalWorkouts}
             </p>
             <p className="text-[9px] text-muted-foreground">Total</p>
@@ -813,7 +813,7 @@ export default function WorkoutPlanPage() {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-pitaya-deep" />
+              <Calendar className="h-4 w-4 text-blue-500" />
               Weekly Schedule
             </CardTitle>
             <div className="flex items-center gap-1">
@@ -872,8 +872,8 @@ export default function WorkoutPlanPage() {
                     today && "ring-2 ring-primary/50",
                     isScheduled &&
                       !completed &&
-                      "bg-pitaya/10 hover:bg-pitaya/15",
-                    completed && "bg-pitaya/10",
+                      "bg-purple-500/10 hover:bg-purple-500/20",
+                    completed && "bg-green-500/10",
                     !isScheduled && "opacity-50",
                     isPast &&
                       !completed &&
@@ -889,7 +889,7 @@ export default function WorkoutPlanPage() {
                     className={cn(
                       "text-sm font-bold",
                       today && "text-primary",
-                      completed && "text-pitaya-deep"
+                      completed && "text-green-400"
                     )}
                   >
                     {format(date, "d")}
@@ -897,9 +897,9 @@ export default function WorkoutPlanPage() {
                   {isScheduled && (
                     <div className="h-4 w-4 flex items-center justify-center">
                       {completed ? (
-                        <CheckCircle2 className="h-4 w-4 text-pitaya-deep" />
+                        <CheckCircle2 className="h-4 w-4 text-green-400" />
                       ) : (
-                        <Dumbbell className="h-3 w-3 text-pitaya-deep" />
+                        <Dumbbell className="h-3 w-3 text-purple-400" />
                       )}
                     </div>
                   )}
@@ -912,7 +912,7 @@ export default function WorkoutPlanPage() {
 
       {/* Selected Day Detail */}
       {selectedDay && (
-        <Card className="border-pitaya/20">
+        <Card className="border-purple-500/20">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium">
@@ -944,8 +944,8 @@ export default function WorkoutPlanPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {selectedDay.scheduleDay.warmup && (
-              <div className="bg-accent/60 border border-pitaya/10 rounded-xl p-3 mb-3">
-                <p className="text-xs font-medium text-pitaya-deep mb-1">
+              <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-3 mb-3">
+                <p className="text-xs font-medium text-amber-400 mb-1">
                   🔥 Warm-up
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -968,14 +968,14 @@ export default function WorkoutPlanPage() {
               selectedDay.date,
               selectedDay.scheduleDay.dayIndex
             ) ? (
-              <div className="flex items-center justify-center gap-2 py-3 text-pitaya-deep">
+              <div className="flex items-center justify-center gap-2 py-3 text-green-400">
                 <CheckCircle2 className="h-5 w-5" />
                 <span className="text-sm font-medium">Completed!</span>
               </div>
             ) : (
               <div className="space-y-2 mt-2">
                 <Button
-                  className="w-full h-11 gap-2"
+                  className="w-full h-11 gap-2 bg-green-600 hover:bg-green-700"
                   onClick={() => {
                     // Must run inside the tap so iOS lets the timer beep
                     unlockGuidedAudio();
@@ -1114,7 +1114,7 @@ export default function WorkoutPlanPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Bot className="h-4 w-4 text-pitaya-deep" />
+              <Bot className="h-4 w-4 text-purple-500" />
               AI Trainer Chat
             </CardTitle>
           </CardHeader>
@@ -1132,7 +1132,7 @@ export default function WorkoutPlanPage() {
         <Card className="border-amber-500/20 bg-amber-500/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Trophy className="h-4 w-4 text-pitaya-deep" />
+              <Trophy className="h-4 w-4 text-amber-400" />
               Personal Records
             </CardTitle>
           </CardHeader>
@@ -1170,7 +1170,7 @@ export default function WorkoutPlanPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-pitaya-deep" />
+              <TrendingUp className="h-4 w-4 text-blue-500" />
               Recent Progress
             </CardTitle>
           </CardHeader>
@@ -1184,12 +1184,12 @@ export default function WorkoutPlanPage() {
                   <span className="text-muted-foreground">{t.date}</span>
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1">
-                      <Zap className="h-3 w-3 text-pitaya" />
+                      <Zap className="h-3 w-3 text-blue-400" />
                       {t.totalVolume.toLocaleString()} vol
                     </span>
                     {t.caloriesBurned > 0 && (
                       <span className="flex items-center gap-1">
-                        <Flame className="h-3 w-3 text-pitaya" />
+                        <Flame className="h-3 w-3 text-orange-400" />
                         {Math.round(t.caloriesBurned)} cal
                       </span>
                     )}
@@ -1205,7 +1205,7 @@ export default function WorkoutPlanPage() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Dumbbell className="h-4 w-4 text-pitaya-deep" />
+            <Dumbbell className="h-4 w-4 text-purple-500" />
             Plan Overview
           </CardTitle>
         </CardHeader>
@@ -1219,7 +1219,7 @@ export default function WorkoutPlanPage() {
               }
               className="w-full flex items-center gap-3 p-3 rounded-xl bg-secondary/20 hover:bg-secondary/40 transition-colors text-left"
             >
-              <div className="w-8 h-8 rounded-lg bg-pitaya/15 flex items-center justify-center text-xs font-bold text-pitaya-deep">
+              <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-xs font-bold text-purple-400">
                 D{day.dayIndex + 1}
               </div>
               <div className="flex-1 min-w-0">

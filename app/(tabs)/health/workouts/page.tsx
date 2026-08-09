@@ -515,10 +515,10 @@ export default function WorkoutsPage() {
 
       {/* AI Plan Banner */}
       <Link href="/health/workouts/plan">
-        <Card className="border-pitaya/20 bg-pitaya/5 hover:bg-pitaya/10 transition-colors cursor-pointer">
+        <Card className="border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 transition-colors cursor-pointer">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-pitaya/10">
-              <Sparkles className="h-5 w-5 text-pitaya" />
+            <div className="p-2 rounded-xl bg-purple-500/10">
+              <Sparkles className="h-5 w-5 text-purple-400" />
             </div>
             <div className="flex-1">
               <p className="text-sm font-medium">AI Workout Plan</p>
@@ -526,16 +526,16 @@ export default function WorkoutsPage() {
                 Get a personalized training plan, track progress, and level up
               </p>
             </div>
-            <span className="text-xs text-pitaya-deep">Open →</span>
+            <span className="text-xs text-purple-400">Open →</span>
           </CardContent>
         </Card>
       </Link>
 
       {/* Guided Routines — press start and just follow along */}
-      <Card className="border-pitaya/20 bg-pitaya/5">
+      <Card className="border-teal-500/20 bg-teal-500/5">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center gap-2">
-            <Timer className="h-4 w-4 text-pitaya" />
+            <Timer className="h-4 w-4 text-teal-400" />
             <p className="text-sm font-medium">Routines</p>
           </div>
           {BUILT_IN_ROUTINES.map((routine) => (
@@ -551,7 +551,7 @@ export default function WorkoutsPage() {
               </div>
               <Button
                 size="sm"
-                className="h-9 gap-1.5 shrink-0"
+                className="h-9 gap-1.5 bg-teal-600 hover:bg-teal-700 shrink-0"
                 onClick={() => {
                   // Must run inside the tap so iOS lets the timer beep
                   unlockGuidedAudio();
