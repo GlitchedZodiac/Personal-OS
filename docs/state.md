@@ -5,8 +5,8 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 (EMOM runner live-session UX on web — the
-training block's first REMAINING item; from a cloud session)
+**Last updated:** 2026-08-09 (Food port — the last un-ported screen;
+label scanning as reusable products; from a cloud session)
 **Current phase:** All five Pitaya screens + Chat are now design ports on
 prod. **Michael is pausing to use the app and run a bug sweep.** Next block
 (his 90-day priority, spec captured in deferred-items): training + Today
@@ -17,6 +17,47 @@ crude (calories/macros by input) until 2c. PR #1 open to main.
 prod deploys via `vercel deploy --prod`; merge awaits Michael) ·
 `claude/watch-app` (watch lane, local) · `claude/emom-guided-runner`
 (cloud session; PR into phase1).
+
+## 2026-08-09l — Food port: the last screen, plus label products
+
+Michael's ask from the road: bring Food up to speed — label photos he
+can store, meals set by voice, reusable defaults, meal slots.
+
+- **Food screen ported** (design screen 2, the final un-ported surface —
+  build order from 2026-08-09f is now complete): date header + kcal
+  pill, day timeline with the design's per-meal colour tiles (breakfast
+  #E8D9C8, lunch #C8D6C6, dinner #6B4A5C, snack #D8CBE0), macros as
+  "28P · 44C · 22F", `usual` and `via chat ✓` pills driven by
+  FoodLog.source, the dashed not-logged row, MY USUALS scroller, and a
+  SUPPLEMENTS card. Legacy shadcn Card/Dialog/Select page retired.
+- **Not-logged prompts are lunch + dinner**, not the design's dinner
+  only — he eats those two; breakfast silence isn't a miss.
+- **Supplements ride habit_checks** (the rows Today already uses), so a
+  tick is a tick on both screens — no new model.
+- **Label scanning → reusable products** (NOT in the design; his ask,
+  cleared in chat): POST /api/health/food/scan-label reads a label's
+  per-serving numbers (bilingual — Colombian panels included), the
+  sheet scales by servings, and confirming logs today AND saves the
+  product into MY USUALS with its photo. FavoriteFoods gains
+  kind/servingLabel/photoData (migration 20260809220000). The list GET
+  omits photoData so 20 base64 labels can't bloat the screen's load.
+- **Kept from his bug sweep**: the Targets button (macro goals) — my
+  first port dropped it; self-smoke caught it. Delete lives in the
+  entry sheet since the design's timeline has no edit affordance
+  (surfaced deviation).
+- **Build now runs `prisma migrate deploy`** before generate/build.
+  Vercel only ran `prisma generate`, so a schema-bearing deploy would
+  have shipped code whose columns didn't exist yet (favorites GET
+  selects them → the usuals list would have come back empty). Applies
+  on CLI `vercel deploy --prod` too, since both use this script. A
+  failed migration now fails the build loudly rather than degrading the
+  app silently.
+- Self-smoke: 14 assertions on the running build (pills, totals,
+  supplement state, product serving line) plus POST payload proofs —
+  a usual logs with source=usual, a scan posts kind=product with
+  servingLabel and the compressed photo, and macros scale 1.5×.
+  Also caught: dock covered the last supplement row (pb-32 → pb-44)
+  and "Not Logged" title-casing vs the design's "not logged".
 
 ## 2026-08-09k — EMOM runner: the clock IS the log (web half)
 

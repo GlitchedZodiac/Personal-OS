@@ -113,6 +113,11 @@ model FavoriteFoods {
   carbsG          Float    @default(0)
   fatG            Float    @default(0)
   usageCount      Int      @default(0)
+  // kind="meal" is a plated usual (design's MY USUALS); kind="product" is a
+  // scanned nutrition label — macros below are PER SERVING for products.
+  kind            String   @default("meal")
+  servingLabel    String? // e.g. "1 scoop (32 g)" — products only
+  photoData       String? // compressed label photo (same shape as journal_photo)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
