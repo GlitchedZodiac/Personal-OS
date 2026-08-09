@@ -1,39 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { openai } from "@/lib/openai";
+import { openai, CHAT_MODEL } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
 import {
-  addDaysToDateString,
   getDateStringInTimeZone,
   getZonedDateParts,
-  zonedLocalDateTimeToUtc,
 } from "@/lib/timezone";
 import { getUserTimeZone } from "@/lib/server-timezone";
-import {
-  HEALTH_SYSTEM_PROMPT,
-  FOOD_LOG_FUNCTION,
-  BODY_MEASUREMENT_FUNCTION,
-  WORKOUT_LOG_FUNCTION,
-  WATER_LOG_FUNCTION,
-  GENERAL_CHAT_FUNCTION,
-  TODO_FUNCTION,
-  WORKOUT_PLAN_QUERY_FUNCTION,
-  REMINDER_FUNCTION,
-} from "@/lib/ai-prompts";
+import { HEALTH_SYSTEM_PROMPT, HEALTH_TOOLS } from "@/lib/ai-prompts";
+import { normalizeFoodItemsWithTiming } from "@/lib/food-timing";
+import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 
 // Allow up to 60s for AI generation (Vercel Pro)
 export const maxDuration = 60;
-
-type FoodFunctionItem = {
-  mealType?: string;
-  foodDescription?: string;
-  calories?: number;
-  proteinG?: number;
-  carbsG?: number;
-  fatG?: number;
-  notes?: string;
-  loggedAt?: string;
-  [key: string]: unknown;
-};
 
 function pad2(value: number) {
   return String(value).padStart(2, "0");
@@ -61,158 +39,6 @@ function buildDateContext(now: Date, timeZone: string) {
   return `\n\n[Current local date/time: ${localDate} ${localTime} (${weekday}, ${prettyDate}) | Timezone: ${timeZone}]`;
 }
 
-function normalizeFoodLoggedAtValue(value: unknown, timeZone: string) {
-  if (typeof value !== "string" || value.trim().length === 0) return null;
-  const raw = value.trim();
-
-  // Interpret plain local date/time strings in the app timezone.
-  const localDateTime = raw.match(
-    /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/
-  );
-  if (localDateTime) {
-    const dateStr = localDateTime[1];
-    const hour = Number.parseInt(localDateTime[2] || "12", 10);
-    const minute = Number.parseInt(localDateTime[3] || "00", 10);
-    const second = Number.parseInt(localDateTime[4] || "00", 10);
-
-    if (
-      Number.isFinite(hour) &&
-      Number.isFinite(minute) &&
-      Number.isFinite(second)
-    ) {
-      return zonedLocalDateTimeToUtc(
-        dateStr,
-        timeZone,
-        Math.max(0, Math.min(23, hour)),
-        Math.max(0, Math.min(59, minute)),
-        Math.max(0, Math.min(59, second))
-      ).toISOString();
-    }
-  }
-
-  const parsed = new Date(raw);
-  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
-}
-
-function inferFoodLoggedAtFromMessage(
-  message: string,
-  timeZone: string,
-  now: Date
-) {
-  const lower = message.toLowerCase();
-  const todayDateStr = getDateStringInTimeZone(now, timeZone);
-
-  let targetDate: string | null = null;
-  let hasTemporalHint = false;
-
-  const isoDateMatch = lower.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
-  if (isoDateMatch) {
-    targetDate = isoDateMatch[1];
-    hasTemporalHint = true;
-  } else if (/\b(yesterday|ayer|last night|anoche)\b/.test(lower)) {
-    targetDate = addDaysToDateString(todayDateStr, -1);
-    hasTemporalHint = true;
-  } else if (
-    /\b(today|hoy|tonight|this morning|this afternoon|this evening|esta ma(?:n|\u00f1)ana|esta tarde|esta noche)\b/.test(
-      lower
-    )
-  ) {
-    targetDate = todayDateStr;
-    hasTemporalHint = true;
-  } else if (/\b(tomorrow|ma(?:n|\u00f1)ana)\b/.test(lower)) {
-    targetDate = addDaysToDateString(todayDateStr, 1);
-    hasTemporalHint = true;
-  }
-
-  let hour: number | null = null;
-  let minute = 0;
-
-  const amPmMatch = lower.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
-  if (amPmMatch) {
-    hasTemporalHint = true;
-    const parsedHour = Number.parseInt(amPmMatch[1], 10);
-    const parsedMinute = Number.parseInt(amPmMatch[2] || "0", 10);
-
-    if (Number.isFinite(parsedHour) && Number.isFinite(parsedMinute)) {
-      let normalizedHour = parsedHour % 12;
-      if (amPmMatch[3] === "pm") normalizedHour += 12;
-      hour = normalizedHour;
-      minute = Math.max(0, Math.min(59, parsedMinute));
-    }
-  } else {
-    const h24Match = lower.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
-    if (h24Match) {
-      hasTemporalHint = true;
-      const parsedHour = Number.parseInt(h24Match[1], 10);
-      const parsedMinute = Number.parseInt(h24Match[2], 10);
-
-      if (Number.isFinite(parsedHour) && Number.isFinite(parsedMinute)) {
-        hour = parsedHour;
-        minute = parsedMinute;
-      }
-    }
-  }
-
-  if (!targetDate && hasTemporalHint) {
-    targetDate = todayDateStr;
-  }
-  if (!targetDate) return null;
-
-  if (hour === null) {
-    if (/\b(last night|anoche|tonight|esta noche|cena|dinner)\b/.test(lower)) {
-      hour = 20;
-    } else if (
-      /\b(this morning|morning|esta ma(?:n|\u00f1)ana|desayuno|breakfast)\b/.test(
-        lower
-      )
-    ) {
-      hour = 8;
-    } else if (
-      /\b(this afternoon|afternoon|esta tarde|almuerzo|lunch)\b/.test(lower)
-    ) {
-      hour = 13;
-    } else if (/\b(snack|merienda)\b/.test(lower)) {
-      hour = 16;
-    } else {
-      hour = 12;
-    }
-  }
-
-  return zonedLocalDateTimeToUtc(
-    targetDate,
-    timeZone,
-    hour,
-    minute,
-    0
-  ).toISOString();
-}
-
-function normalizeFoodItemsWithTiming(
-  items: unknown,
-  userMessage: string,
-  timeZone: string,
-  now: Date
-) {
-  if (!Array.isArray(items)) return [];
-  const inferredLoggedAt = inferFoodLoggedAtFromMessage(userMessage, timeZone, now);
-
-  return items.map((item) => {
-    if (!item || typeof item !== "object") return item;
-
-    const typed = item as FoodFunctionItem;
-    const explicitLoggedAt = normalizeFoodLoggedAtValue(typed.loggedAt, timeZone);
-
-    if (explicitLoggedAt) {
-      return { ...typed, loggedAt: explicitLoggedAt };
-    }
-
-    if (inferredLoggedAt) {
-      return { ...typed, loggedAt: inferredLoggedAt };
-    }
-
-    return typed;
-  });
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -227,6 +53,23 @@ export async function POST(request: NextRequest) {
       typeof body.aiLanguage === "string" ? body.aiLanguage : "english";
     const requestedTimeZone =
       typeof body.timeZone === "string" ? body.timeZone : null;
+
+    // Optional prior turns so follow-ups work ("actually make that 2 eggs").
+    // Capped to the last 12 messages to bound tokens.
+    const history: Array<{ role: "user" | "assistant"; content: string }> =
+      Array.isArray(body.history)
+        ? body.history
+            .filter(
+              (m: unknown): m is { role: "user" | "assistant"; content: string } =>
+                !!m &&
+                typeof m === "object" &&
+                ((m as { role?: unknown }).role === "user" ||
+                  (m as { role?: unknown }).role === "assistant") &&
+                typeof (m as { content?: unknown }).content === "string" &&
+                ((m as { content: string }).content.trim().length > 0)
+            )
+            .slice(-12)
+        : [];
 
     if (!message) {
       return NextResponse.json({ error: "No message provided" }, { status: 400 });
@@ -254,29 +97,36 @@ export async function POST(request: NextRequest) {
     }
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: CHAT_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
+        ...history,
         { role: "user", content: message },
       ],
-      functions: [
-        FOOD_LOG_FUNCTION,
-        BODY_MEASUREMENT_FUNCTION,
-        WORKOUT_LOG_FUNCTION,
-        WATER_LOG_FUNCTION,
-        GENERAL_CHAT_FUNCTION,
-        TODO_FUNCTION,
-        WORKOUT_PLAN_QUERY_FUNCTION,
-        REMINDER_FUNCTION,
-      ],
-      function_call: "auto",
+      tools: HEALTH_TOOLS,
+      tool_choice: "auto",
+      // GPT-5.6 requires effort "none" when combining tools with
+      // chat-completions (reasoning+tools lives on the Responses API — the
+      // Phase 2b rebuild target). Parsing turns don't need reasoning anyway.
+      reasoning_effort: "none",
+      // Token discipline: a logging turn never needs more than this — caps
+      // both cost and worst-case latency on the everyday path.
+      max_completion_tokens: 1500,
+    });
+
+    recordAIUsage({
+      surface: "chat",
+      model: CHAT_MODEL,
+      inputTokens: completion.usage?.prompt_tokens ?? 0,
+      outputTokens: completion.usage?.completion_tokens ?? 0,
     });
 
     const responseMessage = completion.choices[0].message;
+    const toolCall = responseMessage.tool_calls?.[0];
 
-    if (responseMessage.function_call) {
-      const functionName = responseMessage.function_call.name;
-      let args = JSON.parse(responseMessage.function_call.arguments || "{}");
+    if (toolCall && toolCall.type === "function") {
+      const functionName = toolCall.function.name;
+      let args = JSON.parse(toolCall.function.arguments || "{}");
 
       if (functionName === "log_food") {
         args = {
@@ -466,9 +316,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("AI chat error:", error);
+    const { kind, userMessage } = classifyOpenAIError(error);
     return NextResponse.json(
-      { error: "Failed to process message" },
-      { status: 500 }
+      { error: userMessage, kind },
+      { status: kind === "unknown" ? 500 : 502 }
     );
   }
 }

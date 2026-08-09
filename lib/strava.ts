@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { downsample, timeInZones, trainingLoad } from "@/lib/zones";
 
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID!;
 const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET!;
@@ -122,43 +123,58 @@ export interface StravaActivity {
   };
 }
 
-// ─── Decode Google Polyline ──────────────────────────────────────────
-export function decodePolyline(encoded: string): [number, number][] {
-  const points: [number, number][] = [];
-  let index = 0;
-  let lat = 0;
-  let lng = 0;
+// Polyline decoding moved to lib/polyline.ts (client-safe module).
 
-  while (index < encoded.length) {
-    let shift = 0;
-    let result = 0;
-    let byte: number;
+// ─── Activity Streams (HR / time / altitude) ─────────────────────────
+// Powers time-in-zone, training load, and the trail elevation profile.
+export interface StravaStreams {
+  heartrate?: number[];
+  time?: number[];
+  altitude?: number[];
+}
 
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
+// Full-resolution streams drive the math; downsampled copies get stored.
+export function buildStreamMetrics(
+  streams: StravaStreams,
+  relativeEffort?: number
+) {
+  const hr = streams.heartrate ?? [];
+  const time = streams.time ?? [];
+  const zones = timeInZones(hr, time);
+  return {
+    hrStream: hr.length ? downsample(hr) : undefined,
+    timeStream: time.length ? downsample(time) : undefined,
+    altitudeStream: streams.altitude?.length
+      ? downsample(streams.altitude)
+      : undefined,
+    timeInZones: zones ?? undefined,
+    loadScore: trainingLoad(zones) ?? undefined,
+    relativeEffort,
+  };
+}
 
-    const dlat = result & 1 ? ~(result >> 1) : result >> 1;
-    lat += dlat;
+export async function fetchActivityStreams(
+  activityId: number | string
+): Promise<StravaStreams | null> {
+  const accessToken = await getValidAccessToken();
+  if (!accessToken) return null;
 
-    shift = 0;
-    result = 0;
-
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-
-    const dlng = result & 1 ? ~(result >> 1) : result >> 1;
-    lng += dlng;
-
-    points.push([lat / 1e5, lng / 1e5]);
+  try {
+    const res = await fetch(
+      `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=heartrate,time,altitude&key_by_type=true`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      heartrate: data.heartrate?.data,
+      time: data.time?.data,
+      altitude: data.altitude?.data,
+    };
+  } catch (err) {
+    console.error("Strava streams fetch error:", err);
+    return null;
   }
-
-  return points;
 }
 
 export async function fetchStravaActivities(

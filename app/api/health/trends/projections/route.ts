@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateChatText } from "@/lib/openai-text";
+import { COACH_MODEL } from "@/lib/openai";
 import { format, subDays, startOfDay, endOfDay, addDays } from "date-fns";
 import crypto from "crypto";
 
@@ -175,6 +176,9 @@ HABITS (last 90 days averages):
 - Days with food logged: ${calDays.length}`;
 
         const completion = await generateChatText({
+          model: COACH_MODEL,
+          reasoningEffort: "medium",
+      surface: "projections",
           messages: [
             {
               role: "system",
@@ -185,8 +189,9 @@ HABITS (last 90 days averages):
               content: `Based on my data, give me a 90-day projection outlook. What will I achieve if I stay on track? What should I focus on to accelerate progress? Be specific with dates and numbers.\n${dataContext}`,
             },
           ],
-          maxCompletionTokens: 420,
-          retryMaxCompletionTokens: 560,
+          // Reasoning tokens share this budget — sized for medium effort + short text
+          maxCompletionTokens: 1400,
+          retryMaxCompletionTokens: 2200,
         });
 
         aiOutlook = completion.text ||

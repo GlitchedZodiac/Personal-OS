@@ -1,22 +1,23 @@
 import type { Metadata, Viewport } from "next";
 import {
+  Familjen_Grotesk,
   IBM_Plex_Mono,
-  IBM_Plex_Sans,
-  Space_Grotesk,
+  Instrument_Sans,
 } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/sw-register";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-const displayFont = Space_Grotesk({
+const displayFont = Familjen_Grotesk({
   variable: "--font-display",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const bodyFont = IBM_Plex_Sans({
+const bodyFont = Instrument_Sans({
   variable: "--font-body",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600"],
 });
 
 const monoFont = IBM_Plex_Mono({
@@ -26,13 +27,13 @@ const monoFont = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Personal OS",
-  description: "Your centralized personal operating system",
+  title: "Pitaya",
+  description: "It's just you. Prove it.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Personal OS",
+    statusBarStyle: "default",
+    title: "Pitaya",
   },
 };
 
@@ -41,7 +42,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#111418",
+  themeColor: "#F2F1F2",
   viewportFit: "cover",
 };
 
@@ -51,24 +52,31 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
         <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Personal OS" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Pitaya" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="format-detection" content="telephone=no" />
-        <meta name="msapplication-TileColor" content="#111418" />
+        <meta name="msapplication-TileColor" content="#F2F1F2" />
       </head>
       <body
         className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} app-shell`}
         suppressHydrationWarning
       >
         {children}
-        <Toaster position="top-center" richColors />
+        {/* Bottom placement: top toasts hide under the Dynamic Island on
+            iPhone; the offset floats them above the dock + tab bar. */}
+        <Toaster
+          position="bottom-center"
+          richColors
+          offset="216px"
+          mobileOffset="216px"
+        />
         <ServiceWorkerRegister />
       </body>
     </html>

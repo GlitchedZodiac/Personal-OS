@@ -1,0 +1,86 @@
+# XcodeGen manifest — regenerate the project after adding/removing files:
+#   cd ios && xcodegen generate
+# (project.pbxproj is generated output; this file is the source of truth.)
+
+name: PersonalOS
+options:
+  bundleIdPrefix: net.blacksheepglobal
+  deploymentTarget:
+    iOS: "18.0"
+    watchOS: "11.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  PersonalOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: iOSApp
+      - path: Shared
+      - path: iPhone
+    info:
+      path: iOSApp/Info.plist
+      properties:
+        CFBundleDisplayName: Pitaya
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSHealthShareUsageDescription: >-
+          Pitaya reads your workouts and daily activity to sync training
+          history to your dashboard.
+        NSHealthUpdateUsageDescription: >-
+          Pitaya saves workouts you record to Apple Health.
+    entitlements:
+      path: iOSApp/PersonalOS.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.blacksheepglobal.pitaya
+        TARGETED_DEVICE_FAMILY: "1"
+
+  PersonalOS Watch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: WatchApp
+      - path: Shared
+    info:
+      path: WatchApp/Info.plist
+      properties:
+        CFBundleDisplayName: Pitaya
+        WKApplication: true
+        # Standalone watch app — no iOS companion required (the iOS target
+        # above is a sibling, not a host; revisit if we ever embed).
+        WKWatchOnly: true
+        WKBackgroundModes: [workout-processing]
+        NSHealthShareUsageDescription: >-
+          Pitaya reads heart rate and calories to show live workout metrics.
+        NSHealthUpdateUsageDescription: >-
+          Pitaya saves workouts you record on the watch to Apple Health.
+    entitlements:
+      path: WatchApp/PersonalOSWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.blacksheepglobal.pitaya.watchkitapp
+
+schemes:
+  PersonalOS:
+    build:
+      targets: { PersonalOS: all }
+    run:
+      config: Debug
+  PersonalOS Watch:
+    build:
+      targets: { PersonalOS Watch: all }
+    run:
+      config: Debug

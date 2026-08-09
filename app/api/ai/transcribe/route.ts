@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { openai } from "@/lib/openai";
+import {
+  openai,
+  TRANSCRIBE_MODEL,
+  TRANSCRIBE_FALLBACK_MODEL,
+} from "@/lib/openai";
+import { TRANSCRIBE_PROMPT } from "@/lib/ai-prompts";
+import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -8,7 +14,7 @@ import {
   recordDemoAIFixedCharge,
 } from "@/lib/demo-ai-budget";
 
-// Allow up to 60s for Whisper transcription (Vercel Pro)
+// Allow up to 60s for transcription (Vercel Pro)
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
@@ -50,16 +56,37 @@ export async function POST(request: NextRequest) {
     const blocked = await enforceDemoAIBudget();
     if (blocked) return blocked;
 
-    // Don't specify language - let Whisper auto-detect
-    const transcription = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(tempPath),
-      model: "whisper-1",
-    });
+    // Don't specify language — auto-detect handles the English/Spanish mix.
+    // The prompt biases recognition toward this app's domain vocabulary.
+    let transcription;
+    try {
+      transcription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(tempPath),
+        model: TRANSCRIBE_MODEL,
+        prompt: TRANSCRIBE_PROMPT,
+      });
+    } catch (primaryError) {
+      console.warn(
+        `[Transcribe] ${TRANSCRIBE_MODEL} failed, falling back to ${TRANSCRIBE_FALLBACK_MODEL}:`,
+        primaryError instanceof Error ? primaryError.message : primaryError
+      );
+      transcription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(tempPath),
+        model: TRANSCRIBE_FALLBACK_MODEL,
+      });
+    }
     await recordDemoAIFixedCharge(
       Number(process.env.DEMO_AI_TRANSCRIPTION_COST_USD || "0.002")
     );
 
     console.log(`[Transcribe] Success: "${transcription.text?.substring(0, 60)}..."`);
+
+    const duration = (transcription as { duration?: number }).duration;
+    recordAIUsage({
+      surface: "transcribe",
+      model: TRANSCRIBE_MODEL,
+      audioSeconds: typeof duration === "number" ? duration : null,
+    });
 
     return NextResponse.json({ text: transcription.text });
   } catch (error: unknown) {
@@ -68,10 +95,11 @@ export async function POST(request: NextRequest) {
     const errMsg =
       error instanceof Error ? error.message : "Failed to transcribe audio";
 
-    // Provide a user-friendly error message
+    // Format problems get a specific hint; everything else gets classified
+    // (quota, auth, network...) so the UI can say what's actually wrong.
     const userMsg = errMsg.includes("could not be decoded")
       ? "Audio format not supported. Please try typing your message instead."
-      : errMsg;
+      : classifyOpenAIError(error).userMessage;
 
     return NextResponse.json({ error: userMsg }, { status: 500 });
   } finally {

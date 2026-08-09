@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#131216; -webkit-font-smoothing:antialiased; }
+    a { color:#DC74A0; text-decoration:none; } a:hover { color:#E795B4; }
+    @keyframes beat { 0%,100% { transform:scale(1); } 12% { transform:scale(1.22); } 24% { transform:scale(1); } }
+    @keyframes ringPulse { 0% { transform:scale(0.9); opacity:0.7; } 100% { transform:scale(1.25); opacity:0; } }
+    @keyframes breathe { 0%,100% { transform:scale(1); opacity:0.5; } 50% { transform:scale(1.08); opacity:1; } }
+    @keyframes shimmer { 0% { transform:translateX(-120%) skewX(-18deg); } 100% { transform:translateX(480%) skewX(-18deg); } }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+  </style>
+</helmet>
+<div style="min-height:100vh; box-sizing:border-box; padding:64px 72px 96px; font-family:'Instrument Sans',sans-serif; background:#131216;">
+  <div style="margin-bottom:52px;">
+    <div style="display:flex; align-items:center; gap:10px; font-size:12px; letter-spacing:0.2em; font-weight:600; color:#DC74A0;"><svg width="11" height="11" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#DC74A0"></rect></svg> PITAYA · WATCHOS COMPANION</div>
+    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:38px; font-weight:700; color:#F2F1F2; letter-spacing:-0.02em; margin-top:8px;">Pitaya on Apple Watch</div>
+    <div style="font-size:14px; color:#96949B; margin-top:6px; max-width:560px; line-height:1.6;">Pairs to the iPhone app · pulls routines &amp; sequences down, pushes activity back up. 46&nbsp;mm canvas, OLED black, one accent.</div>
+  </div>
+
+  <div style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:22px;">01 — FIRST RUN · PAIRING</div>
+  <div style="display:flex; flex-wrap:wrap; gap:44px; margin-bottom:64px;">
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:40px 34px 34px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+              <svg width="58" height="58" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#DC74A0"></rect></svg>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:38px; font-weight:700; color:#FFFFFF; letter-spacing:-0.02em; margin-top:18px;">Pitaya</div>
+              <div style="font-size:19px; color:#A5A3AA; margin-top:8px; line-height:1.45;">Your training,<br>on your wrist.</div>
+              <div style="width:100%; margin-top:34px; background:#A63D63; border-radius:48px; padding:26px 0; font-family:'Familjen Grotesk',sans-serif; font-size:23px; font-weight:600; color:#FFFFFF;">Pair with iPhone</div>
+              <div style="font-size:15px; color:#66646C; margin-top:16px;">Have your phone nearby</div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">01</span> · Welcome</div>
+    </div>
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; left:50%; top:50%; width:300px; height:300px; margin:-150px 0 0 -150px; border:1.5px solid #3D1526; border-radius:50%; animation:ringPulse 2.4s ease-out infinite;"></div>
+            <div style="position:absolute; left:50%; top:50%; width:300px; height:300px; margin:-150px 0 0 -150px; border:1.5px solid #3D1526; border-radius:50%; animation:ringPulse 2.4s ease-out infinite 1.2s;"></div>
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:44px 36px 36px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+              <div style="font-size:15px; letter-spacing:0.2em; font-weight:600; color:#96949B;">PAIRING CODE</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:92px; font-weight:700; color:#DC74A0; letter-spacing:0.1em; font-variant-numeric:tabular-nums; margin-top:10px;">4297</div>
+              <div style="font-size:18px; color:#A5A3AA; line-height:1.5; margin-top:12px;">Enter this code in<br>Pitaya → <span style="color:#FFFFFF; font-weight:600;">Devices</span></div>
+              <div style="display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; color:#8FBF9C; margin-top:26px;"><span style="width:8px; height:8px; border-radius:50%; background:#8FBF9C; animation:blink 1.6s ease infinite;"></span> iPhone detected</div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">02</span> · Pair code</div>
+    </div>
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:48px 40px 40px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+              <div style="width:88px; height:88px; border-radius:50%; border:3px solid #8FBF9C; display:flex; align-items:center; justify-content:center;"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#8FBF9C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 L10 18 L19.5 6.5"></path></svg></div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:34px; font-weight:700; color:#FFFFFF; margin-top:16px;">Paired</div>
+              <div style="width:100%; background:#17161A; border-radius:26px; padding:20px 24px; box-sizing:border-box; margin-top:22px; display:grid; gap:13px;">
+                <div style="display:flex; align-items:center; gap:12px; font-size:18.5px; color:#F2F1F2;"><span style="color:#8FBF9C; font-weight:700;">✓</span> Routines &amp; sequences</div>
+                <div style="display:flex; align-items:center; gap:12px; font-size:18.5px; color:#F2F1F2;"><span style="color:#8FBF9C; font-weight:700;">✓</span> Goals &amp; macros</div>
+                <div style="display:flex; align-items:center; gap:12px; font-size:18.5px; color:#F2F1F2;"><span style="color:#8FBF9C; font-weight:700;">✓</span> 23-day streak</div>
+              </div>
+              <div style="font-size:15px; color:#66646C; margin-top:18px;">Syncs automatically from now on</div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">03</span> · Synced from iPhone</div>
+    </div>
+  </div>
+
+  <div style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:22px;">02 — START A WORKOUT</div>
+  <div style="display:flex; flex-wrap:wrap; gap:44px; margin-bottom:64px;">
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:30px 24px 0;">
+              <div style="display:flex; justify-content:space-between; align-items:baseline; padding:0 12px;">
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:29px; font-weight:700; color:#FFFFFF;">Workouts</div>
+                <div style="font-size:18px; font-weight:600; color:#A5A3AA; font-variant-numeric:tabular-nums;">9:41</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:14px; background:#3D1526; border-radius:28px; padding:18px 20px; margin-top:14px;">
+                <div style="flex:1;">
+                  <div style="font-size:12.5px; letter-spacing:0.14em; font-weight:700; color:#E9A8C4;">TODAY'S PLAN</div>
+                  <div style="font-family:'Familjen Grotesk',sans-serif; font-size:25px; font-weight:700; color:#FFFFFF; margin-top:3px;">KB Session B</div>
+                  <div style="font-size:15.5px; color:#D9A7BD; margin-top:2px;">swings · press · squats</div>
+                </div>
+                <div style="width:60px; height:60px; border-radius:50%; background:#DC74A0; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="22" height="22" viewBox="0 0 24 24"><polygon points="8,5 20,12 8,19" fill="#14060C"></polygon></svg></div>
+              </div>
+              <div style="display:grid; gap:10px; margin-top:10px;">
+                <div style="display:flex; align-items:center; gap:14px; background:#17161A; border-radius:26px; padding:16px 18px;">
+                  <div style="width:52px; height:52px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2"><rect x="4" y="5" width="7" height="6" rx="1.5"></rect><rect x="13" y="9" width="7" height="6" rx="1.5"></rect><rect x="8" y="14" width="7" height="6" rx="1.5"></rect></svg></div>
+                  <div style="flex:1;"><div style="font-size:22px; font-weight:600; color:#FFFFFF;">Sequences</div><div style="font-size:15.5px; color:#96949B; margin-top:1px;">4 saved · from iPhone</div></div>
+                  <span style="font-size:22px; color:#66646C;">›</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:14px; background:#17161A; border-radius:26px; padding:16px 18px;">
+                  <div style="width:52px; height:52px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round"><path d="M9 8V6.5a3 3 0 0 1 6 0V8"></path><path d="M7.5 8h9c2 2.2 3 4.6 3 7a7.5 7.5 0 0 1-15 0c0-2.4 1-4.8 3-7Z"></path></svg></div>
+                  <div style="flex:1;"><div style="font-size:22px; font-weight:600; color:#FFFFFF;">Kettlebell</div><div style="font-size:15.5px; color:#96949B; margin-top:1px;">last · today 7:12a</div></div>
+                  <span style="font-size:22px; color:#66646C;">›</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:14px; background:#17161A; border-radius:26px; padding:16px 18px;">
+                  <div style="width:52px; height:52px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 L9 8 L13 13.5 L16 9.5 L21 18 Z"></path></svg></div>
+                  <div style="flex:1;"><div style="font-size:22px; font-weight:600; color:#FFFFFF;">Trail Run</div><div style="font-size:15.5px; color:#96949B; margin-top:1px;">4.2 km · Wed</div></div>
+                  <span style="font-size:22px; color:#66646C;">›</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:14px; background:#17161A; border-radius:26px; padding:16px 18px;">
+                  <div style="width:52px; height:52px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round"><circle cx="13" cy="4.5" r="2"></circle><path d="M13 8 l-3 5 4 3 v5 M10 13 l-3 2 M14 16 l4 2"></path></svg></div>
+                  <div style="flex:1;"><div style="font-size:22px; font-weight:600; color:#FFFFFF;">Walk</div><div style="font-size:15.5px; color:#96949B; margin-top:1px;">open goal</div></div>
+                  <span style="font-size:22px; color:#66646C;">›</span>
+                </div>
+              </div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">04</span> · Workout types <span style="color:#55535A;">— crown scrolls</span></div>
+    </div>
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:30px 24px 0;">
+              <div style="display:flex; justify-content:space-between; align-items:baseline; padding:0 12px;">
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:29px; font-weight:700; color:#FFFFFF;">Sequences</div>
+                <div style="font-size:18px; font-weight:600; color:#A5A3AA; font-variant-numeric:tabular-nums;">9:41</div>
+              </div>
+              <div style="font-size:15px; color:#66646C; padding:4px 12px 0;">built in Pitaya on iPhone</div>
+              <div style="display:grid; gap:10px; margin-top:12px;">
+                <div style="display:flex; align-items:center; background:#17161A; border-radius:26px; padding:18px 20px;">
+                  <div style="flex:1;"><div style="font-size:23px; font-weight:600; color:#FFFFFF;">EMOM 12</div><div style="font-size:15.5px; color:#96949B; margin-top:2px;">swings · push press · every :60</div></div>
+                  <span style="font-size:16px; font-weight:600; color:#DC74A0; background:#2A1420; padding:6px 13px; border-radius:99px; font-variant-numeric:tabular-nums;">12:00</span>
+                </div>
+                <div style="display:flex; align-items:center; background:#17161A; border-radius:26px; padding:18px 20px;">
+                  <div style="flex:1;"><div style="font-size:23px; font-weight:600; color:#FFFFFF;">Armor Complex</div><div style="font-size:15.5px; color:#96949B; margin-top:2px;">C&amp;P · squat · swing · 5 rounds</div></div>
+                  <span style="font-size:16px; font-weight:600; color:#DC74A0; background:#2A1420; padding:6px 13px; border-radius:99px; font-variant-numeric:tabular-nums;">~18:00</span>
+                </div>
+                <div style="display:flex; align-items:center; background:#17161A; border-radius:26px; padding:18px 20px;">
+                  <div style="flex:1;"><div style="font-size:23px; font-weight:600; color:#FFFFFF;">Tabata Squats</div><div style="font-size:15.5px; color:#96949B; margin-top:2px;">20s on · 10s off · ×8</div></div>
+                  <span style="font-size:16px; font-weight:600; color:#DC74A0; background:#2A1420; padding:6px 13px; border-radius:99px; font-variant-numeric:tabular-nums;">4:00</span>
+                </div>
+                <div style="display:flex; align-items:center; background:#17161A; border-radius:26px; padding:18px 20px;">
+                  <div style="flex:1;"><div style="font-size:23px; font-weight:600; color:#FFFFFF;">500 Swing Day</div><div style="font-size:15.5px; color:#96949B; margin-top:2px;">10 × 50 · rest as needed</div></div>
+                  <span style="font-size:16px; font-weight:600; color:#DC74A0; background:#2A1420; padding:6px 13px; border-radius:99px; font-variant-numeric:tabular-nums;">open</span>
+                </div>
+              </div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">05</span> · Saved sequences</div>
+    </div>
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:34px 30px 30px; display:flex; flex-direction:column;">
+              <div style="display:flex; justify-content:space-between; align-items:baseline; padding:0 6px;">
+                <div style="display:flex; align-items:baseline; gap:10px;"><span style="font-size:24px; color:#66646C;">‹</span><span style="font-family:'Familjen Grotesk',sans-serif; font-size:28px; font-weight:700; color:#FFFFFF;">EMOM 12</span></div>
+                <div style="font-size:18px; font-weight:600; color:#A5A3AA; font-variant-numeric:tabular-nums;">9:41</div>
+              </div>
+              <div style="display:flex; gap:8px; margin-top:12px; padding:0 6px;">
+                <span style="font-size:14.5px; font-weight:600; color:#A5A3AA; background:#17161A; padding:7px 14px; border-radius:99px;">12 MIN</span>
+                <span style="font-size:14.5px; font-weight:600; color:#A5A3AA; background:#17161A; padding:7px 14px; border-radius:99px;">EVERY :60</span>
+              </div>
+              <div style="background:#17161A; border-radius:26px; padding:18px 20px; margin-top:14px; display:grid; gap:14px;">
+                <div><div style="font-size:12.5px; letter-spacing:0.14em; font-weight:700; color:#DC74A0;">ODD MINUTES</div><div style="font-size:20px; font-weight:600; color:#FFFFFF; margin-top:3px;">10 two-hand swings · 24 kg</div></div>
+                <div style="height:1px; background:#232227;"></div>
+                <div><div style="font-size:12.5px; letter-spacing:0.14em; font-weight:700; color:#DC74A0;">EVEN MINUTES</div><div style="font-size:20px; font-weight:600; color:#FFFFFF; margin-top:3px;">8 push press · 2×16 kg</div></div>
+              </div>
+              <div style="font-size:14.5px; color:#66646C; margin-top:12px; padding:0 6px;">Finish early — the clock is your rest.</div>
+              <div style="flex:1;"></div>
+              <div style="display:flex; align-items:center; justify-content:center; gap:10px; background:#A63D63; border-radius:44px; padding:24px 0;"><span style="width:10px; height:10px; border-radius:50%; background:#FFD9E8;"></span><span style="font-family:'Familjen Grotesk',sans-serif; font-size:23px; font-weight:600; color:#FFFFFF;">Start</span></div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">06</span> · Sequence detail</div>
+    </div>
+  </div>
+
+  <div style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:22px;">03 — LIVE WORKOUT</div>
+  <div style="display:flex; flex-wrap:wrap; gap:44px; margin-bottom:64px;">
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:36px 36px 26px; display:flex; flex-direction:column;">
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:0 2px;">
+                <span style="font-size:13px; letter-spacing:0.16em; font-weight:700; color:#DC74A0;">KB SESSION</span>
+                <span style="font-size:16px; font-weight:600; color:#A5A3AA; font-variant-numeric:tabular-nums;">9:41</span>
+              </div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:82px; font-weight:700; color:#FFFFFF; letter-spacing:-0.01em; font-variant-numeric:tabular-nums; line-height:1; margin-top:12px;">{{ elapsed }}</div>
+              <div style="display:flex; align-items:center; gap:12px; margin-top:20px;">
+                <svg width="34" height="34" viewBox="0 0 24 24" style="animation:beat 1s ease infinite;"><path d="M12 21 C5.5 15 2.5 10.8 2.5 7.2 A4.6 4.6 0 0 1 12 5.2 A4.6 4.6 0 0 1 21.5 7.2 C21.5 10.8 18.5 15 12 21 Z" fill="#DC74A0"></path></svg>
+                <span style="font-family:'Familjen Grotesk',sans-serif; font-size:56px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums; line-height:1;">{{ hrTxt }}</span>
+                <span style="font-size:15px; font-weight:600; color:#96949B; align-self:flex-end; padding-bottom:6px;">BPM</span>
+              </div>
+              <div style="display:flex; gap:5px; margin-top:12px;">
+                <div style="flex:1; height:9px; border-radius:5px; background:#2A292E;"></div>
+                <div style="flex:1; height:9px; border-radius:5px; background:#2A292E;"></div>
+                <div style="flex:1; height:9px; border-radius:5px; background:#DC74A0;"></div>
+                <div style="flex:1; height:9px; border-radius:5px; background:#2A292E;"></div>
+                <div style="flex:1; height:9px; border-radius:5px; background:#2A292E;"></div>
+              </div>
+              <div style="font-size:13px; letter-spacing:0.14em; font-weight:600; color:#96949B; margin-top:7px;">ZONE 3 · AEROBIC</div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;">
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:42px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums; line-height:1;">486</div><div style="font-size:13px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:4px;">KCAL</div></div>
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:42px; font-weight:700; color:#DC74A0; font-variant-numeric:tabular-nums; line-height:1;">R4<span style="color:#66646C; font-size:28px;">/5</span></div><div style="font-size:13px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:4px;">ROUND</div></div>
+              </div>
+              <div style="display:flex; justify-content:center; gap:7px; margin-top:18px;"><span style="width:7px; height:7px; border-radius:50%; background:#FFFFFF;"></span><span style="width:7px; height:7px; border-radius:50%; background:#3A393E;"></span><span style="width:7px; height:7px; border-radius:50%; background:#3A393E;"></span></div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">07</span> · Live metrics — HR · kcal · time</div>
+    </div>
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <svg width="396" height="484" viewBox="0 0 396 484" style="position:absolute; inset:0;">
+              <circle cx="198" cy="242" r="178" fill="none" stroke="#2A1420" stroke-width="13"></circle>
+              <circle cx="198" cy="242" r="178" fill="none" stroke="#DC74A0" stroke-width="13" stroke-linecap="round" stroke-dasharray="1118.4" transform="rotate(-90 198 242)" style="stroke-dashoffset: {{ emomOff }}; transition:stroke-dashoffset 0.95s linear;"></circle>
+            </svg>
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+              <div style="font-size:14px; letter-spacing:0.18em; font-weight:700; color:#96949B;">{{ roundLab }}</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:96px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums; line-height:1; margin-top:6px;">{{ emomTxt }}</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:27px; font-weight:700; color:#DC74A0; margin-top:12px;">10 SWINGS</div>
+              <div style="font-size:16.5px; color:#96949B; margin-top:5px;">next · 8 push press</div>
+              <div style="display:flex; align-items:center; gap:7px; margin-top:16px;"><svg width="17" height="17" viewBox="0 0 24 24" style="animation:beat 1s ease infinite;"><path d="M12 21 C5.5 15 2.5 10.8 2.5 7.2 A4.6 4.6 0 0 1 12 5.2 A4.6 4.6 0 0 1 21.5 7.2 C21.5 10.8 18.5 15 12 21 Z" fill="#DC74A0"></path></svg><span style="font-size:19px; font-weight:600; color:#F2F1F2; font-variant-numeric:tabular-nums;">{{ hrTxt }}</span></div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">08</span> · Sequence live — work minute</div>
+    </div>
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; left:50%; top:50%; width:320px; height:320px; margin:-160px 0 0 -160px; border:2px solid #24332A; border-radius:50%; animation:breathe 4s ease-in-out infinite;"></div>
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+              <div style="font-size:15px; letter-spacing:0.22em; font-weight:700; color:#8FBF9C;">REST</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:110px; font-weight:700; color:#8FBF9C; font-variant-numeric:tabular-nums; line-height:1; margin-top:8px;">{{ restTxt }}</div>
+              <div style="font-size:18px; color:#A5A3AA; margin-top:14px;">round 8 starts · swings 24 kg</div>
+              <div style="display:flex; align-items:center; gap:7px; margin-top:14px;"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 21 C5.5 15 2.5 10.8 2.5 7.2 A4.6 4.6 0 0 1 12 5.2 A4.6 4.6 0 0 1 21.5 7.2 C21.5 10.8 18.5 15 12 21 Z" fill="#5E9B72"></path></svg><span style="font-size:17px; font-weight:600; color:#8FBF9C; font-variant-numeric:tabular-nums;">131 · coming down</span></div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">09</span> · Sequence live — rest</div>
+    </div>
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:38px 40px 34px; display:flex; flex-direction:column;">
+              <div style="text-align:center; font-size:15px; font-weight:600; color:#96949B; font-variant-numeric:tabular-nums;">42:07 · KB Session</div>
+              <div style="flex:1; display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px;">
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px;"><div style="width:124px; height:124px; border-radius:50%; background:#3A1518; display:flex; align-items:center; justify-content:center;"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#E08585" stroke-width="2.6" stroke-linecap="round"><path d="M6 6 L18 18 M18 6 L6 18"></path></svg></div><span style="font-size:17px; font-weight:600; color:#F2F1F2;">End</span></div>
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px;"><div style="width:124px; height:124px; border-radius:50%; background:#232227; display:flex; align-items:center; justify-content:center;"><svg width="30" height="30" viewBox="0 0 24 24" fill="#F2F1F2"><rect x="6" y="4" width="4.5" height="16" rx="1.5"></rect><rect x="13.5" y="4" width="4.5" height="16" rx="1.5"></rect></svg></div><span style="font-size:17px; font-weight:600; color:#F2F1F2;">Pause</span></div>
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px;"><div style="width:124px; height:124px; border-radius:50%; background:#14212B; display:flex; align-items:center; justify-content:center;"><svg width="30" height="30" viewBox="0 0 24 24"><path d="M12 3 C12 3 6.5 9.8 6.5 13.8 A5.5 5.5 0 0 0 17.5 13.8 C17.5 9.8 12 3 12 3 Z" fill="#7FA6C9"></path></svg></div><span style="font-size:17px; font-weight:600; color:#F2F1F2;">Lock</span></div>
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px;"><div style="width:124px; height:124px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21 V4"></path><path d="M5 4 H17 L14 8 L17 12 H5"></path></svg></div><span style="font-size:17px; font-weight:600; color:#F2F1F2;">Lap</span></div>
+              </div>
+              <div style="display:flex; justify-content:center; gap:7px; margin-top:14px;"><span style="width:7px; height:7px; border-radius:50%; background:#3A393E;"></span><span style="width:7px; height:7px; border-radius:50%; background:#3A393E;"></span><span style="width:7px; height:7px; border-radius:50%; background:#FFFFFF;"></span></div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">10</span> · Controls — swipe right</div>
+    </div>
+  </div>
+
+  <div style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:22px;">04 — OUTDOORS &amp; SAVE</div>
+  <div style="display:flex; flex-wrap:wrap; gap:44px; margin-bottom:64px;">
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:34px 32px 30px; display:flex; flex-direction:column;">
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:0 4px;">
+                <span style="font-size:13px; letter-spacing:0.16em; font-weight:700; color:#DC74A0;">TRAIL RUN</span>
+                <span style="display:flex; align-items:center; gap:6px; font-size:13.5px; font-weight:700; color:#8FBF9C;"><span style="width:7px; height:7px; border-radius:50%; background:#8FBF9C; animation:blink 1.6s ease infinite;"></span>GPS</span>
+              </div>
+              <div style="position:relative; height:184px; border-radius:26px; background:#101014; border:1px solid #1F1E23; margin-top:12px; overflow:hidden;">
+                <svg width="100%" height="100%" viewBox="0 0 330 184" preserveAspectRatio="none">
+                  <path d="M-10 60 C60 40 120 70 180 52 C240 36 290 58 340 44" fill="none" stroke="#1C1B20" stroke-width="1.5"></path>
+                  <path d="M-10 110 C70 92 130 122 200 104 C260 90 300 108 340 96" fill="none" stroke="#1C1B20" stroke-width="1.5"></path>
+                  <path d="M-10 156 C60 140 140 166 210 150 C270 138 310 152 340 144" fill="none" stroke="#1C1B20" stroke-width="1.5"></path>
+                  <path d="M36 148 C70 128 66 96 104 88 C142 80 150 108 186 98 C224 86 220 56 258 48 C284 42 296 58 312 40" fill="none" stroke="#DC74A0" stroke-width="4" stroke-linecap="round"></path>
+                  <circle cx="36" cy="148" r="6" fill="none" stroke="#DC74A0" stroke-width="2.5"></circle>
+                  <circle cx="312" cy="40" r="7" fill="#DC74A0" stroke="#000000" stroke-width="2.5"></circle>
+                </svg>
+                <span style="position:absolute; right:12px; bottom:10px; font-size:11px; letter-spacing:0.1em; color:#55535A; font-weight:600;">SUNRISE RIDGE</span>
+              </div>
+              <div style="display:flex; align-items:baseline; gap:10px; margin-top:16px; padding:0 4px;">
+                <span style="font-family:'Familjen Grotesk',sans-serif; font-size:58px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums; line-height:1;">4.2</span>
+                <span style="font-size:16px; letter-spacing:0.1em; font-weight:600; color:#96949B;">KM</span>
+              </div>
+              <div style="display:flex; margin-top:14px; padding:0 4px;">
+                <div style="flex:1;"><div style="font-size:22px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums;">+186</div><div style="font-size:12px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:3px;">ELEV M</div></div>
+                <div style="flex:1;"><div style="font-size:22px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums;">6:12</div><div style="font-size:12px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:3px;">/KM</div></div>
+                <div style="flex:1;"><div style="display:flex; align-items:center; gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" style="animation:beat 1s ease infinite;"><path d="M12 21 C5.5 15 2.5 10.8 2.5 7.2 A4.6 4.6 0 0 1 12 5.2 A4.6 4.6 0 0 1 21.5 7.2 C21.5 10.8 18.5 15 12 21 Z" fill="#DC74A0"></path></svg><span style="font-size:22px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums;">{{ hrTxt }}</span></div><div style="font-size:12px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:3px;">BPM</div></div>
+              </div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">11</span> · Trail — GPS route live</div>
+    </div>
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:40px 34px 32px; display:flex; flex-direction:column;">
+              <div style="display:flex; align-items:center; gap:12px; padding:0 4px;">
+                <div style="width:44px; height:44px; border-radius:50%; border:2.5px solid #8FBF9C; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8FBF9C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 L10 18 L19.5 6.5"></path></svg></div>
+                <div>
+                  <div style="font-family:'Familjen Grotesk',sans-serif; font-size:28px; font-weight:700; color:#FFFFFF; line-height:1.1;">Saved</div>
+                  <div style="display:flex; align-items:center; gap:7px; font-size:14px; color:#96949B; margin-top:3px;"><span style="position:relative; overflow:hidden; width:60px; height:5px; border-radius:3px; background:#232227;"><span style="position:absolute; top:0; bottom:0; width:24px; background:#DC74A0; border-radius:3px; animation:shimmer 1.8s ease-in-out infinite;"></span></span> syncing to iPhone</div>
+                </div>
+              </div>
+              <div style="background:#17161A; border-radius:26px; padding:20px 22px; margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:18px 10px;">
+                <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:30px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums; line-height:1;">42:16</div><div style="font-size:12px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:4px;">TIME</div></div>
+                <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:30px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums; line-height:1;">486</div><div style="font-size:12px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:4px;">KCAL</div></div>
+                <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:30px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums; line-height:1;">142</div><div style="font-size:12px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:4px;">AVG BPM</div></div>
+                <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:30px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums; line-height:1;">12,480</div><div style="font-size:12px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:4px;">KG VOLUME</div></div>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; background:#3D1526; border-radius:22px; padding:15px 18px; margin-top:12px;">
+                <svg width="13" height="13" viewBox="0 0 10 10" style="flex:none;"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#FFFFFF"></rect></svg>
+                <span style="font-size:17px; font-weight:600; color:#FFD9E8;">PR · Clean &amp; press 28 kg × 5</span>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="text-align:center; font-size:14.5px; color:#66646C;">Full breakdown in Pitaya on iPhone</div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">12</span> · Save — pushes back to the app</div>
+    </div>
+  </div>
+
+  <div style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:22px;">05 — TIMER &amp; SLEEP</div>
+  <div style="display:flex; flex-wrap:wrap; gap:44px;">
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <svg width="396" height="484" viewBox="0 0 396 484" style="position:absolute; left:0; top:-14px;">
+              <circle cx="198" cy="230" r="148" fill="none" stroke="#232227" stroke-width="12"></circle>
+              <circle cx="198" cy="230" r="148" fill="none" stroke="#DC74A0" stroke-width="12" stroke-linecap="round" stroke-dasharray="929.9" transform="rotate(-90 198 230)" style="stroke-dashoffset: {{ tmrOff }}; transition:stroke-dashoffset 0.95s linear;"></circle>
+            </svg>
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:0 40px 30px; display:flex; flex-direction:column; align-items:center;">
+              <div style="font-size:13px; letter-spacing:0.18em; font-weight:700; color:#96949B; margin-top:52px;">REST TIMER</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:84px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums; line-height:1; margin-top:78px;">{{ tmrTxt }}</div>
+              <div style="font-size:16px; color:#96949B; margin-top:8px;">of 1:30 · crown adjusts</div>
+              <div style="flex:1;"></div>
+              <div style="display:flex; gap:10px; width:100%;">
+                <div style="flex:1; text-align:center; background:#17161A; border-radius:99px; padding:15px 0; font-size:18px; font-weight:600; color:#F2F1F2;">+0:30</div>
+                <div style="flex:1; text-align:center; background:#17161A; border-radius:99px; padding:15px 0; font-size:18px; font-weight:600; color:#DC74A0;">Skip</div>
+              </div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">13</span> · Rest timer — haptic at zero</div>
+    </div>
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+              <svg width="30" height="30" viewBox="0 0 24 24"><path d="M20 14 A8.5 8.5 0 1 1 10.5 3.5 A7 7 0 0 0 20 14 Z" fill="#4A4550"></path></svg>
+              <div style="font-size:14px; letter-spacing:0.2em; font-weight:600; color:#4A4550; margin-top:14px;">SLEEP MODE</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:92px; font-weight:700; color:#55505B; font-variant-numeric:tabular-nums; line-height:1; margin-top:10px;">2:47</div>
+              <div style="font-size:17px; color:#4A4550; margin-top:14px;">alarm 6:30</div>
+              <div style="display:flex; align-items:center; gap:7px; margin-top:26px;"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 21 C5.5 15 2.5 10.8 2.5 7.2 A4.6 4.6 0 0 1 12 5.2 A4.6 4.6 0 0 1 21.5 7.2 C21.5 10.8 18.5 15 12 21 Z" fill="#3A363F"></path></svg><span style="font-size:15px; font-weight:600; color:#3A363F; font-variant-numeric:tabular-nums;">52 resting</span></div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">14</span> · Sleep — dimmed for night</div>
+    </div>
+
+    <div style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-9px; top:122px; width:13px; height:72px; border-radius:7px; background:linear-gradient(90deg,#45444B,#17161A); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06), inset -2px 0 3px rgba(0,0,0,0.6);"></div>
+        <div style="position:absolute; right:-9px; top:150px; width:13px; height:16px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-6px; top:216px; width:9px; height:98px; border-radius:5px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:16px; background:linear-gradient(155deg,#2E2D33 0%,#17161A 45%,#0C0B0E 100%); box-shadow:0 30px 70px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 6px rgba(0,0,0,0.6);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:40px 34px 34px; display:flex; flex-direction:column;">
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:0 4px;">
+                <span style="font-size:13px; letter-spacing:0.16em; font-weight:700; color:#96949B;">LAST NIGHT</span>
+                <span style="font-size:14px; font-weight:600; color:#66646C; font-variant-numeric:tabular-nums;">11:42 – 6:23</span>
+              </div>
+              <div style="display:flex; align-items:baseline; gap:10px; margin-top:14px; padding:0 4px;">
+                <span style="font-family:'Familjen Grotesk',sans-serif; font-size:64px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums; line-height:1;">7:12</span>
+                <span style="font-size:15px; letter-spacing:0.1em; font-weight:600; color:#96949B;">ASLEEP</span>
+              </div>
+              <div style="display:flex; height:20px; border-radius:10px; overflow:hidden; margin-top:16px;">
+                <div style="width:5%; background:#3A393E;"></div>
+                <div style="width:21%; background:#DC74A0;"></div>
+                <div style="width:52%; background:#A63D63;"></div>
+                <div style="width:22%; background:#6B2F49;"></div>
+              </div>
+              <div style="display:flex; gap:14px; margin-top:10px; padding:0 2px;">
+                <span style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:#96949B;"><span style="width:7px; height:7px; border-radius:2px; background:#3A393E;"></span>Awake</span>
+                <span style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:#96949B;"><span style="width:7px; height:7px; border-radius:2px; background:#DC74A0;"></span>REM</span>
+                <span style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:#96949B;"><span style="width:7px; height:7px; border-radius:2px; background:#A63D63;"></span>Core</span>
+                <span style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:#96949B;"><span style="width:7px; height:7px; border-radius:2px; background:#6B2F49;"></span>Deep</span>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex; align-items:center; gap:16px; background:#17161A; border-radius:26px; padding:18px 20px;">
+                <svg width="64" height="64" viewBox="0 0 64 64" style="flex:none;">
+                  <circle cx="32" cy="32" r="26" fill="none" stroke="#232227" stroke-width="7"></circle>
+                  <circle cx="32" cy="32" r="26" fill="none" stroke="#8FBF9C" stroke-width="7" stroke-linecap="round" stroke-dasharray="163.4" stroke-dashoffset="31" transform="rotate(-90 32 32)"></circle>
+                  <text x="32" y="38" text-anchor="middle" font-family="Familjen Grotesk, sans-serif" font-size="17" font-weight="700" fill="#FFFFFF">81</text>
+                </svg>
+                <div><div style="font-size:20px; font-weight:600; color:#FFFFFF;">Recovery 81</div><div style="font-size:14px; color:#96949B; margin-top:2px;">synced to Body on iPhone</div></div>
+              </div>
+            </div>
+            <div style="position:absolute; inset:0; border-radius:106px; pointer-events:none; box-shadow:inset 0 0 36px rgba(0,0,0,0.55); background:linear-gradient(165deg, rgba(255,255,255,0.05), transparent 30%);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:13.5px; color:#8A8890;"><span style="color:#DC74A0; font-weight:700;">15</span> · Morning — stages &amp; recovery</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;liveTick&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Live screens&quot;},&quot;emomRound&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:7,&quot;min&quot;:1,&quot;max&quot;:12,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Live screens&quot;}}">
+class Component extends DCLogic {
+  state = { t: 0 };
+  componentDidMount() {
+    this._iv = setInterval(() => { if (this.props.liveTick ?? true) this.setState(s => ({ t: s.t + 1 })); }, 1000);
+  }
+  componentWillUnmount() { clearInterval(this._iv); }
+  renderVals() {
+    const t = this.state.t;
+    const pad = n => String(n).padStart(2, '0');
+    const el = 2527 + t;
+    const emom = 60 - ((t + 18) % 60);
+    const rest = 18 - (t % 18);
+    const rem = 67 - (t % 68);
+    const round = this.props.emomRound ?? 7;
+    const wig = [0, 2, 3, 1, 2][t % 5];
+    return {
+      elapsed: Math.floor(el / 60) + ':' + pad(el % 60),
+      emomTxt: ':' + pad(emom),
+      emomOff: (1118.4 * (1 - emom / 60)).toFixed(1) + 'px',
+      roundLab: 'ROUND ' + round + ' OF 12',
+      restTxt: ':' + pad(rest),
+      tmrTxt: Math.floor(rem / 60) + ':' + pad(rem % 60),
+      tmrOff: (929.9 * (1 - rem / 90)).toFixed(1) + 'px',
+      hrTxt: String(146 + wig)
+    };
+  }
+}
+</script>
+</body>
+</html>

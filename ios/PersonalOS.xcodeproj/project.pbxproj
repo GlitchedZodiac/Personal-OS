@@ -1,0 +1,508 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		05317DBD031E73DDAE8151C6 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
+		1AD7225F8119DEE334552638 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
+		1E57C0B28724B24673F91B65 /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
+		1F4F7858F490CDE118F92780 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 779544B3E1F855E1019BE07F /* Components.swift */; };
+		267048DC6977B56F65B7C242 /* WorkoutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAD62BC2C3D39E29DAEB3A3 /* WorkoutRecorder.swift */; };
+		2DF1CA1D50939C507B4D10F3 /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
+		3907BAA59C9AC5461171670C /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
+		3CEB3D4F1FB7CF28281BD4C4 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
+		5427D9F48D8059CB0AC1580D /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
+		55E9EAB4707D71D7514C4CF6 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
+		6EF00415B4AD3B33E2B6C717 /* Smoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAABEEDD8A9DD0E43F18673C /* Smoke.swift */; };
+		6FFE9221290D2657D9C64588 /* PersonalOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2BE5E7DEF13CBB8EFDE90AC /* PersonalOSApp.swift */; };
+		7CEC08ACE05C328348AD7791 /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
+		7FDC7116A0E356DF685AA40D /* HealthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19835752792B8774D2AD643F /* HealthStore.swift */; };
+		836DABC6857606F8BB040B10 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0960EA68534280B484B235 /* AppModel.swift */; };
+		83FB94B008C61E0037CDB980 /* MobileAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977A9107D8035E968679A59C /* MobileAPIModels.swift */; };
+		86CDB2DEBE59EC1C1E425730 /* LiveWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90514349C02B2B967189761C /* LiveWorkoutView.swift */; };
+		9768A01B73B3B14BDBB8D6C2 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C296B6BB79F59CD32FB649 /* HomeView.swift */; };
+		9890184C4B9B3D1073B8B4D7 /* PairingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA94BE4FFDB0509B29D5AF96 /* PairingViews.swift */; };
+		B00B0A7ABDF2552A868200C3 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B00C978153160C55EFA8A /* Theme.swift */; };
+		B4FE0E0A8D8734ED1191377D /* PitayaWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A818535E93E67612022919 /* PitayaWatchApp.swift */; };
+		B51F6AD550EEB2F65BC6677F /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D0C5609A11F08C551F2A60 /* SummaryView.swift */; };
+		B5954AB70A7B681072E2CFCD /* SetLoggerPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1377A069127D2D8A55879B3B /* SetLoggerPage.swift */; };
+		D1667DF004D2B8CCD9737C26 /* MobileAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977A9107D8035E968679A59C /* MobileAPIModels.swift */; };
+		E055B584F27FDA5F0F34016F /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
+		FD0ABE944039C2090164EB53 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B00C978153160C55EFA8A /* Theme.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		12D0C5609A11F08C551F2A60 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
+		1377A069127D2D8A55879B3B /* SetLoggerPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetLoggerPage.swift; sourceTree = "<group>"; };
+		19835752792B8774D2AD643F /* HealthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStore.swift; sourceTree = "<group>"; };
+		1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseCatalog.swift; sourceTree = "<group>"; };
+		2D2267F0F55DAA9167B98D75 /* PersonalOS Watch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PersonalOS Watch.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2FAD62BC2C3D39E29DAEB3A3 /* WorkoutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutRecorder.swift; sourceTree = "<group>"; };
+		40DD35A02B11408515079C64 /* PRBaselines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRBaselines.swift; sourceTree = "<group>"; };
+		42ADF8B3E198AEB2237AD08D /* PersonalOSWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PersonalOSWatch.entitlements; sourceTree = "<group>"; };
+		4A0960EA68534280B484B235 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		5327746B0D266318DF89D2DF /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		570E4172D82BFC1B6E10D848 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		59C296B6BB79F59CD32FB649 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		65026F55D9A5F18E5741377D /* PersonalOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PersonalOS.entitlements; sourceTree = "<group>"; };
+		779544B3E1F855E1019BE07F /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		7E4AC2F072E9A3D3911A6CBF /* PersonalOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PersonalOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		90514349C02B2B967189761C /* LiveWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveWorkoutView.swift; sourceTree = "<group>"; };
+		977A9107D8035E968679A59C /* MobileAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAPIModels.swift; sourceTree = "<group>"; };
+		ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineWorkoutQueue.swift; sourceTree = "<group>"; };
+		BAB5F2EC88271FD5EC8C556E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		BE7B00C978153160C55EFA8A /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		D2BE5E7DEF13CBB8EFDE90AC /* PersonalOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalOSApp.swift; sourceTree = "<group>"; };
+		E9A818535E93E67612022919 /* PitayaWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaWatchApp.swift; sourceTree = "<group>"; };
+		EA94BE4FFDB0509B29D5AF96 /* PairingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingViews.swift; sourceTree = "<group>"; };
+		F16589754476E6469459CB02 /* MobileAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAPIClient.swift; sourceTree = "<group>"; };
+		FAABEEDD8A9DD0E43F18673C /* Smoke.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Smoke.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0DD4F18CE1D1882FFDE5BA1F /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				779544B3E1F855E1019BE07F /* Components.swift */,
+				59C296B6BB79F59CD32FB649 /* HomeView.swift */,
+				90514349C02B2B967189761C /* LiveWorkoutView.swift */,
+				EA94BE4FFDB0509B29D5AF96 /* PairingViews.swift */,
+				1377A069127D2D8A55879B3B /* SetLoggerPage.swift */,
+				12D0C5609A11F08C551F2A60 /* SummaryView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		0E877CF5FA10BFC5735886DD = {
+			isa = PBXGroup;
+			children = (
+				C4655E30656B97F40D1ADC7A /* iOSApp */,
+				62F1BA4FDF1AE7FA3E9436A8 /* iPhone */,
+				F3E7F35B0D1D8C1B1A873A68 /* Shared */,
+				6120242F3F5A6892CC740690 /* WatchApp */,
+				7431D2A6AE9186C80A596BE6 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		3EB2EF6426CD0FB7A62EF165 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				F16589754476E6469459CB02 /* MobileAPIClient.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		449EE58B96B9E0C6D63189ED /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				977A9107D8035E968679A59C /* MobileAPIModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		6120242F3F5A6892CC740690 /* WatchApp */ = {
+			isa = PBXGroup;
+			children = (
+				4A0960EA68534280B484B235 /* AppModel.swift */,
+				570E4172D82BFC1B6E10D848 /* Info.plist */,
+				42ADF8B3E198AEB2237AD08D /* PersonalOSWatch.entitlements */,
+				E9A818535E93E67612022919 /* PitayaWatchApp.swift */,
+				FAABEEDD8A9DD0E43F18673C /* Smoke.swift */,
+				2FAD62BC2C3D39E29DAEB3A3 /* WorkoutRecorder.swift */,
+				0DD4F18CE1D1882FFDE5BA1F /* Views */,
+			);
+			path = WatchApp;
+			sourceTree = "<group>";
+		};
+		62F1BA4FDF1AE7FA3E9436A8 /* iPhone */ = {
+			isa = PBXGroup;
+			children = (
+				19835752792B8774D2AD643F /* HealthStore.swift */,
+			);
+			path = iPhone;
+			sourceTree = "<group>";
+		};
+		7431D2A6AE9186C80A596BE6 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				2D2267F0F55DAA9167B98D75 /* PersonalOS Watch.app */,
+				7E4AC2F072E9A3D3911A6CBF /* PersonalOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		89A1F5EB6AB1E8B4831E3D46 /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */,
+				5327746B0D266318DF89D2DF /* SessionStore.swift */,
+			);
+			path = Storage;
+			sourceTree = "<group>";
+		};
+		C4655E30656B97F40D1ADC7A /* iOSApp */ = {
+			isa = PBXGroup;
+			children = (
+				BAB5F2EC88271FD5EC8C556E /* Info.plist */,
+				65026F55D9A5F18E5741377D /* PersonalOS.entitlements */,
+				D2BE5E7DEF13CBB8EFDE90AC /* PersonalOSApp.swift */,
+			);
+			path = iOSApp;
+			sourceTree = "<group>";
+		};
+		F3E7F35B0D1D8C1B1A873A68 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */,
+				40DD35A02B11408515079C64 /* PRBaselines.swift */,
+				BE7B00C978153160C55EFA8A /* Theme.swift */,
+				449EE58B96B9E0C6D63189ED /* Models */,
+				3EB2EF6426CD0FB7A62EF165 /* Networking */,
+				89A1F5EB6AB1E8B4831E3D46 /* Storage */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		536B420B2D8018B46F3047EF /* PersonalOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2355FC1A2E7518D10603EC0F /* Build configuration list for PBXNativeTarget "PersonalOS" */;
+			buildPhases = (
+				0C643070322A965CD35F1302 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PersonalOS;
+			packageProductDependencies = (
+			);
+			productName = PersonalOS;
+			productReference = 7E4AC2F072E9A3D3911A6CBF /* PersonalOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		AD4D41AF62428EAB5D82B96C /* PersonalOS Watch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1977864FD278078A2854E520 /* Build configuration list for PBXNativeTarget "PersonalOS Watch" */;
+			buildPhases = (
+				5C11ADE9FA26FC5BF47D9169 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "PersonalOS Watch";
+			packageProductDependencies = (
+			);
+			productName = "PersonalOS Watch";
+			productReference = 2D2267F0F55DAA9167B98D75 /* PersonalOS Watch.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D7C951264FC5DCA3AF9A15DB /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					536B420B2D8018B46F3047EF = {
+						ProvisioningStyle = Automatic;
+					};
+					AD4D41AF62428EAB5D82B96C = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = FEBA5B8AC94D195456C1A22C /* Build configuration list for PBXProject "PersonalOS" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 0E877CF5FA10BFC5735886DD;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 7431D2A6AE9186C80A596BE6 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				536B420B2D8018B46F3047EF /* PersonalOS */,
+				AD4D41AF62428EAB5D82B96C /* PersonalOS Watch */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0C643070322A965CD35F1302 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55E9EAB4707D71D7514C4CF6 /* ExerciseCatalog.swift in Sources */,
+				7FDC7116A0E356DF685AA40D /* HealthStore.swift in Sources */,
+				7CEC08ACE05C328348AD7791 /* MobileAPIClient.swift in Sources */,
+				D1667DF004D2B8CCD9737C26 /* MobileAPIModels.swift in Sources */,
+				E055B584F27FDA5F0F34016F /* OfflineWorkoutQueue.swift in Sources */,
+				1E57C0B28724B24673F91B65 /* PRBaselines.swift in Sources */,
+				6FFE9221290D2657D9C64588 /* PersonalOSApp.swift in Sources */,
+				05317DBD031E73DDAE8151C6 /* SessionStore.swift in Sources */,
+				FD0ABE944039C2090164EB53 /* Theme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5C11ADE9FA26FC5BF47D9169 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				836DABC6857606F8BB040B10 /* AppModel.swift in Sources */,
+				1F4F7858F490CDE118F92780 /* Components.swift in Sources */,
+				3CEB3D4F1FB7CF28281BD4C4 /* ExerciseCatalog.swift in Sources */,
+				9768A01B73B3B14BDBB8D6C2 /* HomeView.swift in Sources */,
+				86CDB2DEBE59EC1C1E425730 /* LiveWorkoutView.swift in Sources */,
+				5427D9F48D8059CB0AC1580D /* MobileAPIClient.swift in Sources */,
+				83FB94B008C61E0037CDB980 /* MobileAPIModels.swift in Sources */,
+				2DF1CA1D50939C507B4D10F3 /* OfflineWorkoutQueue.swift in Sources */,
+				3907BAA59C9AC5461171670C /* PRBaselines.swift in Sources */,
+				9890184C4B9B3D1073B8B4D7 /* PairingViews.swift in Sources */,
+				B4FE0E0A8D8734ED1191377D /* PitayaWatchApp.swift in Sources */,
+				1AD7225F8119DEE334552638 /* SessionStore.swift in Sources */,
+				B5954AB70A7B681072E2CFCD /* SetLoggerPage.swift in Sources */,
+				6EF00415B4AD3B33E2B6C717 /* Smoke.swift in Sources */,
+				B51F6AD550EEB2F65BC6677F /* SummaryView.swift in Sources */,
+				B00B0A7ABDF2552A868200C3 /* Theme.swift in Sources */,
+				267048DC6977B56F65B7C242 /* WorkoutRecorder.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		02A8D0293824E05ED5AB5306 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Debug;
+		};
+		3B1726DFB6F8F9B0788F8D6C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Release;
+		};
+		43E5D19A7406F679D7DE37BC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = WatchApp/PersonalOSWatch.entitlements;
+				INFOPLIST_FILE = WatchApp/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = net.blacksheepglobal.pitaya.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Release;
+		};
+		71138D750015B3E6B2FEF2B2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = WatchApp/PersonalOSWatch.entitlements;
+				INFOPLIST_FILE = WatchApp/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = net.blacksheepglobal.pitaya.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Debug;
+		};
+		AC66B4258780992A0D84336F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = iOSApp/PersonalOS.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = iOSApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = net.blacksheepglobal.pitaya;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C0E95E9AA356141A3CD6EE7E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = iOSApp/PersonalOS.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = iOSApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = net.blacksheepglobal.pitaya;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1977864FD278078A2854E520 /* Build configuration list for PBXNativeTarget "PersonalOS Watch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				71138D750015B3E6B2FEF2B2 /* Debug */,
+				43E5D19A7406F679D7DE37BC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		2355FC1A2E7518D10603EC0F /* Build configuration list for PBXNativeTarget "PersonalOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AC66B4258780992A0D84336F /* Debug */,
+				C0E95E9AA356141A3CD6EE7E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FEBA5B8AC94D195456C1A22C /* Build configuration list for PBXProject "PersonalOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				02A8D0293824E05ED5AB5306 /* Debug */,
+				3B1726DFB6F8F9B0788F8D6C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D7C951264FC5DCA3AF9A15DB /* Project object */;
+}

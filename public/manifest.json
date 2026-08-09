@@ -1,14 +1,14 @@
 {
-  "name": "PerOps",
-  "short_name": "PerOps",
-  "description": "Your personal operating system — health, fitness, todos, and AI coaching",
+  "name": "Pitaya",
+  "short_name": "Pitaya",
+  "description": "It's just you. Prove it.",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#0a0a0a",
+  "background_color": "#F2F1F2",
+  "theme_color": "#F2F1F2",
   "orientation": "portrait-primary",
-  "categories": ["health", "fitness", "productivity"],
+  "categories": ["health", "fitness"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -25,26 +25,20 @@
   ],
   "shortcuts": [
     {
-      "name": "Dashboard",
-      "short_name": "Dashboard",
+      "name": "Today",
+      "short_name": "Today",
       "url": "/dashboard",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Log Food",
+      "name": "Food",
       "short_name": "Food",
       "url": "/health/food",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Todos",
-      "short_name": "Todos",
-      "url": "/todos",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Workouts",
-      "short_name": "Workout",
+      "name": "Train",
+      "short_name": "Train",
       "url": "/health/workouts",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }

@@ -4,8 +4,6 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 model FoodLog {
@@ -985,4 +983,82 @@ model ExchangeRateSnapshot {
   @@unique([baseCurrency, quoteCurrency, rateDate, provider])
   @@index([rateDate, provider])
   @@map("exchange_rate_snapshots")
+}
+
+model AIUsageEvent {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  surface      String
+  model        String
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  audioSeconds Float?
+  costUsd      Decimal  @db.Decimal(10, 6)
+
+  @@index([createdAt])
+  @@map("ai_usage_events")
+}
+
+model PersonalRecord {
+  id            String   @id @default(uuid())
+  exercise      String // canonical id from lib/exercises.ts
+  exerciseName  String
+  kind          String // weight | volume
+  value         Float
+  unit          String // kg | kg-reps
+  previousValue Float?
+  workoutLogId  String?
+  achievedAt    DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([exercise, kind])
+  @@map("personal_records")
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  role      String // user | assistant | proposal
+  content   String
+  meta      Json? // {source} for user msgs; {kind, data, status} for proposals
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("chat_messages")
+}
+
+model Sequence {
+  id                 String   @id @default(uuid())
+  name               String
+  kind               String // straight | emom | tabata | circuit
+  restSecondsDefault Int?
+  durationMinutes    Int? // EMOM/circuit total time ("20-minute EMOM")
+  steps              Json // ordered [{ exercise, sets?, reps?, seconds?, weightKg?, restSeconds? }]
+  isArchived         Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("sequences")
+}
+
+model HabitCheck {
+  id        String   @id @default(uuid())
+  name      String // creatine | mobility | steps | journal (free-form)
+  localDate String // YYYY-MM-DD in the user's timezone
+  createdAt DateTime @default(now())
+
+  @@unique([name, localDate])
+  @@index([localDate])
+  @@map("habit_checks")
+}
+
+model JournalEntry {
+  id        String   @id @default(uuid())
+  localDate String   @unique // YYYY-MM-DD
+  text      String   @default("")
+  photoData String? // one compressed base64 photo per day — the habit anchor
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("journal_entries")
 }

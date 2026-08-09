@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { detectAndRecordPRs } from "@/lib/prs";
 
 function toNullableNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
@@ -89,7 +90,20 @@ export async function POST(request: NextRequest) {
       data: buildWorkoutMutation(body),
     });
 
-    return NextResponse.json(entry);
+    // PR detection — metering strength progress is why the app exists.
+    // Never let it break workout logging.
+    let newPRs: Awaited<ReturnType<typeof detectAndRecordPRs>> = [];
+    try {
+      newPRs = await detectAndRecordPRs({
+        workoutLogId: entry.id,
+        exercises: entry.exercises,
+        achievedAt: entry.startedAt,
+      });
+    } catch (error) {
+      console.warn("PR detection failed:", (error as Error)?.message);
+    }
+
+    return NextResponse.json({ ...entry, newPRs });
   } catch (error) {
     console.error("Workout create error:", error);
     return NextResponse.json(

@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   fetchStravaActivities,
+  fetchActivityStreams,
+  buildStreamMetrics,
   mapStravaActivityType,
   buildWorkoutDescription,
   type StravaActivity,
@@ -159,6 +161,20 @@ export async function POST(request: Request) {
         // Strip the Z so JavaScript doesn't re-interpret it as UTC.
         const localDateStr = (activity.start_date_local || activity.start_date).replace(/Z$/i, "");
 
+        // Streams → time-in-zone, training load, elevation profile. Never
+        // let an analytics fetch break the import.
+        let streamMetrics: Record<string, unknown> = {};
+        try {
+          if (activity.has_heartrate || activity.total_elevation_gain > 0) {
+            const streams = await fetchActivityStreams(activity.id);
+            if (streams) {
+              streamMetrics = buildStreamMetrics(streams, activity.suffer_score);
+            }
+          }
+        } catch (err) {
+          console.warn("Stream analytics failed:", (err as Error)?.message);
+        }
+
         await prisma.workoutLog.create({
           data: {
             startedAt: new Date(localDateStr),
@@ -180,7 +196,10 @@ export async function POST(request: Request) {
             routeData: activity.map?.summary_polyline
               ? { summaryPolyline: activity.map.summary_polyline }
               : undefined,
-            metricsData: exerciseData as Prisma.InputJsonValue,
+            metricsData: {
+              ...exerciseData,
+              ...streamMetrics,
+            } as Prisma.InputJsonValue,
             externalSource: "strava",
             externalId: stravaId,
             syncStatus: "synced",

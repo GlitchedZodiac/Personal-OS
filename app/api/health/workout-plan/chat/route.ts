@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { openai } from "@/lib/openai";
+import { openai, CHAT_MODEL } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
+import { getDateStringInTimeZone } from "@/lib/timezone";
+import { getUserTimeZone } from "@/lib/server-timezone";
 import {
   capDemoCompletionTokens,
   enforceDemoAIBudget,
@@ -56,16 +58,6 @@ const WORKOUT_CHAT_FUNCTIONS = [
               estimatedDuration: { type: "number" as const, description: "Minutes" },
               estimatedCalories: { type: "number" as const },
               warmup: { type: "string" as const, description: "Brief warmup instructions" },
-              format: {
-                type: "string" as const,
-                description:
-                  "Optional session format, e.g. 'emom' for interval-driven circuits. For EMOM days, estimatedDuration is the number of rounds and exercises are cycled one per round.",
-              },
-              intervalSeconds: {
-                type: "number" as const,
-                description:
-                  "Optional seconds per guided round for interval formats (60 for EMOM, 120 for E2MOM)",
-              },
               exercises: {
                 type: "array" as const,
                 items: {
@@ -114,8 +106,6 @@ const WORKOUT_CHAT_FUNCTIONS = [
               estimatedDuration: { type: "number" as const },
               estimatedCalories: { type: "number" as const },
               warmup: { type: "string" as const },
-              format: { type: "string" as const },
-              intervalSeconds: { type: "number" as const },
               exercises: {
                 type: "array" as const,
                 items: {
@@ -206,8 +196,12 @@ const WORKOUT_CHAT_FUNCTIONS = [
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, conversationHistory, currentPlan, customInstructions, aiLanguage } =
+    const { message, conversationHistory, currentPlan, customInstructions, aiLanguage, timeZone } =
       await request.json();
+
+    const userTimeZone = await getUserTimeZone(
+      typeof timeZone === "string" ? timeZone : null
+    );
 
     if (!message) {
       return NextResponse.json({ error: "No message provided" }, { status: 400 });
@@ -237,7 +231,7 @@ export async function POST(request: NextRequest) {
       });
       if (recentLogs.length > 0) {
         const logLines = recentLogs.map((l) => {
-          const date = l.startedAt.toISOString().split("T")[0];
+          const date = getDateStringInTimeZone(l.startedAt, userTimeZone);
           const desc = l.description ? ` — ${l.description}` : "";
           return `  ${date}: ${l.workoutType} ${l.durationMinutes}min${l.caloriesBurned ? ` (${Math.round(l.caloriesBurned)} cal)` : ""} [${l.source}]${desc}`;
         });
@@ -301,7 +295,7 @@ ${planContext}${recentWorkoutsContext}`;
     if (blocked) return blocked;
 
     const completion = await openai.chat.completions.create({
-      model: getDemoChatModel("gpt-5.2"),
+      model: getDemoChatModel(CHAT_MODEL),
       messages,
       functions: WORKOUT_CHAT_FUNCTIONS,
       function_call: "auto",

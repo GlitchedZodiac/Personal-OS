@@ -1,1125 +1,762 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  ArrowLeft,
-  Plus,
-  Clock,
-  Flame,
-  Dumbbell,
-  Sparkles,
-  RefreshCw,
-  Loader2,
-  Heart,
-  Mountain,
-  Play,
-  TrendingUp,
-  Zap,
-  Timer,
-  Pencil,
-  Trophy,
-  ThumbsUp,
-  Route,
-  Trash2,
-} from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
-import { VoiceInput } from "@/components/voice-input";
-import {
-  GuidedRoutine,
-  unlockGuidedAudio,
-  type RoutineExercise,
-} from "@/components/guided-routine";
-import { ConfirmDelete } from "@/components/confirm-delete";
-import { RouteMap } from "@/components/route-map";
-import { WhisperButton } from "@/components/whisper-button";
-import Link from "next/link";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
-import { useCachedFetch, invalidateHealthCache } from "@/lib/cache";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useDataLoggedListener } from "@/components/use-data-logged";
+import { SheetPortal } from "@/components/sheet-portal";
+import type { SequenceStep } from "@/lib/sequences";
 
-// ─── Types ────────────────────────────────────────────────────────────
-interface StravaExerciseData {
-  name?: string;
-  stravaType?: string;
-  sportType?: string;
-  distance?: number;
-  distanceKm?: number;
-  distanceMi?: number;
-  elevationGain?: number;
-  elevHigh?: number;
-  elevLow?: number;
-  avgHeartrate?: number;
-  maxHeartrate?: number;
-  avgSpeed?: number;
-  maxSpeed?: number;
-  avgWatts?: number;
-  maxWatts?: number;
-  avgCadence?: number;
-  sufferScore?: number;
-  achievements?: number;
-  kudos?: number;
-  prs?: number;
-  polyline?: string;
-  movingTime?: number;
-  elapsedTime?: number;
-  // Legacy fields
-  sets?: number;
-  reps?: number;
-  weightKg?: number;
+// Pitaya Train — full port of the design's Train screen (docs/design/
+// pitaya-app.dc.html, screen 3) plus its Live-workout and Routines sheets
+// (screen 5 overlays). All data is real: weekly tonnage, PR banner, today's
+// session with per-row PR chips, 8-week volume bars, latest trail. Surfaced
+// deviations from the design demo: the live sheet has no watch-mirroring
+// chip or live heart rate yet (both arrive with the watch build), and the
+// trail card's elevation sparkline waits for real elevation-series data.
+
+interface TrainData {
+  date: string;
+  weekNumber: number;
+  weekVolumeKg: number;
+  latestPR: {
+    exerciseName: string;
+    kind: string;
+    value: number;
+    unit: string;
+    previousValue: number | null;
+    achievedAt: string;
+    isToday: boolean;
+  } | null;
+  session: {
+    rows: { name: string; detail: string; isPR: boolean }[];
+    durationMinutes: number;
+    startedAt: string;
+  } | null;
+  weeklyVolume: { weekStart: string; label: string; volumeKg: number }[];
+  pctChange: number | null;
+  latestTrail: {
+    id: string;
+    startedAt: string;
+    workoutType: string;
+    description: string | null;
+    distanceKm: number;
+    elevationGainM: number | null;
+    durationMinutes: number;
+    avgHeartRateBpm: number | null;
+    altitudeSpark: number[] | null;
+  } | null;
+  latestEffort: {
+    startedAt: string;
+    workoutType: string;
+    description: string | null;
+    durationMinutes: number;
+    avgHeartRateBpm: number | null;
+    timeInZones: { seconds: number[]; pct: number[]; totalSeconds: number };
+    loadScore: number | null;
+    relativeEffort: number | null;
+  } | null;
 }
 
-interface WorkoutEntry {
-  id: string;
-  startedAt: string;
-  durationMinutes: number;
-  workoutType: string;
-  description: string | null;
-  caloriesBurned: number | null;
-  exercises: StravaExerciseData[] | null;
-  source: string;
-  stravaActivityId: string | null;
-}
-
-// ─── Config ────────────────────────────────────────────────────────────
-const workoutConfig: Record<
-  string,
-  { icon: string; color: string; bgColor: string; gradient: string }
-> = {
-  strength: {
-    icon: "💪",
-    color: "text-blue-400",
-    bgColor: "bg-blue-500/10 border-blue-500/20",
-    gradient: "from-blue-500/10 to-blue-500/5",
-  },
-  cardio: {
-    icon: "❤️",
-    color: "text-red-400",
-    bgColor: "bg-red-500/10 border-red-500/20",
-    gradient: "from-red-500/10 to-red-500/5",
-  },
-  run: {
-    icon: "🏃",
-    color: "text-green-400",
-    bgColor: "bg-green-500/10 border-green-500/20",
-    gradient: "from-green-500/10 to-green-500/5",
-  },
-  walk: {
-    icon: "🚶",
-    color: "text-emerald-400",
-    bgColor: "bg-emerald-500/10 border-emerald-500/20",
-    gradient: "from-emerald-500/10 to-emerald-500/5",
-  },
-  hike: {
-    icon: "🥾",
-    color: "text-lime-400",
-    bgColor: "bg-lime-500/10 border-lime-500/20",
-    gradient: "from-lime-500/10 to-lime-500/5",
-  },
-  cycling: {
-    icon: "🚴",
-    color: "text-amber-400",
-    bgColor: "bg-amber-500/10 border-amber-500/20",
-    gradient: "from-amber-500/10 to-amber-500/5",
-  },
-  swimming: {
-    icon: "🏊",
-    color: "text-cyan-400",
-    bgColor: "bg-cyan-500/10 border-cyan-500/20",
-    gradient: "from-cyan-500/10 to-cyan-500/5",
-  },
-  yoga: {
-    icon: "🧘",
-    color: "text-purple-400",
-    bgColor: "bg-purple-500/10 border-purple-500/20",
-    gradient: "from-purple-500/10 to-purple-500/5",
-  },
-  hiit: {
-    icon: "🔥",
-    color: "text-orange-400",
-    bgColor: "bg-orange-500/10 border-orange-500/20",
-    gradient: "from-orange-500/10 to-orange-500/5",
-  },
-  other: {
-    icon: "⚡",
-    color: "text-gray-400",
-    bgColor: "bg-gray-500/10 border-gray-500/20",
-    gradient: "from-gray-500/10 to-gray-500/5",
-  },
-};
-
-// ─── Helpers ────────────────────────────────────────────────────────────
-function formatPace(avgSpeedMs: number, type: string): string {
-  if (type === "run" || type === "walk" || type === "hike") {
-    const paceMinPerKm = 1000 / 60 / avgSpeedMs;
-    const paceMin = Math.floor(paceMinPerKm);
-    const paceSec = Math.round((paceMinPerKm - paceMin) * 60);
-    return `${paceMin}:${paceSec.toString().padStart(2, "0")} /km`;
-  }
-  if (type === "cycling") {
-    const speedKmh = avgSpeedMs * 3.6;
-    return `${speedKmh.toFixed(1)} km/h`;
-  }
-  return "";
-}
-
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
-// ─── Built-in guided routines ───────────────────────────────────────────
-
-interface BuiltInRoutine {
+interface Routine {
   id: string;
   name: string;
-  summary: string;
-  totalMinutes: number;
-  intervalSeconds: number;
-  workoutType: string;
-  exercises: RoutineExercise[];
+  kind: string;
+  restSecondsDefault: number | null;
+  durationMinutes: number | null;
+  steps: SequenceStep[];
 }
 
-const BUILT_IN_ROUTINES: BuiltInRoutine[] = [
-  {
-    id: "kb-emom-20",
-    name: "20-Min Kettlebell EMOM",
-    summary: "20 swings · 10 snatches L · 10 snatches R · 15 goblet squats",
-    totalMinutes: 20,
-    intervalSeconds: 60,
-    workoutType: "hiit",
-    exercises: [
-      { name: "Kettlebell Swings", reps: 20 },
-      { name: "Kettlebell Snatches (Left)", reps: 10 },
-      { name: "Kettlebell Snatches (Right)", reps: 10 },
-      { name: "Goblet Squats", reps: 15 },
-    ],
-  },
+// Design's 8-bar color ramp, oldest → current week.
+const BAR_COLORS = [
+  "#EADFE5",
+  "#EADFE5",
+  "#EADFE5",
+  "#DCA8BE",
+  "#DCA8BE",
+  "#C97D9C",
+  "#C97D9C",
+  "#A63D63",
 ];
 
-// ─── Component ──────────────────────────────────────────────────────────
-export default function WorkoutsPage() {
-  const { data: entries, loading, refresh: fetchEntries } =
-    useCachedFetch<WorkoutEntry[]>("/api/health/workouts", { ttl: 60_000 });
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<WorkoutEntry | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [newEntry, setNewEntry] = useState({
-    workoutType: "strength",
-    durationMinutes: "",
-    description: "",
-    caloriesBurned: "",
-  });
-  const [editForm, setEditForm] = useState({
-    workoutType: "",
-    durationMinutes: "",
-    description: "",
-    caloriesBurned: "",
-    startedAt: "",
-  });
-  const [stravaConnected, setStravaConnected] = useState(false);
-  const [stravaSyncing, setStravaSyncing] = useState(false);
-  const [guidedRoutine, setGuidedRoutine] = useState<BuiltInRoutine | null>(
-    null
-  );
+const fmt = (n: number) => n.toLocaleString("en-US");
 
-  useEffect(() => {
-    fetch("/api/strava/status")
-      .then((r) => r.json())
-      .then((d) => setStravaConnected(d.connected))
-      .catch(() => {});
+function stepSummary(steps: SequenceStep[], durationMinutes?: number | null) {
+  const names = steps
+    .slice(0, 4)
+    .map((s) => s.exerciseName.toLowerCase())
+    .join(" · ");
+  return durationMinutes ? `${durationMinutes} min — ${names}` : names;
+}
+
+// Sets-per-step: builder stores it alongside reps; timed steps run once.
+function targetSetsFor(step: SequenceStep) {
+  const withSets = step as SequenceStep & { sets?: number };
+  if (withSets.sets && withSets.sets > 0) return withSets.sets;
+  return step.seconds ? 1 : 5;
+}
+
+interface LiveSession {
+  routine: Routine;
+  stepIdx: number;
+  setsDone: number[];
+  startedAt: number;
+}
+
+export default function TrainPage() {
+  const router = useRouter();
+  const [data, setData] = useState<TrainData | null>(null);
+  const [routines, setRoutines] = useState<Routine[] | null>(null);
+  const [showRoutines, setShowRoutines] = useState(false);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [live, setLive] = useState<LiveSession | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const load = useCallback(() => {
+    const local = new Date();
+    const dateStr = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    fetch(`/api/health/train?date=${dateStr}&tz=${encodeURIComponent(tz)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setData)
+      .catch(() => setData(null));
+    fetch("/api/health/sequences")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => setRoutines(Array.isArray(rows) ? rows : []))
+      .catch(() => setRoutines([]));
   }, []);
 
-  const handleStravaSync = async () => {
-    setStravaSyncing(true);
-    try {
-      const res = await fetch("/api/strava/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullSync: false }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.message || `Synced ${data.synced} activities`);
-        if (data.synced > 0) {
-          invalidateHealthCache();
-          fetchEntries();
-        }
-      } else {
-        toast.error(data.error || "Sync failed");
-      }
-    } catch {
-      toast.error("Sync failed");
-    } finally {
-      setStravaSyncing(false);
-    }
+  useEffect(load, [load]);
+  useDataLoggedListener(load);
+
+  // Live session clock
+  useEffect(() => {
+    if (!live) return;
+    timerRef.current = setInterval(
+      () => setElapsed(Math.floor((Date.now() - live.startedAt) / 1000)),
+      1000
+    );
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [live]);
+
+  const startLive = (routine: Routine) => {
+    setLive({
+      routine,
+      stepIdx: 0,
+      setsDone: routine.steps.map(() => 0),
+      startedAt: Date.now(),
+    });
+    setElapsed(0);
+    setShowRoutines(false);
+    setShowStartPicker(false);
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      const res = await fetch(`/api/health/workouts?id=${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        invalidateHealthCache();
-        fetchEntries();
-      }
-    } catch (error) {
-      console.error("Failed to delete:", error);
+  const openStart = () => {
+    if (!routines || routines.length === 0) {
+      toast("Build a routine first — Routines → Build new routine.");
+      setShowRoutines(true);
+      return;
     }
+    setShowStartPicker(true);
   };
 
-  const handleAddManual = async () => {
-    try {
-      const res = await fetch("/api/health/workouts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...newEntry,
-          durationMinutes: parseInt(newEntry.durationMinutes) || 0,
-          caloriesBurned: newEntry.caloriesBurned
-            ? parseFloat(newEntry.caloriesBurned)
-            : null,
-          source: "manual",
-        }),
-      });
-      if (res.ok) {
-        setShowAddDialog(false);
-        setNewEntry({
-          workoutType: "strength",
-          durationMinutes: "",
-          description: "",
-          caloriesBurned: "",
-        });
-        invalidateHealthCache();
-        fetchEntries();
-        toast.success("Workout logged!");
-      }
-    } catch (error) {
-      console.error("Failed to add entry:", error);
-    }
-  };
-
-  const openEditDialog = (entry: WorkoutEntry) => {
-    setEditingEntry(entry);
-    setEditForm({
-      workoutType: entry.workoutType,
-      durationMinutes: entry.durationMinutes.toString(),
-      description: entry.description || "",
-      caloriesBurned: entry.caloriesBurned?.toString() || "",
-      startedAt: format(new Date(entry.startedAt), "yyyy-MM-dd'T'HH:mm"),
+  const bumpSet = (delta: number) => {
+    setLive((prev) => {
+      if (!prev) return prev;
+      const setsDone = [...prev.setsDone];
+      setsDone[prev.stepIdx] = Math.max(0, setsDone[prev.stepIdx] + delta);
+      return { ...prev, setsDone };
     });
   };
 
-  const handleSaveEdit = async () => {
-    if (!editingEntry) return;
+  const advanceStep = (dir: 1 | -1) => {
+    setLive((prev) => {
+      if (!prev) return prev;
+      const next = Math.min(
+        prev.routine.steps.length - 1,
+        Math.max(0, prev.stepIdx + dir)
+      );
+      return { ...prev, stepIdx: next };
+    });
+  };
+
+  const endLive = async () => {
+    if (!live) return;
+    setSaving(true);
     try {
+      const durationMinutes = Math.max(1, Math.round(elapsed / 60));
+      const exercises = live.routine.steps
+        .map((step, i) => ({
+          name: step.exerciseName,
+          sets: live.setsDone[i],
+          reps: step.reps ?? undefined,
+          seconds: step.seconds ?? undefined,
+          weightKg: step.weightKg ?? undefined,
+        }))
+        .filter((e) => e.sets > 0);
+
+      if (exercises.length === 0) {
+        toast("Nothing logged — session discarded.");
+        setLive(null);
+        return;
+      }
+
       const res = await fetch("/api/health/workouts", {
-        method: "PATCH",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: editingEntry.id,
-          workoutType: editForm.workoutType,
-          durationMinutes: parseInt(editForm.durationMinutes) || 0,
-          description: editForm.description || null,
-          caloriesBurned: editForm.caloriesBurned
-            ? parseFloat(editForm.caloriesBurned)
-            : null,
-          startedAt: editForm.startedAt ? new Date(editForm.startedAt).toISOString() : undefined,
+          workoutType: "strength",
+          description: live.routine.name,
+          durationMinutes,
+          exercises,
+          source: "live",
+          metricsData: { sequenceId: live.routine.id },
         }),
       });
-      if (res.ok) {
-        setEditingEntry(null);
-        invalidateHealthCache();
-        fetchEntries();
-        toast.success("Workout updated!");
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(body.error || "Couldn't save the session");
+        return;
       }
-    } catch (error) {
-      console.error("Failed to edit:", error);
-      toast.error("Failed to update");
+      if (Array.isArray(body.newPRs) && body.newPRs.length > 0) {
+        for (const pr of body.newPRs) {
+          toast.success(
+            `NEW PR — ${pr.exerciseName}: ${fmt(pr.value)} ${pr.unit === "kg-reps" ? "kg total" : "kg"}`
+          );
+        }
+      } else {
+        toast.success("Session saved");
+      }
+      setLive(null);
+      load();
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleBulkDeleteNonStrava = async () => {
-    const manualEntries = safeEntries.filter((e) => e.source !== "strava");
-    if (manualEntries.length === 0) {
-      toast.info("No manual workouts to remove.");
-      return;
-    }
-    if (!confirm(`Delete ${manualEntries.length} non-Strava workout${manualEntries.length > 1 ? "s" : ""}? This cannot be undone.`)) return;
-
-    let deleted = 0;
-    for (const entry of manualEntries) {
-      try {
-        const res = await fetch(`/api/health/workouts?id=${entry.id}`, { method: "DELETE" });
-        if (res.ok) deleted++;
-      } catch {
-        // continue
-      }
-    }
-    toast.success(`Removed ${deleted} manual workout${deleted > 1 ? "s" : ""}`);
-    invalidateHealthCache();
-    fetchEntries();
-  };
-
-  const safeEntries = entries ?? [];
-  const totalMinutes = safeEntries.reduce((sum, e) => sum + e.durationMinutes, 0);
-  const totalCalBurned = safeEntries.reduce(
-    (sum, e) => sum + (e.caloriesBurned || 0),
-    0
+  const maxVolume = useMemo(
+    () => Math.max(1, ...(data?.weeklyVolume.map((w) => w.volumeKg) ?? [1])),
+    [data]
   );
-  const stravaCount = safeEntries.filter((e) => e.source === "strava").length;
-  const manualCount = safeEntries.filter((e) => e.source !== "strava").length;
 
-  // Get Strava exercise data from first exercise entry
-  const getStravaData = (entry: WorkoutEntry): StravaExerciseData | null => {
-    if (!entry.exercises || entry.exercises.length === 0) return null;
-    return entry.exercises[0];
-  };
+  const sessionTime = data?.session
+    ? new Date(data.session.startedAt)
+        .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+        .toUpperCase()
+    : null;
+
+  const trailDay = data?.latestTrail
+    ? new Date(data.latestTrail.startedAt).toLocaleDateString("en-US", {
+        weekday: "short",
+      })
+    : null;
+
+  const liveStep = live?.routine.steps[live.stepIdx];
+  const liveNext = live?.routine.steps[live.stepIdx + 1];
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
+  const ss = String(elapsed % 60).padStart(2, "0");
 
   return (
-    <div className="space-y-4 px-4 pt-12 pb-36 lg:space-y-6 lg:px-0 lg:pt-10 lg:pb-10">
+    <div className="px-4 pb-32 pt-12 lg:px-0 lg:pt-8 max-w-lg lg:max-w-2xl">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Link href="/health">
-          <Button variant="ghost" size="icon" className="h-9 w-9">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold">Workouts</h1>
-          <p className="text-xs text-muted-foreground">
-            Track your training sessions
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="micro-label">
+            Week {data?.weekNumber ?? "—"} · Kettlebell block
           </p>
+          <h1
+            className="mt-0.5 text-3xl font-bold tracking-[-0.02em]"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Train
+          </h1>
         </div>
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="h-9">
-              <Plus className="h-4 w-4 mr-1" /> Add
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle>Log Workout</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div>
-                <Label>Workout Type</Label>
-                <Select
-                  value={newEntry.workoutType}
-                  onValueChange={(v) =>
-                    setNewEntry({ ...newEntry, workoutType: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(workoutConfig).map(([key, cfg]) => (
-                      <SelectItem key={key} value={key}>
-                        {cfg.icon} {key.charAt(0).toUpperCase() + key.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label>Duration (min)</Label>
-                  <Input
-                    type="number"
-                    value={newEntry.durationMinutes}
-                    onChange={(e) =>
-                      setNewEntry({
-                        ...newEntry,
-                        durationMinutes: e.target.value,
-                      })
-                    }
-                    placeholder="45"
-                  />
-                </div>
-                <div>
-                  <Label>Calories Burned</Label>
-                  <Input
-                    type="number"
-                    value={newEntry.caloriesBurned}
-                    onChange={(e) =>
-                      setNewEntry({
-                        ...newEntry,
-                        caloriesBurned: e.target.value,
-                      })
-                    }
-                    placeholder="300"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label className="flex items-center justify-between">
-                  Description
-                  <WhisperButton
-                    size="sm"
-                    className="h-6 w-6 p-0"
-                    onTranscription={(text) =>
-                      setNewEntry((prev) => ({
-                        ...prev,
-                        description: prev.description
-                          ? `${prev.description}\n${text}`
-                          : text,
-                      }))
-                    }
-                  />
-                </Label>
-                <Textarea
-                  value={newEntry.description}
-                  onChange={(e) =>
-                    setNewEntry({ ...newEntry, description: e.target.value })
-                  }
-                  placeholder="Describe your workout — or tap the mic"
-                  rows={2}
-                  className="mt-1"
-                />
-              </div>
-              <Button onClick={handleAddManual} className="w-full">
-                Save Workout
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <span className="rounded-full bg-accent px-3 py-[5px] text-xs font-semibold tabular-nums text-[#8C2F51]">
+          {fmt(data?.weekVolumeKg ?? 0)} kg
+        </span>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6">
-        <div className="space-y-4 lg:sticky lg:top-6">
+      {/* Actions */}
+      <div className="mt-4 flex gap-2.5">
+        <button
+          onClick={openStart}
+          className="flex flex-[1.5] items-center justify-center gap-2 rounded-[12px] bg-foreground py-3 text-[13.5px] font-semibold text-background"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          <span className="h-2 w-2 rounded-full bg-[#DC74A0]" /> Start live
+          workout
+        </button>
+        <button
+          onClick={() => setShowRoutines(true)}
+          className="flex-1 rounded-[12px] border border-[#D9D7DC] bg-card py-3 text-[13.5px] font-semibold text-foreground"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          Routines
+        </button>
+      </div>
 
-      {/* AI Plan Banner */}
-      <Link href="/health/workouts/plan">
-        <Card className="border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 transition-colors cursor-pointer">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-purple-500/10">
-              <Sparkles className="h-5 w-5 text-purple-400" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium">AI Workout Plan</p>
-              <p className="text-[10px] text-muted-foreground">
-                Get a personalized training plan, track progress, and level up
-              </p>
-            </div>
-            <span className="text-xs text-purple-400">Open →</span>
-          </CardContent>
-        </Card>
-      </Link>
-
-      {/* Guided Routines — press start and just follow along */}
-      <Card className="border-teal-500/20 bg-teal-500/5">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Timer className="h-4 w-4 text-teal-400" />
-            <p className="text-sm font-medium">Routines</p>
-          </div>
-          {BUILT_IN_ROUTINES.map((routine) => (
-            <div
-              key={routine.id}
-              className="flex items-center gap-3 p-3 rounded-xl bg-secondary/20"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{routine.name}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  {routine.summary}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                className="h-9 gap-1.5 bg-teal-600 hover:bg-teal-700 shrink-0"
-                onClick={() => {
-                  // Must run inside the tap so iOS lets the timer beep
-                  unlockGuidedAudio();
-                  setGuidedRoutine(routine);
-                }}
-              >
-                <Play className="h-3.5 w-3.5" /> Start
-              </Button>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* Strava Sync */}
-      {stravaConnected && (
-        <Card className="border-orange-500/20 bg-orange-500/5">
-          <CardContent className="p-3 flex items-center gap-3">
-            <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24">
-              <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" fill="#FC4C02"/>
+      {/* NEW PR banner */}
+      {data?.latestPR && (
+        <div className="relative mt-3 overflow-hidden rounded-[18px] bg-primary p-[18px]">
+          <div
+            className="absolute bottom-0 top-0 w-[60px] bg-white/[0.18] blur-[6px]"
+            style={{ animation: "shimmer 3.2s ease-in-out infinite" }}
+          />
+          <div className="flex items-center gap-2 text-[10.5px] font-bold tracking-[0.18em] text-[#F6E3EB]">
+            <svg width="10" height="10" viewBox="0 0 10 10">
+              <rect
+                x="5"
+                y="0"
+                width="7"
+                height="7"
+                transform="rotate(45 5 1.5)"
+                fill="#FFFFFF"
+              />
             </svg>
-            <p className="text-xs text-muted-foreground flex-1">
-              {stravaCount > 0
-                ? `${stravaCount} Strava activities synced`
-                : "Strava connected — sync your latest activities"}
-            </p>
-            <Button
-              onClick={handleStravaSync}
-              disabled={stravaSyncing}
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs border-orange-500/30 text-orange-400"
-            >
-              {stravaSyncing ? (
-                <Loader2 className="h-3 w-3 animate-spin mr-1" />
-              ) : (
-                <RefreshCw className="h-3 w-3 mr-1" />
-              )}
-              Sync
-            </Button>
-          </CardContent>
-        </Card>
+            NEW PR ·{" "}
+            {data.latestPR.isToday
+              ? "TODAY"
+              : new Date(data.latestPR.achievedAt)
+                  .toLocaleDateString("en-US", { weekday: "long" })
+                  .toUpperCase()}
+          </div>
+          <div
+            className="mt-1.5 text-[22px] font-bold text-white"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            {data.latestPR.exerciseName} — {fmt(data.latestPR.value)}{" "}
+            {data.latestPR.unit === "kg-reps" ? "kg total" : "kg"}
+          </div>
+          <div className="mt-[3px] text-xs text-[#F0D3E0]">
+            Yesterday&apos;s you lifted less.
+          </div>
+        </div>
       )}
 
-      {/* Summary bar */}
-      {safeEntries.length > 0 && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div>
-                  <p className="text-2xl font-bold">{safeEntries.length}</p>
-                  <p className="text-[10px] text-muted-foreground">workouts</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{totalMinutes}</p>
-                  <p className="text-[10px] text-muted-foreground">minutes</p>
-                </div>
-                {totalCalBurned > 0 && (
-                  <div>
-                    <p className="text-2xl font-bold">
-                      {Math.round(totalCalBurned).toLocaleString()}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      cal burned
-                    </p>
-                  </div>
+      {/* Today's session */}
+      {data?.session && (
+        <div className="mt-3 overflow-hidden rounded-[18px] bg-card shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+          <div className="px-4 pb-2.5 pt-3.5 text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+            TODAY{sessionTime ? ` · ${sessionTime}` : ""}
+            {data.session.durationMinutes
+              ? ` · ${data.session.durationMinutes} MIN`
+              : ""}
+          </div>
+          {data.session.rows.map((row, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between border-t border-muted px-4 py-3"
+              style={row.isPR ? { background: "#FDF7FA" } : undefined}
+            >
+              <div className="text-[13.5px] font-semibold text-foreground">
+                {row.name}{" "}
+                {row.isPR && (
+                  <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold text-white">
+                    PR
+                  </span>
                 )}
               </div>
-              {/* Bulk delete manual workouts */}
-              {manualCount > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10"
-                  onClick={handleBulkDeleteNonStrava}
-                >
-                  <Trash2 className="h-3 w-3 mr-1" />
-                  {manualCount} manual
-                </Button>
-              )}
+              <div className="flex items-center gap-2.5">
+                <span className="text-[12.5px] tabular-nums text-secondary-foreground">
+                  {row.detail}
+                </span>
+                <span className="text-[13px] text-[#5E9B72]">✓</span>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       )}
 
-        </div>
-
-        <div className="space-y-4">
-
-      {/* Workout List */}
-      {loading ? (
-        <div className="py-12 text-center text-muted-foreground">
-          <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-          Loading...
-        </div>
-      ) : safeEntries.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Dumbbell className="h-10 w-10 text-primary/20 mx-auto mb-3" />
-            <p className="text-muted-foreground">No workouts logged yet.</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Use voice input or tap Add to log a workout.
+      {/* Volume · 8 weeks */}
+      <div className="mt-3 rounded-[16px] bg-card p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+        <div className="flex items-baseline justify-between">
+          <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+            VOLUME · 8 WEEKS
+          </p>
+          {data?.pctChange != null && (
+            <p
+              className="text-[11px] font-semibold"
+              style={{ color: data.pctChange >= 0 ? "#5E9B72" : "#B54B4B" }}
+            >
+              {data.pctChange >= 0 ? "+" : ""}
+              {data.pctChange}%
             </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {safeEntries.map((entry) => {
-            const cfg =
-              workoutConfig[entry.workoutType] || workoutConfig.other;
-            const strava = getStravaData(entry);
-            const isExpanded = expandedId === entry.id;
-            const hasRoute = strava?.polyline;
-            const hasDetailedStats = strava && (strava.distance || strava.avgHeartrate || strava.elevationGain);
-
-            return (
-              <Card
-                key={entry.id}
-                className={cn("border overflow-hidden", cfg.bgColor)}
-              >
-                <CardContent className="p-0">
-                  {/* Main card content */}
-                  <div
-                    className="p-4 cursor-pointer"
-                    onClick={() => setExpandedId(isExpanded ? null : entry.id)}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        {/* Type, source badge & date */}
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <span className="text-xl">{cfg.icon}</span>
-                          <span
-                            className={cn("font-semibold capitalize", cfg.color)}
-                          >
-                            {entry.workoutType}
-                          </span>
-
-                          {/* Source badges */}
-                          {entry.source === "strava" && (
-                            <Badge className="text-[9px] h-4 px-1.5 bg-orange-500/15 text-orange-400 border-orange-500/30">
-                              <svg className="h-2.5 w-2.5 mr-0.5" viewBox="0 0 24 24">
-                                <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" fill="#FC4C02"/>
-                              </svg>
-                              Strava
-                            </Badge>
-                          )}
-                          {entry.source === "ai" && (
-                            <Badge className="text-[9px] h-4 px-1.5 bg-primary/10 text-primary">
-                              AI
-                            </Badge>
-                          )}
-
-                          <Badge variant="outline" className="text-[10px] ml-auto">
-                            {format(new Date(entry.startedAt), "MMM d, h:mm a")}
-                          </Badge>
-                        </div>
-
-                        {/* Strava activity name */}
-                        {strava?.name && entry.source === "strava" && (
-                          <p className="text-sm font-medium mb-1">{strava.name}</p>
-                        )}
-
-                        {/* Quick stats row */}
-                        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                          <div className="flex items-center gap-1.5 text-xs">
-                            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="font-medium">
-                              {entry.durationMinutes} min
-                            </span>
-                          </div>
-
-                          {entry.caloriesBurned && entry.caloriesBurned > 0 && (
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <Flame className="h-3.5 w-3.5 text-orange-400" />
-                              <span className="font-medium">
-                                {Math.round(entry.caloriesBurned)} cal
-                              </span>
-                            </div>
-                          )}
-
-                          {strava?.distanceKm && strava.distanceKm > 0 && (
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <Route className="h-3.5 w-3.5 text-blue-400" />
-                              <span className="font-medium">
-                                {strava.distanceKm} km ({strava.distanceMi} mi)
-                              </span>
-                            </div>
-                          )}
-
-                          {strava?.elevationGain && strava.elevationGain > 0 && (
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <Mountain className="h-3.5 w-3.5 text-emerald-400" />
-                              <span className="font-medium">
-                                {Math.round(strava.elevationGain)}m ↑
-                              </span>
-                            </div>
-                          )}
-
-                          {strava?.avgHeartrate && (
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <Heart className="h-3.5 w-3.5 text-red-400" />
-                              <span className="font-medium">
-                                {Math.round(strava.avgHeartrate)} bpm
-                              </span>
-                            </div>
-                          )}
-
-                          {strava?.avgSpeed && strava.avgSpeed > 0 && (
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <TrendingUp className="h-3.5 w-3.5 text-cyan-400" />
-                              <span className="font-medium">
-                                {formatPace(strava.avgSpeed, entry.workoutType)}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Achievements row */}
-                        {(strava?.prs || strava?.achievements || strava?.kudos) && (
-                          <div className="flex gap-3 mt-2">
-                            {strava.prs && strava.prs > 0 && (
-                              <div className="flex items-center gap-1 text-[10px] text-amber-400">
-                                <Trophy className="h-3 w-3" />
-                                {strava.prs} PR{strava.prs > 1 ? "s" : ""}
-                              </div>
-                            )}
-                            {strava.achievements && strava.achievements > 0 && (
-                              <div className="flex items-center gap-1 text-[10px] text-yellow-400">
-                                <Zap className="h-3 w-3" />
-                                {strava.achievements} achievement{strava.achievements > 1 ? "s" : ""}
-                              </div>
-                            )}
-                            {strava.kudos && strava.kudos > 0 && (
-                              <div className="flex items-center gap-1 text-[10px] text-orange-400">
-                                <ThumbsUp className="h-3 w-3" />
-                                {strava.kudos} kudo{strava.kudos > 1 ? "s" : ""}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Description (non-Strava or collapsed) */}
-                        {entry.description && !strava?.name && (
-                          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                            {entry.description}
-                          </p>
-                        )}
-
-                        {/* Expand indicator */}
-                        {(hasRoute || hasDetailedStats) && (
-                          <p className="text-[10px] text-muted-foreground/50 mt-2">
-                            {isExpanded ? "Tap to collapse ▲" : "Tap for details ▼"}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex flex-col gap-1 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditDialog(entry);
-                          }}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <ConfirmDelete
-                          onConfirm={() => handleDelete(entry.id)}
-                          itemName={`${entry.workoutType} workout`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Expanded details */}
-                  {isExpanded && (
-                    <div className={cn("border-t border-border/30 p-4 space-y-3 bg-gradient-to-b", cfg.gradient)}>
-                      {/* Route map */}
-                      {hasRoute && (
-                        <RouteMap
-                          polyline={strava!.polyline!}
-                          width={350}
-                          height={160}
-                          className="w-full"
-                        />
-                      )}
-
-                      {/* Detailed stats grid */}
-                      {hasDetailedStats && (
-                        <div className="grid grid-cols-2 gap-2">
-                          {strava?.movingTime && (
-                            <div className="bg-black/10 rounded-lg p-2.5">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Timer className="h-3 w-3 text-muted-foreground" />
-                                <span className="text-[10px] text-muted-foreground">Moving Time</span>
-                              </div>
-                              <p className="text-sm font-semibold">{formatDuration(strava.movingTime)}</p>
-                            </div>
-                          )}
-
-                          {strava?.elapsedTime && strava.movingTime && strava.elapsedTime !== strava.movingTime && (
-                            <div className="bg-black/10 rounded-lg p-2.5">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Clock className="h-3 w-3 text-muted-foreground" />
-                                <span className="text-[10px] text-muted-foreground">Elapsed</span>
-                              </div>
-                              <p className="text-sm font-semibold">{formatDuration(strava.elapsedTime)}</p>
-                            </div>
-                          )}
-
-                          {strava?.maxHeartrate && (
-                            <div className="bg-black/10 rounded-lg p-2.5">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Heart className="h-3 w-3 text-red-400" />
-                                <span className="text-[10px] text-muted-foreground">Max HR</span>
-                              </div>
-                              <p className="text-sm font-semibold">{strava.maxHeartrate} bpm</p>
-                            </div>
-                          )}
-
-                          {strava?.maxSpeed && strava.maxSpeed > 0 && (
-                            <div className="bg-black/10 rounded-lg p-2.5">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <TrendingUp className="h-3 w-3 text-cyan-400" />
-                                <span className="text-[10px] text-muted-foreground">Max Speed</span>
-                              </div>
-                              <p className="text-sm font-semibold">
-                                {formatPace(strava.maxSpeed, entry.workoutType) || `${(strava.maxSpeed * 3.6).toFixed(1)} km/h`}
-                              </p>
-                            </div>
-                          )}
-
-                          {strava?.elevHigh != null && strava.elevLow != null && (
-                            <div className="bg-black/10 rounded-lg p-2.5">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Mountain className="h-3 w-3 text-emerald-400" />
-                                <span className="text-[10px] text-muted-foreground">Elevation Range</span>
-                              </div>
-                              <p className="text-sm font-semibold">
-                                {Math.round(strava.elevLow)}m — {Math.round(strava.elevHigh)}m
-                              </p>
-                            </div>
-                          )}
-
-                          {strava?.avgWatts && (
-                            <div className="bg-black/10 rounded-lg p-2.5">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Zap className="h-3 w-3 text-yellow-400" />
-                                <span className="text-[10px] text-muted-foreground">Avg Power</span>
-                              </div>
-                              <p className="text-sm font-semibold">{Math.round(strava.avgWatts)}W</p>
-                            </div>
-                          )}
-
-                          {strava?.avgCadence && (
-                            <div className="bg-black/10 rounded-lg p-2.5">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <RefreshCw className="h-3 w-3 text-violet-400" />
-                                <span className="text-[10px] text-muted-foreground">Avg Cadence</span>
-                              </div>
-                              <p className="text-sm font-semibold">{Math.round(strava.avgCadence)} rpm</p>
-                            </div>
-                          )}
-
-                          {strava?.sufferScore && (
-                            <div className="bg-black/10 rounded-lg p-2.5">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Flame className="h-3 w-3 text-orange-400" />
-                                <span className="text-[10px] text-muted-foreground">Suffer Score</span>
-                              </div>
-                              <p className="text-sm font-semibold">{strava.sufferScore}</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Full description for Strava */}
-                      {entry.description && strava?.name && (
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                          {entry.description}
-                        </p>
-                      )}
-
-                      {/* Legacy exercise list (manual workouts) */}
-                      {entry.exercises && entry.source !== "strava" && entry.exercises.length > 0 && (
-                        <div className="space-y-1.5 pl-1 border-l-2 border-border/30">
-                          {entry.exercises.map((ex, i) => (
-                            <div
-                              key={i}
-                              className="pl-3 flex items-center gap-2 text-xs"
-                            >
-                              <span className="font-medium">{ex.name}</span>
-                              {ex.sets && (
-                                <span className="text-muted-foreground">
-                                  {ex.sets}×{ex.reps || "?"}
-                                </span>
-                              )}
-                              {ex.weightKg && (
-                                <Badge
-                                  variant="secondary"
-                                  className="text-[10px] h-4 px-1"
-                                >
-                                  {ex.weightKg}kg
-                                </Badge>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+          )}
         </div>
-      )}
+        <div className="mt-3 flex h-[74px] items-end gap-2">
+          {(data?.weeklyVolume ?? Array.from({ length: 8 }, () => null)).map(
+            (bucket, i) => (
+              <div
+                key={i}
+                className="flex-1 rounded-t-[6px]"
+                style={{
+                  background: BAR_COLORS[i],
+                  height: bucket
+                    ? `${Math.max(4, Math.round((bucket.volumeKg / maxVolume) * 100))}%`
+                    : "4%",
+                }}
+              />
+            )
+          )}
+        </div>
+        <div className="mt-1.5 flex justify-between text-[9.5px] text-muted-foreground">
+          <span>{data?.weeklyVolume[0]?.label ?? ""}</span>
+          <span>{data?.weeklyVolume[7]?.label ?? ""}</span>
         </div>
       </div>
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editingEntry} onOpenChange={(open) => !open && setEditingEntry(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Edit Workout</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Date & Time</Label>
-              <Input
-                type="datetime-local"
-                value={editForm.startedAt}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, startedAt: e.target.value })
-                }
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label>Workout Type</Label>
-              <Select
-                value={editForm.workoutType}
-                onValueChange={(v) =>
-                  setEditForm({ ...editForm, workoutType: v })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(workoutConfig).map(([key, cfg]) => (
-                    <SelectItem key={key} value={key}>
-                      {cfg.icon} {key.charAt(0).toUpperCase() + key.slice(1)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Duration (min)</Label>
-                <Input
-                  type="number"
-                  value={editForm.durationMinutes}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      durationMinutes: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <Label>Calories Burned</Label>
-                <Input
-                  type="number"
-                  value={editForm.caloriesBurned}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      caloriesBurned: e.target.value,
-                    })
-                  }
-                />
-              </div>
-            </div>
-            <div>
-              <Label className="flex items-center justify-between">
-                Description
-                <WhisperButton
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  onTranscription={(text) =>
-                    setEditForm((prev) => ({
-                      ...prev,
-                      description: prev.description
-                        ? `${prev.description}\n${text}`
-                        : text,
-                    }))
-                  }
-                />
-              </Label>
-              <Textarea
-                value={editForm.description}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, description: e.target.value })
-                }
-                placeholder="Describe your workout — or tap the mic to dictate"
-                rows={3}
-                className="mt-1"
-              />
-            </div>
-            <Button onClick={handleSaveEdit} className="w-full">
-              Save Changes
-            </Button>
+      {/* Trails */}
+      <div className="mt-3 rounded-[16px] bg-card p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+              TRAILS
+            </p>
+            {data?.latestTrail ? (
+              <>
+                <p
+                  className="mt-1 text-[15px] font-semibold text-foreground"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {(data.latestTrail.description || data.latestTrail.workoutType)
+                    .split("•")[0]
+                    .trim()}{" "}
+                  · {data.latestTrail.distanceKm} km · {trailDay}
+                </p>
+                <p className="mt-0.5 text-[11.5px] text-secondary-foreground">
+                  {[
+                    data.latestTrail.elevationGainM
+                      ? `+${Math.round(data.latestTrail.elevationGainM)} m`
+                      : null,
+                    data.latestTrail.avgHeartRateBpm
+                      ? `avg ${data.latestTrail.avgHeartRateBpm} bpm`
+                      : null,
+                    `${data.latestTrail.durationMinutes} min`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </>
+            ) : (
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                No trails yet — first one starts from the wrist.
+              </p>
+            )}
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Guided Routine Session */}
-      {guidedRoutine && (
-        <GuidedRoutine
-          title={guidedRoutine.name}
-          exercises={guidedRoutine.exercises}
-          totalMinutes={guidedRoutine.totalMinutes}
-          intervalSeconds={guidedRoutine.intervalSeconds}
-          workoutType={guidedRoutine.workoutType}
-          onFinish={async (data) => {
-            try {
-              const exerciseCount = guidedRoutine.exercises.length;
-              const res = await fetch("/api/health/workouts", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  workoutType: guidedRoutine.workoutType,
-                  durationMinutes: data.durationMinutes,
-                  caloriesBurned: data.caloriesBurned,
-                  description: `${guidedRoutine.name} — guided, ${data.roundsCompleted}/${data.totalRounds} rounds`,
-                  exercises: guidedRoutine.exercises.map((ex, i) => ({
-                    name: ex.name,
-                    reps: ex.reps,
-                    sets:
-                      Math.floor(data.roundsCompleted / exerciseCount) +
-                      (i < data.roundsCompleted % exerciseCount ? 1 : 0),
-                  })),
-                  source: "guided",
-                }),
-              });
-              if (!res.ok) return false;
-              invalidateHealthCache();
-              fetchEntries();
-              toast.success(
-                `Routine logged! ${data.durationMinutes} min • ~${data.caloriesBurned} cal 💪`
-              );
-              return true;
-            } catch {
-              return false;
+          <button
+            onClick={() =>
+              toast("Trail recording lives on the watch — web recording later.")
             }
-          }}
-          onExit={() => setGuidedRoutine(null)}
-        />
+            className="rounded-[10px] bg-foreground px-4 py-2.5 text-[12.5px] font-semibold text-background"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            ● Record
+          </button>
+        </div>
+        {/* Elevation profile — real altitude stream (design: TRAILS spark) */}
+        {data?.latestTrail?.altitudeSpark &&
+          data.latestTrail.altitudeSpark.length > 2 && (
+            <svg
+              width="100%"
+              height="54"
+              viewBox="0 0 360 54"
+              preserveAspectRatio="none"
+              className="mt-2.5"
+            >
+              {(() => {
+                const alt = data.latestTrail!.altitudeSpark!;
+                const mn = Math.min(...alt);
+                const mx = Math.max(...alt);
+                const span = mx - mn || 1;
+                const pts = alt.map((v, i) => ({
+                  x: 8 + (i / (alt.length - 1)) * 344,
+                  y: 8 + (1 - (v - mn) / span) * 38,
+                }));
+                return (
+                  <>
+                    <path
+                      d={`M ${pts.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" L ")}`}
+                      fill="none"
+                      stroke="#DCA8BE"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                    />
+                    <circle
+                      cx={pts[0].x}
+                      cy={pts[0].y}
+                      r="4"
+                      fill="none"
+                      stroke="#A63D63"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx={pts[pts.length - 1].x}
+                      cy={pts[pts.length - 1].y}
+                      r="4"
+                      fill="#A63D63"
+                    />
+                  </>
+                );
+              })()}
+            </svg>
+          )}
+      </div>
+
+      {/* Effort · time in zones — HR-bearing sessions (Strava now, watch next) */}
+      {data?.latestEffort && (
+        <div className="mt-3 rounded-2xl bg-card p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+          <div className="flex items-baseline justify-between">
+            <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+              EFFORT · TIME IN ZONES
+            </p>
+            <p className="text-[11px] font-semibold text-[#8C2F51] tabular-nums">
+              {data.latestEffort.relativeEffort != null
+                ? `RE ${data.latestEffort.relativeEffort}`
+                : data.latestEffort.loadScore != null
+                  ? `load ${data.latestEffort.loadScore}`
+                  : ""}
+            </p>
+          </div>
+          <p
+            className="mt-1 text-[13px] font-semibold text-foreground"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            {(data.latestEffort.description ?? data.latestEffort.workoutType)
+              .split("•")[0]
+              .trim()}{" "}
+            ·{" "}
+            {new Date(data.latestEffort.startedAt).toLocaleDateString("en-US", {
+              weekday: "short",
+            })}
+            {data.latestEffort.avgHeartRateBpm
+              ? ` · avg ${data.latestEffort.avgHeartRateBpm} bpm`
+              : ""}
+          </p>
+          <div className="mt-2.5 flex h-[22px] gap-[2px] overflow-hidden rounded-md">
+            {data.latestEffort.timeInZones.pct.map((pct, i) =>
+              pct > 0 ? (
+                <div
+                  key={i}
+                  style={{
+                    width: `${pct}%`,
+                    background: ["#EADFE5", "#DCA8BE", "#C97D9C", "#A63D63", "#8C2F51"][i],
+                  }}
+                />
+              ) : null
+            )}
+          </div>
+          <div className="mt-1.5 flex justify-between text-[10px] tabular-nums text-muted-foreground">
+            {data.latestEffort.timeInZones.pct.map((pct, i) => (
+              <span key={i}>
+                Z{i + 1} {pct}%
+              </span>
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* Voice Input */}
-      <VoiceInput onDataLogged={() => { invalidateHealthCache(); fetchEntries(); }} />
+      {/* ——— Routines sheet ——— */}
+      {showRoutines && (
+        <SheetPortal>
+          <div
+            className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
+            onClick={() => setShowRoutines(false)}
+          />
+          <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
+            <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
+            <p
+              className="text-xl font-bold text-foreground"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Routines
+            </p>
+            <div className="mt-3.5 grid gap-px overflow-hidden rounded-[14px] border border-border bg-border">
+              {(routines ?? []).map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => startLive(r)}
+                  className="flex items-center justify-between bg-card px-3.5 py-[13px] text-left"
+                >
+                  <div>
+                    <p className="text-[13.5px] font-semibold text-foreground">
+                      {r.name}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {stepSummary(r.steps, r.durationMinutes)}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-[#8C2F51]">
+                    → Watch
+                  </span>
+                </button>
+              ))}
+              <button
+                onClick={() => router.push("/health/workouts/routines")}
+                className="border-t-[1.5px] border-dashed border-border bg-card px-3.5 py-[13px] text-center"
+              >
+                <span className="text-[13px] font-semibold text-[#8C2F51]">
+                  + Build new routine
+                </span>
+              </button>
+            </div>
+            <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+              Routines sync to your Apple Watch as native workouts — start them
+              from the wrist, sets mirror back here.
+            </p>
+            <button
+              onClick={() => setShowRoutines(false)}
+              className="mx-auto mt-[18px] block rounded-full border border-border px-6 py-[9px] text-[13px] font-semibold text-secondary-foreground"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Close
+            </button>
+          </div>
+        </SheetPortal>
+      )}
+
+      {/* ——— Start picker (choose routine for live session) ——— */}
+      {showStartPicker && (
+        <SheetPortal>
+          <div
+            className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
+            onClick={() => setShowStartPicker(false)}
+          />
+          <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
+            <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
+            <p
+              className="text-xl font-bold text-foreground"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Start live workout
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Pick the routine for this session.
+            </p>
+            <div className="mt-3.5 grid gap-px overflow-hidden rounded-[14px] border border-border bg-border">
+              {(routines ?? []).map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => startLive(r)}
+                  className="flex items-center justify-between bg-card px-3.5 py-[13px] text-left"
+                >
+                  <p className="text-[13.5px] font-semibold text-foreground">
+                    {r.name}
+                  </p>
+                  <span className="h-2 w-2 rounded-full bg-[#DC74A0]" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </SheetPortal>
+      )}
+
+      {/* ——— Live workout sheet ——— */}
+      {live && liveStep && (
+        <SheetPortal>
+          <div className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]" />
+          <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
+            <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
+            <div className="flex items-center justify-between">
+              <p
+                className="text-xl font-bold text-foreground"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                Live workout
+              </p>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="h-2 w-2 rounded-full bg-primary"
+                  style={{ animation: "soft-pulse 1.2s ease-in-out infinite" }}
+                />
+                <span className="text-[13px] font-semibold tabular-nums text-[#8C2F51]">
+                  {mm}:{ss}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-[16px] bg-accent p-4">
+              <p className="text-[10.5px] font-bold tracking-[0.16em] text-[#8C2F51]">
+                CURRENT · SET{" "}
+                {Math.min(
+                  live.setsDone[live.stepIdx] + 1,
+                  targetSetsFor(liveStep)
+                )}{" "}
+                OF {targetSetsFor(liveStep)}
+              </p>
+              <p
+                className="mt-1.5 text-[22px] font-bold text-foreground"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {liveStep.exerciseName}
+                {liveStep.weightKg ? ` · ${liveStep.weightKg} kg` : ""}
+              </p>
+              <div className="mt-3 flex items-center gap-3.5">
+                <button
+                  onClick={() => bumpSet(-1)}
+                  className="h-11 w-11 rounded-[12px] bg-card text-[22px] leading-none text-[#8C2F51]"
+                >
+                  −
+                </button>
+                <div className="flex-1 text-center">
+                  <p
+                    className="text-[26px] font-bold tabular-nums text-foreground"
+                    style={{ fontFamily: "var(--font-display)" }}
+                  >
+                    {liveStep.reps
+                      ? `${liveStep.reps} reps`
+                      : `${liveStep.seconds}s`}
+                  </p>
+                  <p className="text-[11px] font-semibold text-[#8C2F51]">
+                    {live.setsDone[live.stepIdx]} set
+                    {live.setsDone[live.stepIdx] === 1 ? "" : "s"} logged on tap
+                  </p>
+                </div>
+                <button
+                  onClick={() => bumpSet(1)}
+                  className="h-11 w-11 rounded-[12px] bg-primary text-[22px] leading-none text-white"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between px-1">
+              <button
+                onClick={() => advanceStep(-1)}
+                disabled={live.stepIdx === 0}
+                className="text-xs text-secondary-foreground disabled:opacity-40"
+              >
+                ← Prev
+              </button>
+              <span className="text-xs text-secondary-foreground">
+                {liveNext
+                  ? `Next — ${liveNext.exerciseName}${liveNext.weightKg ? ` · ${liveNext.weightKg} kg` : ""}`
+                  : "Last movement"}
+              </span>
+              <button
+                onClick={() => advanceStep(1)}
+                disabled={live.stepIdx >= live.routine.steps.length - 1}
+                className="text-xs font-semibold text-[#8C2F51] disabled:opacity-40"
+              >
+                Next →
+              </button>
+            </div>
+
+            <button
+              onClick={endLive}
+              disabled={saving}
+              className="mt-4 w-full rounded-[12px] bg-foreground py-[13px] text-sm font-semibold text-background"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {saving ? "Saving…" : "End session & save"}
+            </button>
+          </div>
+        </SheetPortal>
+      )}
     </div>
   );
 }

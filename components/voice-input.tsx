@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ import {
   Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CameraIcon, ChatBubbleIcon, MicIcon } from "@/components/pitaya-icons";
 import { toast } from "sonner";
 import { getSettings } from "@/lib/settings";
 import { deactivateMicrophoneStream, getOrCreateMicrophoneStream } from "@/lib/microphone";
@@ -96,6 +98,30 @@ interface AIResponse {
 
 export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const floatingBottomClass = "bottom-[calc(env(safe-area-inset-bottom,0px)+7.25rem)]";
+  const router = useRouter();
+  const pathname = usePathname();
+  const onChatScreen = pathname === "/chat";
+
+  // Voice and text from the dock land in the chat thread (2b fold) — the
+  // conversational proposal cards replace the dock's old review UI, and
+  // follow-ups ("make it two eggs") work by just talking again.
+  const handOffToChat = useCallback(
+    (text: string, source: "text" | "voice") => {
+      if (onChatScreen) {
+        window.dispatchEvent(
+          new CustomEvent("pitaya:chat-send", { detail: { text, source } })
+        );
+      } else {
+        sessionStorage.setItem(
+          "pitaya:pending-chat",
+          JSON.stringify({ text, source })
+        );
+        router.push("/chat");
+      }
+    },
+    [onChatScreen, router]
+  );
+
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -111,6 +137,9 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  // Rolling conversation memory so follow-ups work ("actually make that 2 eggs").
+  // Sent to the chat API with every message; capped there to the last 12 turns.
+  const historyRef = useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const activeMimeRef = useRef<string>("");
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -247,14 +276,11 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
         return;
       }
 
-      // Show transcribed text in input for review before sending
-      setTextInput(text.trim());
-      setShowTextInput(true);
       setLastFailedText(null);
       setIsTranscribing(false);
 
-      // Auto-send to AI (text is preserved in input if it fails)
-      await processText(text.trim());
+      // Into the chat thread — proposals render there, follow-ups by voice.
+      handOffToChat(text.trim(), "voice");
     } catch (error) {
       console.error("Transcription failed:", error);
       const msg = error instanceof Error ? error.message : "Failed to transcribe audio";
@@ -265,47 +291,9 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
     }
   };
 
-  // Step 2: Send text to AI — if it fails, text stays in the input
-  const processText = async (text: string) => {
-    setIsProcessing(true);
-    setLastFailedText(null);
-    try {
-      const settings = getSettings();
-      const chatRes = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          customInstructions: settings.aiInstructions?.health || "",
-          aiLanguage: settings.aiLanguage || "english",
-          timeZone: settings.timeZone,
-        }),
-      });
-
-      if (!chatRes.ok) throw new Error("AI processing failed");
-      const response: AIResponse = await chatRes.json();
-
-      setAiResponse(response);
-
-      if (response.type === "general") {
-        toast.info(response.message);
-        setTextInput("");
-        setIsProcessing(false);
-      } else {
-        setShowConfirmation(true);
-        setTextInput("");
-        setIsProcessing(false);
-      }
-    } catch (error) {
-      console.error("AI processing failed:", error);
-      // Keep text in the input so user can retry
-      setLastFailedText(text);
-      setTextInput(text);
-      setShowTextInput(true);
-      toast.error("AI failed to process — your text is saved. Edit or tap send to retry.");
-      setIsProcessing(false);
-    }
-  };
+  // The legacy /api/ai/chat review flow now serves ONLY the camera path
+  // (photo → analyze → confirm card); voice and text go through the chat
+  // thread via handOffToChat.
 
   // ── Photo handling ──────────────────────────────────────────────────
   const compressImage = useCallback(
@@ -556,16 +544,14 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const handleTextSubmit = async () => {
     if (!textInput.trim()) return;
     const text = textInput.trim();
-    // Don't clear text yet — keep it until AI succeeds
-    await processText(text);
+    setTextInput("");
+    setShowTextInput(false);
+    handOffToChat(text, "text");
   };
 
   const handleRetry = async () => {
-    if (lastFailedText) {
-      await processText(lastFailedText);
-    } else if (textInput.trim()) {
-      await processText(textInput.trim());
-    }
+    const text = lastFailedText || textInput.trim();
+    if (text) handOffToChat(text, "text");
   };
 
   // Editing overlay for a food item
@@ -933,7 +919,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
                     Analyzing your meal...
                   </p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    GPT-5.2 Vision is identifying food items
+                    AI vision is identifying food items
                   </p>
                 </div>
                 <Loader2 className="h-5 w-5 animate-spin text-amber-400 shrink-0" />
@@ -952,69 +938,68 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
           onChange={handlePhotoSelect}
         />
 
-        {/* Main controls */}
-        <div className="floating-action-dock flex items-center justify-center gap-4 rounded-[32px] px-4 py-3">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-11 w-11 rounded-full border-white/10 bg-white/4 shadow-md"
-            onClick={() => setShowTextInput(!showTextInput)}
+        {/* Main dock — design: floating pill, chat 46 · mic 54 raspberry · camera 46 */}
+        <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-border bg-card/95 p-[7px] shadow-[0_10px_30px_rgba(35,34,39,0.16)] backdrop-blur-xl">
+          {/* Chat bubble → the Chat screen (design: dock chat active on it) */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!onChatScreen) router.push("/chat");
+            }}
+            className={cn(
+              "flex h-[46px] w-[46px] items-center justify-center rounded-full transition-all duration-200 hover:scale-105",
+              onChatScreen
+                ? "bg-primary text-primary-foreground"
+                : "text-[#8C2F51] hover:bg-secondary"
+            )}
           >
-            <MessageSquare className={cn("h-4 w-4", showTextInput && "text-teal-300")} />
-          </Button>
+            <ChatBubbleIcon size={20} />
+          </button>
 
           <div className="relative flex items-center justify-center">
             {/* Audio level ring — pulses with actual mic input */}
             {isRecording && (
               <div
-                className="absolute rounded-full bg-red-500/20 transition-transform duration-100"
+                className="absolute rounded-full bg-primary/20 transition-transform duration-100"
                 style={{
-                  width: `${64 + audioLevel * 48}px`,
-                  height: `${64 + audioLevel * 48}px`,
+                  width: `${58 + audioLevel * 44}px`,
+                  height: `${58 + audioLevel * 44}px`,
                   opacity: 0.3 + audioLevel * 0.5,
                 }}
               />
             )}
-            <Button
-              size="icon"
+            <button
+              type="button"
               className={cn(
-                "h-16 w-16 rounded-full shadow-lg transition-all duration-200 relative z-10",
-                isRecording
-                  ? "bg-red-500 hover:bg-red-600 shadow-red-500/30"
-                  : "bg-teal-500 hover:bg-teal-400 shadow-teal-500/20",
+                "relative z-10 flex h-[54px] w-[54px] items-center justify-center rounded-full transition-all duration-200 hover:scale-105",
+                isRecording ? "bg-[#8C2F51] animate-pulse" : "bg-primary",
                 (isProcessing || isTranscribing || isAnalyzingPhoto) && "opacity-60"
               )}
               onClick={isRecording ? stopRecording : startRecording}
               disabled={isProcessing || isTranscribing || isAnalyzingPhoto}
             >
-              {isTranscribing ? (
-                <Loader2 className="h-7 w-7 animate-spin" />
-              ) : isProcessing ? (
-                <Loader2 className="h-7 w-7 animate-spin" />
+              {isTranscribing || isProcessing ? (
+                <Loader2 className="h-6 w-6 animate-spin text-primary-foreground" />
               ) : isRecording ? (
-                <MicOff className="h-7 w-7" />
+                <MicOff className="h-6 w-6 text-primary-foreground" />
               ) : (
-                <Mic className="h-7 w-7" />
+                <MicIcon size={22} />
               )}
-            </Button>
+            </button>
           </div>
 
-          <Button
-            variant="outline"
-            size="icon"
-            className={cn(
-              "h-11 w-11 rounded-full border-white/10 bg-white/4 shadow-md",
-              isAnalyzingPhoto && "border-amber-500/50"
-            )}
+          <button
+            type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessing || isTranscribing || isRecording || isAnalyzingPhoto}
+            className="flex h-[46px] w-[46px] items-center justify-center rounded-full text-[#8C2F51] transition-all duration-200 hover:scale-105 hover:bg-secondary disabled:opacity-50"
           >
             {isAnalyzingPhoto ? (
-              <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
             ) : (
-              <Camera className="h-4 w-4" />
+              <CameraIcon size={20} />
             )}
-          </Button>
+          </button>
         </div>
 
         {isRecording && (

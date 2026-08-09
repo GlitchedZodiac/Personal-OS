@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { openai } from "@/lib/openai";
+import { openai, CHAT_MODEL } from "@/lib/openai";
 import { buildCoachStyleGuide, getCoachLanguageLabel } from "@/lib/health-coach";
 
 // Allow up to 60s for AI generation (Vercel Pro)
@@ -76,7 +76,7 @@ Rules:
 - Do not be generic.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: CHAT_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },

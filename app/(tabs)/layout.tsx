@@ -2,6 +2,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DemoBanner } from "@/components/demo-banner";
 import { DemoWalkthrough } from "@/components/demo-walkthrough";
+import { GlobalDock } from "@/components/global-dock";
 import { PinGate } from "@/components/pin-gate";
 
 export default function TabsLayout({
@@ -19,6 +20,7 @@ export default function TabsLayout({
             {children}
           </main>
         </div>
+        <GlobalDock />
         <BottomNav />
         <DemoWalkthrough />
       </div>

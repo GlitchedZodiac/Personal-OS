@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Personal OS
 
-## Getting Started
+A single-user "life dashboard" PWA: health tracking (food, water, workouts, body,
+recovery, AI coach), deep personal finance (Gmail statement ingestion, budgets,
+pockets, obligations, USD/COP), todos + reminders, and cross-module trends —
+behind a PIN gate, deployed on Vercel.
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** (App Router, Turbopack) + React 19 + Tailwind 4 + shadcn/ui
+- **Prisma** → Supabase Postgres (43 models)
+- **OpenAI** for chat/coach/vision (meal photos) and Whisper dictation
+- **Integrations**: Strava OAuth (activity sync), Google OAuth (read-only Gmail
+  finance scanning)
+- **Vercel crons**: daily refresh, finance Gmail sync, weekly report
+- **PWA**: installable, service worker in `public/sw.js`
+- Native Apple companion scaffold in `ios/` (Swift, pre-Xcode-project — see
+  `ios/README.md`)
+
+## Setup
 
 ```bash
+npm install
+cp .env.example .env.local   # then fill it in — see comments in the file
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Environment variables are documented in [.env.example](.env.example). Production
+values live in the Vercel project (`personal-os`); pull with
+`vercel env pull .env.local --environment=production`. The two database URLs are
+Sensitive in Vercel (write-only) — fetch them from the Supabase dashboard.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev        # dev server (Turbopack)
+npm run build      # prisma generate + production build
+npm run test       # vitest unit tests
+npm run test:e2e   # Playwright smoke tests
+npm run lint       # eslint
+```
 
-## Learn More
+## Layout
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `app/(tabs)/` — pages: dashboard, health/*, finances/*, todos, trends, settings
+- `app/api/` — route handlers: ai/*, health/*, finance/*, todos, reminders,
+  strava/*, mobile/* (iOS companion contracts), cron/*
+- `lib/` — domain logic (finance pipeline in `lib/finance/`, AI prompts, auth,
+  timezone helpers)
+- `prisma/` — schema + `manual-migrations/` (SQL applied by hand; no migration
+  history yet)
+- `docs/` — bug backlog, Google/finance setup notes

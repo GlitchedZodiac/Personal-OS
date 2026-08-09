@@ -1,51 +1,67 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 function cleanEnv(value: string | undefined): string | undefined {
   if (!value) return value;
   return value
-    .replace(/\\r\\n/g, "")
-    .replace(/\\n/g, "")
-    .replace(/\\r/g, "")
+    .replace(/\r\n/g, "")
+    .replace(/\n/g, "")
+    .replace(/\r/g, "")
     .trim();
 }
 
-// Guard against accidental newline artifacts in provider env vars.
-process.env.DATABASE_URL = cleanEnv(process.env.DATABASE_URL);
-process.env.DIRECT_URL = cleanEnv(process.env.DIRECT_URL);
+/**
+ * Prisma 7 connects through the node-postgres driver adapter. The old
+ * engine-era URL params (pgbouncer, connection_limit, pool_timeout) mean
+ * nothing to pg — pool sizing is configured on the adapter instead.
+ *
+ * SSL: Supabase's pooler presents a self-signed chain. Prisma 5's engine
+ * treated `sslmode=require` as encrypt-without-CA-verification; node-postgres
+ * verifies by default and fails with P1011. We reproduce the engine
+ * semantics: always encrypt (unless sslmode=disable), never CA-verify.
+ */
+function toPgConfig(value: string | undefined) {
+  const cleaned = cleanEnv(value);
+  if (!cleaned) return { connectionString: cleaned, ssl: undefined };
+
+  try {
+    const url = new URL(cleaned);
+    const sslmode = url.searchParams.get("sslmode");
+    for (const p of ["pgbouncer", "connection_limit", "pool_timeout", "sslmode"]) {
+      url.searchParams.delete(p);
+    }
+    return {
+      connectionString: url.toString(),
+      ssl: sslmode === "disable" ? undefined : { rejectUnauthorized: false },
+    };
+  } catch {
+    return { connectionString: cleaned, ssl: { rejectUnauthorized: false } };
+  }
+}
+
+export function createPrismaAdapter() {
+  const { connectionString, ssl } = toPgConfig(process.env.DATABASE_URL);
+  return new PrismaPg({
+    connectionString,
+    ssl,
+    // Single-user app on serverless functions hitting the Supabase
+    // transaction pooler: small per-instance pools, and fail-fast timeouts —
+    // Vercel freezes instances after responding, so a thawed instance can
+    // hold dead idle sockets; without these, a reused dead connection hangs
+    // the function until FUNCTION_INVOCATION_TIMEOUT.
+    max: 5,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 5_000,
+    query_timeout: 8_000,
+    keepAlive: true,
+  });
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-function normalizeDatabaseUrl(value: string | undefined) {
-  if (!value) return value;
-  const cleaned = value
-    .replace(/\\r\\n/g, "")
-    .replace(/\\n/g, "")
-    .replace(/\\r/g, "")
-    .trim();
-
-  try {
-    const url = new URL(cleaned);
-
-    // Serverless functions should keep tiny connection pools to avoid exhausting
-    // the shared Postgres connection limit across many cold/warm lambdas.
-    if (!url.searchParams.has("connection_limit")) {
-      url.searchParams.set("connection_limit", "1");
-    }
-    if (!url.searchParams.has("pool_timeout")) {
-      url.searchParams.set("pool_timeout", "30");
-    }
-
-    return url.toString();
-  } catch {
-    return cleaned;
-  }
-}
-
-process.env.DATABASE_URL = normalizeDatabaseUrl(process.env.DATABASE_URL);
-process.env.DIRECT_URL = cleanEnv(process.env.DIRECT_URL);
-
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+export const prisma =
+  globalForPrisma.prisma ?? new PrismaClient({ adapter: createPrismaAdapter() });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

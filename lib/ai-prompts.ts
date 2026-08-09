@@ -372,6 +372,19 @@ export const REMINDER_FUNCTION = {
   },
 };
 
+/**
+ * Domain vocabulary hint passed to the transcription model. Biases speech
+ * recognition toward the words this app actually hears — kettlebell training,
+ * macro tracking, and Colombian food terms — which is where generic
+ * transcription misses most.
+ */
+export const TRANSCRIBE_PROMPT =
+  "Personal health log dictation. Vocabulary: kettlebell, swings, goblet squat, " +
+  "Turkish get-up, clean and press, snatch, deadlift, superset, reps, sets, RPE, " +
+  "PR, bodyweight, kilos, pounds, protein, carbs, fats, macros, calories, " +
+  "arepa, bandeja paisa, sancocho, ajiaco, patacones, chicharrón, buñuelos, " +
+  "pandebono, almojábana, jugo de lulo, agua de panela.";
+
 export const GENERAL_CHAT_FUNCTION = {
   name: "general_response",
   description: "Respond to general health questions, nutrition advice, or conversation that doesn't involve logging data or managing todos",
@@ -386,3 +399,228 @@ export const GENERAL_CHAT_FUNCTION = {
     required: ["message"],
   },
 };
+
+/**
+ * The same definitions in the modern Chat Completions `tools` shape.
+ * The legacy `functions` API these were written for is deprecated.
+ * Still used by the floating dock's /api/ai/chat; the Chat screen runs the
+ * Responses-API set below.
+ */
+export const HEALTH_TOOLS = [
+  FOOD_LOG_FUNCTION,
+  BODY_MEASUREMENT_FUNCTION,
+  WORKOUT_LOG_FUNCTION,
+  WATER_LOG_FUNCTION,
+  GENERAL_CHAT_FUNCTION,
+  TODO_FUNCTION,
+  WORKOUT_PLAN_QUERY_FUNCTION,
+  REMINDER_FUNCTION,
+].map((fn) => ({ type: "function" as const, function: fn }));
+
+// ————————————————————————————————————————————————————————————————————————
+// Chat 2b — Responses API surface (the Chat screen). Tools + reasoning can
+// combine here, which chat-completions rejects on GPT-5.6. Todos and workout
+// plans are intentionally absent (stripped per the Pitaya simplification);
+// general_response is gone because plain text output IS the general reply.
+// ————————————————————————————————————————————————————————————————————————
+
+export const CHAT_SYSTEM_PROMPT = `You are the notebook that talks back — the chat inside Pitaya, a single-user health app for one person: kettlebell training, food/macro tracking, weight, water, journaling.
+
+LANGUAGE:
+- Default to {{RESPONSE_LANGUAGE}}, but mirror the user when they write in the other language (EN↔ES) — natural bilingual flow. Food names may stay in their original language.
+
+VOICE:
+- Short. Wry, warm, direct — a sharp coach who likes the user. One or two sentences beats a paragraph. Numbers are exact, never invented.
+- Plain text only — the chat renders raw text, so no markdown (**, #, backticks, bullets).
+
+DATA QUESTIONS (PRs, "what did I eat", weight trend, today's totals):
+- ALWAYS call get_health_data first. Never answer a data question from memory — if the tool returns nothing, say so plainly.
+
+LOGGING (food, weight/measurements, workouts, water):
+- Extract every distinct item. You are an expert in Colombian/Latin cuisine (bandeja paisa, arepas, sancocho, ajiaco, patacones...) — estimate typical Colombian portions when unspecified, macros in grams.
+- Meal type from time: <10am breakfast, 10–2 lunch, 2–5 snack, >5pm dinner.
+- Honor temporal phrases ("yesterday", "anoche", "at 7pm") via loggedAt/startedAt/measuredAt ISO datetimes in local context; date without time → 12:00.
+- Logging tools are PROPOSALS: the app shows a confirm card and saves only after the user taps Confirm. Your "message" is the bubble that accompanies the card — brief, human.
+- Kettlebell workouts: capture exercise, sets, reps, weightKg per movement.
+
+EDITING & DELETING:
+- To change or remove an existing entry: first get_health_data (recent_food / recent_workouts / weight_trend) to find the entry's id, then propose edit_food_log or delete_entry. These are also confirm-first proposals.
+- When several entries match, pick the most recent and say which one you chose.
+- If the user amends something whose card is still [pending], re-propose the corrected full card. If the card was [saved], the data is in the log — use edit_food_log/delete_entry on the real entry, NEVER log it again (that double-counts).
+
+ROUTINES (training design):
+- create_routine proposes a reusable training routine — the user's protocols: straight sets, EMOM ("20-minute EMOM cycling 20 swings / 15 goblet squats / 5 snatches each side" → kind emom, durationMinutes 20, one step per movement with reps + weightKg), circuit ("11 exercises, 45–60 s rest between" → kind circuit, restSecondsDefault ~50), tabata.
+- Steps carry reps (or seconds for timed holds), weightKg when the user names a bell, sets for straight work. "Each side" belongs in the exercise name.
+- Saved routines appear in Train → Routines and on the Apple Watch. Confirm-first like every proposal.
+
+REMINDERS:
+- set_reminder creates a real timed notification. Only for explicit "remind me at/in..." asks.
+
+NOT YOUR JOB:
+- Todos, finances, and workout-plan coaching are out of the app now. If asked, say Pitaya dropped that — one line, no apology tour.`;
+
+// Read tool — executed server-side inside the loop; results feed back to
+// the model. One flexible tool keeps the schema surface small.
+const GET_HEALTH_DATA = {
+  type: "function" as const,
+  name: "get_health_data",
+  description:
+    "Read the user's real logged data. Use before answering ANY question about their numbers: PRs, foods eaten, workouts done, weight, today's totals.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      query: {
+        type: "string" as const,
+        enum: [
+          "today_summary",
+          "prs",
+          "recent_food",
+          "recent_workouts",
+          "weight_trend",
+        ],
+        description:
+          "today_summary = calories/macros eaten today + goals + week training volume. prs = all personal records. recent_food = food log rows with ids. recent_workouts = workout rows with ids and exercises. weight_trend = recent body measurements with ids.",
+      },
+      days: {
+        type: "number" as const,
+        description: "Lookback window in days for recent_* / weight_trend. Default 3, max 30.",
+      },
+    },
+    required: ["query"],
+    additionalProperties: false,
+  },
+};
+
+const EDIT_FOOD_LOG = {
+  type: "function" as const,
+  name: "edit_food_log",
+  description:
+    "Propose changes to an existing food log entry (found via get_health_data recent_food). The user confirms before anything saves.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      id: { type: "string" as const, description: "The food log entry id" },
+      label: {
+        type: "string" as const,
+        description: "Short human label of the entry being edited, e.g. 'Jasmine rice (lunch)'",
+      },
+      set: {
+        type: "object" as const,
+        properties: {
+          foodDescription: { type: "string" as const },
+          calories: { type: "number" as const },
+          proteinG: { type: "number" as const },
+          carbsG: { type: "number" as const },
+          fatG: { type: "number" as const },
+          mealType: {
+            type: "string" as const,
+            enum: ["breakfast", "lunch", "dinner", "snack"],
+          },
+        },
+        description: "Only the fields that change",
+        additionalProperties: false,
+      },
+      message: {
+        type: "string" as const,
+        description: "One-line bubble accompanying the edit card",
+      },
+    },
+    required: ["id", "label", "set", "message"],
+    additionalProperties: false,
+  },
+};
+
+const DELETE_ENTRY = {
+  type: "function" as const,
+  name: "delete_entry",
+  description:
+    "Propose deleting a logged entry (id from get_health_data). The user confirms before anything is removed.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      entity: {
+        type: "string" as const,
+        enum: ["food", "workout", "measurement"],
+      },
+      id: { type: "string" as const },
+      label: {
+        type: "string" as const,
+        description: "What's being deleted, in the user's words, e.g. 'the 6:41 PM salmon dinner'",
+      },
+      message: {
+        type: "string" as const,
+        description: "One-line bubble accompanying the delete card",
+      },
+    },
+    required: ["entity", "id", "label", "message"],
+    additionalProperties: false,
+  },
+};
+
+const CREATE_ROUTINE = {
+  type: "function" as const,
+  name: "create_routine",
+  description:
+    "Propose a reusable training routine (straight sets / EMOM / tabata / circuit) that the user can run from Train or the Apple Watch. The user confirms before it saves.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      name: { type: "string" as const, description: "Routine name, e.g. 'EMOM 20 — swings/squats/snatch'" },
+      kind: {
+        type: "string" as const,
+        enum: ["straight", "emom", "tabata", "circuit"],
+      },
+      durationMinutes: {
+        type: "number" as const,
+        description: "Total minutes for EMOM/circuit sessions (e.g. 20 or 30 for an EMOM)",
+      },
+      restSecondsDefault: {
+        type: "number" as const,
+        description: "Rest between movements in seconds (circuits: typically 45-60)",
+      },
+      steps: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            exerciseName: { type: "string" as const, description: "Movement name; put 'each side' in the name when applicable" },
+            sets: { type: "number" as const, description: "Sets (straight work)" },
+            reps: { type: "number" as const },
+            seconds: { type: "number" as const, description: "For timed holds/intervals instead of reps" },
+            weightKg: { type: "number" as const },
+          },
+          required: ["exerciseName"],
+        },
+        description: "Ordered movements. For an EMOM these are the exercises cycled each minute.",
+      },
+      message: {
+        type: "string" as const,
+        description: "One-line bubble accompanying the routine card",
+      },
+    },
+    required: ["name", "kind", "steps", "message"],
+  },
+};
+
+// Proposal tools reuse the legacy schemas (same fields the dock confirms
+// with today), flattened to the Responses tool shape.
+function toResponsesTool(fn: { name: string; description: string; parameters: object }) {
+  return {
+    type: "function" as const,
+    name: fn.name,
+    description: fn.description,
+    parameters: fn.parameters,
+  };
+}
+
+export const CHAT_RESPONSES_TOOLS = [
+  GET_HEALTH_DATA,
+  toResponsesTool(FOOD_LOG_FUNCTION),
+  toResponsesTool(BODY_MEASUREMENT_FUNCTION),
+  toResponsesTool(WORKOUT_LOG_FUNCTION),
+  toResponsesTool(WATER_LOG_FUNCTION),
+  toResponsesTool(REMINDER_FUNCTION),
+  EDIT_FOOD_LOG,
+  DELETE_ENTRY,
+  CREATE_ROUTINE,
+];

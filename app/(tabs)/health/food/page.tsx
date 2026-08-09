@@ -38,7 +38,8 @@ import {
   Zap,
   X,
 } from "lucide-react";
-import { VoiceInput } from "@/components/voice-input";
+import { useDataLoggedListener } from "@/components/use-data-logged";
+import { MacroTargetsSheet } from "@/components/macro-targets-sheet";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import Link from "next/link";
 import { addDays, format, isToday, subDays } from "date-fns";
@@ -321,6 +322,7 @@ export default function FoodLogPage() {
   const [calTarget, setCalTarget] = useState(2000);
   const [macroTargets, setMacroTargets] = useState({ proteinG: 150, carbsG: 200, fatG: 67 });
   const [showQuickLog, setShowQuickLog] = useState(false);
+  const [showTargets, setShowTargets] = useState(false);
   const [quickLogLoading, setQuickLogLoading] = useState<string | null>(null);
   const [editEntry, setEditEntry] = useState<FoodEntry | null>(null);
   const [editForm, setEditForm] = useState({
@@ -346,6 +348,7 @@ export default function FoodLogPage() {
 
   const { data: entries, initialLoading, refresh: fetchEntries } =
     useCachedFetch<FoodEntry[]>(foodUrl, { ttl: 60_000 });
+  useDataLoggedListener(fetchEntries);
 
   const { data: favorites, refresh: refreshFavorites } =
     useCachedFetch<FavoriteFood[]>("/api/health/favorites", { ttl: 300_000 });
@@ -602,7 +605,7 @@ export default function FoodLogPage() {
     <div className="space-y-4 px-4 pt-12 pb-36 lg:space-y-6 lg:px-0 lg:pt-10 lg:pb-10">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
-        <Link href="/health">
+        <Link href="/dashboard">
           <Button variant="ghost" size="icon" className="h-9 w-9">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -613,6 +616,15 @@ export default function FoodLogPage() {
             {format(selectedDate, "EEEE, MMM d")}
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 rounded-full px-3 text-xs font-semibold"
+          onClick={() => setShowTargets(true)}
+          title="Calorie & macro targets"
+        >
+          Targets
+        </Button>
         <Button
           variant="outline"
           size="icon"
@@ -1095,8 +1107,11 @@ export default function FoodLogPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Voice Input */}
-      <VoiceInput onDataLogged={() => { invalidateHealthCache(); fetchEntries(); }} />
+      <MacroTargetsSheet
+        open={showTargets}
+        onClose={() => setShowTargets(false)}
+        onSaved={fetchEntries}
+      />
     </div>
   );
 }

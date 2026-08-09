@@ -1,12 +1,14 @@
-// Service Worker for Personal OS PWA — v2
-const CACHE_NAME = "personal-os-v2";
-const OFFLINE_URL = "/health";
+// Service Worker for Pitaya PWA — v3 (Pitaya routes; legacy pages sunset)
+const CACHE_NAME = "pitaya-v3";
+const OFFLINE_URL = "/dashboard";
 
 // Assets to cache on install
 const PRECACHE_ASSETS = [
-  "/health",
-  "/trends",
-  "/todos",
+  "/dashboard",
+  "/chat",
+  "/health/workouts",
+  "/health/body",
+  "/health/food",
   "/settings",
   "/manifest.json",
   "/icon-192.png",
