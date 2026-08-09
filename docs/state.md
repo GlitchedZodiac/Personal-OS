@@ -17,6 +17,54 @@ crude (calories/macros by input) until 2c. PR #1 open to main.
 prod deploys via `vercel deploy --prod`; merge awaits Michael) ·
 `claude/watch-app` (watch lane, local).
 
+## 2026-08-09j — Sweep 2 fixed (portal sheets, chat send) + ZONES LIVE
+
+Second on-phone sweep + his "fire the Strava upgrades" green light
+(mountain training these next months — zones/effort/elevation are now
+first-class).
+
+Bug fixes:
+- **Sheets really above the dock now.** Root cause found: `main { z-index:
+  1 }` (page-in animation rule) creates a permanent stacking context, so
+  in-page fixed sheets could NEVER out-stack the dock outside it —
+  z-80 was meaningless. components/sheet-portal.tsx portals every bottom
+  sheet (tape, journal, routines, start picker, live workout, targets) to
+  <body>. This was the real "mic node covers everything" bug.
+- **Chat composer: send button** — typing swaps the mic for a raspberry
+  send arrow (his "no send on the chat"); mic returns when empty.
+- **Dock hidden on /chat** — the thread's composer IS the input there;
+  the dock only overlapped it on real phones (surfaced deviation from the
+  design's dock-on-every-screen; usability wins).
+
+Strava upgrades (all live, backfilled):
+- **lib/zones.ts** — his real Strava zone boundaries as defaults
+  (122/152/167/182), timeInZones() with gap-owning samples, TRIMP-style
+  trainingLoad() (transparent alternative to Strava's proprietary RE),
+  downsample(). 5 new tests (73 total).
+- **Streams pipeline** — lib/strava.ts fetchActivityStreams
+  (heartrate/time/altitude) + buildStreamMetrics; sync now attaches
+  hrStream/timeStream/altitudeStream (downsampled ≤120 pts) +
+  timeInZones + loadScore + relativeEffort to metricsData on every new
+  import; POST /api/strava/backfill-streams (idempotent) ran against his
+  history: **23/23 activities enriched**.
+- **Train screen** — TRAILS card now draws the REAL elevation profile
+  (design's sparkline, live data: his run's altitude trace); new
+  EFFORT · TIME IN ZONES card (zone ramp bar + Z1–Z5 percentages + RE /
+  load) from the latest HR-bearing session — verified with real numbers:
+  Z1 30 / Z2 47 / Z3 23, RE 16, avg 139 bpm.
+- **Chat sees it** — get_health_data recent_workouts now returns
+  zonePct/loadScore/relativeEffort per workout ("how hard was this
+  week?" answerable with real numbers).
+- Kettlebell/dumbbell coverage note: the same pipeline applies to ANY
+  workout with an HR stream — the watch supplies HR for strength
+  sessions once it records; the zone card + load work unchanged.
+
+Notes: his last Strava sync was June — the Aug walks import with streams
+on his next Settings → Sync tap. Routine "finisher" structure discussion
+filed as a v2 deferred item (blocks model, watch-lane coordination).
+Maps: RouteMap SVG shape rendering exists + polylines stored; tile maps
+(streets background) are a later add.
+
 ## 2026-08-09i — Michael's first on-phone bug sweep, fixed same-day
 
 He used prod on his iPhone; his list, dispositions:

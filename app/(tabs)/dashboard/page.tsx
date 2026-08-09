@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { TrainIcon } from "@/components/pitaya-icons";
 import { useDataLoggedListener } from "@/components/use-data-logged";
+import { SheetPortal } from "@/components/sheet-portal";
 import {
   getOrCreateMicrophoneStream,
   deactivateMicrophoneStream,
@@ -666,7 +667,7 @@ export default function TodayPage() {
 
       {/* ——— Journal sheet ——— */}
       {showJournal && (
-        <>
+        <SheetPortal>
           <div
             className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
             onClick={() => setShowJournal(false)}
@@ -705,7 +706,7 @@ export default function TodayPage() {
               </button>
             </div>
           </div>
-        </>
+        </SheetPortal>
       )}
     </div>
   );

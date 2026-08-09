@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { downsample, timeInZones, trainingLoad } from "@/lib/zones";
 
 const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID!;
 const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET!;
@@ -123,6 +124,58 @@ export interface StravaActivity {
 }
 
 // Polyline decoding moved to lib/polyline.ts (client-safe module).
+
+// ─── Activity Streams (HR / time / altitude) ─────────────────────────
+// Powers time-in-zone, training load, and the trail elevation profile.
+export interface StravaStreams {
+  heartrate?: number[];
+  time?: number[];
+  altitude?: number[];
+}
+
+// Full-resolution streams drive the math; downsampled copies get stored.
+export function buildStreamMetrics(
+  streams: StravaStreams,
+  relativeEffort?: number
+) {
+  const hr = streams.heartrate ?? [];
+  const time = streams.time ?? [];
+  const zones = timeInZones(hr, time);
+  return {
+    hrStream: hr.length ? downsample(hr) : undefined,
+    timeStream: time.length ? downsample(time) : undefined,
+    altitudeStream: streams.altitude?.length
+      ? downsample(streams.altitude)
+      : undefined,
+    timeInZones: zones ?? undefined,
+    loadScore: trainingLoad(zones) ?? undefined,
+    relativeEffort,
+  };
+}
+
+export async function fetchActivityStreams(
+  activityId: number | string
+): Promise<StravaStreams | null> {
+  const accessToken = await getValidAccessToken();
+  if (!accessToken) return null;
+
+  try {
+    const res = await fetch(
+      `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=heartrate,time,altitude&key_by_type=true`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      heartrate: data.heartrate?.data,
+      time: data.time?.data,
+      altitude: data.altitude?.data,
+    };
+  } catch (err) {
+    console.error("Strava streams fetch error:", err);
+    return null;
+  }
+}
 
 export async function fetchStravaActivities(
   page = 1,

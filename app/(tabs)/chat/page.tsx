@@ -641,7 +641,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col px-4 pb-60 pt-12 lg:px-0 lg:pt-8 max-w-lg lg:max-w-2xl">
+    <div className="flex min-h-dvh flex-col px-4 pb-44 pt-12 lg:px-0 lg:pt-8 max-w-lg lg:max-w-2xl">
       <p className="micro-label">The notebook that talks back</p>
       <h1
         className="mt-0.5 text-3xl font-bold tracking-[-0.02em]"
@@ -706,7 +706,7 @@ export default function ChatPage() {
           send(draft, "text");
         }}
         className="sticky mt-4 flex items-center gap-2.5 rounded-full border border-border bg-card py-2 pl-[18px] pr-2 shadow-[0_6px_20px_rgba(35,34,39,0.08)]"
-        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 12.5rem)" }}
+        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.5rem)" }}
       >
         <input
           value={draft}
@@ -717,17 +717,40 @@ export default function ChatPage() {
           disabled={busy}
           className="min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground"
         />
-        <button
-          type="button"
-          onClick={() =>
-            recording ? recorderRef.current?.stop() : startVoice()
-          }
-          disabled={busy || transcribing}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors"
-          style={{ background: recording ? "#A63D63" : "#F6E3EB" }}
-        >
-          <MicGlyph color={recording ? "#FFFFFF" : "#8C2F51"} />
-        </button>
+        {draft.trim() ? (
+          // Typed something → the button sends. Mic returns when it's empty.
+          <button
+            type="submit"
+            disabled={busy}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#FFFFFF"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M22 2 11 13" />
+              <path d="M22 2 15 22l-4-9-9-4Z" />
+            </svg>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() =>
+              recording ? recorderRef.current?.stop() : startVoice()
+            }
+            disabled={busy || transcribing}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors"
+            style={{ background: recording ? "#A63D63" : "#F6E3EB" }}
+          >
+            <MicGlyph color={recording ? "#FFFFFF" : "#8C2F51"} />
+          </button>
+        )}
       </form>
     </div>
   );

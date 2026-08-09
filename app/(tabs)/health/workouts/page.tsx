@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useDataLoggedListener } from "@/components/use-data-logged";
+import { SheetPortal } from "@/components/sheet-portal";
 import type { SequenceStep } from "@/lib/sequences";
 
 // Pitaya Train — full port of the design's Train screen (docs/design/
@@ -43,6 +44,17 @@ interface TrainData {
     elevationGainM: number | null;
     durationMinutes: number;
     avgHeartRateBpm: number | null;
+    altitudeSpark: number[] | null;
+  } | null;
+  latestEffort: {
+    startedAt: string;
+    workoutType: string;
+    description: string | null;
+    durationMinutes: number;
+    avgHeartRateBpm: number | null;
+    timeInZones: { seconds: number[]; pct: number[]; totalSeconds: number };
+    loadScore: number | null;
+    relativeEffort: number | null;
   } | null;
 }
 
@@ -445,11 +457,111 @@ export default function TrainPage() {
             ● Record
           </button>
         </div>
+        {/* Elevation profile — real altitude stream (design: TRAILS spark) */}
+        {data?.latestTrail?.altitudeSpark &&
+          data.latestTrail.altitudeSpark.length > 2 && (
+            <svg
+              width="100%"
+              height="54"
+              viewBox="0 0 360 54"
+              preserveAspectRatio="none"
+              className="mt-2.5"
+            >
+              {(() => {
+                const alt = data.latestTrail!.altitudeSpark!;
+                const mn = Math.min(...alt);
+                const mx = Math.max(...alt);
+                const span = mx - mn || 1;
+                const pts = alt.map((v, i) => ({
+                  x: 8 + (i / (alt.length - 1)) * 344,
+                  y: 8 + (1 - (v - mn) / span) * 38,
+                }));
+                return (
+                  <>
+                    <path
+                      d={`M ${pts.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" L ")}`}
+                      fill="none"
+                      stroke="#DCA8BE"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                    />
+                    <circle
+                      cx={pts[0].x}
+                      cy={pts[0].y}
+                      r="4"
+                      fill="none"
+                      stroke="#A63D63"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx={pts[pts.length - 1].x}
+                      cy={pts[pts.length - 1].y}
+                      r="4"
+                      fill="#A63D63"
+                    />
+                  </>
+                );
+              })()}
+            </svg>
+          )}
       </div>
+
+      {/* Effort · time in zones — HR-bearing sessions (Strava now, watch next) */}
+      {data?.latestEffort && (
+        <div className="mt-3 rounded-2xl bg-card p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+          <div className="flex items-baseline justify-between">
+            <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+              EFFORT · TIME IN ZONES
+            </p>
+            <p className="text-[11px] font-semibold text-[#8C2F51] tabular-nums">
+              {data.latestEffort.relativeEffort != null
+                ? `RE ${data.latestEffort.relativeEffort}`
+                : data.latestEffort.loadScore != null
+                  ? `load ${data.latestEffort.loadScore}`
+                  : ""}
+            </p>
+          </div>
+          <p
+            className="mt-1 text-[13px] font-semibold text-foreground"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            {(data.latestEffort.description ?? data.latestEffort.workoutType)
+              .split("•")[0]
+              .trim()}{" "}
+            ·{" "}
+            {new Date(data.latestEffort.startedAt).toLocaleDateString("en-US", {
+              weekday: "short",
+            })}
+            {data.latestEffort.avgHeartRateBpm
+              ? ` · avg ${data.latestEffort.avgHeartRateBpm} bpm`
+              : ""}
+          </p>
+          <div className="mt-2.5 flex h-[22px] gap-[2px] overflow-hidden rounded-md">
+            {data.latestEffort.timeInZones.pct.map((pct, i) =>
+              pct > 0 ? (
+                <div
+                  key={i}
+                  style={{
+                    width: `${pct}%`,
+                    background: ["#EADFE5", "#DCA8BE", "#C97D9C", "#A63D63", "#8C2F51"][i],
+                  }}
+                />
+              ) : null
+            )}
+          </div>
+          <div className="mt-1.5 flex justify-between text-[10px] tabular-nums text-muted-foreground">
+            {data.latestEffort.timeInZones.pct.map((pct, i) => (
+              <span key={i}>
+                Z{i + 1} {pct}%
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ——— Routines sheet ——— */}
       {showRoutines && (
-        <>
+        <SheetPortal>
           <div
             className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
             onClick={() => setShowRoutines(false)}
@@ -503,12 +615,12 @@ export default function TrainPage() {
               Close
             </button>
           </div>
-        </>
+        </SheetPortal>
       )}
 
       {/* ——— Start picker (choose routine for live session) ——— */}
       {showStartPicker && (
-        <>
+        <SheetPortal>
           <div
             className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
             onClick={() => setShowStartPicker(false)}
@@ -539,12 +651,12 @@ export default function TrainPage() {
               ))}
             </div>
           </div>
-        </>
+        </SheetPortal>
       )}
 
       {/* ——— Live workout sheet ——— */}
       {live && liveStep && (
-        <>
+        <SheetPortal>
           <div className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]" />
           <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
             <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
@@ -643,7 +755,7 @@ export default function TrainPage() {
               {saving ? "Saving…" : "End session & save"}
             </button>
           </div>
-        </>
+        </SheetPortal>
       )}
     </div>
   );

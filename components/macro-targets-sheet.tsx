@@ -6,6 +6,7 @@ import {
   fetchServerSettings,
   saveSettingsToServer,
 } from "@/lib/settings";
+import { SheetPortal } from "@/components/sheet-portal";
 
 // Calorie + macro targets editor (moved here from the old settings page —
 // Michael asked for it in the Food section). Drives the Today ring, the
@@ -76,7 +77,7 @@ export function MacroTargetsSheet({
   };
 
   return (
-    <>
+    <SheetPortal>
       <div className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]" onClick={onClose} />
       <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
         <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
@@ -152,6 +153,6 @@ export function MacroTargetsSheet({
           </button>
         </div>
       </div>
-    </>
+    </SheetPortal>
   );
 }

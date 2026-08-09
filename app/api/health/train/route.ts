@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const chartStartStr = addDaysToDateString(weekStartStr, -7 * 7); // 8 buckets incl. current
     const { rangeStart } = getUtcDateRangeForTimeZone(chartStartStr, todayStr, timeZone);
 
-    const [workouts, latestPRRow, trail] = await Promise.all([
+    const [workouts, latestPRRow, trail, effortRow] = await Promise.all([
       prisma.workoutLog.findMany({
         where: { startedAt: { gte: rangeStart } },
         orderBy: { startedAt: "desc" },
@@ -70,6 +70,21 @@ export async function GET(request: NextRequest) {
           elevationGainM: true,
           durationMinutes: true,
           avgHeartRateBpm: true,
+          metricsData: true,
+        },
+      }),
+      // Latest session with zone analytics (HR stream present) — Strava
+      // imports today, watch recordings next.
+      prisma.workoutLog.findFirst({
+        where: { metricsData: { path: ["loadScore"], gt: 0 } },
+        orderBy: { startedAt: "desc" },
+        select: {
+          startedAt: true,
+          workoutType: true,
+          description: true,
+          durationMinutes: true,
+          avgHeartRateBpm: true,
+          metricsData: true,
         },
       }),
     ]);
@@ -177,8 +192,30 @@ export async function GET(request: NextRequest) {
             elevationGainM: trail.elevationGainM,
             durationMinutes: trail.durationMinutes,
             avgHeartRateBpm: trail.avgHeartRateBpm,
+            altitudeSpark:
+              ((trail.metricsData as { altitudeStream?: number[] } | null)
+                ?.altitudeStream ?? null),
           }
         : null,
+      latestEffort: (() => {
+        if (!effortRow) return null;
+        const m = effortRow.metricsData as {
+          timeInZones?: { seconds: number[]; pct: number[]; totalSeconds: number };
+          loadScore?: number;
+          relativeEffort?: number;
+        } | null;
+        if (!m?.timeInZones) return null;
+        return {
+          startedAt: effortRow.startedAt.toISOString(),
+          workoutType: effortRow.workoutType,
+          description: effortRow.description,
+          durationMinutes: effortRow.durationMinutes,
+          avgHeartRateBpm: effortRow.avgHeartRateBpm,
+          timeInZones: m.timeInZones,
+          loadScore: m.loadScore ?? null,
+          relativeEffort: m.relativeEffort ?? null,
+        };
+      })(),
     });
   } catch (error) {
     console.error("Train screen error:", error);

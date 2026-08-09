@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDataLoggedListener } from "@/components/use-data-logged";
+import { SheetPortal } from "@/components/sheet-portal";
 
 // Pitaya Body — full port of the design's Body screen (docs/design/
 // pitaya-app.dc.html, screen 4): scrubable 12-week trend chart
@@ -533,7 +534,7 @@ export default function BodyPage() {
 
       {/* ——— New tape sheet ——— */}
       {showTape && (
-        <>
+        <SheetPortal>
           <div
             className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
             onClick={() => setShowTape(false)}
@@ -584,7 +585,7 @@ export default function BodyPage() {
               </button>
             </div>
           </div>
-        </>
+        </SheetPortal>
       )}
     </div>
   );

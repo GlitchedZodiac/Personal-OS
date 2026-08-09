@@ -74,15 +74,26 @@ export async function executeGetHealthData(
         take: 20,
       });
       return {
-        workouts: rows.map((w) => ({
-          id: w.id,
-          startedAt: w.startedAt.toISOString(),
-          workoutType: w.workoutType,
-          description: w.description,
-          durationMinutes: w.durationMinutes,
-          volumeKg: sessionVolumeKg(w.exercises),
-          exercises: w.exercises,
-        })),
+        workouts: rows.map((w) => {
+          const m = (w.metricsData ?? {}) as {
+            timeInZones?: { pct: number[]; totalSeconds: number };
+            loadScore?: number;
+            relativeEffort?: number;
+          };
+          return {
+            id: w.id,
+            startedAt: w.startedAt.toISOString(),
+            workoutType: w.workoutType,
+            description: w.description,
+            durationMinutes: w.durationMinutes,
+            volumeKg: sessionVolumeKg(w.exercises),
+            exercises: w.exercises,
+            // zone analytics when an HR stream existed (Strava/watch)
+            zonePct: m.timeInZones?.pct,
+            loadScore: m.loadScore,
+            relativeEffort: m.relativeEffort,
+          };
+        }),
       };
     }
 
