@@ -30,10 +30,21 @@ enum Smoke {
             }
         }
 
+        // HOLD variant: start a kettlebell session, log one set, and stay on
+        // the live set-logger screen (for visual verification runs).
+        if env["PITAYA_SMOKE_HOLD"] == "1", model.phase == .home {
+            await model.startWorkout(.kettlebell, useRecorder: false)
+            model.weightKg = 16
+            model.reps = 10
+            model.logSet()
+            log("hold: live on set logger, 1 set logged")
+            return
+        }
+
         guard env["PITAYA_SMOKE_AUTORUN"] == "1", model.phase == .home else { return }
 
-        log("autorun: starting kettlebell workout…")
-        await model.startWorkout(.kettlebell)
+        log("autorun: starting kettlebell workout (recorder off — no HK sheet)…")
+        await model.startWorkout(.kettlebell, useRecorder: false)
 
         // Below-baseline set (no PR expected on real history), then a heavy
         // single designed to beat any stored swing weight PR.

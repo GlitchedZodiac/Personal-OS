@@ -120,7 +120,7 @@ public final class AppModel: ObservableObject {
     // Kettlebell live state
     @Published public private(set) var loggedSets: [LoggedSet] = []
     @Published public var currentExercise: ExerciseDef = ExerciseCatalog.kettlebell.first
-        ?? ExerciseDef(id: "kb-swing", name: "Kettlebell Swing", category: .kettlebell)
+        ?? ExerciseDef(id: "kb-swing", name: "Kettlebell Swing", category: .kettlebell, aliases: [])
     @Published public var weightKg: Double = 16
     @Published public var reps: Int = 10
     @Published public private(set) var prFlash: LoggedSet?
@@ -132,6 +132,7 @@ public final class AppModel: ObservableObject {
     private let queue: OfflineWorkoutQueue?
     private var baselines = PRBaselines()
     private var prFlashTask: Task<Void, Never>?
+    private var workoutStartedAt = Date()
 
     public init(
         sessionStore: (any SessionStore)? = nil,
@@ -212,17 +213,21 @@ public final class AppModel: ObservableObject {
 
     // MARK: - Workout flow
 
-    public func startWorkout(_ kind: WorkoutKind) async {
+    /// `useRecorder: false` is the headless-smoke path (no HealthKit sheet in
+    /// a simulator run); every user-facing call leaves it true.
+    public func startWorkout(_ kind: WorkoutKind, useRecorder: Bool = true) async {
         loggedSets = []
         summary = nil
         syncState = .idle
+        workoutStartedAt = Date()
+        phase = .live(kind)
+        guard useRecorder else { return }
         do {
             try await recorder.start(activityType: kind.activityType, outdoor: kind.isOutdoor)
         } catch {
             // HealthKit refused (denied auth, restricted) — the session still
             // runs on wall clock so a workout is never lost.
         }
-        phase = .live(kind)
     }
 
     public func logSet() {
@@ -263,7 +268,7 @@ public final class AppModel: ObservableObject {
         let prs = baselines.sessionPRs(entries: entries)
         baselines.absorb(entries: entries)
 
-        let started = totals?.startedAt ?? Date().addingTimeInterval(-recorder.elapsed)
+        let started = totals?.startedAt ?? workoutStartedAt
         let ended = totals?.endedAt ?? Date()
         let duration = totals?.durationSeconds ?? ended.timeIntervalSince(started)
 

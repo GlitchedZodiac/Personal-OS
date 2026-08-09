@@ -51,6 +51,8 @@ struct SetLoggerPage: View {
                         Text("\(model.reps)")
                             .font(Theme.numeric(23))
                             .foregroundStyle(Theme.textBright)
+                            .lineLimit(1)
+                            .fixedSize()
                             .frame(minWidth: 26)
                             .contentTransition(.numericText())
                         repButton("plus") { if model.reps < 99 { model.reps += 1 } }
@@ -93,7 +95,8 @@ struct SetLoggerPage: View {
     private var totalsLine: String {
         let volume = model.loggedSets.reduce(0.0) { $0 + $1.weightKg * Double($1.reps) }
         guard !model.loggedSets.isEmpty else { return "no sets yet" }
-        return "\(model.loggedSets.count) sets · \(Fmt.grouped(volume)) kg"
+        let count = model.loggedSets.count
+        return "\(count) \(count == 1 ? "set" : "sets") · \(Fmt.grouped(volume)) kg"
     }
 
     private func repButton(_ icon: String, action: @escaping () -> Void) -> some View {

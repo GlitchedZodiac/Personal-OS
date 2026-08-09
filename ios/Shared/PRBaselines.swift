@@ -31,7 +31,7 @@ public struct PRBaselines: Sendable {
 
     private mutating func fold(_ entry: ExerciseEntry) {
         guard
-            let def = ExerciseCatalog.byLooseName(entry.name),
+            let def = ExerciseCatalog.normalize(entry.name),
             let weight = entry.weightKg, weight > 0
         else { return }
 
@@ -78,7 +78,7 @@ public struct PRBaselines: Sendable {
 
         for entry in entries {
             guard
-                let def = ExerciseCatalog.byLooseName(entry.name),
+                let def = ExerciseCatalog.normalize(entry.name),
                 let weight = entry.weightKg, weight > 0
             else { continue }
             var c = perExercise[def.id] ?? Candidate(name: def.name)

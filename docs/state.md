@@ -5,14 +5,67 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 (PITAYA Stage A live — rebrand + IA strip)
+**Last updated:** 2026-08-09 (PITAYA Stage A web + [watch] app live E2E in sim)
 **Current phase:** Phase 1 complete; AI provider decided (all-OpenAI, 5.6
-tiers, live on prod). Michael is iterating on design (2a). Next hands-off
-work: 2d kettlebell catalog/PR backend + 2b editing tools (design-independent).
-Watch phase blocked on Michael installing full Xcode.
-**Branch in flight:** `claude/phase1-modernization` — deployed to prod via
-`vercel deploy --prod` (twice); UNPUSHED to GitHub (403 — collaborator access
-pending, see deferred-items).
+tiers, live on prod). Web: Pitaya Stage A shipped, next stages queued. Watch
+Phase 3 STARTED — core loop (pair → record → kettlebell sets → PR haptic →
+sync) working in simulator against prod, Pitaya watch design implemented.
+**Branch in flight:** `claude/phase1-modernization` (web, deployed to prod
+via `vercel deploy --prod`; UNPUSHED to GitHub — 403, collaborator access
+pending, see deferred-items) · `claude/watch-app` (watch lane, local).
+
+## 2026-08-09e — [watch] Pitaya watch app: core loop live in simulator
+
+First watch-lane session. The Xcode phase that never happened, happened —
+and the full core loop runs against prod from the wrist simulator.
+
+Shipped (branch `claude/watch-app`, ios/** + docs/watch docs):
+- **Xcode project generated** (XcodeGen, `ios/project.yml`): `PersonalOS`
+  (iOS 18 companion placeholder) + `PersonalOS Watch` (watchOS 11 standalone,
+  WKWatchOnly) — both build green on Xcode 26.6/SDK 26.5. No sudo needed:
+  `DEVELOPER_DIR` override documented in ios/README.md. iOS sim platform
+  runtime downloaded (watch runtime was already present).
+- **Scaffold audit → rewrite.** The blind-from-Windows scaffold had real
+  bugs: query strings percent-encoded into paths, stock .iso8601 decoding
+  that rejects the backend's fractional-second dates, non-optional fields
+  that crash on real null-bearing rows, missing `exercises` payload, a
+  potential infinite 401 retry loop, tokens in UserDefaults. All fixed;
+  tokens now Keychain-only (`ios/Shared/Storage/SessionStore.swift`).
+- **Exercise catalog mirrored, with aliases** (`ios/scripts/gen-catalog.mjs`
+  → generated Swift). Self-smoke caught that exact-name matching missed his
+  real history ("Kettlebell swings" plural → no match → false 16 kg PR);
+  ported the fold+alias+containment normalizer — watch baselines now equal
+  the server backfill's bests (20 kg swing/goblet, 16 kg press/clean, 12 halo).
+- **Pitaya watch design implemented** (from design project `Pitaya
+  Watch.dc.html`, all tokens in `ios/Shared/Theme.swift` as the one seam):
+  welcome → PIN pad → paired; home; live metrics (elapsed, beating-heart HR,
+  zone bar, kcal); kettlebell set logger (crown weight dial, rep stepper,
+  PR flash + haptic); controls (end/pause/water-lock/repeat); summary with
+  stats grid + PR banners + sync state. Fonts not bundled yet (system face
+  via the Theme seam; deferred item).
+- **Local PR engine** (`PRBaselines.swift`) mirroring lib/prs.ts semantics
+  (weight + volume), built from `GET /api/mobile/workouts` history because
+  `/api/health/prs` is cookie-gated (deferred ask filed for /api/mobile/prs;
+  also: mobile sync doesn't run server PR detection — filed).
+- **Offline queue → sync** with server-side (externalSource, externalId)
+  upsert dedupe.
+
+Self-smoke (all against live prod, then cleaned up — 4 workout rows + 4
+device sessions created and deleted, verified before each delete):
+- Headless seams (DEBUG-only env vars) drove the real AppModel paths:
+  pair → fetch → baselines → 2 sets → finish → sync; row landed with exact
+  `{name, sets, reps, weightKg}` entries.
+- Full INTERACTIVE UI run via simulator taps: wrong-PIN 401 error state →
+  pair → HealthKit grant sheets → live session with **streaming simulated
+  HR (64 bpm), zone bar live** → tap-logged sets (16 kg × 10 and × 11) →
+  End → summary showed volume-PR-only (16<20 weight correctly suppressed)
+  → synced; prod row carried avgHR 60 + both sets.
+- Fixed en route: reps text wrapping, "1 sets" pluralization, iPhone
+  HealthStore continuation that had never compiled.
+
+Not built yet (design exists): sequences/EMOM timers (no backend contract —
+deferred), rest timer, GPS routes (3.5), sleep/recovery screens, iPhone app,
+complications. Watch sim left booted at the fresh welcome screen for Michael.
 
 ## 2026-08-09d — PITAYA: design landed, Stage A shipped
 
