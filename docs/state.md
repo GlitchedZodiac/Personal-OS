@@ -5,16 +5,65 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 (Chat 2b live: Responses API loop, /chat screen)
-**Current phase:** Phase 1 complete; AI on all-OpenAI 5.6 tiers. Web: Pitaya
-Settings + Train + Today are full ports; **Chat 2b is live** (Responses API
-agentic loop, streaming, real data answers, edit/delete via chat, rolling
-persisted thread at /chat). Next per Michael's order: Body, then Food (2c).
-Watch Phase 3 in parallel — sequences API live, wrist routines unblocked.
-**Branch in flight:** `claude/phase1-modernization` — now PUSHED to GitHub
-(collaborator access granted 2026-08-09); prod deploys still via
-`vercel deploy --prod`; merge to main awaits Michael's go.
+**Last updated:** 2026-08-09 (Body port live; EMOM duration + chat routine
+design; PAUSE for Michael's stress test)
+**Current phase:** All five Pitaya screens + Chat are now design ports on
+prod. **Michael is pausing to use the app and run a bug sweep.** Next block
+(his 90-day priority, spec captured in deferred-items): training + Today
+polish — live sessions w/ HR/zones/burn/analytics + post-workout AI report,
+protocol-true EMOM/circuit runners on web + watch. Food stays deliberately
+crude (calories/macros by input) until 2c. PR #1 open to main.
+**Branch in flight:** `claude/phase1-modernization` (pushed; PR #1 open;
+prod deploys via `vercel deploy --prod`; merge awaits Michael) ·
 `claude/watch-app` (watch lane, local).
+
+## 2026-08-09h — Body port + EMOM duration + chat designs routines
+
+Michael's direction: Body stays simple (daily weight + tape → trends);
+training is the 90-day priority and the next block after his stress test.
+This session shipped Body plus the two training pieces his spec needed
+in the data model NOW so routines built this week are protocol-true.
+
+- **Body screen** (design screen 4, replacing the legacy report list):
+  scrubable trend chart — Weight = last 12 real weigh-ins (own dates; a
+  12-week window would have hidden his May-and-older history — same trap
+  as chat's weight_trend, fixed the same way), Volume/Calories = 12
+  Mon-start weekly buckets; design geometry exact (area fill, dots, dark
+  tooltip, touch-drag scrub that snaps to points). Measurements card:
+  design's body-figure SVG verbatim w/ 7 tap points mapped to schema
+  fields, #F6E3EB detail panel (value, delta since first tape, 3-bar mini
+  history), "+ New tape" sheet (kg + 7 dims, only filled fields POST).
+  Progress-photos compare slider (real photos when ≥2 exist, quiet empty
+  state until then). Recovery card renders its honest "arrives with sleep
+  sync" state — no sleep/HRV data source exists yet (surfaced deviation).
+  Backend: `GET /api/health/body/overview` one-fetch composite.
+- **Sequence.durationMinutes** (migration `sequence_duration`): his
+  "20-minute EMOM" is now expressible. validateSequence caps at 240;
+  builder page grew TOTAL MINUTES + REST BETWEEN fields; both sequence
+  routes + mobile payload carry it; watch-contract updated with v1 run
+  semantics (EMOM = durationMinutes 1-min rounds cycling steps; circuit =
+  restSecondsDefault between movements). Per-side fix: catalog
+  normalization no longer swallows "each side" ("5 snatches each side" →
+  "Kettlebell Snatch (each side)", kb-snatch id kept).
+- **Chat designs routines**: new `create_routine` proposal tool + prompt
+  section speaking his protocol language. Smoked with his exact ask —
+  "design me a 20 minute EMOM: 20 KB swings, 15 goblet squats, 5 snatches
+  each side, swings/squats 24kg, snatches 20kg" → correct card (emom ·
+  20 min · 3 steps w/ weights) → confirm → saved with catalog ids
+  (kb-swing / kb-goblet-squat / kb-snatch) → appears in Train → Routines
+  and the watch list. Routine cards render steps + kind/duration in-thread.
+
+Verification: tsc clean · 68/68 vitest (EMOM duration, per-side, absurd
+durations, create_routine in surface) · clean build · dev smokes (body
+overview with his real 12 weigh-ins Mar 17 → May 2 −2.5 kg, tape dims,
+EMOM design→confirm→normalized save) · Body screenshotted at 375px (real
+chart + NECK 41.1 cm panel) · prod deploy Ready + prod body-overview
+smoke · all smoke rows cleaned.
+
+**PAUSED HERE for Michael's bug sweep.** Next block spec:
+docs/deferred-items.md top entry (his words, near-verbatim).
+
+## 2026-08-09g — Chat 2b: Responses-API agentic loop + the /chat screen
 
 ## 2026-08-09g — Chat 2b: Responses-API agentic loop + the /chat screen
 

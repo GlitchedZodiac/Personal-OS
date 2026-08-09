@@ -51,6 +51,7 @@ const KIND_TITLES: Record<string, string> = {
   water: "PROPOSED WATER",
   edit_food: "PROPOSED EDIT",
   delete: "PROPOSED DELETE",
+  routine: "PROPOSED ROUTINE",
 };
 
 function fmtTime(iso?: string) {
@@ -363,6 +364,17 @@ export default function ChatPage() {
         );
         if (!res.ok) throw new Error("Edit failed");
         followUp = "Updated.";
+      } else if (kind === "routine") {
+        const { message: _m, ...fields } = data;
+        void _m;
+        const res = await fetch("/api/health/sequences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(fields),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Save failed");
+        followUp = `${String(data.name ?? "Routine")} is in Routines — and on the watch list.`;
       } else if (kind === "delete") {
         const entity = String(data.entity ?? "food");
         const endpoint =
@@ -480,7 +492,51 @@ export default function ChatPage() {
             </div>
           )}
 
-          {kind !== "food" && (
+          {kind === "routine" && (
+            <div className="py-2">
+              <p
+                className="text-[15px] font-bold text-foreground"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {String(data.name ?? "Routine")}
+              </p>
+              <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#8C2F51]">
+                {String(data.kind ?? "")}
+                {data.durationMinutes ? ` · ${data.durationMinutes} min` : ""}
+                {data.restSecondsDefault ? ` · rest ${data.restSecondsDefault}s` : ""}
+              </p>
+              <div className="mt-2">
+                {((data.steps as { exerciseName: string; sets?: number; reps?: number; seconds?: number; weightKg?: number }[]) ?? []).map(
+                  (s, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between border-t border-muted py-2 first:border-t-0"
+                    >
+                      <span className="text-[13px] font-semibold text-foreground">
+                        {s.exerciseName}
+                      </span>
+                      <span className="text-[12px] tabular-nums text-secondary-foreground">
+                        {[
+                          s.sets && s.reps
+                            ? `${s.sets} × ${s.reps}`
+                            : s.reps
+                              ? `${s.reps} reps`
+                              : s.seconds
+                                ? `${s.seconds}s`
+                                : null,
+                          s.weightKg ? `${s.weightKg} kg` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
+          {kind !== "food" && kind !== "routine" && (
             <div className="py-3 text-[13.5px] leading-relaxed text-foreground">
               {kind === "delete" ? (
                 <>Delete <span className="font-semibold">{String(data.label ?? "this entry")}</span>?</>

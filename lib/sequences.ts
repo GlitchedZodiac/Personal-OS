@@ -21,6 +21,7 @@ export interface SequenceInput {
   name?: unknown;
   kind?: unknown;
   restSecondsDefault?: unknown;
+  durationMinutes?: unknown;
   steps?: unknown;
 }
 
@@ -30,7 +31,14 @@ function toPositive(value: unknown): number | undefined {
 }
 
 export function validateSequence(input: SequenceInput):
-  | { ok: true; name: string; kind: SequenceKind; restSecondsDefault: number | null; steps: SequenceStep[] }
+  | {
+      ok: true;
+      name: string;
+      kind: SequenceKind;
+      restSecondsDefault: number | null;
+      durationMinutes: number | null;
+      steps: SequenceStep[];
+    }
   | { ok: false; error: string } {
   const name = typeof input.name === "string" ? input.name.trim() : "";
   if (!name) return { ok: false, error: "Name is required" };
@@ -65,9 +73,17 @@ export function validateSequence(input: SequenceInput):
       return { ok: false, error: `"${rawName}" needs reps or seconds` };
     }
 
+    // Catalog normalization must not swallow the per-side qualifier —
+    // "5 snatches each side" is double the volume of "5 snatches".
+    const perSide = /each side|per side|cada lado|por lado/i.test(rawName);
+    let displayName = def?.name ?? rawName;
+    if (def && perSide && !/each side/i.test(displayName)) {
+      displayName = `${displayName} (each side)`;
+    }
+
     steps.push({
       exercise: def?.id ?? rawName.toLowerCase(),
-      exerciseName: def?.name ?? rawName,
+      exerciseName: displayName,
       sets: toPositive(step.sets),
       reps,
       seconds,
@@ -77,5 +93,16 @@ export function validateSequence(input: SequenceInput):
   }
 
   const rest = toPositive(input.restSecondsDefault);
-  return { ok: true, name, kind, restSecondsDefault: rest ?? null, steps };
+  const duration = toPositive(input.durationMinutes);
+  if (duration && duration > 240) {
+    return { ok: false, error: "Duration too long (max 240 min)" };
+  }
+  return {
+    ok: true,
+    name,
+    kind,
+    restSecondsDefault: rest ?? null,
+    durationMinutes: duration ? Math.round(duration) : null,
+    steps,
+  };
 }

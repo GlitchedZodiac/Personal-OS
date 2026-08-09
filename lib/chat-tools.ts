@@ -167,6 +167,7 @@ export const PROPOSAL_TOOL_NAMES = new Set([
   "log_water",
   "edit_food_log",
   "delete_entry",
+  "create_routine",
 ]);
 
 export type ProposalKind =
@@ -175,7 +176,8 @@ export type ProposalKind =
   | "workout"
   | "water"
   | "edit_food"
-  | "delete";
+  | "delete"
+  | "routine";
 
 export function proposalKindFor(toolName: string): ProposalKind | null {
   switch (toolName) {
@@ -191,6 +193,8 @@ export function proposalKindFor(toolName: string): ProposalKind | null {
       return "edit_food";
     case "delete_entry":
       return "delete";
+    case "create_routine":
+      return "routine";
     default:
       return null;
   }

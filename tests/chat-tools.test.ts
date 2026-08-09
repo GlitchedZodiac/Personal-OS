@@ -20,6 +20,7 @@ describe("chat 2b tool surface", () => {
     expect(names).toContain("log_workout");
     expect(names).toContain("edit_food_log");
     expect(names).toContain("delete_entry");
+    expect(names).toContain("create_routine");
     // Stripped surfaces must NOT resurface through chat.
     expect(names).not.toContain("manage_todo");
     expect(names).not.toContain("workout_plan_query");

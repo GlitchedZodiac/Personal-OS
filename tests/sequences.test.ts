@@ -42,6 +42,45 @@ describe("validateSequence", () => {
     expect(result.steps[0].exerciseName).toBe("Sandbag over shoulder");
   });
 
+  it("carries durationMinutes for EMOMs (Michael's 20-minute protocol)", () => {
+    const result = validateSequence({
+      name: "EMOM 20 — swings/squats/snatch",
+      kind: "emom",
+      durationMinutes: 20,
+      steps: [
+        { exerciseName: "kettlebell swings", reps: 20, weightKg: 24 },
+        { exerciseName: "goblet squats", reps: 15, weightKg: 24 },
+        { exerciseName: "Snatch (each side)", reps: 5, weightKg: 20 },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.durationMinutes).toBe(20);
+    expect(result.steps).toHaveLength(3);
+    expect(result.steps[0].exercise).toBe("kb-swing");
+    expect(result.steps[1].exercise).toBe("kb-goblet-squat");
+    // the per-side qualifier survives catalog normalization
+    expect(result.steps[2].exercise).toBe("kb-snatch");
+    expect(result.steps[2].exerciseName).toBe("Kettlebell Snatch (each side)");
+  });
+
+  it("rejects absurd durations and defaults absent ones to null", () => {
+    expect(
+      validateSequence({
+        name: "X",
+        kind: "emom",
+        durationMinutes: 500,
+        steps: [{ exerciseName: "swing", reps: 5 }],
+      }).ok
+    ).toBe(false);
+    const noDuration = validateSequence({
+      name: "X",
+      kind: "straight",
+      steps: [{ exerciseName: "swing", reps: 5 }],
+    });
+    expect(noDuration.ok && noDuration.durationMinutes).toBeNull();
+  });
+
   it("accepts timed steps without reps (tabata)", () => {
     const result = validateSequence({
       name: "Tabata swings",

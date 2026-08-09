@@ -15,6 +15,7 @@ interface Routine {
   name: string;
   kind: string;
   restSecondsDefault: number | null;
+  durationMinutes: number | null;
   steps: SequenceStep[];
 }
 
@@ -47,6 +48,8 @@ export default function RoutinesPage() {
   const [editing, setEditing] = useState<Routine | "new" | null>(null);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<string>("straight");
+  const [duration, setDuration] = useState("");
+  const [rest, setRest] = useState("");
   const [steps, setSteps] = useState<DraftStep[]>([{ ...EMPTY_STEP }]);
   const [saving, setSaving] = useState(false);
 
@@ -64,10 +67,14 @@ export default function RoutinesPage() {
     if (routine === "new") {
       setName("");
       setKind("straight");
+      setDuration("");
+      setRest("");
       setSteps([{ ...EMPTY_STEP }]);
     } else {
       setName(routine.name);
       setKind(routine.kind);
+      setDuration(routine.durationMinutes ? String(routine.durationMinutes) : "");
+      setRest(routine.restSecondsDefault ? String(routine.restSecondsDefault) : "");
       setSteps(
         routine.steps.map((s) => ({
           exerciseName: s.exerciseName,
@@ -90,6 +97,8 @@ export default function RoutinesPage() {
         id: editing !== "new" && editing ? editing.id : undefined,
         name,
         kind,
+        durationMinutes: duration || undefined,
+        restSecondsDefault: rest || undefined,
         steps: steps
           .filter((s) => s.exerciseName.trim())
           .map((s) => ({
@@ -216,6 +225,34 @@ export default function RoutinesPage() {
                 {KIND_LABELS[k]}
               </button>
             ))}
+          </div>
+
+          {/* EMOMs run on the clock ("20-minute EMOM"); circuits rest between movements. */}
+          <div className="flex gap-2.5">
+            <label className="block flex-1">
+              <span className="text-[10px] font-semibold tracking-wide text-muted-foreground">
+                TOTAL MINUTES {kind === "emom" ? "(EMOM length)" : "(optional)"}
+              </span>
+              <input
+                inputMode="numeric"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                placeholder={kind === "emom" ? "20" : "—"}
+                className="mt-0.5 w-full rounded-[10px] border border-border bg-card px-3 py-2 text-center text-sm tabular-nums outline-none"
+              />
+            </label>
+            <label className="block flex-1">
+              <span className="text-[10px] font-semibold tracking-wide text-muted-foreground">
+                REST BETWEEN (SEC)
+              </span>
+              <input
+                inputMode="numeric"
+                value={rest}
+                onChange={(e) => setRest(e.target.value)}
+                placeholder={kind === "circuit" ? "45" : "—"}
+                className="mt-0.5 w-full rounded-[10px] border border-border bg-card px-3 py-2 text-center text-sm tabular-nums outline-none"
+              />
+            </label>
           </div>
 
           <div className="space-y-2.5">

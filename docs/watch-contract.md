@@ -39,11 +39,20 @@ Model (additive migration, main lane):
 ```
 Sequence {
   id, name, kind: "straight" | "emom" | "tabata" | "circuit",
-  restSecondsDefault: Int?,
-  steps: Json  // ordered [{ exercise: canonicalId, reps?, seconds?, weightKg?, restSeconds? }]
+  restSecondsDefault: Int?,   // circuits: rest between movements (Michael's: 45–60 s)
+  durationMinutes: Int?,      // ADDED 2026-08-09: EMOM/circuit total time ("20-minute EMOM")
+  steps: Json  // ordered [{ exercise: canonicalId, exerciseName, sets?, reps?, seconds?, weightKg?, restSeconds? }]
   isArchived, createdAt, updatedAt
 }
 ```
+
+Watch semantics for `durationMinutes` (v1): an EMOM run is
+`durationMinutes` one-minute rounds cycling `steps` in order (e.g. 20 min
+cycling 3 movements → each movement 6–7 times); a circuit repeats `steps`
+with `restSecondsDefault` between movements until the user ends it (or
+`durationMinutes` elapses when set). Routines can now also be created from
+the app's chat ("design me a 20-minute EMOM…") — same rows, no watch change
+needed.
 
 Endpoints: `GET /api/mobile/sequences` (bearer; list, active only) and the
 cookie-gated web CRUD under `/api/health/sequences`. Watch treats sequences

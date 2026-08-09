@@ -1032,7 +1032,8 @@ model Sequence {
   name               String
   kind               String // straight | emom | tabata | circuit
   restSecondsDefault Int?
-  steps              Json // ordered [{ exercise, reps?, seconds?, weightKg?, restSeconds? }]
+  durationMinutes    Int? // EMOM/circuit total time ("20-minute EMOM")
+  steps              Json // ordered [{ exercise, sets?, reps?, seconds?, weightKg?, restSeconds? }]
   isArchived         Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

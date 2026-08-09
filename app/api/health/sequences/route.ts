@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
         name: parsed.name,
         kind: parsed.kind,
         restSecondsDefault: parsed.restSecondsDefault,
+        durationMinutes: parsed.durationMinutes,
         steps: parsed.steps as object[],
       },
     });
@@ -64,6 +65,7 @@ export async function PATCH(request: NextRequest) {
         name: parsed.name,
         kind: parsed.kind,
         restSecondsDefault: parsed.restSecondsDefault,
+        durationMinutes: parsed.durationMinutes,
         steps: parsed.steps as object[],
       },
     });

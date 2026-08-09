@@ -51,6 +51,7 @@ interface Routine {
   name: string;
   kind: string;
   restSecondsDefault: number | null;
+  durationMinutes: number | null;
   steps: SequenceStep[];
 }
 
@@ -68,11 +69,12 @@ const BAR_COLORS = [
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
-function stepSummary(steps: SequenceStep[]) {
-  return steps
+function stepSummary(steps: SequenceStep[], durationMinutes?: number | null) {
+  const names = steps
     .slice(0, 4)
     .map((s) => s.exerciseName.toLowerCase())
     .join(" · ");
+  return durationMinutes ? `${durationMinutes} min — ${names}` : names;
 }
 
 // Sets-per-step: builder stores it alongside reps; timed steps run once.
@@ -472,7 +474,7 @@ export default function TrainPage() {
                       {r.name}
                     </p>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {stepSummary(r.steps)}
+                      {stepSummary(r.steps, r.durationMinutes)}
                     </p>
                   </div>
                   <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-[#8C2F51]">

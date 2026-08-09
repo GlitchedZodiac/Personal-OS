@@ -448,6 +448,11 @@ EDITING & DELETING:
 - When several entries match, pick the most recent and say which one you chose.
 - If the user amends something whose card is still [pending], re-propose the corrected full card. If the card was [saved], the data is in the log — use edit_food_log/delete_entry on the real entry, NEVER log it again (that double-counts).
 
+ROUTINES (training design):
+- create_routine proposes a reusable training routine — the user's protocols: straight sets, EMOM ("20-minute EMOM cycling 20 swings / 15 goblet squats / 5 snatches each side" → kind emom, durationMinutes 20, one step per movement with reps + weightKg), circuit ("11 exercises, 45–60 s rest between" → kind circuit, restSecondsDefault ~50), tabata.
+- Steps carry reps (or seconds for timed holds), weightKg when the user names a bell, sets for straight work. "Each side" belongs in the exercise name.
+- Saved routines appear in Train → Routines and on the Apple Watch. Confirm-first like every proposal.
+
 REMINDERS:
 - set_reminder creates a real timed notification. Only for explicit "remind me at/in..." asks.
 
@@ -552,6 +557,51 @@ const DELETE_ENTRY = {
   },
 };
 
+const CREATE_ROUTINE = {
+  type: "function" as const,
+  name: "create_routine",
+  description:
+    "Propose a reusable training routine (straight sets / EMOM / tabata / circuit) that the user can run from Train or the Apple Watch. The user confirms before it saves.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      name: { type: "string" as const, description: "Routine name, e.g. 'EMOM 20 — swings/squats/snatch'" },
+      kind: {
+        type: "string" as const,
+        enum: ["straight", "emom", "tabata", "circuit"],
+      },
+      durationMinutes: {
+        type: "number" as const,
+        description: "Total minutes for EMOM/circuit sessions (e.g. 20 or 30 for an EMOM)",
+      },
+      restSecondsDefault: {
+        type: "number" as const,
+        description: "Rest between movements in seconds (circuits: typically 45-60)",
+      },
+      steps: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            exerciseName: { type: "string" as const, description: "Movement name; put 'each side' in the name when applicable" },
+            sets: { type: "number" as const, description: "Sets (straight work)" },
+            reps: { type: "number" as const },
+            seconds: { type: "number" as const, description: "For timed holds/intervals instead of reps" },
+            weightKg: { type: "number" as const },
+          },
+          required: ["exerciseName"],
+        },
+        description: "Ordered movements. For an EMOM these are the exercises cycled each minute.",
+      },
+      message: {
+        type: "string" as const,
+        description: "One-line bubble accompanying the routine card",
+      },
+    },
+    required: ["name", "kind", "steps", "message"],
+  },
+};
+
 // Proposal tools reuse the legacy schemas (same fields the dock confirms
 // with today), flattened to the Responses tool shape.
 function toResponsesTool(fn: { name: string; description: string; parameters: object }) {
@@ -572,4 +622,5 @@ export const CHAT_RESPONSES_TOOLS = [
   toResponsesTool(REMINDER_FUNCTION),
   EDIT_FOOD_LOG,
   DELETE_ENTRY,
+  CREATE_ROUTINE,
 ];
