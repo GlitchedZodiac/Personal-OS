@@ -5,10 +5,11 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-08 (phase1b session)
-**Current phase:** Phase 1 COMPLETE. Phase 2 is next: Michael is running the
-design brief through Claude design; 2b (chat surface) can start once the AI
-provider decision lands.
+**Last updated:** 2026-08-09 (GPT-5.6 upgrade session)
+**Current phase:** Phase 1 complete; AI provider decided (all-OpenAI, 5.6
+tiers, live on prod). Michael is iterating on design (2a). Next hands-off
+work: 2d kettlebell catalog/PR backend + 2b editing tools (design-independent).
+Watch phase blocked on Michael installing full Xcode.
 **Branch in flight:** `claude/phase1-modernization` — deployed to prod via
 `vercel deploy --prod` (twice); UNPUSHED to GitHub (403 — collaborator access
 pending, see deferred-items).
