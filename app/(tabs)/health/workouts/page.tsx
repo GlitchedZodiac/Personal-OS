@@ -108,6 +108,17 @@ interface LiveSession {
   startedAt: number;
 }
 
+// A routine runs on the EMOM clock when it's tagged emom, or when its
+// name says so (routines predating the kind selector default to
+// "straight"). Length falls back to 20 minutes if unset.
+function isGuidedEmom(routine: Routine) {
+  return routine.kind === "emom" || /\bemom\b/i.test(routine.name);
+}
+
+function emomMinutes(routine: Routine) {
+  return routine.durationMinutes ?? 20;
+}
+
 export default function TrainPage() {
   const router = useRouter();
   const [data, setData] = useState<TrainData | null>(null);
@@ -158,7 +169,11 @@ export default function TrainPage() {
     setShowStartPicker(false);
     // EMOM routines dive straight into the protocol clock — no set
     // counting; the clock is the log (deferred-items training block).
-    if (routine.kind === "emom" && routine.durationMinutes && routine.steps.length > 0) {
+    // The builder defaults kind to "straight", so routines built before
+    // the kind selector existed are matched by name too; duration falls
+    // back to 20 min rather than silently dropping to the manual sheet.
+    // The picker's "EMOM · guided" chip shows which routines run guided.
+    if (isGuidedEmom(routine) && routine.steps.length > 0) {
       setEmomLive(routine);
       return;
     }
@@ -745,7 +760,7 @@ export default function TrainPage() {
                   <p className="text-[13.5px] font-semibold text-foreground">
                     {r.name}
                   </p>
-                  {r.kind === "emom" && r.durationMinutes ? (
+                  {isGuidedEmom(r) ? (
                     <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-[#8C2F51]">
                       EMOM · guided
                     </span>
@@ -887,7 +902,7 @@ export default function TrainPage() {
       {emomLive && (
         <EmomRunner
           routineName={emomLive.name}
-          durationMinutes={emomLive.durationMinutes ?? emomLive.steps.length}
+          durationMinutes={emomMinutes(emomLive)}
           steps={emomLive.steps}
           saving={saving}
           onFinish={finishEmom}

@@ -33,8 +33,12 @@ minute wheel, per-round movement cycling, congratulations, one-tap save.
   engine (throttle-proof), screen wake lock, WebAudio cues (unlocked in
   the launch tap for iOS) + vibration + spoken round announcements
   (muteable, persisted).
-- **Train page** — `startLive` routes kind="emom" (with durationMinutes)
-  into the runner; sets derive from rounds completed (round i → step
+- **Train page** — `startLive` routes EMOM routines into the runner —
+  matched by `kind === "emom"` OR a name containing "emom" (the builder
+  defaults kind to "straight", so routines built before the kind
+  selector would otherwise fall silently to the manual sheet), with
+  length defaulting to 20 min when durationMinutes is unset; the start
+  picker's "EMOM · guided" chip shows which routines run guided; sets derive from rounds completed (round i → step
   i mod n) and save through the shared path with
   `metricsData.emom = {roundsCompleted, totalRounds}`. Ending early
   always offers Finish & save — a session is never silently discarded.
