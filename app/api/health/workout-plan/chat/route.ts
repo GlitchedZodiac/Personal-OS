@@ -56,6 +56,16 @@ const WORKOUT_CHAT_FUNCTIONS = [
               estimatedDuration: { type: "number" as const, description: "Minutes" },
               estimatedCalories: { type: "number" as const },
               warmup: { type: "string" as const, description: "Brief warmup instructions" },
+              format: {
+                type: "string" as const,
+                description:
+                  "Optional session format, e.g. 'emom' for interval-driven circuits. For EMOM days, estimatedDuration is the number of rounds and exercises are cycled one per round.",
+              },
+              intervalSeconds: {
+                type: "number" as const,
+                description:
+                  "Optional seconds per guided round for interval formats (60 for EMOM, 120 for E2MOM)",
+              },
               exercises: {
                 type: "array" as const,
                 items: {
@@ -104,6 +114,8 @@ const WORKOUT_CHAT_FUNCTIONS = [
               estimatedDuration: { type: "number" as const },
               estimatedCalories: { type: "number" as const },
               warmup: { type: "string" as const },
+              format: { type: "string" as const },
+              intervalSeconds: { type: "number" as const },
               exercises: {
                 type: "array" as const,
                 items: {

@@ -167,6 +167,23 @@
   z-index: 0;
 }
 
+/* Sonner toasts: pin a real width so notifications can never collapse into a
+   one-character-per-line vertical strip on narrow/PWA viewports. */
+[data-sonner-toaster] {
+  width: min(var(--width, 356px), calc(100vw - 2rem)) !important;
+}
+
+[data-sonner-toast] {
+  width: 100% !important;
+}
+
+[data-sonner-toast] [data-title],
+[data-sonner-toast] [data-description] {
+  word-break: normal;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }

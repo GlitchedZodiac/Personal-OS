@@ -5,12 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   ArrowLeft,
   Calendar,
   Check,
@@ -22,6 +16,7 @@ import {
   Flame,
   Loader2,
   Mic,
+  Play,
   Sparkles,
   Target,
   Trophy,
@@ -45,7 +40,8 @@ import {
   type ChatMessage,
   type WorkoutChatResponse,
 } from "@/components/workout-voice-input";
-import { ActiveWorkout, estimateCaloriesBurned } from "@/components/active-workout";
+import { ActiveWorkout } from "@/components/active-workout";
+import { GuidedRoutine, unlockGuidedAudio } from "@/components/guided-routine";
 import {
   addDays,
   startOfWeek,
@@ -66,6 +62,9 @@ interface ScheduleDay {
   estimatedCalories: number;
   warmup?: string;
   exercises: ExerciseData[];
+  /** Optional guided-session hints (AI plans may set these) */
+  format?: string;
+  intervalSeconds?: number;
 }
 
 interface WorkoutPlan {
@@ -209,6 +208,10 @@ export default function WorkoutPlanPage() {
   });
   const [units, setUnits] = useState<"metric" | "imperial">("metric");
   const [activeWorkout, setActiveWorkout] = useState<{
+    date: Date;
+    scheduleDay: ScheduleDay;
+  } | null>(null);
+  const [guidedWorkout, setGuidedWorkout] = useState<{
     date: Date;
     scheduleDay: ScheduleDay;
   } | null>(null);
@@ -970,34 +973,97 @@ export default function WorkoutPlanPage() {
                 <span className="text-sm font-medium">Completed!</span>
               </div>
             ) : (
-              <div className="flex gap-2 mt-2">
+              <div className="space-y-2 mt-2">
                 <Button
-                  className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
+                  className="w-full h-11 gap-2 bg-green-600 hover:bg-green-700"
                   onClick={() => {
-                    setActiveWorkout({
+                    // Must run inside the tap so iOS lets the timer beep
+                    unlockGuidedAudio();
+                    setGuidedWorkout({
                       date: selectedDay.date,
                       scheduleDay: selectedDay.scheduleDay,
                     });
                     setSelectedDay(null);
                   }}
                 >
-                  <Zap className="h-4 w-4" />
-                  Start Workout
+                  <Play className="h-4 w-4" />
+                  Start Routine
                 </Button>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() =>
-                    handleComplete(selectedDay.date, selectedDay.scheduleDay)
-                  }
-                >
-                  <Check className="h-4 w-4" />
-                  Quick Log
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 gap-2"
+                    onClick={() => {
+                      setActiveWorkout({
+                        date: selectedDay.date,
+                        scheduleDay: selectedDay.scheduleDay,
+                      });
+                      setSelectedDay(null);
+                    }}
+                  >
+                    <Zap className="h-4 w-4" />
+                    Track Sets
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 gap-2"
+                    onClick={() =>
+                      handleComplete(selectedDay.date, selectedDay.scheduleDay)
+                    }
+                  >
+                    <Check className="h-4 w-4" />
+                    Quick Log
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Guided Routine Mode — dive in, no set-by-set logging */}
+      {guidedWorkout && (
+        <GuidedRoutine
+          title={guidedWorkout.scheduleDay.label}
+          exercises={guidedWorkout.scheduleDay.exercises}
+          totalMinutes={Math.min(
+            90,
+            Math.max(5, guidedWorkout.scheduleDay.estimatedDuration || 20)
+          )}
+          intervalSeconds={guidedWorkout.scheduleDay.intervalSeconds || 60}
+          workoutType="hiit"
+          units={units}
+          onFinish={async (data) => {
+            if (!plan) return false;
+            try {
+              const res = await fetch("/api/health/workout-plan/complete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  planId: plan.id,
+                  scheduledDate: guidedWorkout.date.toISOString(),
+                  dayIndex: guidedWorkout.scheduleDay.dayIndex,
+                  dayLabel: guidedWorkout.scheduleDay.label,
+                  completed: true,
+                  actualExercises: guidedWorkout.scheduleDay.exercises,
+                  caloriesBurned: data.caloriesBurned,
+                  durationMinutes: data.durationMinutes,
+                  userNotes: `Guided routine — ${data.roundsCompleted}/${data.totalRounds} rounds`,
+                }),
+              });
+              if (!res.ok) return false;
+              toast.success(
+                `Routine logged! ${data.durationMinutes} min • ~${data.caloriesBurned} cal 💪`
+              );
+              fetchPlan();
+              fetchStreak();
+              return true;
+            } catch {
+              return false;
+            }
+          }}
+          onExit={() => setGuidedWorkout(null)}
+        />
       )}
 
       {/* Active Workout Mode */}
