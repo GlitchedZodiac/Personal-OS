@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useDataLoggedListener } from "@/components/use-data-logged";
 import { SheetPortal } from "@/components/sheet-portal";
+import {
+  EmomRunner,
+  runnerCues,
+  unlockRunnerAudio,
+} from "@/components/emom-runner";
 import type { SequenceStep } from "@/lib/sequences";
 
 // Pitaya Train — full port of the design's Train screen (docs/design/
@@ -110,8 +115,11 @@ export default function TrainPage() {
   const [showRoutines, setShowRoutines] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [live, setLive] = useState<LiveSession | null>(null);
+  const [emomLive, setEmomLive] = useState<Routine | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+  const [restLeft, setRestLeft] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(() => {
@@ -144,6 +152,16 @@ export default function TrainPage() {
   }, [live]);
 
   const startLive = (routine: Routine) => {
+    // iOS only allows audio born from a tap — unlock before any runner UI.
+    unlockRunnerAudio();
+    setShowRoutines(false);
+    setShowStartPicker(false);
+    // EMOM routines dive straight into the protocol clock — no set
+    // counting; the clock is the log (deferred-items training block).
+    if (routine.kind === "emom" && routine.durationMinutes && routine.steps.length > 0) {
+      setEmomLive(routine);
+      return;
+    }
     setLive({
       routine,
       stepIdx: 0,
@@ -151,8 +169,7 @@ export default function TrainPage() {
       startedAt: Date.now(),
     });
     setElapsed(0);
-    setShowRoutines(false);
-    setShowStartPicker(false);
+    setRestEndsAt(null);
   };
 
   const openStart = () => {
@@ -169,9 +186,37 @@ export default function TrainPage() {
       if (!prev) return prev;
       const setsDone = [...prev.setsDone];
       setsDone[prev.stepIdx] = Math.max(0, setsDone[prev.stepIdx] + delta);
+      // A logged set starts the rest clock (circuit/straight protocols).
+      if (delta > 0) {
+        const step = prev.routine.steps[prev.stepIdx];
+        const rest = step.restSeconds ?? prev.routine.restSecondsDefault;
+        if (rest && rest > 0) setRestEndsAt(Date.now() + rest * 1000);
+      }
       return { ...prev, setsDone };
     });
   };
+
+  // Rest countdown — sage REST state from the watch design (screen 09),
+  // folded into the live sheet. Beeps out the last 3 seconds.
+  useEffect(() => {
+    if (!restEndsAt) return;
+    let lastWhole: number | null = null;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((restEndsAt - Date.now()) / 1000));
+      setRestLeft(left);
+      if (left !== lastWhole) {
+        lastWhole = left;
+        if (left <= 3 && left >= 1) runnerCues.tick();
+        if (left === 0) {
+          runnerCues.roundStart();
+          setRestEndsAt(null);
+        }
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 200);
+    return () => clearInterval(interval);
+  }, [restEndsAt]);
 
   const advanceStep = (dir: 1 | -1) => {
     setLive((prev) => {
@@ -184,43 +229,39 @@ export default function TrainPage() {
     });
   };
 
-  const endLive = async () => {
-    if (!live) return;
+  // Shared save path for both live modes. Returns true on success so the
+  // EMOM runner can hold its save panel open (retry) instead of losing
+  // the session on a network blip.
+  const saveSession = async (
+    routine: Routine,
+    durationMinutes: number,
+    exercises: {
+      name: string;
+      sets: number;
+      reps?: number;
+      seconds?: number;
+      weightKg?: number;
+    }[],
+    extraMetrics?: Record<string, unknown>
+  ): Promise<boolean> => {
     setSaving(true);
     try {
-      const durationMinutes = Math.max(1, Math.round(elapsed / 60));
-      const exercises = live.routine.steps
-        .map((step, i) => ({
-          name: step.exerciseName,
-          sets: live.setsDone[i],
-          reps: step.reps ?? undefined,
-          seconds: step.seconds ?? undefined,
-          weightKg: step.weightKg ?? undefined,
-        }))
-        .filter((e) => e.sets > 0);
-
-      if (exercises.length === 0) {
-        toast("Nothing logged — session discarded.");
-        setLive(null);
-        return;
-      }
-
       const res = await fetch("/api/health/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workoutType: "strength",
-          description: live.routine.name,
+          description: routine.name,
           durationMinutes,
           exercises,
           source: "live",
-          metricsData: { sequenceId: live.routine.id },
+          metricsData: { sequenceId: routine.id, ...extraMetrics },
         }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error(body.error || "Couldn't save the session");
-        return;
+        return false;
       }
       if (Array.isArray(body.newPRs) && body.newPRs.length > 0) {
         for (const pr of body.newPRs) {
@@ -231,11 +272,69 @@ export default function TrainPage() {
       } else {
         toast.success("Session saved");
       }
-      setLive(null);
       load();
+      return true;
     } finally {
       setSaving(false);
     }
+  };
+
+  const endLive = async () => {
+    if (!live) return;
+    const durationMinutes = Math.max(1, Math.round(elapsed / 60));
+    const exercises = live.routine.steps
+      .map((step, i) => ({
+        name: step.exerciseName,
+        sets: live.setsDone[i],
+        reps: step.reps ?? undefined,
+        seconds: step.seconds ?? undefined,
+        weightKg: step.weightKg ?? undefined,
+      }))
+      .filter((e) => e.sets > 0);
+
+    if (exercises.length === 0) {
+      toast("Nothing logged — session discarded.");
+      setLive(null);
+      setRestEndsAt(null);
+      return;
+    }
+
+    if (await saveSession(live.routine, durationMinutes, exercises)) {
+      setLive(null);
+      setRestEndsAt(null);
+    }
+  };
+
+  // EMOM: the clock is the log — sets derive from rounds completed
+  // (round i belongs to step i % n), no manual counting.
+  const finishEmom = async (result: {
+    roundsCompleted: number;
+    totalRounds: number;
+    elapsedSeconds: number;
+  }): Promise<boolean> => {
+    if (!emomLive) return false;
+    const n = emomLive.steps.length;
+    const exercises = emomLive.steps
+      .map((step, i) => ({
+        name: step.exerciseName,
+        sets:
+          Math.floor(result.roundsCompleted / n) +
+          (i < result.roundsCompleted % n ? 1 : 0),
+        reps: step.reps ?? undefined,
+        seconds: step.seconds ?? undefined,
+        weightKg: step.weightKg ?? undefined,
+      }))
+      .filter((e) => e.sets > 0);
+    if (exercises.length === 0) return false;
+
+    const ok = await saveSession(
+      emomLive,
+      Math.max(1, Math.round(result.elapsedSeconds / 60)),
+      exercises,
+      { emom: { roundsCompleted: result.roundsCompleted, totalRounds: result.totalRounds } }
+    );
+    if (ok) setEmomLive(null);
+    return ok;
   };
 
   const maxVolume = useMemo(
@@ -646,7 +745,13 @@ export default function TrainPage() {
                   <p className="text-[13.5px] font-semibold text-foreground">
                     {r.name}
                   </p>
-                  <span className="h-2 w-2 rounded-full bg-[#DC74A0]" />
+                  {r.kind === "emom" && r.durationMinutes ? (
+                    <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-[#8C2F51]">
+                      EMOM · guided
+                    </span>
+                  ) : (
+                    <span className="h-2 w-2 rounded-full bg-[#DC74A0]" />
+                  )}
                 </button>
               ))}
             </div>
@@ -724,6 +829,26 @@ export default function TrainPage() {
               </div>
             </div>
 
+            {restEndsAt !== null && restLeft > 0 && (
+              <button
+                onClick={() => setRestEndsAt(null)}
+                className="mt-3 flex w-full items-center justify-between rounded-[14px] bg-[#EDF3EE] px-4 py-3"
+              >
+                <span className="text-[10.5px] font-bold tracking-[0.2em] text-[#5E9B72]">
+                  REST
+                </span>
+                <span
+                  className="text-[24px] font-bold tabular-nums text-[#5E9B72]"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  :{String(restLeft).padStart(2, "0")}
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  tap to skip
+                </span>
+              </button>
+            )}
+
             <div className="mt-3 flex items-center justify-between px-1">
               <button
                 onClick={() => advanceStep(-1)}
@@ -756,6 +881,18 @@ export default function TrainPage() {
             </button>
           </div>
         </SheetPortal>
+      )}
+
+      {/* ——— EMOM runner (protocol clock; kind="emom" routines) ——— */}
+      {emomLive && (
+        <EmomRunner
+          routineName={emomLive.name}
+          durationMinutes={emomLive.durationMinutes ?? emomLive.steps.length}
+          steps={emomLive.steps}
+          saving={saving}
+          onFinish={finishEmom}
+          onExit={() => setEmomLive(null)}
+        />
       )}
     </div>
   );

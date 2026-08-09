@@ -153,6 +153,24 @@
   }
 }
 
+/* Sonner toasts: pin a real width so a toast can never collapse into the
+   one-character-per-line vertical strip seen on-phone (bug sweep,
+   "Nothing logged — session discarded." screenshot). */
+[data-sonner-toaster] {
+  width: min(var(--width, 356px), calc(100vw - 2rem)) !important;
+}
+
+[data-sonner-toast] {
+  width: 100% !important;
+}
+
+[data-sonner-toast] [data-title],
+[data-sonner-toast] [data-description] {
+  word-break: normal;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
 /* Micro-label voice: 11px uppercase letterspaced (Pitaya section headers) */
 .micro-label {
   font-size: 11px;
