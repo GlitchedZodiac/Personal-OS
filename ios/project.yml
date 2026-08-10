@@ -58,6 +58,9 @@ targets:
       - path: WatchApp/Fonts
         type: folder
         buildPhase: resources
+    dependencies:
+      - target: PersonalOS WatchWidgets
+        embed: true
     info:
       path: WatchApp/Info.plist
       properties:
@@ -86,6 +89,22 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.blacksheepglobal.pitaya.watchkitapp
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  PersonalOS WatchWidgets:
+    type: app-extension
+    platform: watchOS
+    sources: [WatchWidgets]
+    info:
+      path: WatchWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Pitaya
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.blacksheepglobal.pitaya.watchkitapp.widgets
+        SKIP_INSTALL: YES
 
 schemes:
   PersonalOS:
