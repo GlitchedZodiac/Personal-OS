@@ -36,6 +36,29 @@ enum Smoke {
             model.externalSourceOverride = "watch_smoke"
         }
 
+        // Visual-verification aid: a local 3-round circuit with prescribed
+        // weights (the backend can't build circuits yet — rounds field filed).
+        if env["PITAYA_SMOKE_SAMPLE_CIRCUIT"] == "1" {
+            model.debugInjectSequence(SequenceDef(
+                id: "smoke-circuit",
+                name: "Armor Builder (sample)",
+                kind: "circuit",
+                restSecondsDefault: 15,
+                durationMinutes: nil,
+                rounds: 3,
+                steps: [
+                    SequenceStep(exercise: "kb-swing", exerciseName: "Kettlebell Swing",
+                                 reps: 15, seconds: nil, weightKg: 20, restSeconds: nil),
+                    SequenceStep(exercise: "kb-goblet-squat", exerciseName: "Goblet Squat",
+                                 reps: 10, seconds: nil, weightKg: 20, restSeconds: nil),
+                    SequenceStep(exercise: "kb-clean-and-press", exerciseName: "Clean and Press",
+                                 reps: 5, seconds: nil, weightKg: 16, restSeconds: nil),
+                ],
+                updatedAt: Date()
+            ))
+            log("sample circuit injected")
+        }
+
         // HOLD variant: start a kettlebell session, log one set, and stay on
         // the live set-logger screen (for visual verification runs).
         if env["PITAYA_SMOKE_HOLD"] == "1", model.phase == .home {

@@ -37,6 +37,9 @@ struct LiveWorkoutView: View {
                 IdleNudgeOverlay(onEnd: { Task { await model.finishWorkout(kind) } })
             }
         }
+        .overlay {
+            CountdownOverlay()
+        }
         .animation(.spring(duration: 0.35), value: model.prFlash != nil)
     }
 }
@@ -188,7 +191,7 @@ struct ControlsPage: View {
                     Circle().fill(bg)
                     glyph()
                 }
-                .frame(width: 44, height: 44)
+                .frame(width: 50, height: 50)
                 Text(label)
                     .font(Theme.text(8.5, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)

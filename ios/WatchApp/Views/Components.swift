@@ -139,6 +139,33 @@ struct ZoneBar: View {
     }
 }
 
+// MARK: - Countdown overlay (3 · 2 · 1 before every start)
+
+struct CountdownOverlay: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        if let n = model.countdown {
+            ZStack {
+                Theme.bg.ignoresSafeArea()
+                VStack(spacing: 4) {
+                    Text("GET READY")
+                        .font(Theme.text(9, weight: .bold))
+                        .kerning(1.6)
+                        .foregroundStyle(Theme.textTertiary)
+                    Text("\(n)")
+                        .font(Theme.numeric(64))
+                        .foregroundStyle(Theme.accent)
+                        .contentTransition(.numericText(countsDown: true))
+                        .id(n)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .animation(.spring(duration: 0.3), value: n)
+        }
+    }
+}
+
 // MARK: - Formatting
 
 enum Fmt {

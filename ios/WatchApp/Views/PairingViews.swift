@@ -109,7 +109,7 @@ struct PinPadView: View {
                     isSubmit ? (submitReady ? Theme.textBright : Theme.textMuted) : Theme.textPrimary
                 )
                 .frame(maxWidth: .infinity)
-                .frame(height: 27)
+                .frame(height: 31)
                 .background(
                     isSubmit ? (submitReady ? Theme.accentDeep : Theme.card) : Theme.card,
                     in: RoundedRectangle(cornerRadius: 9)

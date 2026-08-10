@@ -73,7 +73,7 @@ struct HomeGridView: View {
                     Circle().fill(circle)
                     glyph()
                 }
-                .frame(width: 24, height: 24)
+                .frame(width: 27, height: 27)
                 Spacer(minLength: 4)
                 Text(title)
                     .font(Theme.text(11.5, weight: .semibold))
@@ -87,7 +87,7 @@ struct HomeGridView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(9)
-            .frame(height: 78)
+            .frame(height: 88)
             .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         }
         .buttonStyle(.plain)

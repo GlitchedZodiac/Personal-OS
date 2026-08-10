@@ -268,6 +268,18 @@ public struct SequenceStep: Codable, Hashable, Sendable {
     public let seconds: Int?
     public let weightKg: Double?
     public let restSeconds: Int?
+
+    public init(
+        exercise: String, exerciseName: String, reps: Int?, seconds: Int?,
+        weightKg: Double?, restSeconds: Int?
+    ) {
+        self.exercise = exercise
+        self.exerciseName = exerciseName
+        self.reps = reps
+        self.seconds = seconds
+        self.weightKg = weightKg
+        self.restSeconds = restSeconds
+    }
 }
 
 public struct SequenceDef: Codable, Hashable, Identifiable, Sendable {
@@ -276,8 +288,25 @@ public struct SequenceDef: Codable, Hashable, Identifiable, Sendable {
     public let kind: String // "straight" | "emom" | "tabata" | "circuit"
     public let restSecondsDefault: Int?
     public let durationMinutes: Int?
+    /// Round count for circuit kind — decodes nil until the main lane ships
+    /// the field (filed 2026-08-10); the runner falls back to 3.
+    public let rounds: Int?
     public let steps: [SequenceStep]
     public let updatedAt: Date
+
+    public init(
+        id: String, name: String, kind: String, restSecondsDefault: Int?,
+        durationMinutes: Int?, rounds: Int?, steps: [SequenceStep], updatedAt: Date
+    ) {
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.restSecondsDefault = restSecondsDefault
+        self.durationMinutes = durationMinutes
+        self.rounds = rounds
+        self.steps = steps
+        self.updatedAt = updatedAt
+    }
 }
 
 public struct SequenceListResponse: Codable, Sendable {
@@ -290,11 +319,18 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     public let sequenceId: String?
     public let sequenceName: String?
     public let roundsCompleted: Int?
+    /// Total working seconds per step index (circuit runs: start→Done deltas
+    /// summed across rounds) — Michael's "track how long each move takes".
+    public let stepSeconds: [Int]?
 
-    public init(sequenceId: String?, sequenceName: String?, roundsCompleted: Int?) {
+    public init(
+        sequenceId: String?, sequenceName: String?, roundsCompleted: Int?,
+        stepSeconds: [Int]? = nil
+    ) {
         self.sequenceId = sequenceId
         self.sequenceName = sequenceName
         self.roundsCompleted = roundsCompleted
+        self.stepSeconds = stepSeconds
     }
 }
 

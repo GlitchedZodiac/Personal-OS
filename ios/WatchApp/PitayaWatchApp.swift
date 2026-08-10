@@ -35,6 +35,8 @@ struct RootView: View {
                 HomeGridView()
             case .workoutList:
                 WorkoutListView()
+            case .kettlebellSpace:
+                KettlebellSpaceView()
             case .sequences:
                 SequencesListView()
             case .sequenceDetail(let sequence):

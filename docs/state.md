@@ -13,6 +13,34 @@ watch-device-runbook.md). Web: Pitaya stages continuing per 09f order.
 **Branch in flight:** `claude/phase1-modernization` (web) ·
 `claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch).
 
+## 2026-08-10a — [watch] Routines-first: circuits, weights editor, countdown
+
+Michael's direction crystallized on-wrist: routines are the center (his
+Lebe Stark walkthrough → MVP spec in deferred-items for the main lane).
+Watch side shipped and sim-verified end-to-end (Release built; OTA install
+pending — watch was out of network reach, likely on his walk):
+
+- **Circuit runner** (kind != emom): tap-driven Done per step, ROUND r OF R
+  + STEP s OF n, big reps + move + weight, live HR, mint REST countdown
+  between rounds (skippable, haptic at zero — design 14's job), End-early
+  counts tap-counted completions exactly. **Per-step working seconds**
+  captured start→Done and synced as metricsData.stepSeconds.
+- **Pre-start weights editor** on routine detail ("TODAY'S WEIGHTS"):
+  crown-dial sheet per exercise, real bell denominations (4 kg jumps,
+  4–64), overrides persist per routine, entries log ACTUAL weights → PRs.
+  EMOM labels show weight when set.
+- **Kettlebell space IA**: Workouts → Kettlebell → Routines + Free sets
+  (routines count live from the API). Sequences list renamed Routines.
+- **3-2-1 countdown** with tick haptics + start haptic before every
+  freeform/routine start (his ask — nothing starts on the tap itself).
+- **Type +12% globally** (one-line Theme typeScale — second size pass) and
+  bigger touch targets (rows 31pt circles, controls 50pt, tiles 88pt, PIN
+  keys 31pt).
+- DEBUG sample-circuit seam (injection survives refreshes) lets the runner
+  be driven in sim before the backend can build circuits; circuit detail
+  labels say STEP n (not MINUTE n).
+- rounds: Int? decodes now (nil-safe until main lane ships the field).
+
 ## 2026-08-09h — [watch] ON MICHAEL'S WRIST + feedback batch shipped same-day
 
 Pitaya reached the physical watch (Series 8, watchOS 26.6). Debug install

@@ -94,10 +94,11 @@ public final class AppModel: ObservableObject {
         case pairedIntro
         case home              // design 04 — tile grid
         case workoutList       // design 05
+        case kettlebellSpace   // Michael's 2026-08-10 IA: routines + free sets
         case sequences         // design 06
         case sequenceDetail(SequenceDef) // design 07
         case live(WorkoutKind)           // freeform live pages
-        case liveSequence(SequenceDef)   // design 09 — EMOM runner
+        case liveSequence(SequenceDef)   // EMOM ring or circuit runner by kind
         case summary
     }
 
@@ -127,6 +128,23 @@ public final class AppModel: ObservableObject {
     // EMOM runner state
     @Published public private(set) var emomRound = 0
     @Published public private(set) var emomSecondsLeft = 60
+
+    // Circuit runner state (tap-driven)
+    @Published public private(set) var circuitRound = 1
+    @Published public private(set) var circuitStepIndex = 0
+    @Published public private(set) var circuitRestLeft: Int? // nil = working
+    private var circuitStepCompletions: [Int] = []
+    private var circuitStepSeconds: [Int] = []
+    private var circuitStepMark = Date()
+    private var circuitRestTask: Task<Void, Never>?
+
+    // Pre-start weight overrides per exercise id (Michael's ask: dial actual
+    // weights before Start; the run logs what you really lifted). Last-used
+    // values persist per sequence in plain prefs (never sensitive data).
+    @Published public var weightOverrides: [String: Double] = [:]
+
+    // 3-2-1 countdown before any start (nil = not counting)
+    @Published public private(set) var countdown: Int?
 
     // Idle nudge — "still training?" after minutes without a signal
     @Published public var idleNudgeActive = false
@@ -244,6 +262,9 @@ public final class AppModel: ObservableObject {
 
         if let list = try? await api.fetchSequences() {
             sequences = list.sequences
+            #if DEBUG
+            sequences.append(contentsOf: debugInjected)
+            #endif
         }
 
         do {
@@ -266,26 +287,83 @@ public final class AppModel: ObservableObject {
     // MARK: - Navigation
 
     public func openWorkoutList() { phase = .workoutList }
+    public func openKettlebellSpace() { phase = .kettlebellSpace }
     public func openSequences() { phase = .sequences }
-    public func openSequence(_ sequence: SequenceDef) { phase = .sequenceDetail(sequence) }
+    public func openSequence(_ sequence: SequenceDef) {
+        loadWeightOverrides(for: sequence)
+        phase = .sequenceDetail(sequence)
+    }
     public func backToHome() { phase = .home }
     public func backToWorkoutList() { phase = .workoutList }
+    public func backToKettlebellSpace() { phase = .kettlebellSpace }
     public func backToSequences() { phase = .sequences }
+
+    // MARK: - Weight overrides
+
+    /// Unique weight-bearing exercises in a sequence, in first-appearance
+    /// order — the rows of the pre-start weights editor.
+    public func weightableExercises(in sequence: SequenceDef) -> [(id: String, name: String)] {
+        var seen = Set<String>()
+        return sequence.steps.compactMap { step in
+            guard !seen.contains(step.exercise) else { return nil }
+            let category = ExerciseCatalog.byId(step.exercise)?.category
+            guard category == .kettlebell || category == .barbell || category == .dumbbell
+            else { return nil }
+            seen.insert(step.exercise)
+            return (step.exercise, step.exerciseName)
+        }
+    }
+
+    public func effectiveWeight(for step: SequenceStep) -> Double? {
+        weightOverrides[step.exercise] ?? step.weightKg
+    }
+
+    private func overridesKey(_ sequence: SequenceDef) -> String {
+        "seqWeights.\(sequence.id)"
+    }
+
+    private func loadWeightOverrides(for sequence: SequenceDef) {
+        var loaded = (UserDefaults.standard.dictionary(forKey: overridesKey(sequence)) as? [String: Double]) ?? [:]
+        // Prescribed weights fill the gaps so the editor always shows a number.
+        for step in sequence.steps where loaded[step.exercise] == nil {
+            if let weight = step.weightKg { loaded[step.exercise] = weight }
+        }
+        weightOverrides = loaded
+    }
+
+    private func persistWeightOverrides(for sequence: SequenceDef) {
+        UserDefaults.standard.set(weightOverrides, forKey: overridesKey(sequence))
+    }
 
     // MARK: - Freeform workout flow
 
-    /// `useRecorder: false` is the headless-smoke path (no HealthKit sheet in
-    /// a simulator run); every user-facing call leaves it true.
+    /// `useRecorder: false` is the headless-smoke path (no HealthKit sheet,
+    /// no countdown in a simulator run); every user-facing call leaves it true.
     public func startWorkout(_ kind: WorkoutKind, useRecorder: Bool = true) async {
         resetLiveState()
         phase = .live(kind)
         guard useRecorder else { return }
+        await runCountdown()
+        workoutStartedAt = Date()
         do {
             try await recorder.start(activityType: kind.activityType, outdoor: kind.isOutdoor)
         } catch {
             // HealthKit refused (denied auth, restricted) — the session still
             // runs on wall clock so a workout is never lost.
         }
+    }
+
+    /// 3 · 2 · 1 with tick haptics, then the start haptic — Michael's ask:
+    /// nothing should begin the instant you tap.
+    private func runCountdown() async {
+        for n in [3, 2, 1] {
+            countdown = n
+            WKInterfaceDevice.current().play(.click)
+            try? await Task.sleep(nanoseconds: 900_000_000)
+        }
+        countdown = nil
+        WKInterfaceDevice.current().play(.start)
+        markActivity()
     }
 
     public func logSet() {
@@ -341,11 +419,23 @@ public final class AppModel: ObservableObject {
     public func startSequence(_ sequence: SequenceDef, useRecorder: Bool = true) async {
         resetLiveState()
         activeSequence = sequence
+        persistWeightOverrides(for: sequence)
         emomRound = 0
         emomSecondsLeft = 60
         sequencePausedAccum = 0
         sequencePauseStartedAt = nil
+        circuitRound = 1
+        circuitStepIndex = 0
+        circuitRestLeft = nil
+        circuitStepCompletions = Array(repeating: 0, count: sequence.steps.count)
+        circuitStepSeconds = Array(repeating: 0, count: sequence.steps.count)
         phase = .liveSequence(sequence)
+
+        if useRecorder {
+            await runCountdown()
+        }
+        workoutStartedAt = Date()
+        circuitStepMark = Date()
 
         if useRecorder {
             do {
@@ -353,10 +443,74 @@ public final class AppModel: ObservableObject {
             } catch {}
         }
 
-        engineTask?.cancel()
-        engineTask = Task { [weak self] in
-            await self?.runEMOMEngine(sequence)
+        if sequence.kind == "emom" {
+            engineTask?.cancel()
+            engineTask = Task { [weak self] in
+                await self?.runEMOMEngine(sequence)
+            }
         }
+        // Circuit/straight kinds are tap-driven — no clock engine.
+    }
+
+    // MARK: - Circuit runner (tap-driven rounds)
+
+    public func circuitTotalRounds(_ sequence: SequenceDef) -> Int {
+        max(sequence.rounds ?? 3, 1)
+    }
+
+    /// "Done" on the current step: advance, rest between rounds, finish
+    /// after the last.
+    public func advanceCircuitStep(_ sequence: SequenceDef) async {
+        guard circuitRestLeft == nil else { return }
+        markActivity()
+        if circuitStepIndex < circuitStepCompletions.count {
+            circuitStepCompletions[circuitStepIndex] += 1
+            circuitStepSeconds[circuitStepIndex] += Int(Date().timeIntervalSince(circuitStepMark))
+        }
+
+        if circuitStepIndex + 1 < sequence.steps.count {
+            circuitStepIndex += 1
+            circuitStepMark = Date()
+            WKInterfaceDevice.current().play(.click)
+        } else if circuitRound < circuitTotalRounds(sequence) {
+            WKInterfaceDevice.current().play(.success)
+            await runCircuitRest(sequence)
+            circuitRound += 1
+            circuitStepIndex = 0
+            circuitStepMark = Date() // work clock restarts after rest
+        } else {
+            WKInterfaceDevice.current().play(.success)
+            await finishSequence(roundsCompleted: circuitTotalRounds(sequence))
+        }
+    }
+
+    public func skipCircuitRest() {
+        circuitRestTask?.cancel()
+        circuitRestLeft = nil
+    }
+
+    private func runCircuitRest(_ sequence: SequenceDef) async {
+        let restSeconds = sequence.steps[circuitStepIndex].restSeconds
+            ?? sequence.restSecondsDefault ?? 60
+        guard restSeconds > 0 else { return }
+
+        circuitRestTask?.cancel()
+        circuitRestLeft = restSeconds
+        let task = Task { [weak self] in
+            var left = restSeconds
+            while left > 0, !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled else { return }
+                left -= 1
+                self?.circuitRestLeft = left
+            }
+            if !Task.isCancelled {
+                WKInterfaceDevice.current().play(.notification) // design 14: haptic at zero
+            }
+        }
+        circuitRestTask = task
+        await task.value
+        circuitRestLeft = nil
     }
 
     /// One round per minute; steps cycle across minutes (design 09's model,
@@ -410,12 +564,23 @@ public final class AppModel: ObservableObject {
     /// End from controls mid-sequence: the running round counts — you tapped
     /// End after doing the work, not before.
     public func endSequenceEarly() async {
-        await finishSequence(roundsCompleted: max(emomRound, 0))
+        guard let sequence = activeSequence else { return }
+        if sequence.kind == "emom" {
+            await finishSequence(roundsCompleted: max(emomRound, 0))
+        } else {
+            await finishSequence(roundsCompleted: max(circuitRound - 1, minCompletedRounds))
+        }
+    }
+
+    private var minCompletedRounds: Int {
+        circuitStepCompletions.min() ?? 0
     }
 
     private func finishSequence(roundsCompleted: Int) async {
         engineTask?.cancel()
         engineTask = nil
+        circuitRestTask?.cancel()
+        circuitRestLeft = nil
         guard let sequence = activeSequence else { return }
 
         let totals = await recorder.finish()
@@ -438,19 +603,32 @@ public final class AppModel: ObservableObject {
         )
     }
 
-    /// Rounds R cycling S steps → step i performed R/S (+1 for the first
-    /// R%S steps) times.
+    /// EMOM: rounds R cycling S steps → step i performed R/S (+1 for the
+    /// first R%S steps) times. Circuit: exact tap-counted completions.
+    /// Weights come from the pre-start overrides (actual iron lifted), then
+    /// the routine's prescription.
     private func sequenceEntries(sequence: SequenceDef, rounds: Int) -> [ExerciseEntry] {
         let stepCount = sequence.steps.count
-        guard stepCount > 0, rounds > 0 else { return [] }
+        guard stepCount > 0 else { return [] }
+
+        let usesCompletions = sequence.kind != "emom"
+            && circuitStepCompletions.count == stepCount
+            && circuitStepCompletions.contains(where: { $0 > 0 })
+
         return sequence.steps.enumerated().compactMap { index, step in
-            let times = rounds / stepCount + (index < rounds % stepCount ? 1 : 0)
+            let times: Int
+            if usesCompletions {
+                times = circuitStepCompletions[index]
+            } else {
+                guard rounds > 0 else { return nil }
+                times = rounds / stepCount + (index < rounds % stepCount ? 1 : 0)
+            }
             guard times > 0 else { return nil }
             return ExerciseEntry(
                 name: step.exerciseName,
                 sets: times,
                 reps: step.reps,
-                weightKg: step.weightKg
+                weightKg: effectiveWeight(for: step)
             )
         }
     }
@@ -502,7 +680,9 @@ public final class AppModel: ObservableObject {
             exercises: entries.isEmpty ? nil : entries,
             metricsData: sequence.map {
                 WorkoutMetricsData(
-                    sequenceId: $0.id, sequenceName: $0.name, roundsCompleted: rounds
+                    sequenceId: $0.id, sequenceName: $0.name, roundsCompleted: rounds,
+                    stepSeconds: circuitStepSeconds.contains(where: { $0 > 0 })
+                        ? circuitStepSeconds : nil
                 )
             },
             deviceType: "apple_watch"
@@ -549,6 +729,9 @@ public final class AppModel: ObservableObject {
         pendingItem = nil
         syncState = .idle
         idleNudgeActive = false
+        countdown = nil
+        circuitRestTask?.cancel()
+        circuitRestLeft = nil
         workoutStartedAt = Date()
         markActivity()
         startIdleWatchdog()
@@ -665,6 +848,17 @@ public final class AppModel: ObservableObject {
         }
         return "Kettlebell — " + names.joined(separator: ", ")
     }
+
+    #if DEBUG
+    /// Smoke-only: inject a local sequence so runners can be driven in the
+    /// simulator before the backend carries that kind. Survives background
+    /// refreshes (which replace `sequences` with the server list).
+    private var debugInjected: [SequenceDef] = []
+    public func debugInjectSequence(_ sequence: SequenceDef) {
+        debugInjected.append(sequence)
+        sequences.append(sequence)
+    }
+    #endif
 
     private func friendlyError(_ error: Error) -> String {
         if let clientError = error as? MobileAPIClient.ClientError {

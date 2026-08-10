@@ -53,6 +53,10 @@ public enum Theme {
     // Familjen Grotesk (display/numerals) + Instrument Sans (text), bundled
     // in WatchApp/Fonts and registered via UIAppFonts. PostScript names
     // verified from the TTF name tables.
+    //
+    // typeScale: every font in the app runs through it. Raised to 1.12 on
+    // Michael's second "a little bigger" pass (2026-08-10, 45 mm wrist).
+    private static let typeScale: CGFloat = 1.12
     private static func familjen(_ weight: Font.Weight) -> String {
         switch weight {
         case .bold, .heavy, .black: return "FamiljenGrotesk-Bold"
@@ -71,17 +75,17 @@ public enum Theme {
     }
 
     public static func display(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
-        .custom(familjen(weight), size: size)
+        .custom(familjen(weight), size: size * typeScale)
     }
 
     public static func text(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .custom(instrument(weight), size: size)
+        .custom(instrument(weight), size: size * typeScale)
     }
 
     /// Tabular-numeral display face for timers and live metrics (Familjen
     /// carries tabular figures; monospacedDigit engages them).
     public static func numeric(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
-        .custom(familjen(weight), size: size).monospacedDigit()
+        .custom(familjen(weight), size: size * typeScale).monospacedDigit()
     }
 
     // ── Shape ─────────────────────────────────────────────────────────

@@ -80,7 +80,7 @@ struct SetLoggerPage: View {
         .padding(.vertical, 2)
         .focusable(true)
         .digitalCrownRotation(
-            $crownWeight, from: 2, through: 60, by: 2,
+            $crownWeight, from: 4, through: 64, by: 4,
             sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true
         )
         .onChange(of: crownWeight) { _, newValue in
@@ -102,9 +102,9 @@ struct SetLoggerPage: View {
     private func repButton(_ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Theme.textPrimary)
-                .frame(width: 25, height: 25)
+                .frame(width: 28, height: 28)
                 .background(Theme.elementDim, in: Circle())
         }
         .buttonStyle(.plain)

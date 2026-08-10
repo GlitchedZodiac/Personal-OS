@@ -19,25 +19,16 @@ struct WorkoutListView: View {
                 }
                 .padding(.horizontal, 4)
 
-                if !model.sequences.isEmpty {
-                    row(
-                        title: "Sequences",
-                        subtitle: "\(model.sequences.count) saved · from Pitaya"
-                    ) {
-                        SequenceGridGlyph(color: Theme.accent, size: 13)
-                    } action: {
-                        model.openSequences()
-                    }
-                }
-
-                row(kind: .kettlebell, title: "Kettlebell", subtitle: kettlebellSubtitle) {
-                    PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 14)
+                row(title: "Kettlebell", subtitle: kettlebellSubtitle) {
+                    PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 15)
+                } action: {
+                    model.openKettlebellSpace()
                 }
                 row(kind: .run, title: "Trail Run", subtitle: runSubtitle) {
-                    PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 14)
+                    PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 15)
                 }
                 row(kind: .walk, title: "Walk", subtitle: "open goal") {
-                    WalkGlyph(color: Theme.accent, size: 14)
+                    WalkGlyph(color: Theme.accent, size: 15)
                 }
             }
             .padding(.horizontal, 2)
@@ -64,7 +55,7 @@ struct WorkoutListView: View {
                     Circle().fill(Theme.accentDim)
                     glyph()
                 }
-                .frame(width: 28, height: 28)
+                .frame(width: 31, height: 31)
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title)
@@ -89,12 +80,16 @@ struct WorkoutListView: View {
     }
 
     private var kettlebellSubtitle: String {
+        let routines = model.sequences.count
+        if routines > 0 {
+            return "\(routines) \(routines == 1 ? "routine" : "routines") · free sets"
+        }
         if let last = model.lastKettlebell {
             let f = RelativeDateTimeFormatter()
             f.unitsStyle = .short
             return "last · " + f.localizedString(for: last, relativeTo: Date())
         }
-        return "sets · crown weight · PRs"
+        return "routines · free sets · PRs"
     }
 
     private var runSubtitle: String {
@@ -104,6 +99,79 @@ struct WorkoutListView: View {
             return String(format: "%.1f km · %@", run.km, f.string(from: run.at))
         }
         return "GPS coming · HR live"
+    }
+}
+
+// MARK: - Kettlebell space (Michael's 2026-08-10 IA: routines are the main
+// object; free sets are the freestyle corner)
+
+struct KettlebellSpaceView: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    BackChevron { model.backToWorkoutList() }
+                    Text("Kettlebell")
+                        .font(Theme.display(16))
+                        .foregroundStyle(Theme.textBright)
+                }
+                .padding(.horizontal, 4)
+
+                spaceRow(
+                    title: "Routines",
+                    subtitle: model.sequences.isEmpty
+                        ? "build one in Pitaya chat"
+                        : "\(model.sequences.count) saved · EMOM · circuits"
+                ) {
+                    SequenceGridGlyph(color: Theme.accent, size: 14)
+                } action: {
+                    if !model.sequences.isEmpty { model.openSequences() }
+                }
+
+                spaceRow(title: "Free sets", subtitle: "crown weight · tap reps · PRs") {
+                    PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 15)
+                } action: {
+                    Task { await model.startWorkout(.kettlebell) }
+                }
+            }
+            .padding(.horizontal, 2)
+        }
+    }
+
+    private func spaceRow(
+        title: String, subtitle: String,
+        @ViewBuilder glyph: () -> some View,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle().fill(Theme.accentDim)
+                    glyph()
+                }
+                .frame(width: 31, height: 31)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title)
+                        .font(Theme.text(13, weight: .semibold))
+                        .foregroundStyle(Theme.textBright)
+                    Text(subtitle)
+                        .font(Theme.text(9))
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.textMuted)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 10)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+        }
+        .buttonStyle(.plain)
     }
 }
 
