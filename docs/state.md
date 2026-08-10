@@ -13,6 +13,36 @@ watch-device-runbook.md). Web: Pitaya stages continuing per 09f order.
 **Branch in flight:** `claude/phase1-modernization` (web) ·
 `claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch).
 
+## 2026-08-09h — [watch] ON MICHAEL'S WRIST + feedback batch shipped same-day
+
+Pitaya reached the physical watch (Series 8, watchOS 26.6). Debug install
+went through Xcode with Michael present (blockers en route, all solved:
+watch invisible to the Mac until same-Wi-Fi + first Xcode contact unlocked
+the hidden Developer Mode toggle; a stray Sign-In-with-Apple capability
+from "+ Capability" exploration broke personal-team provisioning — removed;
+team HDR67SL3JG captured into project.yml). His feedback from the first
+wrist session, shipped within the hour and REinstalled over the air via
+devicectl as a Release build (commit 6fedc4c):
+
+- **Sequences/EMOM live on the wrist** — /api/mobile/sequences shipped
+  mid-session (main lane's Train stage); list/detail/runner ported from
+  design 06/07/09; his real "20-Min EMOM" runs with ring countdown, round
+  haptics, auto-finish; runs sync with metricsData.sequenceId. Sim-verified
+  through real taps end-to-end.
+- **New Home ported** (design 04 tile grid, dragonfruit logo extracted
+  verbatim from pitaya-icons.tsx; Sleep/Journal honest "soon" tiles).
+- **Save/Discard review** replaces auto-save (his ask; discard confirmed
+  destructive-style); **idle nudge** after 8 quiet minutes (no sets, HR<95):
+  haptic + Keep going / End overlay (his ask).
+- **Perf**: the 5–10 s black screens were Debug+debugger overhead plus a
+  bootstrap that blocked on two cold Vercel calls — now cached-baselines-
+  first with background refresh, and the wrist runs Release.
+- Sizes bumped ~10% for the 45 mm ("a little small" feedback — iterate).
+- Smoke rows now sync as externalSource watch_smoke; his 2 real app_watch
+  wrist workouts were correctly untouched by cleanup; PR table backfilled
+  clean after the smoke (7 records, unchanged).
+- Watch streak on home deferred (needs a mobile endpoint — new ask below).
+
 ## 2026-08-09g — [watch] Server-truth PRs adopted, PORT GATE parity, runbook
 
 Post-worktree-split session in the new lane home. Both new backend
