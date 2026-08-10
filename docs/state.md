@@ -18,6 +18,35 @@ prod deploys via `vercel deploy --prod`; merge awaits Michael) ·
 `claude/watch-app` (watch lane, local) · `claude/emom-guided-runner`
 (cloud session; PR into phase1).
 
+## 2026-08-09m — Post-session report (the Strava read Strava can't give)
+
+His ask: "push post session ai insights like Strava has… doesn't need
+the watch but will be fed by the watch." The training block's remaining
+app-side item (deferred-items (1)).
+
+- **lib/workout-report.ts** — assembles the FACTS (exercises, tonnage,
+  EMOM rounds completed, PRs hit, days since last same-type session,
+  tonnage vs the last 5 comparable sessions) in code, so every number in
+  the report is computed, never hallucinated; COACH_MODEL only
+  interprets. Voice rules: 3 short paragraphs, no markdown/emoji/hype,
+  no moralising about rest days.
+- **WATCH-READY BY CONSTRUCTION** — avg/max HR, time-in-zones, calories,
+  relative effort/load are read from the log + metricsData when present
+  and omitted from the prompt when absent, with the model told which
+  signals it has. When the wrist starts streaming, the same report gets
+  richer with zero code change. Today HR-bearing Strava imports already
+  produce the full version; strength sessions get the tonnage/PR version.
+- **POST /api/health/workouts/report** generates once and caches to
+  `metricsData.report` (a COACH_MODEL call is never repeated silently);
+  `?refresh` rewrites; `GET ?id=` reads. Train's save path fires it
+  automatically after any live session, and the screen shows a SESSION
+  REPORT card with a Rewrite action. `/api/health/train` now returns
+  `session.workoutId` so the card can find its report.
+- **vercel-build split** — `prisma migrate deploy` moved off `build` onto
+  `vercel-build` (Vercel prefers it; CLI deploys use it too). Self-smoke
+  caught that putting it on `build` broke `npm run build` with no DB
+  reachable — his offline builds would have failed.
+
 ## 2026-08-09l — Food port: the last screen, plus label products
 
 Michael's ask from the road: bring Food up to speed — label photos he

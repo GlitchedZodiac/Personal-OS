@@ -37,6 +37,7 @@ interface TrainData {
     rows: { name: string; detail: string; isPR: boolean }[];
     durationMinutes: number;
     startedAt: string;
+    workoutId?: string;
   } | null;
   weeklyVolume: { weekStart: string; label: string; volumeKg: number }[];
   pctChange: number | null;
@@ -131,6 +132,8 @@ export default function TrainPage() {
   const [saving, setSaving] = useState(false);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [restLeft, setRestLeft] = useState(0);
+  const [report, setReport] = useState<string | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(() => {
@@ -149,6 +152,16 @@ export default function TrainPage() {
 
   useEffect(load, [load]);
   useDataLoggedListener(load);
+
+  // Surface a report already written for today's session.
+  useEffect(() => {
+    const id = data?.session?.workoutId;
+    if (!id) return;
+    fetch(`/api/health/workouts/report?id=${id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setReport(d?.report?.text ?? null))
+      .catch(() => {});
+  }, [data?.session?.workoutId]);
 
   // Live session clock
   useEffect(() => {
@@ -186,6 +199,46 @@ export default function TrainPage() {
     setElapsed(0);
     setRestEndsAt(null);
   };
+
+  // Post-session read (the Strava-style "how did that go"). Generated
+  // once per session and cached server-side on the log's metricsData.
+  const requestReport = useCallback(async (workoutId: string) => {
+    setReportBusy(true);
+    try {
+      const res = await fetch("/api/health/workouts/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workoutId }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.report?.text) setReport(body.report.text);
+    } catch {
+      // A missing report never blocks the session being saved.
+    } finally {
+      setReportBusy(false);
+    }
+  }, []);
+
+  const refreshReport = useCallback(
+    async (workoutId: string) => {
+      setReportBusy(true);
+      try {
+        const res = await fetch("/api/health/workouts/report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workoutId, refresh: true }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok && body.report?.text) setReport(body.report.text);
+        else toast.error(body.error || "Couldn't rewrite the report");
+      } catch {
+        toast.error("Couldn't rewrite the report");
+      } finally {
+        setReportBusy(false);
+      }
+    },
+    []
+  );
 
   const openStart = () => {
     if (!routines || routines.length === 0) {
@@ -258,7 +311,7 @@ export default function TrainPage() {
       weightKg?: number;
     }[],
     extraMetrics?: Record<string, unknown>
-  ): Promise<boolean> => {
+  ): Promise<string | null> => {
     setSaving(true);
     try {
       const res = await fetch("/api/health/workouts", {
@@ -276,7 +329,7 @@ export default function TrainPage() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error(body.error || "Couldn't save the session");
-        return false;
+        return null;
       }
       if (Array.isArray(body.newPRs) && body.newPRs.length > 0) {
         for (const pr of body.newPRs) {
@@ -288,7 +341,9 @@ export default function TrainPage() {
         toast.success("Session saved");
       }
       load();
-      return true;
+      // The post-session read writes itself — he shouldn't have to ask.
+      if (typeof body.id === "string") void requestReport(body.id);
+      return typeof body.id === "string" ? body.id : null;
     } finally {
       setSaving(false);
     }
@@ -318,6 +373,7 @@ export default function TrainPage() {
       setLive(null);
       setRestEndsAt(null);
     }
+
   };
 
   // EMOM: the clock is the log — sets derive from rounds completed
@@ -342,14 +398,14 @@ export default function TrainPage() {
       .filter((e) => e.sets > 0);
     if (exercises.length === 0) return false;
 
-    const ok = await saveSession(
+    const savedId = await saveSession(
       emomLive,
       Math.max(1, Math.round(result.elapsedSeconds / 60)),
       exercises,
       { emom: { roundsCompleted: result.roundsCompleted, totalRounds: result.totalRounds } }
     );
-    if (ok) setEmomLive(null);
-    return ok;
+    if (savedId) setEmomLive(null);
+    return Boolean(savedId);
   };
 
   const maxVolume = useMemo(
@@ -482,6 +538,40 @@ export default function TrainPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Session report — the post-workout read (Strava-style) */}
+      {data?.session && (report || reportBusy) && (
+        <div className="mt-3 rounded-[16px] bg-card p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+          <div className="flex items-baseline justify-between">
+            <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+              SESSION REPORT
+            </p>
+            {report && !reportBusy && (
+              <button
+                onClick={() =>
+                  data.session?.workoutId && refreshReport(data.session.workoutId)
+                }
+                className="text-[11px] font-semibold text-[#8C2F51]"
+              >
+                Rewrite
+              </button>
+            )}
+          </div>
+          {reportBusy && !report ? (
+            <p className="mt-2 text-[13px] text-muted-foreground">
+              Reading the session…
+            </p>
+          ) : (
+            <div className="mt-2 space-y-2">
+              {report?.split(/\n{2,}/).map((para, i) => (
+                <p key={i} className="text-[13px] leading-relaxed text-foreground">
+                  {para.trim()}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -127,6 +127,7 @@ export async function GET(request: NextRequest) {
       rows: SessionRow[];
       durationMinutes: number;
       startedAt: string;
+      workoutId: string;
     } | null = null;
     if (todaysWorkout) {
       const prRecords = await prisma.personalRecord.findMany({
@@ -155,6 +156,8 @@ export async function GET(request: NextRequest) {
         rows,
         durationMinutes: todaysWorkout.durationMinutes,
         startedAt: todaysWorkout.startedAt.toISOString(),
+        // Lets the Train screen fetch/generate this session's report.
+        workoutId: todaysWorkout.id,
       };
     }
 
