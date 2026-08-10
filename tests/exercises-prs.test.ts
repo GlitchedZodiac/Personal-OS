@@ -18,7 +18,10 @@ describe("normalizeExerciseName", () => {
 
   it("understands Spanish aliases with accents", () => {
     expect(normalizeExerciseName("sentadilla goblet")?.id).toBe("kb-goblet-squat");
-    expect(normalizeExerciseName("peso muerto")?.id).toBe("deadlift");
+    // He owns no barbell: bare "deadlift"/"peso muerto" is the kettlebell
+    // one. The barbell entry keeps its explicit aliases.
+    expect(normalizeExerciseName("peso muerto")?.id).toBe("kb-deadlift");
+    expect(normalizeExerciseName("barbell deadlift")?.id).toBe("deadlift");
     expect(normalizeExerciseName("dominadas")?.id).toBe("pull-up");
     expect(normalizeExerciseName("press militar")?.id).toBe("kb-press");
   });
@@ -80,7 +83,7 @@ describe("extractPRCandidates", () => {
       42,
       { name: "squat", weightKg: -10 },
     ]);
-    expect(candidates.find((c) => c.exercise === "deadlift" && c.kind === "volume")?.value).toBe(1500);
+    expect(candidates.find((c) => c.exercise === "kb-deadlift" && c.kind === "volume")?.value).toBe(1500);
     expect(candidates.filter((c) => c.exercise === "back-squat")).toHaveLength(0);
   });
 });

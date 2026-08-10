@@ -18,6 +18,39 @@ prod deploys via `vercel deploy --prod`; merge awaits Michael) ·
 `claude/watch-app` (watch lane, local) · `claude/emom-guided-runner`
 (cloud session; PR into phase1).
 
+## 2026-08-10a — Exercise catalog expanded + randomised EMOMs
+
+His voice brief: the movements he actually trains, quick weight entry, a
+"randomize EMOM" button, and coaching detail — all of it feeding the
+watch he's building in parallel.
+
+- **Catalog: 47 → 64 movements**, and every movement he named now carries
+  `equipment`, `laterality` (one bell vs two), `pattern`, `grip`,
+  `emomSuitable`/`emomReps`, and `coaching { setup, cues, avoid }`.
+  Added: renegade row, gorilla row, jerk, DB chest/shoulder/incline
+  press, DB row, KB + DB reverse lunges, walk, hike, run, band
+  pull-apart, shoulder pass-through, clamshell, reverse plank.
+- **Alias reroutes — he owns no barbell**: bare "deadlift"/"peso muerto"
+  → `kb-deadlift`, "shoulder press" → `db-shoulder-press`, "bent over
+  row" → `db-row`. Two existing tests asserted the old barbell mapping
+  and were updated deliberately. PR-id consequence filed as deferred.
+- **His kit as presets**: `KETTLEBELL_WEIGHTS_KG = [16,20,24,32]`,
+  `DUMBBELL_WEIGHT_KG = 17.5`, `weightPresetsFor(def)` — ready for the
+  weight prompt and the watch's crown dial.
+- **lib/emom-generator.ts + POST /api/health/sequences/random** — a
+  balanced random EMOM: distinct movement patterns, grip-heavy
+  movements never adjacent (wrap included), slow technical lifts
+  (get-up, windmill) excluded via `emomSuitable`, unilateral work
+  labelled "each side", weights from his ladder. Proposes only —
+  Start it / Roll again / Save it, matching the confirm-first dock.
+- Self-smoke caught: my first spacing pass only REORDERED grip-heavy
+  movements, which can't work when more than half are heavy (3 heavy +
+  1 light always collides). Fixed by capping heavy picks at floor(n/2)
+  during selection. 7 invariant tests over 60 seeded draws now hold.
+- 107/107 vitest (34 new). Deferred: warm-up/wind-down protocol,
+  train-to-failure protocol, coaching detail SURFACE (data is done),
+  workoutType-from-kind, watch catalog mirror.
+
 ## 2026-08-09l — Food port: the last screen, plus label products
 
 Michael's ask from the road: bring Food up to speed — label photos he
