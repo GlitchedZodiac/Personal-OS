@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		05317DBD031E73DDAE8151C6 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
+		0B73A4EC13599FACFA029DF5 /* SequenceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */; };
+		119C8051CB463E710DA49416 /* HomeGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D569AE319D0679E013CC7F3 /* HomeGridView.swift */; };
 		1AD7225F8119DEE334552638 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
 		1E57C0B28724B24673F91B65 /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
 		1F4F7858F490CDE118F92780 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 779544B3E1F855E1019BE07F /* Components.swift */; };
@@ -60,11 +62,13 @@
 		5327746B0D266318DF89D2DF /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		570E4172D82BFC1B6E10D848 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		59C296B6BB79F59CD32FB649 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		5D569AE319D0679E013CC7F3 /* HomeGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeGridView.swift; sourceTree = "<group>"; };
 		65026F55D9A5F18E5741377D /* PersonalOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PersonalOS.entitlements; sourceTree = "<group>"; };
 		662A6D243528AE6967F5E3EA /* FamiljenGrotesk-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "FamiljenGrotesk-Regular.ttf"; sourceTree = "<group>"; };
 		779544B3E1F855E1019BE07F /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		79984AFEC08AF2C2C87E907E /* PitayaGlyphs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaGlyphs.swift; sourceTree = "<group>"; };
 		7E4AC2F072E9A3D3911A6CBF /* PersonalOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PersonalOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SequenceViews.swift; sourceTree = "<group>"; };
 		90514349C02B2B967189761C /* LiveWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveWorkoutView.swift; sourceTree = "<group>"; };
 		977A9107D8035E968679A59C /* MobileAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAPIModels.swift; sourceTree = "<group>"; };
 		ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineWorkoutQueue.swift; sourceTree = "<group>"; };
@@ -86,10 +90,12 @@
 			isa = PBXGroup;
 			children = (
 				779544B3E1F855E1019BE07F /* Components.swift */,
+				5D569AE319D0679E013CC7F3 /* HomeGridView.swift */,
 				59C296B6BB79F59CD32FB649 /* HomeView.swift */,
 				90514349C02B2B967189761C /* LiveWorkoutView.swift */,
 				EA94BE4FFDB0509B29D5AF96 /* PairingViews.swift */,
 				79984AFEC08AF2C2C87E907E /* PitayaGlyphs.swift */,
+				8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */,
 				1377A069127D2D8A55879B3B /* SetLoggerPage.swift */,
 				12D0C5609A11F08C551F2A60 /* SummaryView.swift */,
 			);
@@ -250,9 +256,11 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					536B420B2D8018B46F3047EF = {
+						DevelopmentTeam = HDR67SL3JG;
 						ProvisioningStyle = Automatic;
 					};
 					AD4D41AF62428EAB5D82B96C = {
+						DevelopmentTeam = HDR67SL3JG;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -319,6 +327,7 @@
 				836DABC6857606F8BB040B10 /* AppModel.swift in Sources */,
 				1F4F7858F490CDE118F92780 /* Components.swift in Sources */,
 				3CEB3D4F1FB7CF28281BD4C4 /* ExerciseCatalog.swift in Sources */,
+				119C8051CB463E710DA49416 /* HomeGridView.swift in Sources */,
 				9768A01B73B3B14BDBB8D6C2 /* HomeView.swift in Sources */,
 				86CDB2DEBE59EC1C1E425730 /* LiveWorkoutView.swift in Sources */,
 				5427D9F48D8059CB0AC1580D /* MobileAPIClient.swift in Sources */,
@@ -328,6 +337,7 @@
 				9890184C4B9B3D1073B8B4D7 /* PairingViews.swift in Sources */,
 				A02A6000CD7F80F1C1B81CF8 /* PitayaGlyphs.swift in Sources */,
 				B4FE0E0A8D8734ED1191377D /* PitayaWatchApp.swift in Sources */,
+				0B73A4EC13599FACFA029DF5 /* SequenceViews.swift in Sources */,
 				1AD7225F8119DEE334552638 /* SessionStore.swift in Sources */,
 				B5954AB70A7B681072E2CFCD /* SetLoggerPage.swift in Sources */,
 				6EF00415B4AD3B33E2B6C717 /* Smoke.swift in Sources */,
@@ -377,6 +387,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = HDR67SL3JG;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -444,6 +455,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = HDR67SL3JG;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;

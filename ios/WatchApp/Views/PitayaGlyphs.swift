@@ -22,7 +22,7 @@ private func svgPath(_ d: String) -> Path {
     var lastCommand: Character = " "
     while !scanner.isAtEnd {
         let command: Character
-        if let c = scanner.scanCharacter(), "MLHVCAZmlhvcaz".contains(c) {
+        if let c = scanner.scanCharacter(), "MLHVCAQZmlhvcaqz".contains(c) {
             command = c
         } else {
             scanner.currentIndex = d.index(before: scanner.currentIndex)
@@ -81,6 +81,16 @@ private func svgPath(_ d: String) -> Path {
             let c2 = CGPoint(x: current.x + x2, y: current.y + y2)
             current = CGPoint(x: current.x + x, y: current.y + y)
             path.addCurve(to: current, control1: c1, control2: c2)
+        case "Q":
+            guard let x1 = num(), let y1 = num(), let x = num(), let y = num() else { return path }
+            let control = CGPoint(x: x1, y: y1)
+            current = CGPoint(x: x, y: y)
+            path.addQuadCurve(to: current, control: control)
+        case "q":
+            guard let x1 = num(), let y1 = num(), let x = num(), let y = num() else { return path }
+            let control = CGPoint(x: current.x + x1, y: current.y + y1)
+            current = CGPoint(x: current.x + x, y: current.y + y)
+            path.addQuadCurve(to: current, control: control)
         case "A", "a":
             // Elliptical arc → cubic approximation good enough at glyph scale.
             guard let rx = num(), let ry = num(), let _ = num(), let largeArc = num(),
@@ -225,6 +235,50 @@ enum Glyphs {
     static let lapFlag = ["M5 21 V4", "M5 4 H17 L14 8 L17 12 H5"]
     /// Sequences grid — three offset tiles (rects drawn by the view).
     static let sequenceRects: [(CGFloat, CGFloat)] = [(4, 5), (13, 9), (8, 14)]
+    /// Moon — home Sleep tile + sleep screens.
+    static let moon = ["M20 14 A8.5 8.5 0 1 1 10.5 3.5 A7 7 0 0 0 20 14 Z"]
+    /// Pencil — home Journal tile.
+    static let pencil = ["M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"]
+}
+
+// MARK: - The dragonfruit logo (components/pitaya-icons.tsx, verbatim)
+
+/// The Pitaya brand mark — raspberry tile, white flesh, 4 seeds, 2 leaves.
+/// Replaces the old diamond at brand-mark positions per Michael 2026-08-09.
+struct DragonfruitLogo: View {
+    var size: CGFloat = 38
+    var tile: Bool = true
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 48
+            if tile {
+                let tileRect = CGRect(x: 0, y: 0, width: 48 * u, height: 48 * u)
+                context.fill(
+                    Path(roundedRect: tileRect, cornerRadius: 13 * u),
+                    with: .color(Theme.accentDeep)
+                )
+            }
+            func circle(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat, _ color: Color) {
+                let rect = CGRect(x: (cx - r) * u, y: (cy - r) * u, width: 2 * r * u, height: 2 * r * u)
+                context.fill(Path(ellipseIn: rect), with: .color(color))
+            }
+            circle(24, 26, 12.5, .white)
+            circle(20, 23, 1.4, Theme.accentDeep)
+            circle(27, 27, 1.4, Theme.accentDeep)
+            circle(22, 30, 1.4, Theme.accentDeep)
+            circle(28, 21.5, 1.4, Theme.accentDeep)
+
+            let scale = CGAffineTransform(scaleX: u, y: u)
+            let leaf1 = svgPath("M28 12 Q31 8 36 9 Q34 14 30 14.5 Z").applying(scale)
+            let leaf2 = svgPath("M18 13 Q14 10 10.5 12 Q13 16 17 15.5 Z").applying(scale)
+            context.opacity = 0.9
+            context.fill(Path(leaf1.cgPath), with: .color(.white))
+            context.opacity = 0.7
+            context.fill(Path(leaf2.cgPath), with: .color(.white))
+        }
+        .frame(width: size, height: size)
+    }
 }
 
 /// Walk figure = design circle head (cx13 cy4.5 r2) + body strokes.

@@ -15,11 +15,11 @@ struct WelcomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
-            PitayaMark(size: 22)
+            DragonfruitLogo(size: 44)
             Text("Pitaya")
-                .font(Theme.display(22))
+                .font(Theme.display(23))
                 .foregroundStyle(Theme.textBright)
-                .padding(.top, 10)
+                .padding(.top, 9)
             Text("Your training,\non your wrist.")
                 .font(Theme.text(11))
                 .foregroundStyle(Theme.textSecondary)

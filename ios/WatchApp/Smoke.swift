@@ -49,6 +49,10 @@ enum Smoke {
 
         guard env["PITAYA_SMOKE_AUTORUN"] == "1", model.phase == .home else { return }
 
+        // Bootstrap no longer blocks on the network; smoke needs real
+        // baselines before evaluating PRs, so refresh explicitly.
+        await model.refreshHistory()
+
         log("autorun: starting kettlebell workout (recorder off — no HK sheet)…")
         await model.startWorkout(.kettlebell, useRecorder: false)
 
@@ -69,6 +73,8 @@ enum Smoke {
 
         try? await Task.sleep(nanoseconds: 3_000_000_000)
         await model.finishWorkout(.kettlebell)
+        log("finished — reviewing (unsaved), now saving…")
+        await model.saveWorkout()
 
         let prs = model.summary?.prs ?? []
         let source = model.syncState == .synced ? "SERVER-CONFIRMED" : "local-estimate"

@@ -14,6 +14,9 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
+    # Michael's personal team (picked in Xcode 2026-08-09); keeping it here
+    # means `xcodegen generate` never loses signing.
+    DEVELOPMENT_TEAM: HDR67SL3JG
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: 0.1.0
     ENABLE_USER_SCRIPT_SANDBOXING: YES

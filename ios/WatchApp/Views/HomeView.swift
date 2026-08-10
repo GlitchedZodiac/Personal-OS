@@ -1,34 +1,44 @@
-// Home — design screen 04's workout list, ported per THE PORT GATE: the
-// design's rows (Kettlebell / Trail Run / Walk) with its own glyphs. The
-// design's Sequences row and Today's-Plan card return when their backend
-// contracts ship (watch-contract.md); until then this list is exactly what
-// works. Row subtitles carry real history facts like the design's do.
+// Workout list — design screen 05: Sequences row (live now that
+// /api/mobile/sequences shipped) + Kettlebell / Trail Run / Walk with the
+// design's own glyphs and real-history subtitles.
 
 #if os(watchOS)
 import SwiftUI
 
-struct HomeView: View {
+struct WorkoutListView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 5) {
-                Text("Workouts")
-                    .font(Theme.display(17))
-                    .foregroundStyle(Theme.textBright)
-                    .padding(.horizontal, 4)
+                HStack(spacing: 6) {
+                    BackChevron { model.backToHome() }
+                    Text("Workouts")
+                        .font(Theme.display(16))
+                        .foregroundStyle(Theme.textBright)
+                }
+                .padding(.horizontal, 4)
+
+                if !model.sequences.isEmpty {
+                    row(
+                        title: "Sequences",
+                        subtitle: "\(model.sequences.count) saved · from Pitaya"
+                    ) {
+                        SequenceGridGlyph(color: Theme.accent, size: 13)
+                    } action: {
+                        model.openSequences()
+                    }
+                }
 
                 row(kind: .kettlebell, title: "Kettlebell", subtitle: kettlebellSubtitle) {
-                    PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 13)
+                    PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 14)
                 }
                 row(kind: .run, title: "Trail Run", subtitle: runSubtitle) {
-                    PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 13)
+                    PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 14)
                 }
                 row(kind: .walk, title: "Walk", subtitle: "open goal") {
-                    WalkGlyph(color: Theme.accent, size: 13)
+                    WalkGlyph(color: Theme.accent, size: 14)
                 }
-
-                footer
             }
             .padding(.horizontal, 2)
         }
@@ -38,53 +48,44 @@ struct HomeView: View {
         kind: WorkoutKind, title: String, subtitle: String,
         @ViewBuilder glyph: () -> some View
     ) -> some View {
-        Button {
+        row(title: title, subtitle: subtitle, glyph: glyph) {
             Task { await model.startWorkout(kind) }
-        } label: {
+        }
+    }
+
+    private func row(
+        title: String, subtitle: String,
+        @ViewBuilder glyph: () -> some View,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
             HStack(spacing: 8) {
                 ZStack {
                     Circle().fill(Theme.accentDim)
                     glyph()
                 }
-                .frame(width: 26, height: 26)
+                .frame(width: 28, height: 28)
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title)
-                        .font(Theme.text(12, weight: .semibold))
+                        .font(Theme.text(13, weight: .semibold))
                         .foregroundStyle(Theme.textBright)
                     Text(subtitle)
-                        .font(Theme.text(8.5))
+                        .font(Theme.text(9))
                         .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.textMuted)
             }
             .padding(.horizontal, 9)
-            .padding(.vertical, 8)
+            .padding(.vertical, 9)
             .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         }
         .buttonStyle(.plain)
-    }
-
-    private var footer: some View {
-        HStack {
-            if case .queued(let count) = model.syncState {
-                Label("\(count) queued", systemImage: "arrow.triangle.2.circlepath")
-                    .font(Theme.text(8))
-                    .foregroundStyle(Theme.textMuted)
-            }
-            Spacer()
-            Button("Unpair") {
-                Task { await model.unpair() }
-            }
-            .buttonStyle(.plain)
-            .font(Theme.text(8))
-            .foregroundStyle(Theme.textFaint)
-        }
-        .padding(.horizontal, 6)
-        .padding(.top, 5)
     }
 
     private var kettlebellSubtitle: String {
@@ -103,6 +104,43 @@ struct HomeView: View {
             return String(format: "%.1f km · %@", run.km, f.string(from: run.at))
         }
         return "GPS coming · HR live"
+    }
+}
+
+/// The design's sequences glyph — three offset rounded tiles.
+struct SequenceGridGlyph: View {
+    var color: Color
+    var size: CGFloat = 13
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 24
+            for (x, y) in Glyphs.sequenceRects {
+                let rect = CGRect(x: x * u, y: y * u, width: 7 * u, height: 6 * u)
+                context.stroke(
+                    Path(roundedRect: rect, cornerRadius: 1.5 * u),
+                    with: .color(color),
+                    style: StrokeStyle(lineWidth: 2 * u, lineCap: .round)
+                )
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// Back affordance used across pushed screens (design's ‹ mark).
+struct BackChevron: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.textMuted)
+                .frame(width: 22, height: 22)
+                .background(Theme.card, in: Circle())
+        }
+        .buttonStyle(.plain)
     }
 }
 #endif

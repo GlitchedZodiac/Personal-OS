@@ -1,7 +1,8 @@
-// App-level state machine for the watch app: pairing → home → live workout →
-// summary, plus the offline sync queue and the local PR engine. Views stay
-// thin; every action the UI can take routes through here (the DEBUG smoke
-// harness drives these same methods, so self-smoke exercises real paths).
+// App-level state machine for the watch app: pairing → home → workout list /
+// sequences → live → summary, plus the offline sync queue, the local PR
+// engine, the EMOM runner, and the idle-nudge watchdog. Views stay thin;
+// every action the UI can take routes through here (the DEBUG smoke harness
+// drives these same methods, so self-smoke exercises real paths).
 
 #if os(watchOS)
 import Foundation
@@ -38,6 +39,13 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         }
     }
 
+    public var isOutdoor: Bool {
+        switch self {
+        case .walk, .run, .hike: return true
+        case .kettlebell, .other: return false
+        }
+    }
+
     public var activityType: HKWorkoutActivityType {
         switch self {
         case .kettlebell: return .functionalStrengthTraining
@@ -47,14 +55,6 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         case .other: return .other
         }
     }
-
-    public var isOutdoor: Bool {
-        switch self {
-        case .walk, .run, .hike: return true
-        case .kettlebell, .other: return false
-        }
-    }
-
 }
 
 // MARK: - Kettlebell session state
@@ -78,7 +78,9 @@ public struct WorkoutSummary {
     public let distanceMeters: Double?
     public let totalVolumeKg: Double
     public let setCount: Int
-    public let prs: [PRBaselines.SessionPR]
+    public let roundsCompleted: Int?
+    public let sequenceName: String?
+    public var prs: [PRBaselines.SessionPR]
 }
 
 // MARK: - App model
@@ -90,13 +92,17 @@ public final class AppModel: ObservableObject {
         case welcome
         case pinEntry
         case pairedIntro
-        case home
-        case live(WorkoutKind)
+        case home              // design 04 — tile grid
+        case workoutList       // design 05
+        case sequences         // design 06
+        case sequenceDetail(SequenceDef) // design 07
+        case live(WorkoutKind)           // freeform live pages
+        case liveSequence(SequenceDef)   // design 09 — EMOM runner
         case summary
     }
 
     public enum SyncState: Equatable {
-        case idle, syncing, synced, queued(Int), failed(String)
+        case idle, unsaved, syncing, synced, queued(Int), failed(String)
     }
 
     @Published public private(set) var phase: Phase = .loading
@@ -106,6 +112,7 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var prExerciseCount = 0
     @Published public private(set) var lastKettlebell: Date?
     @Published public private(set) var lastRun: (at: Date, km: Double)?
+    @Published public private(set) var sequences: [SequenceDef] = []
     @Published public private(set) var syncState: SyncState = .idle
     @Published public private(set) var summary: WorkoutSummary?
 
@@ -116,6 +123,16 @@ public final class AppModel: ObservableObject {
     @Published public var weightKg: Double = 16
     @Published public var reps: Int = 10
     @Published public private(set) var prFlash: LoggedSet?
+
+    // EMOM runner state
+    @Published public private(set) var emomRound = 0
+    @Published public private(set) var emomSecondsLeft = 60
+
+    // Idle nudge — "still training?" after minutes without a signal
+    @Published public var idleNudgeActive = false
+    private var lastActivityAt = Date()
+    private var idleWatchdog: Task<Void, Never>?
+    private static let idleThreshold: TimeInterval = 8 * 60
 
     public let recorder = WorkoutRecorder()
 
@@ -131,6 +148,11 @@ public final class AppModel: ObservableObject {
     private var baselines = PRBaselines()
     private var prFlashTask: Task<Void, Never>?
     private var workoutStartedAt = Date()
+    private var pendingItem: WorkoutSyncItem?
+    private var activeSequence: SequenceDef?
+    private var engineTask: Task<Void, Never>?
+    private var sequencePausedAccum: TimeInterval = 0
+    private var sequencePauseStartedAt: Date?
 
     public init(
         sessionStore: (any SessionStore)? = nil,
@@ -147,15 +169,18 @@ public final class AppModel: ObservableObject {
 
     public func bootstrap() async {
         if await sessionStore.load() != nil {
-            // Cached baselines first so an offline cold start still knows
-            // the bests; the network refresh replaces them when reachable.
+            // Cached baselines synchronously, network in the background — the
+            // home screen must never wait on two cold Vercel round-trips
+            // (that was the 5–10 s "black screen" Michael hit on wrist).
             if let cached = await prCache?.load() {
                 baselines = PRBaselines(cached: cached)
                 prExerciseCount = baselines.best.count
             }
             phase = .home
-            await refreshHistory()
-            await drainQueue()
+            Task { [weak self] in
+                await self?.refreshHistory()
+                await self?.drainQueue()
+            }
         } else {
             phase = .welcome
         }
@@ -198,12 +223,12 @@ public final class AppModel: ObservableObject {
         await prCache?.clear()
         historyCount = 0
         baselines = PRBaselines()
+        sequences = []
         phase = .welcome
     }
 
-    /// Refresh server-truth PR baselines (GET /api/mobile/prs) and the
-    /// workout history facts the home screen shows. Offline keeps the last
-    /// known state (disk-cached baselines survive relaunches).
+    /// Refresh server-truth PR baselines, sequences, and home-screen facts.
+    /// Offline keeps the last known state (cached baselines survive).
     public func refreshHistory() async {
         do {
             let prList = try await api.fetchPRs()
@@ -215,6 +240,10 @@ public final class AppModel: ObservableObject {
             return
         } catch {
             // Offline is fine — cached baselines stand.
+        }
+
+        if let list = try? await api.fetchSequences() {
+            sequences = list.sequences
         }
 
         do {
@@ -234,15 +263,21 @@ public final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: - Workout flow
+    // MARK: - Navigation
+
+    public func openWorkoutList() { phase = .workoutList }
+    public func openSequences() { phase = .sequences }
+    public func openSequence(_ sequence: SequenceDef) { phase = .sequenceDetail(sequence) }
+    public func backToHome() { phase = .home }
+    public func backToWorkoutList() { phase = .workoutList }
+    public func backToSequences() { phase = .sequences }
+
+    // MARK: - Freeform workout flow
 
     /// `useRecorder: false` is the headless-smoke path (no HealthKit sheet in
     /// a simulator run); every user-facing call leaves it true.
     public func startWorkout(_ kind: WorkoutKind, useRecorder: Bool = true) async {
-        loggedSets = []
-        summary = nil
-        syncState = .idle
-        workoutStartedAt = Date()
+        resetLiveState()
         phase = .live(kind)
         guard useRecorder else { return }
         do {
@@ -263,6 +298,7 @@ public final class AppModel: ObservableObject {
             isWeightPR: result.isWeightPR
         )
         loggedSets.append(set)
+        markActivity()
 
         if result.isWeightPR {
             WKInterfaceDevice.current().play(.success)
@@ -288,14 +324,157 @@ public final class AppModel: ObservableObject {
     public func finishWorkout(_ kind: WorkoutKind) async {
         let totals = await recorder.finish()
         let entries = aggregatedEntries()
-        let prs = baselines.sessionPRs(entries: entries)
-        baselines.absorb(entries: entries)
+        prepareSummary(
+            kind: kind,
+            totals: totals,
+            entries: entries,
+            volume: loggedSets.reduce(0.0) { $0 + $1.weightKg * Double($1.reps) },
+            setCount: loggedSets.count,
+            rounds: nil,
+            sequence: nil,
+            description: sessionDescription(kind: kind)
+        )
+    }
 
+    // MARK: - Sequence (EMOM) flow
+
+    public func startSequence(_ sequence: SequenceDef, useRecorder: Bool = true) async {
+        resetLiveState()
+        activeSequence = sequence
+        emomRound = 0
+        emomSecondsLeft = 60
+        sequencePausedAccum = 0
+        sequencePauseStartedAt = nil
+        phase = .liveSequence(sequence)
+
+        if useRecorder {
+            do {
+                try await recorder.start(activityType: .functionalStrengthTraining, outdoor: false)
+            } catch {}
+        }
+
+        engineTask?.cancel()
+        engineTask = Task { [weak self] in
+            await self?.runEMOMEngine(sequence)
+        }
+    }
+
+    /// One round per minute; steps cycle across minutes (design 09's model,
+    /// matching the web builder's EMOM semantics).
+    private func runEMOMEngine(_ sequence: SequenceDef) async {
+        let totalRounds = max(sequence.durationMinutes ?? sequence.steps.count, 1)
+        let startedAt = Date()
+
+        while !Task.isCancelled {
+            guard case .liveSequence = phase else { return }
+
+            if recorder.phase == .paused {
+                if sequencePauseStartedAt == nil { sequencePauseStartedAt = Date() }
+            } else {
+                if let pausedAt = sequencePauseStartedAt {
+                    sequencePausedAccum += Date().timeIntervalSince(pausedAt)
+                    sequencePauseStartedAt = nil
+                }
+                let elapsed = Date().timeIntervalSince(startedAt) - sequencePausedAccum
+                let minuteIndex = Int(elapsed / 60)
+
+                if minuteIndex >= totalRounds {
+                    WKInterfaceDevice.current().play(.success)
+                    await finishSequence(roundsCompleted: totalRounds)
+                    return
+                }
+
+                let round = minuteIndex + 1
+                if round != emomRound {
+                    if emomRound != 0 { WKInterfaceDevice.current().play(.notification) }
+                    emomRound = round
+                    markActivity()
+                }
+                emomSecondsLeft = 60 - (Int(elapsed) % 60)
+            }
+
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+    }
+
+    public func currentStep(of sequence: SequenceDef) -> SequenceStep? {
+        guard emomRound > 0, !sequence.steps.isEmpty else { return sequence.steps.first }
+        return sequence.steps[(emomRound - 1) % sequence.steps.count]
+    }
+
+    public func nextStep(of sequence: SequenceDef) -> SequenceStep? {
+        guard !sequence.steps.isEmpty else { return nil }
+        return sequence.steps[emomRound % sequence.steps.count]
+    }
+
+    /// End from controls mid-sequence: the running round counts — you tapped
+    /// End after doing the work, not before.
+    public func endSequenceEarly() async {
+        await finishSequence(roundsCompleted: max(emomRound, 0))
+    }
+
+    private func finishSequence(roundsCompleted: Int) async {
+        engineTask?.cancel()
+        engineTask = nil
+        guard let sequence = activeSequence else { return }
+
+        let totals = await recorder.finish()
+        let entries = sequenceEntries(sequence: sequence, rounds: roundsCompleted)
+        let volume = entries.reduce(0.0) { acc, entry in
+            guard let sets = entry.sets, let reps = entry.reps, let weight = entry.weightKg
+            else { return acc }
+            return acc + Double(sets * reps) * weight
+        }
+
+        prepareSummary(
+            kind: .kettlebell,
+            totals: totals,
+            entries: entries,
+            volume: volume,
+            setCount: entries.reduce(0) { $0 + ($1.sets ?? 0) },
+            rounds: roundsCompleted,
+            sequence: sequence,
+            description: sequence.name
+        )
+    }
+
+    /// Rounds R cycling S steps → step i performed R/S (+1 for the first
+    /// R%S steps) times.
+    private func sequenceEntries(sequence: SequenceDef, rounds: Int) -> [ExerciseEntry] {
+        let stepCount = sequence.steps.count
+        guard stepCount > 0, rounds > 0 else { return [] }
+        return sequence.steps.enumerated().compactMap { index, step in
+            let times = rounds / stepCount + (index < rounds % stepCount ? 1 : 0)
+            guard times > 0 else { return nil }
+            return ExerciseEntry(
+                name: step.exerciseName,
+                sets: times,
+                reps: step.reps,
+                weightKg: step.weightKg
+            )
+        }
+    }
+
+    // MARK: - Summary, save, discard
+
+    private func prepareSummary(
+        kind: WorkoutKind,
+        totals: WorkoutRecorder.Totals?,
+        entries: [ExerciseEntry],
+        volume: Double,
+        setCount: Int,
+        rounds: Int?,
+        sequence: SequenceDef?,
+        description: String?
+    ) {
+        stopIdleWatchdog()
         let started = totals?.startedAt ?? workoutStartedAt
         let ended = totals?.endedAt ?? Date()
         let duration = totals?.durationSeconds ?? ended.timeIntervalSince(started)
 
-        let volume = loggedSets.reduce(0.0) { $0 + $1.weightKg * Double($1.reps) }
+        let prs = baselines.sessionPRs(entries: entries)
+        baselines.absorb(entries: entries)
+
         summary = WorkoutSummary(
             kind: kind,
             durationSeconds: duration,
@@ -303,45 +482,117 @@ public final class AppModel: ObservableObject {
             avgHeartRate: totals?.avgHeartRate,
             distanceMeters: totals?.distanceMeters,
             totalVolumeKg: volume,
-            setCount: loggedSets.count,
+            setCount: setCount,
+            roundsCompleted: rounds,
+            sequenceName: sequence?.name,
             prs: prs
         )
 
-        let item = WorkoutSyncItem(
+        pendingItem = WorkoutSyncItem(
             externalSource: externalSourceOverride ?? "app_watch",
             startedAt: started,
             endedAt: ended,
             durationMinutes: max(1, Int((duration / 60).rounded())),
             workoutType: kind.workoutTypeString,
-            description: sessionDescription(kind: kind),
+            description: description,
             caloriesBurned: totals?.activeCalories.map { ($0 * 10).rounded() / 10 },
             distanceMeters: totals?.distanceMeters.map { $0.rounded() },
             avgHeartRateBpm: totals?.avgHeartRate.map { Int($0.rounded()) },
             maxHeartRateBpm: totals?.maxHeartRate.map { Int($0.rounded()) },
             exercises: entries.isEmpty ? nil : entries,
+            metricsData: sequence.map {
+                WorkoutMetricsData(
+                    sequenceId: $0.id, sequenceName: $0.name, roundsCompleted: rounds
+                )
+            },
             deviceType: "apple_watch"
         )
 
+        syncState = .unsaved
         phase = .summary
         if !prs.isEmpty {
             WKInterfaceDevice.current().play(.notification)
         }
-        await sync(item, reconcilePRsFor: item.externalId)
+    }
+
+    /// Michael's ask: explicit Save (vs the old auto-save) so test sessions
+    /// and forgotten-running workouts can be thrown away.
+    public func saveWorkout() async {
+        guard let item = pendingItem else { return }
+        pendingItem = nil
+        try? await queue?.enqueue(item)
+        await drainQueue(reconcilePRsFor: item.externalId)
+    }
+
+    public func discardWorkout() {
+        pendingItem = nil
+        summary = nil
+        loggedSets = []
+        activeSequence = nil
+        syncState = .idle
+        phase = .home
     }
 
     public func dismissSummary() {
         summary = nil
         loggedSets = []
+        activeSequence = nil
         phase = .home
         Task { await refreshHistory() }
     }
 
-    // MARK: - Sync
+    // MARK: - Idle nudge
 
-    private func sync(_ item: WorkoutSyncItem, reconcilePRsFor externalId: String? = nil) async {
-        try? await queue?.enqueue(item)
-        await drainQueue(reconcilePRsFor: externalId)
+    private func resetLiveState() {
+        loggedSets = []
+        summary = nil
+        pendingItem = nil
+        syncState = .idle
+        idleNudgeActive = false
+        workoutStartedAt = Date()
+        markActivity()
+        startIdleWatchdog()
     }
+
+    public func markActivity() {
+        lastActivityAt = Date()
+    }
+
+    public func keepTraining() {
+        markActivity()
+        idleNudgeActive = false
+    }
+
+    private func startIdleWatchdog() {
+        stopIdleWatchdog()
+        idleWatchdog = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                guard let self else { return }
+                switch self.phase {
+                case .live, .liveSequence: break
+                default: return
+                }
+                // A working heart counts as activity even without taps.
+                if let hr = self.recorder.heartRate, hr >= 95 {
+                    self.markActivity()
+                }
+                if !self.idleNudgeActive,
+                   Date().timeIntervalSince(self.lastActivityAt) > Self.idleThreshold {
+                    self.idleNudgeActive = true
+                    WKInterfaceDevice.current().play(.notification)
+                }
+            }
+        }
+    }
+
+    private func stopIdleWatchdog() {
+        idleWatchdog?.cancel()
+        idleWatchdog = nil
+        idleNudgeActive = false
+    }
+
+    // MARK: - Sync
 
     public func drainQueue(reconcilePRsFor externalId: String? = nil) async {
         guard let queue else { return }
@@ -359,18 +610,18 @@ public final class AppModel: ObservableObject {
         }
     }
 
-    /// The server is the PR source of truth: when the just-finished workout's
+    /// The server is the PR source of truth: when the just-saved workout's
     /// sync response includes its PR verdict, it replaces the local estimate
     /// on the summary screen (they agree in the common case; the server wins
     /// on any drift — e.g. a web edit the watch hasn't seen).
     private func reconcileSummaryPRs(from response: WorkoutSyncResponse, matching externalId: String?) {
         guard
             let externalId,
-            let current = summary,
+            summary != nil,
             let serverResult = response.prs?.first(where: { $0.externalId == externalId })
         else { return }
 
-        let serverPRs = serverResult.newPRs.map { pr in
+        summary?.prs = serverResult.newPRs.map { pr in
             PRBaselines.SessionPR(
                 exerciseId: pr.exercise,
                 exerciseName: pr.exerciseName,
@@ -379,17 +630,6 @@ public final class AppModel: ObservableObject {
                 previousValue: pr.previousValue
             )
         }.sorted { $0.exerciseName < $1.exerciseName }
-
-        summary = WorkoutSummary(
-            kind: current.kind,
-            durationSeconds: current.durationSeconds,
-            calories: current.calories,
-            avgHeartRate: current.avgHeartRate,
-            distanceMeters: current.distanceMeters,
-            totalVolumeKg: current.totalVolumeKg,
-            setCount: current.setCount,
-            prs: serverPRs
-        )
     }
 
     // MARK: - Helpers

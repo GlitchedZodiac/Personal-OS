@@ -169,6 +169,7 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
     public let avgHeartRateBpm: Int?
     public let maxHeartRateBpm: Int?
     public let exercises: [ExerciseEntry]?
+    public let metricsData: WorkoutMetricsData?
     public let source: String
     public let syncStatus: String
     public let deviceType: String?
@@ -186,6 +187,7 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         avgHeartRateBpm: Int? = nil,
         maxHeartRateBpm: Int? = nil,
         exercises: [ExerciseEntry]? = nil,
+        metricsData: WorkoutMetricsData? = nil,
         source: String = "mobile",
         syncStatus: String = "synced",
         deviceType: String? = "apple_watch"
@@ -202,6 +204,7 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         self.avgHeartRateBpm = avgHeartRateBpm
         self.maxHeartRateBpm = maxHeartRateBpm
         self.exercises = exercises
+        self.metricsData = metricsData
         self.source = source
         self.syncStatus = syncStatus
         self.deviceType = deviceType
@@ -254,6 +257,45 @@ public struct PersonalRecordRow: Codable, Hashable, Sendable {
 public struct PRListResponse: Codable, Sendable {
     public let records: [PersonalRecordRow]
     public let recent: [PersonalRecordRow]
+}
+
+// MARK: - Sequences (GET /api/mobile/sequences — read-only on the wrist)
+
+public struct SequenceStep: Codable, Hashable, Sendable {
+    public let exercise: String // canonical id
+    public let exerciseName: String
+    public let reps: Int?
+    public let seconds: Int?
+    public let weightKg: Double?
+    public let restSeconds: Int?
+}
+
+public struct SequenceDef: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    public let name: String
+    public let kind: String // "straight" | "emom" | "tabata" | "circuit"
+    public let restSecondsDefault: Int?
+    public let durationMinutes: Int?
+    public let steps: [SequenceStep]
+    public let updatedAt: Date
+}
+
+public struct SequenceListResponse: Codable, Sendable {
+    public let sequences: [SequenceDef]
+}
+
+/// Extra run metadata carried in workout_logs.metricsData — a sequence run
+/// references its source here (per docs/watch-contract.md).
+public struct WorkoutMetricsData: Codable, Hashable, Sendable {
+    public let sequenceId: String?
+    public let sequenceName: String?
+    public let roundsCompleted: Int?
+
+    public init(sequenceId: String?, sequenceName: String?, roundsCompleted: Int?) {
+        self.sequenceId = sequenceId
+        self.sequenceName = sequenceName
+        self.roundsCompleted = roundsCompleted
+    }
 }
 
 // MARK: - Daily health snapshot

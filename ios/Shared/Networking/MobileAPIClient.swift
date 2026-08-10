@@ -101,6 +101,14 @@ public actor MobileAPIClient {
         )
     }
 
+    /// Saved sequences (routines) — read-only on the wrist per contract.
+    public func fetchSequences() async throws -> SequenceListResponse {
+        try await send(
+            path: "/api/mobile/sequences", method: "GET",
+            body: Optional<Int>.none, authorized: true
+        )
+    }
+
     /// Server-truth PR baselines (bearer mirror of /api/health/prs).
     public func fetchPRs() async throws -> PRListResponse {
         try await send(

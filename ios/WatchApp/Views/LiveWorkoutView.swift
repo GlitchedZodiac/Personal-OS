@@ -17,7 +17,8 @@ struct LiveWorkoutView: View {
             if kind == .kettlebell {
                 SetLoggerPage().tag(1)
             }
-            ControlsPage(recorder: model.recorder, kind: kind).tag(kind == .kettlebell ? 2 : 1)
+            ControlsPage(recorder: model.recorder, kind: kind, isSequence: false)
+                .tag(kind == .kettlebell ? 2 : 1)
         }
         .tabViewStyle(.verticalPage)
         .onAppear {
@@ -29,6 +30,11 @@ struct LiveWorkoutView: View {
                     .padding(.horizontal, 8)
                     .padding(.bottom, 2)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .overlay {
+            if model.idleNudgeActive {
+                IdleNudgeOverlay(onEnd: { Task { await model.finishWorkout(kind) } })
             }
         }
         .animation(.spring(duration: 0.35), value: model.prFlash != nil)
@@ -59,17 +65,17 @@ struct MetricsPage: View {
             }
 
             Text(Fmt.clock(recorder.elapsed))
-                .font(Theme.numeric(38))
+                .font(Theme.numeric(42))
                 .foregroundStyle(Theme.textBright)
                 .padding(.top, 2)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                BeatingHeart(size: 14)
+                BeatingHeart(size: 16)
                 Text(recorder.heartRate.map { String(Int($0)) } ?? "––")
-                    .font(Theme.numeric(26))
+                    .font(Theme.numeric(29))
                     .foregroundStyle(Theme.textBright)
                 Text("BPM")
-                    .font(Theme.text(8, weight: .semibold))
+                    .font(Theme.text(9, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
             }
             .padding(.top, 4)
@@ -112,6 +118,7 @@ struct ControlsPage: View {
     @EnvironmentObject private var model: AppModel
     @ObservedObject var recorder: WorkoutRecorder
     let kind: WorkoutKind
+    var isSequence: Bool = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -122,7 +129,13 @@ struct ControlsPage: View {
                         color: Theme.danger, size: 15
                     )
                 }) {
-                    Task { await model.finishWorkout(kind) }
+                    Task {
+                        if isSequence {
+                            await model.endSequenceEarly()
+                        } else {
+                            await model.finishWorkout(kind)
+                        }
+                    }
                 }
                 pauseResume
             }
@@ -132,7 +145,7 @@ struct ControlsPage: View {
                 }) {
                     WKInterfaceDevice.current().enableWaterLock()
                 }
-                if kind == .kettlebell {
+                if kind == .kettlebell && !isSequence {
                     // The design's 4th control is a Lap flag; kettlebell has
                     // no laps, so this slot repeats the last set (deviation
                     // surfaced in state.md; glyph is undesigned → SF).
