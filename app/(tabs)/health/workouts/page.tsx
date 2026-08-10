@@ -131,6 +131,10 @@ export default function TrainPage() {
   const [saving, setSaving] = useState(false);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [restLeft, setRestLeft] = useState(0);
+  const [proposal, setProposal] = useState<
+    (Routine & { rationale: string }) | null
+  >(null);
+  const [rolling, setRolling] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(() => {
@@ -186,6 +190,49 @@ export default function TrainPage() {
     setElapsed(0);
     setRestEndsAt(null);
   };
+
+  // Surprise me — a balanced random EMOM. Nothing is saved until he
+  // starts it or taps Save, matching the app's propose-then-confirm shape.
+  const rollEmom = useCallback(async () => {
+    setRolling(true);
+    try {
+      const res = await fetch("/api/health/sequences/random", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ equipment: "kettlebell" }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error);
+      setProposal({ id: "proposed", ...body });
+      setShowRoutines(false);
+    } catch {
+      toast.error("Couldn't build a routine — try again");
+    } finally {
+      setRolling(false);
+    }
+  }, []);
+
+  const saveProposal = useCallback(async () => {
+    if (!proposal) return;
+    try {
+      const res = await fetch("/api/health/sequences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: proposal.name,
+          kind: "emom",
+          durationMinutes: proposal.durationMinutes,
+          steps: proposal.steps,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Routine saved");
+      setProposal(null);
+      load();
+    } catch {
+      toast.error("Couldn't save that routine");
+    }
+  }, [proposal, load]);
 
   const openStart = () => {
     if (!routines || routines.length === 0) {
@@ -709,6 +756,15 @@ export default function TrainPage() {
                 </button>
               ))}
               <button
+                onClick={rollEmom}
+                disabled={rolling}
+                className="border-t-[1.5px] border-dashed border-border bg-card px-3.5 py-[13px] text-center disabled:opacity-60"
+              >
+                <span className="text-[13px] font-semibold text-[#8C2F51]">
+                  {rolling ? "Building…" : "✦ Surprise me — random EMOM"}
+                </span>
+              </button>
+              <button
                 onClick={() => router.push("/health/workouts/routines")}
                 className="border-t-[1.5px] border-dashed border-border bg-card px-3.5 py-[13px] text-center"
               >
@@ -894,6 +950,68 @@ export default function TrainPage() {
             >
               {saving ? "Saving…" : "End session & save"}
             </button>
+          </div>
+        </SheetPortal>
+      )}
+
+      {/* ——— Random EMOM proposal ——— */}
+      {proposal && (
+        <SheetPortal>
+          <div
+            className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
+            onClick={() => setProposal(null)}
+          />
+          <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
+            <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
+            <p className="micro-label">Proposed EMOM</p>
+            <p
+              className="mt-1 text-xl font-bold leading-tight text-foreground"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {proposal.durationMinutes} minutes · {proposal.steps.length} movements
+            </p>
+            <p className="mt-1 text-[11.5px] text-muted-foreground">
+              {proposal.rationale}
+            </p>
+            <div className="mt-3.5 grid gap-px overflow-hidden rounded-[14px] border border-border bg-border">
+              {proposal.steps.map((step, i) => (
+                <div key={i} className="flex items-center justify-between bg-card px-3.5 py-[13px]">
+                  <span className="text-[13.5px] font-semibold text-foreground">
+                    {step.exerciseName}
+                  </span>
+                  <span className="text-[12.5px] tabular-nums text-secondary-foreground">
+                    {step.reps ? `${step.reps} reps` : `${step.seconds}s`}
+                    {step.weightKg ? ` · ${step.weightKg} kg` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                const routine = proposal;
+                setProposal(null);
+                startLive(routine);
+              }}
+              className="mt-4 w-full rounded-[12px] bg-foreground py-[13px] text-sm font-semibold text-background"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Start it
+            </button>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={rollEmom}
+                disabled={rolling}
+                className="flex-1 rounded-[12px] border border-border py-[11px] text-[13px] font-semibold text-secondary-foreground disabled:opacity-60"
+              >
+                {rolling ? "Rolling…" : "Roll again"}
+              </button>
+              <button
+                onClick={saveProposal}
+                className="flex-1 rounded-[12px] border border-border py-[11px] text-[13px] font-semibold text-[#8C2F51]"
+              >
+                Save it
+              </button>
+            </div>
           </div>
         </SheetPortal>
       )}
