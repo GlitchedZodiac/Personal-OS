@@ -1059,6 +1059,15 @@ model UserExercise {
   @@map("user_exercises")
 }
 
+model WeeklyReport {
+  id        String   @id @default(uuid())
+  weekStart String   @unique // Mon YYYY-MM-DD (user-local) of the reported week
+  data      Json // full report payload: stats + AI headline/coach paragraph
+  createdAt DateTime @default(now())
+
+  @@map("weekly_reports")
+}
+
 model HabitCheck {
   id        String   @id @default(uuid())
   name      String // creatine | mobility | steps | journal (free-form)

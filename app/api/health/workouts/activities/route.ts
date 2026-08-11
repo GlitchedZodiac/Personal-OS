@@ -15,13 +15,19 @@ export async function GET(request: NextRequest) {
     const before = searchParams.get("before");
     const take = Math.min(100, Math.max(1, Number(searchParams.get("take")) || 30));
     const beforeDate = before ? new Date(before) : null;
+    // Optional from/to (ISO dates or datetimes) — the range-picker filter.
+    const fromParam = searchParams.get("from");
+    const toParam = searchParams.get("to");
+    const fromDate = fromParam ? new Date(fromParam) : null;
+    const toDate = toParam ? new Date(`${toParam}T23:59:59.999Z`) : null;
+    const startedAt: { lt?: Date; gte?: Date; lte?: Date } = {};
+    if (beforeDate && Number.isFinite(beforeDate.getTime())) startedAt.lt = beforeDate;
+    if (fromDate && Number.isFinite(fromDate.getTime())) startedAt.gte = fromDate;
+    if (toDate && Number.isFinite(toDate.getTime())) startedAt.lte = toDate;
 
     const [rows, total] = await Promise.all([
       prisma.workoutLog.findMany({
-        where:
-          beforeDate && Number.isFinite(beforeDate.getTime())
-            ? { startedAt: { lt: beforeDate } }
-            : undefined,
+        where: Object.keys(startedAt).length > 0 ? { startedAt } : undefined,
         orderBy: { startedAt: "desc" },
         take,
         select: {

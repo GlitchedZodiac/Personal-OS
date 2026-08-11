@@ -1,35 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { getUserTimeZone } from "@/lib/server-timezone";
+import { generateWeeklyReport } from "@/lib/weekly-report";
+import { getDateStringInTimeZone } from "@/lib/timezone";
 
-// Vercel Cron calls this every Sunday at 2 PM UTC (~9-10 AM EST)
+export const maxDuration = 60;
+
+// Sunday-night writer (vercel.json: Mon 04:00 UTC = Sun 11 PM Bogotá) —
+// generates the week that just ended. Self-authenticating per proxy.ts.
+
 export async function GET(request: NextRequest) {
-  // Verify this is from Vercel Cron (or allow in development)
-  const authHeader = request.headers.get("authorization");
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
+  const auth = request.headers.get("authorization");
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    // Create a reminder that will fire immediately and link to the weekly report
-    await prisma.reminder.create({
-      data: {
-        title: "📊 Your Weekly Report is Ready!",
-        body: "Tap to see your week in review — wins, trends, and your AI coach tip.",
-        remindAt: new Date(), // Fire immediately
-        url: "/trends?tab=weekly-report",
-        fired: false,
-      },
+    const timeZone = await getUserTimeZone(null);
+    const todayStr = getDateStringInTimeZone(new Date(), timeZone);
+    const report = await generateWeeklyReport(todayStr, timeZone);
+    return NextResponse.json({
+      ok: true,
+      weekStart: report.weekStart,
+      headline: report.headline,
     });
-
-    return NextResponse.json({ success: true, message: "Weekly report reminder created" });
   } catch (error) {
-    console.error("Cron weekly report error:", error);
-    return NextResponse.json(
-      { error: "Failed to create weekly report reminder" },
-      { status: 500 }
-    );
+    console.error("Weekly report cron error:", error);
+    return NextResponse.json({ error: "Generation failed" }, { status: 500 });
   }
 }
