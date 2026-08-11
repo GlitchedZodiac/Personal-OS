@@ -18,6 +18,26 @@ crude until 2c.
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).
 
+## 2026-08-11c — Full Strava history in + enriched; history audit
+
+His ask: "I would like our app to have all the history I've done."
+
+- **Full-history Strava sync ran** (POST /api/strava/sync fullSync):
+  account total 91 activities — 5 new (Jun→Aug walks), 86 already
+  present. Coverage now **Nov 4 2024 → Aug 7 2026**; 108 workouts total.
+- **63 legacy rows normalized** onto the modern contract
+  (externalSource "strava" + externalId from stravaActivityId — they
+  predated those fields and were invisible to stream tooling).
+- **backfill-streams gained ?take=&before=** (the hardcoded newest-40
+  window could never reach 2024) and ran over everything: **89 of 91
+  activities now carry hrStream + timeInZones + loadScore** (2 have no
+  HR/altitude on Strava at all). Activities detail charts light up
+  across the whole history.
+- History audit for Michael (delivered in chat): workouts drill-down
+  DONE; food history / range filters / weekly report / composition
+  panel need design first — filed in deferred-items with his
+  cloud-design prompt.
+
 ## 2026-08-11b — Activities port (cloud design) + Michael's batch
 
 His cloud design rev (claude.ai/design "Health app design system" →

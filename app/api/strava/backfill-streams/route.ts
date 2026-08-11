@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { buildStreamMetrics, fetchActivityStreams } from "@/lib/strava";
@@ -6,15 +6,28 @@ import { buildStreamMetrics, fetchActivityStreams } from "@/lib/strava";
 // One-shot: fetch HR/time/altitude streams for already-imported Strava
 // workouts and attach zone/load analytics to metricsData. Idempotent —
 // rows that already carry hrStream or altitudeStream are skipped.
+// ?take=N (max 100) widens the window; ?before=ISO pages into older
+// history (the default newest-40 window could never reach 2024 rows).
 
 export const maxDuration = 60;
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const take = Math.min(100, Math.max(1, Number(searchParams.get("take")) || 40));
+    const before = searchParams.get("before");
+    const beforeDate = before ? new Date(before) : null;
+
     const candidates = await prisma.workoutLog.findMany({
-      where: { externalSource: "strava", stravaActivityId: { not: null } },
+      where: {
+        externalSource: "strava",
+        stravaActivityId: { not: null },
+        ...(beforeDate && Number.isFinite(beforeDate.getTime())
+          ? { startedAt: { lt: beforeDate } }
+          : {}),
+      },
       orderBy: { startedAt: "desc" },
-      take: 40,
+      take,
       select: { id: true, stravaActivityId: true, metricsData: true },
     });
 
