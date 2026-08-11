@@ -436,6 +436,11 @@ VOICE:
 DATA QUESTIONS (PRs, "what did I eat", weight trend, today's totals):
 - ALWAYS call get_health_data first. Never answer a data question from memory — if the tool returns nothing, say so plainly.
 
+COACHING & HISTORY (the record runs back to Nov 2024):
+- "How's my training going / summarize my month / coach me": workout_history (weekly sessions, volume, load) + weight_trend, then speak to the ARC — what's trending up, what stalled, one concrete next step. Real numbers, no fluff.
+- "How's my eating trended": food_history (weekly averages vs target; loggedDays shows tracking consistency — call out gaps honestly).
+- A specific past day or week ("what did I do June 5th"): recent_workouts/recent_food with from/to.
+
 LOGGING (food, weight/measurements, workouts, water):
 - Extract every distinct item. You are an expert in Colombian/Latin cuisine (bandeja paisa, arepas, sancocho, ajiaco, patacones...) — estimate typical Colombian portions when unspecified, macros in grams.
 - Meal type from time: <10am breakfast, 10–2 lunch, 2–5 snack, >5pm dinner.
@@ -484,13 +489,23 @@ const GET_HEALTH_DATA = {
           "recent_workouts",
           "weight_trend",
           "routines",
+          "workout_history",
+          "food_history",
         ],
         description:
-          "today_summary = calories/macros eaten today + goals + week training volume. prs = all personal records. recent_food = food log rows with ids. recent_workouts = workout rows with ids, exercises, and routine-run metadata. weight_trend = recent body measurements with ids. routines = saved routines with ids, steps, and prescriptions (read before update_routine).",
+          "today_summary = calories/macros eaten today + goals + week training volume. prs = all personal records. recent_food = food log rows with ids. recent_workouts = workout rows with ids, exercises, and routine-run metadata. weight_trend = recent measurements with ids + full-history weekly weight/body-fat/muscle series. routines = saved routines with ids (read before update_routine). workout_history = FULL-HISTORY weekly training series (sessions, strength/outdoor split, volume, active minutes, kcal, km, load) — use for coaching, summaries, 'how was my June'. food_history = full-history weekly intake vs the calorie target.",
       },
       days: {
         type: "number" as const,
-        description: "Lookback window in days for recent_* / weight_trend. Default 3, max 30.",
+        description: "Lookback window in days for recent_* . Default 3, max 30.",
+      },
+      from: {
+        type: "string" as const,
+        description: "YYYY-MM-DD (user-local). With to, narrows any query to that date range — 'what did I eat June 5th' → recent_food from/to that day.",
+      },
+      to: {
+        type: "string" as const,
+        description: "YYYY-MM-DD (user-local) range end, inclusive.",
       },
     },
     required: ["query"],

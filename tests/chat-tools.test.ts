@@ -53,6 +53,19 @@ describe("chat 2b tool surface", () => {
     expect(queryEnum).toContain("routines");
   });
 
+  it("get_health_data reaches deep history (coaching queries + ranges)", () => {
+    const tool = CHAT_RESPONSES_TOOLS.find((t) => t.name === "get_health_data");
+    const props = (
+      tool?.parameters as {
+        properties?: { query?: { enum?: string[] }; from?: object; to?: object };
+      }
+    )?.properties;
+    expect(props?.query?.enum).toContain("workout_history");
+    expect(props?.query?.enum).toContain("food_history");
+    expect(props?.from).toBeTruthy();
+    expect(props?.to).toBeTruthy();
+  });
+
   it("routine steps accept rounds/rest/category (the circuit vocabulary)", () => {
     const tool = CHAT_RESPONSES_TOOLS.find((t) => t.name === "create_routine");
     const props = (

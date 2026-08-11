@@ -217,6 +217,15 @@ export default function ActivitiesPage() {
 
   useEffect(() => {
     loadPage(null);
+    // Deep link: /health/workouts/activities?id=<workout> opens that detail
+    // (window.location avoids the useSearchParams Suspense requirement).
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (id) {
+      fetch(`/api/health/workouts/activity?id=${encodeURIComponent(id)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => d && setDetail(d))
+        .catch(() => {});
+    }
   }, [loadPage]);
 
   // "older weeks load as you scroll" — cursor pagination on a sentinel.

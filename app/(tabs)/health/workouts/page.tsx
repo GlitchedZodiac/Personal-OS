@@ -607,10 +607,16 @@ export default function TrainPage() {
         </div>
       </div>
 
-      {/* Trails */}
+      {/* Trails — tapping the summary opens that activity's full detail */}
       <div className="mt-3 rounded-[16px] bg-card p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
         <div className="flex items-center justify-between">
-          <div>
+          <div
+            onClick={() =>
+              data?.latestTrail &&
+              router.push(`/health/workouts/activities?id=${data.latestTrail.id}`)
+            }
+            className={data?.latestTrail ? "cursor-pointer" : undefined}
+          >
             <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
               TRAILS
             </p>

@@ -26,14 +26,27 @@ interface SettingsData {
   fatPct?: number;
 }
 
+function parseIsoDay(value: unknown): string | null {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
 export async function executeGetHealthData(
-  args: { query?: string; days?: number },
+  args: { query?: string; days?: number; from?: string; to?: string },
   timeZone: string,
   todayStr: string
 ): Promise<object> {
   const query = args.query ?? "today_summary";
   const days = clampDays(args.days);
-  const since = new Date(Date.now() - days * DAY_MS);
+  // Optional from/to (YYYY-MM-DD, user-local) — point recent_* at any slice
+  // of history instead of a today-anchored lookback.
+  const fromDay = parseIsoDay(args.from);
+  const toDay = parseIsoDay(args.to);
+  const rangeStart = fromDay
+    ? getUtcDayBoundsForTimeZone(fromDay, timeZone).dayStart
+    : null;
+  const rangeEnd = toDay ? getUtcDayBoundsForTimeZone(toDay, timeZone).dayEnd : null;
+  const since = rangeStart ?? new Date(Date.now() - days * DAY_MS);
+  const until = rangeEnd ?? new Date();
 
   switch (query) {
     case "prs": {
@@ -54,9 +67,9 @@ export async function executeGetHealthData(
 
     case "recent_food": {
       const rows = await prisma.foodLog.findMany({
-        where: { loggedAt: { gte: since } },
+        where: { loggedAt: { gte: since, lte: until } },
         orderBy: { loggedAt: "desc" },
-        take: 40,
+        take: 60,
       });
       return {
         food: rows.map((f) => ({
@@ -74,9 +87,9 @@ export async function executeGetHealthData(
 
     case "recent_workouts": {
       const rows = await prisma.workoutLog.findMany({
-        where: { startedAt: { gte: since } },
+        where: { startedAt: { gte: since, lte: until } },
         orderBy: { startedAt: "desc" },
-        take: 20,
+        take: 30,
       });
       return {
         workouts: rows.map((w) => {
@@ -109,6 +122,119 @@ export async function executeGetHealthData(
             stepSeconds: m.stepSeconds,
           };
         }),
+      };
+    }
+
+    case "workout_history": {
+      // Full-history Mon-week training series — the coaching backbone.
+      // ~90 weeks of data stays compact; from/to narrows when asked.
+      const rows = await prisma.workoutLog.findMany({
+        where: rangeStart ? { startedAt: { gte: since, lte: until } } : {},
+        orderBy: { startedAt: "asc" },
+        select: {
+          startedAt: true,
+          workoutType: true,
+          durationMinutes: true,
+          caloriesBurned: true,
+          distanceMeters: true,
+          exercises: true,
+          metricsData: true,
+        },
+      });
+      const weeks = new Map<
+        string,
+        {
+          sessions: number;
+          strength: number;
+          outdoor: number;
+          volumeKg: number;
+          activeMinutes: number;
+          kcal: number;
+          km: number;
+          load: number[];
+        }
+      >();
+      for (const w of rows) {
+        const week = getWeekStartDateString(
+          getDateStringInTimeZone(w.startedAt, timeZone),
+          1
+        );
+        const b =
+          weeks.get(week) ??
+          { sessions: 0, strength: 0, outdoor: 0, volumeKg: 0, activeMinutes: 0, kcal: 0, km: 0, load: [] };
+        const m = (w.metricsData ?? {}) as { loadScore?: number };
+        const outdoor = (w.distanceMeters ?? 0) > 0;
+        b.sessions += 1;
+        if (outdoor) b.outdoor += 1;
+        else b.strength += 1;
+        b.volumeKg += sessionVolumeKg(w.exercises);
+        b.activeMinutes += w.durationMinutes ?? 0;
+        b.kcal += Math.round(w.caloriesBurned ?? 0);
+        b.km += (w.distanceMeters ?? 0) / 1000;
+        if (typeof m.loadScore === "number") b.load.push(m.loadScore);
+        weeks.set(week, b);
+      }
+      return {
+        weeks: [...weeks.entries()].map(([weekStart, b]) => ({
+          weekStart,
+          sessions: b.sessions,
+          strength: b.strength,
+          outdoor: b.outdoor,
+          volumeKg: Math.round(b.volumeKg),
+          activeMinutes: b.activeMinutes,
+          kcalBurned: b.kcal,
+          outdoorKm: Math.round(b.km * 10) / 10,
+          avgLoadScore:
+            b.load.length > 0
+              ? Math.round(b.load.reduce((s, x) => s + x, 0) / b.load.length)
+              : null,
+        })),
+      };
+    }
+
+    case "food_history": {
+      // Full-history weekly intake vs the current targets — "how's my
+      // eating trended" answerable over any horizon.
+      const [rows, settingsRow] = await Promise.all([
+        prisma.foodLog.findMany({
+          where: rangeStart ? { loggedAt: { gte: since, lte: until } } : {},
+          orderBy: { loggedAt: "asc" },
+          select: { loggedAt: true, calories: true, proteinG: true, carbsG: true, fatG: true },
+        }),
+        prisma.userSettings.findUnique({ where: { id: "default" }, select: { data: true } }),
+      ]);
+      const byDay = new Map<string, { kcal: number; p: number; c: number; f: number }>();
+      for (const r of rows) {
+        const day = getDateStringInTimeZone(r.loggedAt, timeZone);
+        const b = byDay.get(day) ?? { kcal: 0, p: 0, c: 0, f: 0 };
+        b.kcal += r.calories;
+        b.p += r.proteinG;
+        b.c += r.carbsG;
+        b.f += r.fatG;
+        byDay.set(day, b);
+      }
+      const weeks = new Map<string, { days: number; kcal: number; p: number; c: number; f: number }>();
+      for (const [day, d] of byDay) {
+        const week = getWeekStartDateString(day, 1);
+        const b = weeks.get(week) ?? { days: 0, kcal: 0, p: 0, c: 0, f: 0 };
+        b.days += 1;
+        b.kcal += d.kcal;
+        b.p += d.p;
+        b.c += d.c;
+        b.f += d.f;
+        weeks.set(week, b);
+      }
+      const settings = (settingsRow?.data ?? {}) as SettingsData;
+      return {
+        calorieTarget: settings.calorieTarget ?? 2000,
+        weeks: [...weeks.entries()].map(([weekStart, b]) => ({
+          weekStart,
+          loggedDays: b.days,
+          avgKcalPerLoggedDay: Math.round(b.kcal / b.days),
+          avgProteinG: Math.round(b.p / b.days),
+          avgCarbsG: Math.round(b.c / b.days),
+          avgFatG: Math.round(b.f / b.days),
+        })),
       };
     }
 
