@@ -445,13 +445,19 @@ LOGGING (food, weight/measurements, workouts, water):
 
 EDITING & DELETING:
 - To change or remove an existing entry: first get_health_data (recent_food / recent_workouts / weight_trend) to find the entry's id, then propose edit_food_log or delete_entry. These are also confirm-first proposals.
+- Workout corrections ("the windmills I just did were 8 kg, not 20"): get_health_data recent_workouts → edit_workout_entry targeting that one movement. Change only what the user corrected; PRs recalculate on save. If that workout was a routine run (it carries sequenceName) and the corrected weight differs from the routine's prescription, ASK afterwards whether to update the routine's prescribed weight too — if yes, get_health_data routines then update_routine.
 - When several entries match, pick the most recent and say which one you chose.
-- If the user amends something whose card is still [pending], re-propose the corrected full card. If the card was [saved], the data is in the log — use edit_food_log/delete_entry on the real entry, NEVER log it again (that double-counts).
+- If the user amends something whose card is still [pending], re-propose the corrected full card. If the card was [saved], the data is in the log — use edit_workout_entry/edit_food_log/delete_entry on the real entry, NEVER log it again (that double-counts).
 
-ROUTINES (training design):
-- create_routine proposes a reusable training routine — the user's protocols: straight sets, EMOM ("20-minute EMOM cycling 20 swings / 15 goblet squats / 5 snatches each side" → kind emom, durationMinutes 20, one step per movement with reps + weightKg), circuit ("11 exercises, 45–60 s rest between" → kind circuit, restSecondsDefault ~50), tabata.
-- Steps carry reps (or seconds for timed holds), weightKg when the user names a bell, sets for straight work. "Each side" belongs in the exercise name.
+ROUTINES (training design — the product's center):
+- The user trains in routines/flows described in plain language, often from a video or from their head. Your job is to turn that description into a create_routine proposal — any equipment (kettlebell, dumbbell, barbell, bodyweight, machines), not just kettlebell.
+- Kinds: circuit ("20 swings, 20 snatches, 20 goblet squats, repeat 3 times, 60-second rests" → kind circuit, rounds 3, restSecondsDefault 60, one step per movement), emom ("20-minute EMOM cycling swings/squats/snatches" → durationMinutes 20), straight sets ("curls then rows then bench, 3×10 each"), tabata.
+- Rest semantics: restSecondsDefault is the rest between ROUNDS on circuits; a step's restSeconds is the rest right after that movement when it differs. Capture both when the user distinguishes them.
+- Steps carry reps (or seconds for timed holds), weightKg when the user prescribes a load ("swings at 20 kg"), sets for straight work. "Each side" belongs in the exercise name.
+- NEW MOVEMENTS: the user invents flows ("one-arm clean squat thruster") and variants tracked separately ("two-hand clean"). Give those steps a category — they're minted into the app's vocabulary on save. For a standalone "add this movement" ask (no routine), propose create_exercise with sensible aliases.
+- To change a routine ("make the swings 24 kg in my EMOM"): get_health_data routines for the id, then update_routine with the complete corrected definition.
 - Saved routines appear in Train → Routines and on the Apple Watch. Confirm-first like every proposal.
+- Routine runs from the watch sync back with rounds completed and per-movement working time — recent_workouts shows them; quote real numbers when asked how a run went.
 
 REMINDERS:
 - set_reminder creates a real timed notification. Only for explicit "remind me at/in..." asks.
@@ -477,9 +483,10 @@ const GET_HEALTH_DATA = {
           "recent_food",
           "recent_workouts",
           "weight_trend",
+          "routines",
         ],
         description:
-          "today_summary = calories/macros eaten today + goals + week training volume. prs = all personal records. recent_food = food log rows with ids. recent_workouts = workout rows with ids and exercises. weight_trend = recent body measurements with ids.",
+          "today_summary = calories/macros eaten today + goals + week training volume. prs = all personal records. recent_food = food log rows with ids. recent_workouts = workout rows with ids, exercises, and routine-run metadata. weight_trend = recent body measurements with ids. routines = saved routines with ids, steps, and prescriptions (read before update_routine).",
       },
       days: {
         type: "number" as const,
@@ -557,48 +564,176 @@ const DELETE_ENTRY = {
   },
 };
 
+// Shared step + routine field shapes for create_routine / update_routine.
+const ROUTINE_STEP_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    exerciseName: {
+      type: "string" as const,
+      description:
+        "Movement name — ANY equipment (kettlebell, dumbbell, barbell, bodyweight, machine, cardio). Put 'each side' in the name when applicable.",
+    },
+    category: {
+      type: "string" as const,
+      enum: ["kettlebell", "barbell", "dumbbell", "bodyweight", "machine", "cardio", "other"],
+      description:
+        "REQUIRED when the movement is new to the app (a compound flow like 'one-arm clean squat thruster', or a variant tracked separately like 'two-hand clean') — it gets minted as a user exercise on save. Omit for well-known movements.",
+    },
+    sets: { type: "number" as const, description: "Sets (straight work)" },
+    reps: { type: "number" as const },
+    seconds: {
+      type: "number" as const,
+      description: "For timed holds/intervals instead of reps",
+    },
+    weightKg: {
+      type: "number" as const,
+      description: "Prescribed load when the user names one ('swings at 20 kg')",
+    },
+    restSeconds: {
+      type: "number" as const,
+      description:
+        "Rest after THIS movement, when it differs from the routine default",
+    },
+  },
+  required: ["exerciseName"],
+};
+
+const ROUTINE_FIELD_PROPS = {
+  name: {
+    type: "string" as const,
+    description: "Routine name, e.g. 'EMOM 20 — swings/squats/snatch'",
+  },
+  kind: {
+    type: "string" as const,
+    enum: ["straight", "emom", "tabata", "circuit"],
+  },
+  durationMinutes: {
+    type: "number" as const,
+    description: "Total minutes for EMOM sessions (e.g. 20 or 30)",
+  },
+  rounds: {
+    type: "number" as const,
+    description:
+      "Circuit round count — 'repeat 3 times' → 3. Circuits are round-counted, not clocked.",
+  },
+  restSecondsDefault: {
+    type: "number" as const,
+    description:
+      "Default rest in seconds — circuits rest this long BETWEEN ROUNDS (typically 45-90); use per-step restSeconds for rest between movements.",
+  },
+  steps: {
+    type: "array" as const,
+    items: ROUTINE_STEP_SCHEMA,
+    description:
+      "Ordered movements. For an EMOM these are the exercises cycled each minute; for a circuit, one round's sequence.",
+  },
+  message: {
+    type: "string" as const,
+    description: "One-line bubble accompanying the routine card",
+  },
+};
+
 const CREATE_ROUTINE = {
   type: "function" as const,
   name: "create_routine",
   description:
-    "Propose a reusable training routine (straight sets / EMOM / tabata / circuit) that the user can run from Train or the Apple Watch. The user confirms before it saves.",
+    "Propose a reusable training routine (straight sets / EMOM / tabata / circuit) that the user can run from Train or the Apple Watch. Works for ANY equipment — kettlebell, dumbbell, barbell, bodyweight, machines. The user confirms before it saves.",
+  parameters: {
+    type: "object" as const,
+    properties: ROUTINE_FIELD_PROPS,
+    required: ["name", "kind", "steps", "message"],
+  },
+};
+
+const UPDATE_ROUTINE = {
+  type: "function" as const,
+  name: "update_routine",
+  description:
+    "Propose changes to an existing routine (id from get_health_data routines). Send the routine's COMPLETE corrected definition — every step, not just the changed one; it replaces the old definition wholesale. The user confirms before it saves.",
   parameters: {
     type: "object" as const,
     properties: {
-      name: { type: "string" as const, description: "Routine name, e.g. 'EMOM 20 — swings/squats/snatch'" },
-      kind: {
+      id: { type: "string" as const, description: "The routine id being updated" },
+      ...ROUTINE_FIELD_PROPS,
+    },
+    required: ["id", "name", "kind", "steps", "message"],
+  },
+};
+
+const CREATE_EXERCISE = {
+  type: "function" as const,
+  name: "create_exercise",
+  description:
+    "Propose adding a NEW movement to the app's vocabulary — a compound flow the user invented ('one-arm clean squat thruster') or a variant they want tracked separately ('two-hand clean' vs one-hand). Once saved it works everywhere: voice logging, PRs, routines, the watch. Not needed for movements the app already knows, and not needed before create_routine (routine steps with a category mint automatically).",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      name: { type: "string" as const, description: "Display name, e.g. 'One-Arm Clean Squat Thruster'" },
+      category: {
         type: "string" as const,
-        enum: ["straight", "emom", "tabata", "circuit"],
+        enum: ["kettlebell", "barbell", "dumbbell", "bodyweight", "machine", "cardio", "other"],
       },
-      durationMinutes: {
-        type: "number" as const,
-        description: "Total minutes for EMOM/circuit sessions (e.g. 20 or 30 for an EMOM)",
-      },
-      restSecondsDefault: {
-        type: "number" as const,
-        description: "Rest between movements in seconds (circuits: typically 45-60)",
-      },
-      steps: {
+      aliases: {
         type: "array" as const,
-        items: {
-          type: "object" as const,
-          properties: {
-            exerciseName: { type: "string" as const, description: "Movement name; put 'each side' in the name when applicable" },
-            sets: { type: "number" as const, description: "Sets (straight work)" },
-            reps: { type: "number" as const },
-            seconds: { type: "number" as const, description: "For timed holds/intervals instead of reps" },
-            weightKg: { type: "number" as const },
-          },
-          required: ["exerciseName"],
-        },
-        description: "Ordered movements. For an EMOM these are the exercises cycled each minute.",
+        items: { type: "string" as const },
+        description:
+          "Optional other names that should resolve to this movement (EN/ES, transcription variants)",
       },
       message: {
         type: "string" as const,
-        description: "One-line bubble accompanying the routine card",
+        description: "One-line bubble accompanying the card",
       },
     },
-    required: ["name", "kind", "steps", "message"],
+    required: ["name", "category", "message"],
+  },
+};
+
+const EDIT_WORKOUT_ENTRY = {
+  type: "function" as const,
+  name: "edit_workout_entry",
+  description:
+    "Propose correcting ONE movement of an already-saved workout ('the windmills I just did were 8 kg, not 20') — found via get_health_data recent_workouts. Only the named fields change; PRs recalculate automatically. The user confirms before anything saves.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      id: { type: "string" as const, description: "The workout log id" },
+      label: {
+        type: "string" as const,
+        description: "What's being corrected, e.g. 'windmills in this morning's circuit'",
+      },
+      match: {
+        type: "object" as const,
+        properties: {
+          name: {
+            type: "string" as const,
+            description: "Exercise name as it appears in the workout's entries",
+          },
+          index: {
+            type: "number" as const,
+            description: "0-based position in the exercises array, when known — wins over name",
+          },
+        },
+        description: "Which entry to change",
+        additionalProperties: false,
+      },
+      set: {
+        type: "object" as const,
+        properties: {
+          name: { type: "string" as const },
+          sets: { type: "number" as const },
+          reps: { type: "number" as const },
+          seconds: { type: "number" as const },
+          weightKg: { type: "number" as const },
+        },
+        description: "Only the fields that change",
+        additionalProperties: false,
+      },
+      message: {
+        type: "string" as const,
+        description: "One-line bubble accompanying the edit card",
+      },
+    },
+    required: ["id", "label", "match", "set", "message"],
   },
 };
 
@@ -623,4 +758,7 @@ export const CHAT_RESPONSES_TOOLS = [
   EDIT_FOOD_LOG,
   DELETE_ENTRY,
   CREATE_ROUTINE,
+  UPDATE_ROUTINE,
+  CREATE_EXERCISE,
+  EDIT_WORKOUT_ENTRY,
 ];

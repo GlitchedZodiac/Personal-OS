@@ -5,18 +5,85 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 (Food port — the last un-ported screen;
-label scanning as reusable products; from a cloud session)
-**Current phase:** All five Pitaya screens + Chat are now design ports on
-prod. **Michael is pausing to use the app and run a bug sweep.** Next block
-(his 90-day priority, spec captured in deferred-items): training + Today
-polish — live sessions w/ HR/zones/burn/analytics + post-workout AI report,
-protocol-true EMOM/circuit runners on web + watch. Food stays deliberately
-crude (calories/macros by input) until 2c. PR #1 open to main.
-**Branch in flight:** `claude/phase1-modernization` (pushed; PR #1 open;
-prod deploys via `vercel deploy --prod`; merge awaits Michael) ·
-`claude/watch-app` (watch lane, local) · `claude/emom-guided-runner`
-(cloud session; PR into phase1).
+**Last updated:** 2026-08-10 (Routines MVP backend/AI: rounds live in
+mobile sequences, user-minted exercises + /api/mobile/exercises live,
+AI builds/edits routines any-equipment, post-hoc entry fix via chat)
+**Current phase:** Routines are the product's center per Michael's
+2026-08-10 walkthrough. The watch's circuit runner + weights editor were
+already built; the backend/AI pieces it waited on are now live (entry
+2026-08-10b). **WATCH LANE: `rounds` is in `/api/mobile/sequences` and
+`GET /api/mobile/exercises` exists — adopt both.** Food stays deliberately
+crude until 2c.
+**Branch in flight:** `claude/phase1-modernization` (pushed; prod deploys
+via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
+(watch lane, local worktree).
+
+## 2026-08-10b — Routines MVP: the backend/AI half the watch was waiting on
+
+Michael's directive via the watch lane ("we shouldn't do workouts, we
+should be focused on routines") — the ROUTINES MVP SPEC's main-lane
+pieces, all live:
+
+- **`Sequence.rounds`** (migration `sequence_rounds_user_exercises`):
+  circuits are round-counted ("repeat 3 times"). In validateSequence
+  (cap 50), both sequence routes, **`/api/mobile/sequences` — the watch's
+  nil-safe decode can now go live** (falls back to 3 until then). Builder
+  page grew a ROUNDS field; circuit rest label now says ROUND REST
+  (matching the watch: restSecondsDefault rests between ROUNDS, per-step
+  restSeconds after a movement).
+- **User-minted exercises** (`user_exercises`: slug/name/category/
+  aliases): lib/exercises.ts gained a customs layer merged into the one
+  index (client-safe; DB side in lib/user-exercises.ts, 15 s TTL cache).
+  Longest-key-first means "one-arm clean squat thruster" beats the
+  catalog's "thruster" substring — customs win without special-casing.
+  Exact-name mint gate (plural-tolerant) so "Kettlebell Cleans" never
+  mints a duplicate; alias collisions with known keys are dropped so a
+  custom can't hijack "clean". Resolves in PRs (custom movements set
+  records — proven), routines, Train display. **`GET /api/mobile/
+  exercises` (bearer) is live** — customs + max updatedAt for cheap
+  polling; contract in watch-contract.md.
+- **AI routine builder, upgraded**: create_routine now carries rounds,
+  restSecondsDefault (between-rounds), per-step restSeconds/weightKg/
+  category — any equipment. Steps with a category auto-mint unknown
+  movements on save (one confirm, no extra card); explicit
+  create_exercise proposal for standalone "track two-hand cleans
+  separately" asks. NEW update_routine (complete-definition replace,
+  id via new get_health_data routines query). Live-model smoke: dumbbell
+  circuit ask → correct card (circuit · 3 rounds · 60 s round rest ·
+  14 kg steps · dumbbell categories).
+- **Post-hoc single-line edit (2b family)**: edit_workout_entry chat
+  proposal → new PATCH /api/health/workouts/entry — surgical edit of ONE
+  exercises[] entry (catalog-normalized name match, "windmills" finds
+  Kettlebell Windmill), never touches startedAt/type/duration (the
+  general PATCH would clobber). Then a full PR REBUILD (extracted to
+  lib/prs.ts rebuildPersonalRecords, shared with backfill) because a
+  correction must LOWER records: smoke proved windmill 20 kg phantom PR
+  → corrected to 8 kg → phantom retracted. Prompt: after fixing a
+  routine-run's entry, the AI offers to update the routine's prescribed
+  weight too (update_routine).
+- **Watch run metadata rendered**: /api/health/train session now carries
+  routine {name, roundsCompleted} (sequenceName, or lookup by
+  sequenceId) + per-row workSeconds from stepSeconds (positional, only
+  when lengths align); Train's TODAY card shows the routine line, rounds
+  pill, and per-movement working time. Web saveSession now also sends
+  sequenceName. recent_workouts (chat) returns sequenceId/Name/
+  roundsCompleted/stepSeconds — "how did my circuit go" answerable.
+
+Verification: tsc clean · 90/90 vitest (rounds, customs precedence, mint
+gate, entry-edit lib, tool surface) · clean build · API smoke on dev
+(cookie + minted bearer): circuit create w/ mint → mobile payloads →
+update (rounds 3→4) → routine-run workout → Train metadata → entry edit
+→ phantom-PR retraction → live chat-stream proposal. All smoke rows
+deleted; PR table diffed byte-identical to pre-smoke snapshot.
+
+Notes: found the branch checkout 11 commits behind origin/main (EMOM
+runner + Food port merges) — fast-forwarded before building; migration
+drift from cloud-session `favorite_products` resolved by the sync (no
+reset). Long-running dev server held the pre-migration Prisma client —
+restarted. Deferred: builder-UI minting (category picker on unknown
+names), web circuit runner with round counting (watch has it; web live
+sheet is still set-based), folding stepSeconds into workouts older than
+today's on some history surface.
 
 ## 2026-08-09l — Food port: the last screen, plus label products
 

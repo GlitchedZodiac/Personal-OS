@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { EXERCISE_CATALOG } from "@/lib/exercises";
+import { EXERCISE_CATALOG, type ExerciseDef } from "@/lib/exercises";
 import { SEQUENCE_KINDS, type SequenceStep } from "@/lib/sequences";
 
 // Routine builder — companion page to the design's Routines sheet
@@ -16,6 +16,7 @@ interface Routine {
   kind: string;
   restSecondsDefault: number | null;
   durationMinutes: number | null;
+  rounds: number | null;
   steps: SequenceStep[];
 }
 
@@ -49,15 +50,28 @@ export default function RoutinesPage() {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<string>("straight");
   const [duration, setDuration] = useState("");
+  const [rounds, setRounds] = useState("");
   const [rest, setRest] = useState("");
   const [steps, setSteps] = useState<DraftStep[]>([{ ...EMPTY_STEP }]);
   const [saving, setSaving] = useState(false);
+  // Full vocabulary for the picker — catalog plus AI-minted movements.
+  const [exerciseList, setExerciseList] = useState<Pick<ExerciseDef, "id" | "name">[]>(
+    EXERCISE_CATALOG
+  );
 
   const load = useCallback(() => {
     fetch("/api/health/sequences")
       .then((r) => (r.ok ? r.json() : []))
       .then((rows) => setRoutines(Array.isArray(rows) ? rows : []))
       .catch(() => setRoutines([]));
+    fetch("/api/health/exercises")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (Array.isArray(body?.exercises) && body.exercises.length > 0) {
+          setExerciseList(body.exercises);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(load, [load]);
@@ -68,12 +82,14 @@ export default function RoutinesPage() {
       setName("");
       setKind("straight");
       setDuration("");
+      setRounds("");
       setRest("");
       setSteps([{ ...EMPTY_STEP }]);
     } else {
       setName(routine.name);
       setKind(routine.kind);
       setDuration(routine.durationMinutes ? String(routine.durationMinutes) : "");
+      setRounds(routine.rounds ? String(routine.rounds) : "");
       setRest(routine.restSecondsDefault ? String(routine.restSecondsDefault) : "");
       setSteps(
         routine.steps.map((s) => ({
@@ -98,6 +114,7 @@ export default function RoutinesPage() {
         name,
         kind,
         durationMinutes: duration || undefined,
+        rounds: rounds || undefined,
         restSecondsDefault: rest || undefined,
         steps: steps
           .filter((s) => s.exerciseName.trim())
@@ -227,7 +244,8 @@ export default function RoutinesPage() {
             ))}
           </div>
 
-          {/* EMOMs run on the clock ("20-minute EMOM"); circuits rest between movements. */}
+          {/* EMOMs run on the clock ("20-minute EMOM"); circuits are
+              round-counted and rest between rounds. */}
           <div className="flex gap-2.5">
             <label className="block flex-1">
               <span className="text-[10px] font-semibold tracking-wide text-muted-foreground">
@@ -243,13 +261,25 @@ export default function RoutinesPage() {
             </label>
             <label className="block flex-1">
               <span className="text-[10px] font-semibold tracking-wide text-muted-foreground">
-                REST BETWEEN (SEC)
+                ROUNDS {kind === "circuit" ? "(circuit)" : "(optional)"}
+              </span>
+              <input
+                inputMode="numeric"
+                value={rounds}
+                onChange={(e) => setRounds(e.target.value)}
+                placeholder={kind === "circuit" ? "3" : "—"}
+                className="mt-0.5 w-full rounded-[10px] border border-border bg-card px-3 py-2 text-center text-sm tabular-nums outline-none"
+              />
+            </label>
+            <label className="block flex-1">
+              <span className="text-[10px] font-semibold tracking-wide text-muted-foreground">
+                {kind === "circuit" ? "ROUND REST (SEC)" : "REST BETWEEN (SEC)"}
               </span>
               <input
                 inputMode="numeric"
                 value={rest}
                 onChange={(e) => setRest(e.target.value)}
-                placeholder={kind === "circuit" ? "45" : "—"}
+                placeholder={kind === "circuit" ? "60" : "—"}
                 className="mt-0.5 w-full rounded-[10px] border border-border bg-card px-3 py-2 text-center text-sm tabular-nums outline-none"
               />
             </label>
@@ -309,7 +339,7 @@ export default function RoutinesPage() {
             ))}
           </div>
           <datalist id="exercise-catalog">
-            {EXERCISE_CATALOG.map((e) => (
+            {exerciseList.map((e) => (
               <option key={e.id} value={e.name} />
             ))}
           </datalist>

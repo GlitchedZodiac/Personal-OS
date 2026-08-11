@@ -21,6 +21,10 @@ describe("chat 2b tool surface", () => {
     expect(names).toContain("edit_food_log");
     expect(names).toContain("delete_entry");
     expect(names).toContain("create_routine");
+    // Routines block (2026-08-10): edit routines, mint movements, fix entries.
+    expect(names).toContain("update_routine");
+    expect(names).toContain("create_exercise");
+    expect(names).toContain("edit_workout_entry");
     // Stripped surfaces must NOT resurface through chat.
     expect(names).not.toContain("manage_todo");
     expect(names).not.toContain("workout_plan_query");
@@ -36,6 +40,36 @@ describe("chat 2b tool surface", () => {
     expect(proposalKindFor("log_food")).toBe("food");
     expect(proposalKindFor("edit_food_log")).toBe("edit_food");
     expect(proposalKindFor("delete_entry")).toBe("delete");
+    expect(proposalKindFor("update_routine")).toBe("routine_update");
+    expect(proposalKindFor("create_exercise")).toBe("exercise");
+    expect(proposalKindFor("edit_workout_entry")).toBe("edit_workout");
+  });
+
+  it("get_health_data can read routines (ids for update_routine)", () => {
+    const tool = CHAT_RESPONSES_TOOLS.find((t) => t.name === "get_health_data");
+    const queryEnum = (
+      tool?.parameters as { properties?: { query?: { enum?: string[] } } }
+    )?.properties?.query?.enum;
+    expect(queryEnum).toContain("routines");
+  });
+
+  it("routine steps accept rounds/rest/category (the circuit vocabulary)", () => {
+    const tool = CHAT_RESPONSES_TOOLS.find((t) => t.name === "create_routine");
+    const props = (
+      tool?.parameters as {
+        properties?: {
+          rounds?: object;
+          restSecondsDefault?: object;
+          steps?: { items?: { properties?: Record<string, object> } };
+        };
+      }
+    )?.properties;
+    expect(props?.rounds).toBeTruthy();
+    expect(props?.restSecondsDefault).toBeTruthy();
+    const stepProps = props?.steps?.items?.properties ?? {};
+    expect(stepProps.weightKg).toBeTruthy();
+    expect(stepProps.restSeconds).toBeTruthy();
+    expect(stepProps.category).toBeTruthy();
   });
 
   it("system prompt carries the language slot and the confirm-first rule", () => {

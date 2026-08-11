@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeExerciseName } from "@/lib/exercises";
+import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
 
 // Personal-record detection for strength work — kettlebell-first, but any
 // exercise with a weight qualifies. Two record kinds keep it unambiguous:
@@ -109,6 +110,9 @@ export async function detectAndRecordPRs(input: {
   exercises: unknown;
   achievedAt: Date;
 }): Promise<NewPR[]> {
+  // User-minted movements PR like catalog ones — load them into the index
+  // before extraction so a custom flow's tonnage isn't invisible.
+  await ensureUserExercisesLoaded();
   const candidates = extractPRCandidates(input.exercises);
   if (candidates.length === 0) return [];
 
@@ -145,4 +149,42 @@ export async function detectAndRecordPRs(input: {
   }
 
   return newPRs;
+}
+
+/**
+ * Wipe and rebuild the PR table from full workout history, oldest first.
+ * Idempotent — the truth is always derivable from workout_logs. Runs after
+ * catalog growth (new aliases/movements) AND after post-hoc workout edits:
+ * correcting "windmills at 20 kg" down to 8 kg must retract the phantom PR
+ * the wrong weight created.
+ */
+export async function rebuildPersonalRecords(): Promise<{
+  workoutsScanned: number;
+  recordImprovements: number;
+  currentRecords: number;
+}> {
+  await prisma.personalRecord.deleteMany({});
+
+  const workouts = await prisma.workoutLog.findMany({
+    where: { exercises: { not: { equals: null } } },
+    orderBy: { startedAt: "asc" },
+    select: { id: true, startedAt: true, exercises: true },
+  });
+
+  let recordsSet = 0;
+  for (const workout of workouts) {
+    const newPRs = await detectAndRecordPRs({
+      workoutLogId: workout.id,
+      exercises: workout.exercises,
+      achievedAt: workout.startedAt,
+    });
+    recordsSet += newPRs.length;
+  }
+
+  const finalRecords = await prisma.personalRecord.count();
+  return {
+    workoutsScanned: workouts.length,
+    recordImprovements: recordsSet,
+    currentRecords: finalRecords,
+  };
 }

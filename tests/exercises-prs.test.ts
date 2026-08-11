@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { normalizeExerciseName, getExerciseById } from "@/lib/exercises";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  normalizeExerciseName,
+  getExerciseById,
+  setCustomExercises,
+  findExerciseByExactName,
+  slugifyExerciseName,
+} from "@/lib/exercises";
 import { extractPRCandidates } from "@/lib/prs";
 
 describe("normalizeExerciseName", () => {
@@ -82,5 +88,66 @@ describe("extractPRCandidates", () => {
     ]);
     expect(candidates.find((c) => c.exercise === "deadlift" && c.kind === "volume")?.value).toBe(1500);
     expect(candidates.filter((c) => c.exercise === "back-squat")).toHaveLength(0);
+  });
+});
+
+describe("user-minted exercises in the shared index", () => {
+  afterEach(() => setCustomExercises([]));
+
+  const thruster = {
+    id: "one-arm-clean-squat-thruster",
+    name: "One-Arm Clean Squat Thruster",
+    category: "kettlebell" as const,
+    aliases: ["ocst"],
+  };
+
+  it("customs win over catalog substring matches", () => {
+    // Without the custom, the fuzzy pass swallows the flow into a catalog
+    // movement (longest substring wins — "thruster").
+    expect(normalizeExerciseName("one-arm clean squat thruster")?.id).toBe("kb-thruster");
+    setCustomExercises([thruster]);
+    expect(normalizeExerciseName("one-arm clean squat thruster")?.id).toBe(
+      "one-arm-clean-squat-thruster"
+    );
+    expect(normalizeExerciseName("ocst")?.id).toBe("one-arm-clean-squat-thruster");
+    // catalog resolution is untouched
+    expect(normalizeExerciseName("clean and press")?.id).toBe("kb-clean-and-press");
+  });
+
+  it("variants tracked separately resolve to themselves, not the base movement", () => {
+    setCustomExercises([
+      { id: "two-hand-clean", name: "Two-Hand Clean", category: "kettlebell", aliases: [] },
+    ]);
+    expect(normalizeExerciseName("two-hand clean")?.id).toBe("two-hand-clean");
+    expect(normalizeExerciseName("clean")?.id).toBe("kb-clean");
+  });
+
+  it("exact-name gate ignores fuzzy matches (the mint decision)", () => {
+    expect(findExerciseByExactName("one-arm clean squat thruster")).toBeNull();
+    expect(findExerciseByExactName("goblet squats")?.id).toBe("kb-goblet-squat");
+    setCustomExercises([thruster]);
+    expect(findExerciseByExactName("One-Arm Clean Squat Thruster")?.id).toBe(
+      "one-arm-clean-squat-thruster"
+    );
+  });
+
+  it("slugifies names into stable ids", () => {
+    expect(slugifyExerciseName("One-Arm Clean Squat Thruster")).toBe(
+      "one-arm-clean-squat-thruster"
+    );
+    expect(slugifyExerciseName("Curl Martillo (pesado)")).toBe("curl-martillo-pesado");
+  });
+
+  it("resolves custom ids and PRs custom movements", () => {
+    setCustomExercises([thruster]);
+    expect(getExerciseById("one-arm-clean-squat-thruster")?.name).toBe(
+      "One-Arm Clean Squat Thruster"
+    );
+    const candidates = extractPRCandidates([
+      { name: "one-arm clean squat thruster", sets: 3, reps: 5, weightKg: 20 },
+    ]);
+    const weight = candidates.find((c) => c.kind === "weight");
+    expect(weight?.exercise).toBe("one-arm-clean-squat-thruster");
+    expect(weight?.value).toBe(20);
   });
 });

@@ -9,6 +9,7 @@ import {
 } from "@/lib/timezone";
 import { sessionVolumeKg } from "@/lib/prs";
 import { normalizeExerciseName } from "@/lib/exercises";
+import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
 
 const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -26,6 +27,16 @@ interface SessionRow {
   name: string;
   detail: string; // "5 × 10 · 24 kg"
   isPR: boolean;
+  workSeconds?: number; // per-step working time (watch circuit runs)
+}
+
+// Routine-run metadata a watch/web run leaves in metricsData.
+interface RunMetrics {
+  sequenceId?: string;
+  sequenceName?: string;
+  roundsCompleted?: number;
+  stepSeconds?: number[];
+  emom?: { roundsCompleted?: number; totalRounds?: number };
 }
 
 // GET ?date=YYYY-MM-DD — everything the Train screen shows in one call:
@@ -43,6 +54,9 @@ export async function GET(request: NextRequest) {
     const weekStartStr = getWeekStartDateString(todayStr, 1);
     const chartStartStr = addDaysToDateString(weekStartStr, -7 * 7); // 8 buckets incl. current
     const { rangeStart } = getUtcDateRangeForTimeZone(chartStartStr, todayStr, timeZone);
+
+    // Custom movements must resolve for display names and PR chips.
+    await ensureUserExercisesLoaded();
 
     const [workouts, latestPRRow, trail, effortRow] = await Promise.all([
       prisma.workoutLog.findMany({
@@ -127,15 +141,44 @@ export async function GET(request: NextRequest) {
       rows: SessionRow[];
       durationMinutes: number;
       startedAt: string;
+      routine: { name: string; roundsCompleted: number | null } | null;
     } | null = null;
     if (todaysWorkout) {
-      const prRecords = await prisma.personalRecord.findMany({
-        where: { workoutLogId: todaysWorkout.id },
-        select: { exercise: true },
-      });
+      const [prRecords, metricsRow] = await Promise.all([
+        prisma.personalRecord.findMany({
+          where: { workoutLogId: todaysWorkout.id },
+          select: { exercise: true },
+        }),
+        prisma.workoutLog.findUnique({
+          where: { id: todaysWorkout.id },
+          select: { metricsData: true },
+        }),
+      ]);
+      const run = (metricsRow?.metricsData ?? {}) as RunMetrics;
+
+      // Routine attribution: the watch sends sequenceName; older web runs
+      // only carry sequenceId — resolve the name so the card can say it.
+      let routineName = run.sequenceName ?? null;
+      if (!routineName && run.sequenceId) {
+        const seq = await prisma.sequence.findUnique({
+          where: { id: run.sequenceId },
+          select: { name: true },
+        });
+        routineName = seq?.name ?? null;
+      }
+      const roundsCompleted =
+        run.roundsCompleted ?? run.emom?.roundsCompleted ?? null;
+
       const prIds = new Set(prRecords.map((r) => r.exercise));
       const rows: SessionRow[] = [];
-      for (const raw of todaysWorkout.exercises as Array<Record<string, unknown>>) {
+      const exercises = todaysWorkout.exercises as Array<Record<string, unknown>>;
+      // Per-step working time aligns positionally — only trust it when the
+      // arrays actually correspond (a zero-tap step can drop its row).
+      const stepSeconds =
+        Array.isArray(run.stepSeconds) && run.stepSeconds.length === exercises.length
+          ? run.stepSeconds
+          : null;
+      for (const [i, raw] of exercises.entries()) {
         if (!raw || typeof raw !== "object" || typeof raw.name !== "string") continue;
         const def = normalizeExerciseName(raw.name);
         const sets = Number(raw.sets) || null;
@@ -145,16 +188,21 @@ export async function GET(request: NextRequest) {
           sets && reps ? `${sets} × ${reps}` : reps ? `${reps} reps` : null,
           weight ? `${weight} kg` : null,
         ].filter(Boolean);
+        const workSeconds = stepSeconds?.[i];
         rows.push({
           name: def?.name ?? raw.name,
           detail: parts.join(" · "),
           isPR: def ? prIds.has(def.id) : false,
+          ...(workSeconds && workSeconds > 0 ? { workSeconds } : {}),
         });
       }
       session = {
         rows,
         durationMinutes: todaysWorkout.durationMinutes,
         startedAt: todaysWorkout.startedAt.toISOString(),
+        routine: routineName
+          ? { name: routineName, roundsCompleted }
+          : null,
       };
     }
 

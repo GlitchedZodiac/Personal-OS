@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { validateSequence } from "@/lib/sequences";
+import { setCustomExercises } from "@/lib/exercises";
 
 describe("validateSequence", () => {
   it("accepts a straight-sets routine and normalizes exercise names", () => {
@@ -134,4 +135,72 @@ describe("validateSequence", () => {
     });
     expect(result.ok).toBe(false);
   });
+
+  it("carries rounds for circuits ('repeat 3 times') and rejects absurd counts", () => {
+    const result = validateSequence({
+      name: "Swing/snatch/squat circuit",
+      kind: "circuit",
+      rounds: 3,
+      restSecondsDefault: 60,
+      steps: [
+        { exerciseName: "kettlebell swings", reps: 20, weightKg: 20 },
+        { exerciseName: "snatches", reps: 20, weightKg: 20 },
+        { exerciseName: "goblet squats", reps: 20, weightKg: 20 },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rounds).toBe(3);
+    expect(result.restSecondsDefault).toBe(60);
+
+    expect(
+      validateSequence({
+        name: "X",
+        kind: "circuit",
+        rounds: 99,
+        steps: [{ exerciseName: "swing", reps: 5 }],
+      }).ok
+    ).toBe(false);
+
+    const noRounds = validateSequence({
+      name: "X",
+      kind: "circuit",
+      steps: [{ exerciseName: "swing", reps: 5 }],
+    });
+    expect(noRounds.ok && noRounds.rounds).toBeNull();
+  });
+
+  it("coerces rounds from form-input strings", () => {
+    const result = validateSequence({
+      name: "Circuit",
+      kind: "circuit",
+      rounds: "4",
+      steps: [{ exerciseName: "swing", reps: 10 }],
+    });
+    expect(result.ok && result.rounds).toBe(4);
+  });
+
+  it("resolves user-minted movements once they join the index", () => {
+    setCustomExercises([
+      {
+        id: "one-arm-clean-squat-thruster",
+        name: "One-Arm Clean Squat Thruster",
+        category: "kettlebell",
+        aliases: [],
+      },
+    ]);
+    const result = validateSequence({
+      name: "Flow day",
+      kind: "circuit",
+      rounds: 3,
+      steps: [{ exerciseName: "one-arm clean squat thruster", reps: 5, weightKg: 20 }],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // the custom must win over the catalog's substring "clean"
+    expect(result.steps[0].exercise).toBe("one-arm-clean-squat-thruster");
+    expect(result.steps[0].exerciseName).toBe("One-Arm Clean Squat Thruster");
+  });
 });
+
+afterEach(() => setCustomExercises([]));

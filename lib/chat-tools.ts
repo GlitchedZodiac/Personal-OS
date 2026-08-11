@@ -79,6 +79,11 @@ export async function executeGetHealthData(
             timeInZones?: { pct: number[]; totalSeconds: number };
             loadScore?: number;
             relativeEffort?: number;
+            sequenceId?: string;
+            sequenceName?: string;
+            roundsCompleted?: number;
+            stepSeconds?: number[];
+            emom?: { roundsCompleted?: number; totalRounds?: number };
           };
           return {
             id: w.id,
@@ -92,8 +97,31 @@ export async function executeGetHealthData(
             zonePct: m.timeInZones?.pct,
             loadScore: m.loadScore,
             relativeEffort: m.relativeEffort,
+            // routine-run metadata (watch circuit/EMOM runs; web runner)
+            sequenceId: m.sequenceId,
+            sequenceName: m.sequenceName,
+            roundsCompleted: m.roundsCompleted ?? m.emom?.roundsCompleted,
+            stepSeconds: m.stepSeconds,
           };
         }),
+      };
+    }
+
+    case "routines": {
+      const rows = await prisma.sequence.findMany({
+        where: { isArchived: false },
+        orderBy: { updatedAt: "desc" },
+      });
+      return {
+        routines: rows.map((s) => ({
+          id: s.id,
+          name: s.name,
+          kind: s.kind,
+          durationMinutes: s.durationMinutes,
+          rounds: s.rounds,
+          restSecondsDefault: s.restSecondsDefault,
+          steps: s.steps,
+        })),
       };
     }
 
@@ -179,6 +207,9 @@ export const PROPOSAL_TOOL_NAMES = new Set([
   "edit_food_log",
   "delete_entry",
   "create_routine",
+  "update_routine",
+  "create_exercise",
+  "edit_workout_entry",
 ]);
 
 export type ProposalKind =
@@ -188,7 +219,10 @@ export type ProposalKind =
   | "water"
   | "edit_food"
   | "delete"
-  | "routine";
+  | "routine"
+  | "routine_update"
+  | "exercise"
+  | "edit_workout";
 
 export function proposalKindFor(toolName: string): ProposalKind | null {
   switch (toolName) {
@@ -206,6 +240,12 @@ export function proposalKindFor(toolName: string): ProposalKind | null {
       return "delete";
     case "create_routine":
       return "routine";
+    case "update_routine":
+      return "routine_update";
+    case "create_exercise":
+      return "exercise";
+    case "edit_workout_entry":
+      return "edit_workout";
     default:
       return null;
   }

@@ -39,25 +39,43 @@ Model (additive migration, main lane):
 ```
 Sequence {
   id, name, kind: "straight" | "emom" | "tabata" | "circuit",
-  restSecondsDefault: Int?,   // circuits: rest between movements (Michael's: 45–60 s)
-  durationMinutes: Int?,      // ADDED 2026-08-09: EMOM/circuit total time ("20-minute EMOM")
+  restSecondsDefault: Int?,   // circuits: rest BETWEEN ROUNDS (the watch's runCircuitRest); Michael's: 45–90 s
+  durationMinutes: Int?,      // ADDED 2026-08-09: EMOM total time ("20-minute EMOM")
+  rounds: Int?,               // ADDED 2026-08-10: circuit round count ("repeat 3 times"); watch falls back to 3 when null
   steps: Json  // ordered [{ exercise: canonicalId, exerciseName, sets?, reps?, seconds?, weightKg?, restSeconds? }]
   isArchived, createdAt, updatedAt
 }
 ```
 
-Watch semantics for `durationMinutes` (v1): an EMOM run is
-`durationMinutes` one-minute rounds cycling `steps` in order (e.g. 20 min
-cycling 3 movements → each movement 6–7 times); a circuit repeats `steps`
-with `restSecondsDefault` between movements until the user ends it (or
-`durationMinutes` elapses when set). Routines can now also be created from
-the app's chat ("design me a 20-minute EMOM…") — same rows, no watch change
+Watch semantics (v1): an EMOM run is `durationMinutes` one-minute rounds
+cycling `steps` in order (e.g. 20 min cycling 3 movements → each movement
+6–7 times); a circuit runs `rounds` tap-driven rounds (fallback 3), resting
+`restSecondsDefault` between rounds (a restSeconds on the last step
+overrides). Per-step `restSeconds` on other steps = rest after that
+movement (web honors it; watch may adopt later). Routines are created from
+the app's chat in any equipment category — same rows, no watch change
 needed.
 
-Endpoints: `GET /api/mobile/sequences` (bearer; list, active only) and the
-cookie-gated web CRUD under `/api/health/sequences`. Watch treats sequences
-as read-only v1 (runs them, logs resulting workouts through the existing
-sync — a run references `sequenceId` inside `metricsData`).
+Endpoints: `GET /api/mobile/sequences` (bearer; list, active only — carries
+`rounds` since 2026-08-10) and the cookie-gated web CRUD under
+`/api/health/sequences`. Watch treats sequences as read-only v1 (runs them,
+logs resulting workouts through the existing sync — a run references
+`sequenceId`/`sequenceName`/`roundsCompleted`/`stepSeconds[]` inside
+`metricsData`; the Train screen renders all four since 2026-08-10).
+
+## Exercises contract (v1 — live 2026-08-10)
+
+The AI mints user movements (compound flows, tracked variants) into
+`user_exercises` (slug, name, category, aliases). They resolve everywhere
+names resolve on the server (voice logging, PRs, routines, Train display).
+The watch keeps its picker/normalizer in sync via:
+
+`GET /api/mobile/exercises` (bearer) →
+`{ exercises: [{slug, name, category, aliases: [String], updatedAt}], updatedAt }`
+— top-level `updatedAt` is the max across rows (null when none): poll
+cheaply, refetch when it moves. Slugs join the catalog id namespace
+(`one-arm-clean-squat-thruster` alongside `kb-swing`) and appear as
+`steps[].exercise` in sequences.
 
 ## Pairing-code contract (v2 auth — build when iPhone Devices UI lands)
 

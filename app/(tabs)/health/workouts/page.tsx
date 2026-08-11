@@ -34,9 +34,10 @@ interface TrainData {
     isToday: boolean;
   } | null;
   session: {
-    rows: { name: string; detail: string; isPR: boolean }[];
+    rows: { name: string; detail: string; isPR: boolean; workSeconds?: number }[];
     durationMinutes: number;
     startedAt: string;
+    routine: { name: string; roundsCompleted: number | null } | null;
   } | null;
   weeklyVolume: { weekStart: string; label: string; volumeKg: number }[];
   pctChange: number | null;
@@ -69,6 +70,7 @@ interface Routine {
   kind: string;
   restSecondsDefault: number | null;
   durationMinutes: number | null;
+  rounds: number | null;
   steps: SequenceStep[];
 }
 
@@ -270,7 +272,11 @@ export default function TrainPage() {
           durationMinutes,
           exercises,
           source: "live",
-          metricsData: { sequenceId: routine.id, ...extraMetrics },
+          metricsData: {
+            sequenceId: routine.id,
+            sequenceName: routine.name,
+            ...extraMetrics,
+          },
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -460,6 +466,20 @@ export default function TrainPage() {
               ? ` · ${data.session.durationMinutes} MIN`
               : ""}
           </div>
+          {/* Routine attribution — watch/web runs sync their source routine
+              and rounds; free-form sessions have none. */}
+          {data.session.routine && (
+            <div className="flex items-center justify-between px-4 pb-2.5">
+              <span className="text-[13px] font-bold text-[#8C2F51]">
+                {data.session.routine.name}
+              </span>
+              {data.session.routine.roundsCompleted != null && (
+                <span className="rounded-full bg-accent px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-[#8C2F51]">
+                  {data.session.routine.roundsCompleted} rounds
+                </span>
+              )}
+            </div>
+          )}
           {data.session.rows.map((row, i) => (
             <div
               key={i}
@@ -471,6 +491,12 @@ export default function TrainPage() {
                 {row.isPR && (
                   <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold text-white">
                     PR
+                  </span>
+                )}
+                {row.workSeconds != null && (
+                  <span className="ml-1 text-[11px] font-medium tabular-nums text-muted-foreground">
+                    {Math.floor(row.workSeconds / 60)}:
+                    {String(row.workSeconds % 60).padStart(2, "0")} work
                   </span>
                 )}
               </div>

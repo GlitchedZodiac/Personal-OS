@@ -10,7 +10,8 @@ export type ExerciseCategory =
   | "dumbbell"
   | "bodyweight"
   | "machine"
-  | "cardio";
+  | "cardio"
+  | "other";
 
 export interface ExerciseDef {
   /** Canonical id (stable — stored in personal_records and synced to watch). */
@@ -18,6 +19,8 @@ export interface ExerciseDef {
   name: string;
   category: ExerciseCategory;
   aliases: string[];
+  /** True for user-minted movements (user_exercises rows). */
+  isCustom?: boolean;
 }
 
 export const EXERCISE_CATALOG: ExerciseDef[] = [
@@ -81,7 +84,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
 
 const ACCENT_RE = /[̀-ͯ]/g;
 
-function fold(value: string) {
+export function foldExerciseName(value: string) {
   return value
     .toLowerCase()
     .normalize("NFD")
@@ -92,9 +95,35 @@ function fold(value: string) {
     .trim();
 }
 
+const fold = foldExerciseName;
+
+/** Stable id for a user-minted movement: "One-Arm Clean Squat Thruster" → "one-arm-clean-squat-thruster". */
+export function slugifyExerciseName(name: string): string {
+  return fold(name).replace(/\s+/g, "-");
+}
+
 interface IndexEntry {
   key: string;
   def: ExerciseDef;
+}
+
+// User-minted movements (user_exercises rows) merged into the same index.
+// The list is set by lib/user-exercises.ts on the server (DB-backed) or by
+// tests directly — this module stays client-safe (no Prisma import).
+let customExercises: ExerciseDef[] = [];
+
+export function setCustomExercises(defs: ExerciseDef[]) {
+  customExercises = defs.map((d) => ({ ...d, isCustom: true }));
+  index = null; // rebuild lazily with the customs merged in
+}
+
+export function getCustomExercises(): ExerciseDef[] {
+  return customExercises;
+}
+
+/** Full vocabulary — catalog plus user-minted movements (for pickers). */
+export function allExercises(): ExerciseDef[] {
+  return [...EXERCISE_CATALOG, ...customExercises];
 }
 
 let index: IndexEntry[] | null = null;
@@ -102,17 +131,33 @@ let index: IndexEntry[] | null = null;
 function buildIndex(): IndexEntry[] {
   if (index) return index;
   const entries: IndexEntry[] = [];
-  for (const def of EXERCISE_CATALOG) {
+  for (const def of [...EXERCISE_CATALOG, ...customExercises]) {
     entries.push({ key: fold(def.name), def });
     entries.push({ key: def.id, def });
     entries.push({ key: fold(def.id), def });
     for (const alias of def.aliases) entries.push({ key: fold(alias), def });
   }
   // Longest keys first so "clean and press" wins over "clean" on substring
-  // passes.
+  // passes — this also lets a custom "one-arm clean squat thruster" beat the
+  // catalog's "clean" without any special-casing.
   entries.sort((a, b) => b.key.length - a.key.length);
   index = entries;
   return entries;
+}
+
+/**
+ * Exact-fold lookup only — no substring pass. This is the mint gate: a new
+ * movement is "unknown" when nothing matches its exact folded name, even if
+ * the fuzzy normalizer would swallow it into a catalog entry ("one-arm clean
+ * squat thruster" must NOT count as known just because "clean" is).
+ */
+export function findExerciseByExactName(raw: string): ExerciseDef | null {
+  const folded = fold(raw);
+  if (!folded) return null;
+  for (const entry of buildIndex()) {
+    if (entry.key === folded) return entry.def;
+  }
+  return null;
 }
 
 /**
@@ -136,5 +181,9 @@ export function normalizeExerciseName(raw: string): ExerciseDef | null {
 }
 
 export function getExerciseById(id: string): ExerciseDef | null {
-  return EXERCISE_CATALOG.find((e) => e.id === id) ?? null;
+  return (
+    EXERCISE_CATALOG.find((e) => e.id === id) ??
+    customExercises.find((e) => e.id === id) ??
+    null
+  );
 }

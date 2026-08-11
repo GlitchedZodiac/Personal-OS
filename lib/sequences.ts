@@ -22,6 +22,7 @@ export interface SequenceInput {
   kind?: unknown;
   restSecondsDefault?: unknown;
   durationMinutes?: unknown;
+  rounds?: unknown;
   steps?: unknown;
 }
 
@@ -37,6 +38,7 @@ export function validateSequence(input: SequenceInput):
       kind: SequenceKind;
       restSecondsDefault: number | null;
       durationMinutes: number | null;
+      rounds: number | null;
       steps: SequenceStep[];
     }
   | { ok: false; error: string } {
@@ -97,12 +99,19 @@ export function validateSequence(input: SequenceInput):
   if (duration && duration > 240) {
     return { ok: false, error: "Duration too long (max 240 min)" };
   }
+  // Circuits are round-counted ("repeat 3 times") — the watch runs exactly
+  // this many rounds and falls back to 3 when null.
+  const rounds = toPositive(input.rounds);
+  if (rounds && rounds > 50) {
+    return { ok: false, error: "Too many rounds (max 50)" };
+  }
   return {
     ok: true,
     name,
     kind,
     restSecondsDefault: rest ?? null,
     durationMinutes: duration ? Math.round(duration) : null,
+    rounds: rounds ? Math.round(rounds) : null,
     steps,
   };
 }

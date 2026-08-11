@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateSequence } from "@/lib/sequences";
+import { ensureUserExercisesLoaded, mintUnknownExercises } from "@/lib/user-exercises";
 
 // Routines CRUD (web, cookie-gated by proxy.ts). The watch reads the same
 // rows through /api/mobile/sequences per docs/watch-contract.md.
+// Steps may carry a `category` on unknown movements (the AI routine builder
+// sets it) — those are minted into user_exercises before validation, so the
+// saved steps always reference resolvable ids.
 
 export async function GET() {
   try {
@@ -21,6 +25,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    await ensureUserExercisesLoaded();
+    const { minted } = await mintUnknownExercises(body.steps);
     const parsed = validateSequence(body);
     if (!parsed.ok) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
@@ -31,10 +37,11 @@ export async function POST(request: NextRequest) {
         kind: parsed.kind,
         restSecondsDefault: parsed.restSecondsDefault,
         durationMinutes: parsed.durationMinutes,
+        rounds: parsed.rounds,
         steps: parsed.steps as object[],
       },
     });
-    return NextResponse.json(sequence);
+    return NextResponse.json({ ...sequence, mintedExercises: minted });
   } catch (error) {
     console.error("Sequence create error:", error);
     return NextResponse.json({ error: "Failed to create routine" }, { status: 500 });
@@ -55,6 +62,8 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(sequence);
     }
 
+    await ensureUserExercisesLoaded();
+    const { minted } = await mintUnknownExercises(body.steps);
     const parsed = validateSequence(body);
     if (!parsed.ok) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
@@ -66,10 +75,11 @@ export async function PATCH(request: NextRequest) {
         kind: parsed.kind,
         restSecondsDefault: parsed.restSecondsDefault,
         durationMinutes: parsed.durationMinutes,
+        rounds: parsed.rounds,
         steps: parsed.steps as object[],
       },
     });
-    return NextResponse.json(sequence);
+    return NextResponse.json({ ...sequence, mintedExercises: minted });
   } catch (error) {
     console.error("Sequence update error:", error);
     return NextResponse.json({ error: "Failed to update routine" }, { status: 500 });

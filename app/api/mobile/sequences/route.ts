@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
         kind: true,
         restSecondsDefault: true,
         durationMinutes: true,
+        rounds: true,
         steps: true,
         updatedAt: true,
       },

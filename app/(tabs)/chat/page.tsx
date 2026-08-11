@@ -52,6 +52,9 @@ const KIND_TITLES: Record<string, string> = {
   edit_food: "PROPOSED EDIT",
   delete: "PROPOSED DELETE",
   routine: "PROPOSED ROUTINE",
+  routine_update: "ROUTINE UPDATE",
+  exercise: "NEW MOVEMENT",
+  edit_workout: "WORKOUT FIX",
 };
 
 function fmtTime(iso?: string) {
@@ -393,17 +396,48 @@ export default function ChatPage() {
         );
         if (!res.ok) throw new Error("Edit failed");
         followUp = "Updated.";
-      } else if (kind === "routine") {
+      } else if (kind === "routine" || kind === "routine_update") {
         const { message: _m, ...fields } = data;
         void _m;
         const res = await fetch("/api/health/sequences", {
+          method: kind === "routine_update" ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(fields),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Save failed");
+        const minted: string[] = Array.isArray(body.mintedExercises)
+          ? body.mintedExercises
+          : [];
+        followUp =
+          kind === "routine_update"
+            ? `${String(data.name ?? "Routine")} updated — the watch picks it up on next open.`
+            : `${String(data.name ?? "Routine")} is in Routines — and on the watch list.`;
+        if (minted.length > 0) {
+          followUp += ` New movement${minted.length > 1 ? "s" : ""} minted: ${minted.join(", ")}.`;
+        }
+      } else if (kind === "exercise") {
+        const { message: _m, ...fields } = data;
+        void _m;
+        const res = await fetch("/api/health/exercises", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(fields),
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || "Save failed");
-        followUp = `${String(data.name ?? "Routine")} is in Routines — and on the watch list.`;
+        followUp = body.created
+          ? `${String(body.exercise?.name ?? data.name ?? "Movement")} added — voice, PRs, and routines all know it now.`
+          : `Already knew that one — it resolves to ${String(body.exercise?.name ?? "an existing movement")}.`;
+      } else if (kind === "edit_workout") {
+        const res = await fetch("/api/health/workouts/entry", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: data.id, match: data.match, set: data.set }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Edit failed");
+        followUp = "Fixed — PRs recalculated.";
       } else if (kind === "delete") {
         const entity = String(data.entity ?? "food");
         const endpoint =
@@ -521,7 +555,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          {kind === "routine" && (
+          {(kind === "routine" || kind === "routine_update") && (
             <div className="py-2">
               <p
                 className="text-[15px] font-bold text-foreground"
@@ -532,10 +566,11 @@ export default function ChatPage() {
               <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#8C2F51]">
                 {String(data.kind ?? "")}
                 {data.durationMinutes ? ` · ${data.durationMinutes} min` : ""}
+                {data.rounds ? ` · ${data.rounds} rounds` : ""}
                 {data.restSecondsDefault ? ` · rest ${data.restSecondsDefault}s` : ""}
               </p>
               <div className="mt-2">
-                {((data.steps as { exerciseName: string; sets?: number; reps?: number; seconds?: number; weightKg?: number }[]) ?? []).map(
+                {((data.steps as { exerciseName: string; sets?: number; reps?: number; seconds?: number; weightKg?: number; restSeconds?: number }[]) ?? []).map(
                   (s, i) => (
                     <div
                       key={i}
@@ -554,6 +589,7 @@ export default function ChatPage() {
                                 ? `${s.seconds}s`
                                 : null,
                           s.weightKg ? `${s.weightKg} kg` : null,
+                          s.restSeconds ? `rest ${s.restSeconds}s` : null,
                         ]
                           .filter(Boolean)
                           .join(" · ")}
@@ -565,7 +601,38 @@ export default function ChatPage() {
             </div>
           )}
 
-          {kind !== "food" && kind !== "routine" && (
+          {kind === "exercise" && (
+            <div className="py-2">
+              <p
+                className="text-[15px] font-bold text-foreground"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {String(data.name ?? "Movement")}
+              </p>
+              <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#8C2F51]">
+                {String(data.category ?? "other")}
+              </p>
+              {Array.isArray(data.aliases) && data.aliases.length > 0 && (
+                <p className="mt-1.5 text-[12px] text-secondary-foreground">
+                  also answers to {(data.aliases as string[]).join(", ")}
+                </p>
+              )}
+            </div>
+          )}
+
+          {kind === "edit_workout" && (
+            <div className="py-3 text-[13.5px] leading-relaxed text-foreground">
+              <span className="font-semibold">{String(data.label ?? "Entry")}</span>
+              {" → "}
+              {Object.entries((data.set as object) ?? {})
+                .map(([k, v]) =>
+                  k === "weightKg" ? `${v} kg` : k === "seconds" ? `${v}s` : `${k} ${v}`
+                )
+                .join(" · ")}
+            </div>
+          )}
+
+          {!["food", "routine", "routine_update", "exercise", "edit_workout"].includes(kind) && (
             <div className="py-3 text-[13.5px] leading-relaxed text-foreground">
               {kind === "delete" ? (
                 <>Delete <span className="font-semibold">{String(data.label ?? "this entry")}</span>?</>

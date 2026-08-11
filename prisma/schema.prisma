@@ -1038,12 +1038,25 @@ model Sequence {
   kind               String // straight | emom | tabata | circuit
   restSecondsDefault Int?
   durationMinutes    Int? // EMOM/circuit total time ("20-minute EMOM")
+  rounds             Int? // circuit round count ("repeat 3 times"); watch falls back to 3 when null
   steps              Json // ordered [{ exercise, sets?, reps?, seconds?, weightKg?, restSeconds? }]
   isArchived         Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@map("sequences")
+}
+
+model UserExercise {
+  id        String   @id @default(uuid())
+  slug      String   @unique // canonical id (slugified name) — joins the catalog id namespace
+  name      String
+  category  String // kettlebell | barbell | dumbbell | bodyweight | machine | cardio | other
+  aliases   Json // string[] — extra names that resolve to this movement
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_exercises")
 }
 
 model HabitCheck {
