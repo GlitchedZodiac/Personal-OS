@@ -119,12 +119,12 @@
             </div>
           </div>
 
-          <div style="display:flex; justify-content:space-between; align-items:center; background:#FFFFFF; border-radius:16px; padding:14px 16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); animation:rise .5s ease both .3s;">
+          <div onClick="{{ repOpen }}" style="display:flex; justify-content:space-between; align-items:center; background:#FFFFFF; border-radius:16px; padding:14px 16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); animation:rise .5s ease both .3s; cursor:pointer;" style-hover="background:#FAF9FA;">
             <div>
-              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227;">Week 32 · Sunday Report</div>
-              <div style="font-size:11.5px; color:#66646C; margin-top:2px;">writes itself tomorrow night</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227;">Sunday Report</div>
+              <div style="font-size:11.5px; color:#66646C; margin-top:2px;">Week 32 writes tomorrow night · Week 31 ready</div>
             </div>
-            <button style="font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; border:none; border-radius:8px; padding:8px 14px; cursor:pointer;" style-hover="background:#F0D3E0;">PDF</button>
+            <button style="font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; border:none; border-radius:8px; padding:8px 14px; cursor:pointer;" style-hover="background:#F0D3E0;">Open →</button>
           </div>
         </div>
 
@@ -209,12 +209,19 @@
         <div style="width:440px; height:100%; overflow-y:auto; flex:none; box-sizing:border-box; padding:74px 22px 200px;">
           <div style="display:flex; justify-content:space-between; align-items:flex-end;">
             <div>
-              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">SAT · AUGUST 8</div>
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">{{ foodDateLab }}</div>
               <div style="font-family:'Familjen Grotesk',sans-serif; font-size:30px; font-weight:700; color:#232227; letter-spacing:-0.02em; margin-top:2px;">Food</div>
             </div>
-            <div style="font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 12px; border-radius:99px; font-variant-numeric:tabular-nums;">{{ foodTotal }} kcal</div>
+            <div style="font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 12px; border-radius:99px; font-variant-numeric:tabular-nums;">{{ foodKcalChip }} kcal</div>
           </div>
-          <div style="background:#FFFFFF; border-radius:18px; margin-top:18px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden;">
+          <div style="display:flex; align-items:center; gap:10px; margin-top:14px;">
+            <div onClick="{{ fdPrev }}" style="width:32px; height:32px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none; opacity: {{ fdPrevOp }};" style-hover="background:#FAF9FA;"><span style="font-size:16px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#232227;">{{ fdStepLab }}</div>
+            <div onClick="{{ fdNext }}" style="width:32px; height:32px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none; opacity: {{ fdNextOp }};" style-hover="background:#FAF9FA;"><span style="font-size:16px; color:#232227; line-height:1; margin-top:-2px;">›</span></div>
+            <div onClick="{{ fhOpen }}" style="display:flex; align-items:center; gap:6px; font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:8px 13px; border-radius:99px; cursor:pointer; flex:none;" style-hover="background:#F0D3E0;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C2F51" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg>History</div>
+          </div>
+          <sc-if value="{{ foodToday }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#FFFFFF; border-radius:18px; margin-top:14px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden;">
             <div style="display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid #F2F1F2;">
               <div style="display:flex; align-items:center; gap:12px;"><div style="width:42px; height:42px; border-radius:10px; background:#E8D9C8; display:flex; align-items:center; justify-content:center; font-size:9px; letter-spacing:0.08em; color:#8A7355;">7:05</div><div><div style="font-size:13.5px; font-weight:600; color:#232227;">Eggs &amp; sourdough</div><div style="font-size:11px; color:#96949B; margin-top:2px;">28P · 44C · 22F</div></div></div>
               <span style="font-size:13.5px; font-weight:600; color:#232227; font-variant-numeric:tabular-nums;">520</span>
@@ -260,6 +267,34 @@
               <div onClick="{{ togMg }}" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><span style="font-size:13px; color:#454349;">Magnesium · evening</span><span style="font-size:11.5px; font-weight:600; color: {{ supMc }};">{{ supMt }}</span></div>
             </div>
           </div>
+          </sc-if>
+          <sc-if value="{{ foodPast }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFFFFF; border-radius:18px; padding:18px; margin-top:14px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+              <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">DAY TOTAL</div>
+                <div style="font-size:11px; font-weight:600; color: {{ pdDeltaCol }};">{{ pdDelta }}</div>
+              </div>
+              <div style="display:flex; align-items:baseline; gap:8px; margin-top:10px;">
+                <span style="font-family:'Familjen Grotesk',sans-serif; font-size:40px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums; line-height:1;">{{ pdKcal }}</span>
+                <span style="font-size:12px; color:#66646C;">kcal · goal 2,400</span>
+              </div>
+              <div style="display:flex; gap:16px; margin-top:12px; font-size:12px; color:#66646C; font-variant-numeric:tabular-nums;">
+                <span><span style="font-weight:700; color:#232227;">{{ pdP }}</span> protein</span>
+                <span><span style="font-weight:700; color:#232227;">{{ pdC }}</span> carbs</span>
+                <span><span style="font-weight:700; color:#232227;">{{ pdF }}</span> fat</span>
+              </div>
+            </div>
+            <div style="background:#FFFFFF; border-radius:18px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden;">
+              <div style="padding:14px 16px 6px; font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">MEALS</div>
+              <sc-for list="{{ pdMeals }}" as="m" hint-placeholder-count="4">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:13px 16px; border-top:1px solid #F2F1F2;">
+                  <div style="display:flex; align-items:center; gap:12px;"><div style="width:42px; height:42px; border-radius:10px; background:#F2F1F2; display:flex; align-items:center; justify-content:center; font-size:9px; letter-spacing:0.08em; color:#66646C;">{{ m.t }}</div><div><div style="font-size:13.5px; font-weight:600; color:#232227;">{{ m.n }}</div><div style="font-size:11px; color:#96949B; margin-top:2px;">{{ m.m }}</div></div></div>
+                  <span style="font-size:13.5px; font-weight:600; color:#232227; font-variant-numeric:tabular-nums;">{{ m.k }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="text-align:center; font-size:11px; color:#96949B; margin-top:14px;">Past days are closed. <span onClick="{{ fhOpen }}" style="color:#8C2F51; font-weight:600; cursor:pointer;">Open full history →</span></div>
+          </sc-if>
         </div>
 
         <div style="width:440px; height:100%; overflow-y:auto; flex:none; box-sizing:border-box; padding:74px 22px 200px;">
@@ -345,7 +380,7 @@
                 <button onClick="{{ setMV }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:5px 12px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; background: {{ mvBg }}; color: {{ mvCol }};">Volume</button>
                 <button onClick="{{ setMK }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:5px 12px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; background: {{ mkBg }}; color: {{ mkCol }};">Calories</button>
               </div>
-              <div style="font-size:10.5px; font-weight:600; color:#8C2F51;">{{ dTxt }}</div>
+              <div onClick="{{ bcCur }}" style="display:flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; color:#8C2F51; cursor:pointer; background:#F6E3EB; padding:5px 10px; border-radius:99px;" style-hover="background:#F0D3E0;">{{ dTxt }} ›</div>
             </div>
             <div style="position:relative; margin-top:12px;">
               <svg width="360" height="150" viewBox="0 0 360 150">
@@ -361,6 +396,33 @@
               <div style="position:absolute; pointer-events:none; background:#232227; color:#FFFFFF; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; padding:5px 9px; border-radius:7px; white-space:nowrap; transition:left .15s ease, top .15s ease; left: {{ ttL }}; top: {{ ttT }};">{{ ttTxt }}</div>
               <div style="display:flex; justify-content:space-between; font-size:10px; color:#96949B; margin-top:2px;"><span>MAY 18</span><span>touch &amp; drag</span><span>AUG 8</span></div>
             </div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:18px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">BODY COMPOSITION · SMART SCALE</div>
+              <div style="font-size:11px; color:#96949B;">12 weeks</div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-top:14px;">
+              <div onClick="{{ bcFat }}" style="cursor:pointer;" style-hover="opacity:0.75;">
+                <div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B;">BODY FAT ›</div>
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums; margin-top:3px;">18.4<span style="font-size:11px; color:#66646C;">%</span></div>
+                <div style="font-size:10.5px; font-weight:600; color:#5E9B72;">−1.4</div>
+                <svg width="100%" height="26" viewBox="0 0 100 26" preserveAspectRatio="none" style="margin-top:5px;"><polyline points="0,5 10,6 20,8 30,7 40,10 50,12 60,11 70,14 80,16 90,18 100,20" fill="none" stroke="#A63D63" stroke-width="2" stroke-linecap="round"></polyline></svg>
+              </div>
+              <div onClick="{{ bcMus }}" style="cursor:pointer;" style-hover="opacity:0.75;">
+                <div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B;">MUSCLE ›</div>
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums; margin-top:3px;">38.2<span style="font-size:11px; color:#66646C;"> kg</span></div>
+                <div style="font-size:10.5px; font-weight:600; color:#5E9B72;">+0.9</div>
+                <svg width="100%" height="26" viewBox="0 0 100 26" preserveAspectRatio="none" style="margin-top:5px;"><polyline points="0,20 10,19 20,18 30,18 40,16 50,15 60,13 70,12 80,10 90,8 100,7" fill="none" stroke="#232227" stroke-width="2" stroke-linecap="round"></polyline></svg>
+              </div>
+              <div onClick="{{ bcBmr }}" style="cursor:pointer;" style-hover="opacity:0.75;">
+                <div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B;">BMR ›</div>
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums; margin-top:3px;">1,846</div>
+                <div style="font-size:10.5px; font-weight:600; color:#5E9B72;">+38 kcal</div>
+                <svg width="100%" height="26" viewBox="0 0 100 26" preserveAspectRatio="none" style="margin-top:5px;"><polyline points="0,17 10,17 20,16 30,15 40,15 50,13 60,12 70,11 80,10 90,9 100,8" fill="none" stroke="#A9A7AE" stroke-width="2" stroke-linecap="round"></polyline></svg>
+              </div>
+            </div>
+            <div style="font-size:11px; color:#96949B; margin-top:12px; line-height:1.5;">Tap a metric to drill in · syncs each weigh-in from your smart scale.</div>
           </div>
           <div style="background:#FFFFFF; border-radius:18px; padding:18px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -526,6 +588,8 @@
             <div onClick="{{ filAll }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 14px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ fAllBg }}; color: {{ fAllCol }};">All</div>
             <div onClick="{{ filGym }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 14px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ fGymBg }}; color: {{ fGymCol }};">Gym</div>
             <div onClick="{{ filOut }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 14px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ fOutBg }}; color: {{ fOutCol }};">Outdoor</div>
+            <div style="flex:1;"></div>
+            <div onClick="{{ calOpenAct }}" style="display:flex; align-items:center; gap:6px; font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:99px; border:1px solid #E4E2E6; background:#FFFFFF; color:#8C2F51; cursor:pointer;" style-hover="background:#FAF9FA;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C2F51" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg>{{ actRangeLab }}</div>
           </div>
           <div style="display:grid; gap:10px; margin-top:14px;">
             <sc-for list="{{ actItems }}" as="a" hint-placeholder-count="4">
@@ -644,6 +708,243 @@
               </div>
             </div>
             <div style="text-align:center; font-size:11px; color:#96949B; margin-top:16px;">Recorded on Apple Watch · synced to Pitaya</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ bcOn }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Body composition detail" style="position:absolute; inset:0; z-index:57; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 60px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ bcClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">{{ bcKick }}</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">{{ bcName }}</div>
+            </div>
+            <div style="font-size:12px; font-weight:600; padding:5px 12px; border-radius:99px; font-variant-numeric:tabular-nums; background:#F6E3EB; color: {{ bcDeltaCol }};">{{ bcDelta }}</div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:18px; margin-top:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <div style="display:flex; align-items:baseline; gap:6px;">
+                <span style="font-family:'Familjen Grotesk',sans-serif; font-size:38px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums; line-height:1;">{{ bcVal }}</span>
+                <span style="font-size:13px; color:#66646C;">{{ bcUnit }}</span>
+              </div>
+              <div style="font-size:11px; font-weight:600; color:#66646C; font-variant-numeric:tabular-nums;">{{ bcLoLab }} – {{ bcHiLab }}</div>
+            </div>
+            <div style="display:flex; gap:6px; margin-top:12px;">
+              <button onClick="{{ bcR4 }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:5px 12px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ bc4Bg }}; color: {{ bc4Col }};">4 wk</button>
+              <button onClick="{{ bcR8 }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:5px 12px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ bc8Bg }}; color: {{ bc8Col }};">8 wk</button>
+              <button onClick="{{ bcR12 }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:5px 12px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ bc12Bg }}; color: {{ bc12Col }};">12 wk</button>
+            </div>
+            <div style="position:relative; margin-top:12px;">
+              <svg width="360" height="150" viewBox="0 0 360 150">
+                <line x1="0" y1="30" x2="360" y2="30" stroke="#F2F1F2" stroke-width="1"></line>
+                <line x1="0" y1="75" x2="360" y2="75" stroke="#F2F1F2" stroke-width="1"></line>
+                <line x1="0" y1="120" x2="360" y2="120" stroke="#F2F1F2" stroke-width="1"></line>
+                <polygon points="{{ bcArea }}" fill="#F6E3EB"></polygon>
+                <polyline points="{{ bcLine }}" fill="none" stroke="#A63D63" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+                <sc-for list="{{ bcDots }}" as="d" hint-placeholder-count="0"><circle cx="{{ d.x }}" cy="{{ d.y }}" r="3" fill="#FFFFFF" stroke="#A63D63" stroke-width="1.8"></circle></sc-for>
+                <circle cx="{{ bcTX }}" cy="{{ bcTY }}" r="5.5" fill="#A63D63" stroke="#FFFFFF" stroke-width="2" style="transition:all .3s ease;"></circle>
+              </svg>
+              <div onPointerDown="{{ bcScrubDown }}" onPointerMove="{{ bcScrubMove }}" style="position:absolute; top:0; left:0; width:360px; height:150px; touch-action:none; cursor:ew-resize;"></div>
+              <div style="position:absolute; pointer-events:none; background:#232227; color:#FFFFFF; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; padding:5px 9px; border-radius:7px; white-space:nowrap; transition:left .15s ease, top .15s ease; left: {{ bcTtL }}; top: {{ bcTtT }};">{{ bcTtTxt }}</div>
+              <div style="display:flex; justify-content:space-between; font-size:10px; color:#96949B; margin-top:2px;"><span>{{ bcStartLab }}</span><span>touch &amp; drag</span><span>AUG 8</span></div>
+            </div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden;">
+            <div style="padding:14px 16px 6px; font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">{{ bcListKick }}</div>
+            <sc-for list="{{ bcRows }}" as="r" hint-placeholder-count="6">
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-top:1px solid #F2F1F2;">
+                <span style="font-size:13px; font-weight:600; color:#232227;">{{ r.lab }}</span>
+                <span style="display:flex; align-items:baseline; gap:10px;"><span style="font-size:13px; font-weight:600; color:#232227; font-variant-numeric:tabular-nums;">{{ r.v }}</span><span style="font-size:10.5px; font-weight:600; width:44px; text-align:right; font-variant-numeric:tabular-nums; color: {{ r.dc }};">{{ r.d }}</span></span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background:#F6E3EB; border-radius:18px; padding:18px; margin-top:12px;">
+            <div style="display:flex; align-items:center; gap:8px; font-size:10.5px; letter-spacing:0.18em; font-weight:700; color:#8C2F51;"><svg width="10" height="10" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63"></rect></svg> WHAT IT MEANS</div>
+            <div style="font-size:13.5px; color:#232227; line-height:1.65; margin-top:10px;">{{ bcNote }}</div>
+          </div>
+          <div style="text-align:center; font-size:11px; color:#96949B; margin-top:16px;">{{ bcFoot }}</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ fhOn }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Food History" style="position:absolute; inset:0; z-index:57; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 60px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ fhClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">FOOD · HISTORY</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">History</div>
+            </div>
+            <div style="font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 12px; border-radius:99px; font-variant-numeric:tabular-nums;">{{ fhAvg }}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:14px;">
+            <div onClick="{{ calOpenFood }}" style="display:flex; align-items:center; gap:6px; font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:7px 13px; border-radius:99px; border:1px solid #E4E2E6; background:#FFFFFF; color:#8C2F51; cursor:pointer;" style-hover="background:#FAF9FA;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C2F51" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg>{{ fhRangeLab }} ▾</div>
+            <span style="font-size:11px; color:#96949B;">daily totals vs goal 2,400</span>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:16px; margin-top:14px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">CALORIES · TREND</div>
+              <div style="display:flex; align-items:center; gap:5px; font-size:10.5px; color:#96949B;"><span style="width:14px; border-top:1.5px dashed #96949B;"></span>goal</div>
+            </div>
+            <svg width="100%" height="140" viewBox="0 0 360 140" preserveAspectRatio="none" style="margin-top:10px;">
+              <line x1="0" y1="35" x2="360" y2="35" stroke="#F2F1F2" stroke-width="1"></line>
+              <line x1="0" y1="70" x2="360" y2="70" stroke="#F2F1F2" stroke-width="1"></line>
+              <line x1="0" y1="105" x2="360" y2="105" stroke="#F2F1F2" stroke-width="1"></line>
+              <line x1="0" y1="{{ fhGoalY }}" x2="360" y2="{{ fhGoalY }}" stroke="#96949B" stroke-width="1.5" stroke-dasharray="5 5"></line>
+              <polyline points="{{ fhLine }}" fill="none" stroke="#A63D63" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+              <sc-for list="{{ fhDots }}" as="d" hint-placeholder-count="0"><circle cx="{{ d.x }}" cy="{{ d.y }}" r="3.2" fill="#FFFFFF" stroke="#A63D63" stroke-width="1.8"></circle></sc-for>
+            </svg>
+            <div style="display:flex; justify-content:space-between; font-size:9.5px; color:#96949B; margin-top:4px;"><span>{{ fhStartLab }}</span><span>GOAL 2,400</span><span>{{ fhEndLab }}</span></div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden;">
+            <div style="padding:14px 16px 6px; font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">BY DAY</div>
+            <sc-for list="{{ fhRows }}" as="r" hint-placeholder-count="6">
+              <div onClick="{{ r.open }}" style="padding:12px 16px; border-top:1px solid #F2F1F2; cursor:pointer;" style-hover="background:#FAF9FA;">
+                <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                  <span style="font-size:13px; font-weight:600; color:#232227;">{{ r.lab }}</span>
+                  <span style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:13px; font-weight:600; color:#232227; font-variant-numeric:tabular-nums;">{{ r.kcal }}</span><span style="font-size:10.5px; font-weight:600; width:70px; text-align:right; color: {{ r.dc }};">{{ r.d }}</span></span>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px; margin-top:7px;">
+                  <div style="flex:1; height:6px; border-radius:99px; background:#F2F1F2; position:relative;">
+                    <div style="position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:#DCA8BE; width: {{ r.w }};"></div>
+                    <div style="position:absolute; left:86%; top:-2px; bottom:-2px; width:1.5px; background:#96949B;"></div>
+                  </div>
+                  <span style="font-size:10.5px; color:#96949B; width:110px; text-align:right;">{{ r.sub }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="text-align:center; font-size:11px; color:#96949B; margin-top:16px;">Tap a day to open it in Food</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ repOn }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Sunday Report" style="position:absolute; inset:0; z-index:58; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 60px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ repClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">WEEK 31 · JUL 27 – AUG 2</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">Sunday Report</div>
+            </div>
+            <button style="font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; border:none; border-radius:8px; padding:8px 14px; cursor:pointer; flex:none;" style-hover="background:#F0D3E0;">PDF</button>
+          </div>
+          <div style="background:#A63D63; border-radius:18px; padding:18px; margin-top:16px;">
+            <div style="font-size:10.5px; letter-spacing:0.18em; font-weight:700; color:#F6E3EB;">WRITTEN SUN AUG 2 · 11:04 PM</div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:22px; font-weight:700; color:#FFFFFF; margin-top:6px; line-height:1.25;">On plan. Deficit held, volume up, weight down.</div>
+            <div style="display:flex; gap:22px; margin-top:14px;">
+              <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:17px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums;">−1,022</div><div style="font-size:9px; letter-spacing:0.1em; font-weight:600; color:#F0D3E0; margin-top:2px;">KCAL DEFICIT</div></div>
+              <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:17px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums;">5</div><div style="font-size:9px; letter-spacing:0.1em; font-weight:600; color:#F0D3E0; margin-top:2px;">SESSIONS</div></div>
+              <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:17px; font-weight:700; color:#FFFFFF; font-variant-numeric:tabular-nums;">−0.3 kg</div><div style="font-size:9px; letter-spacing:0.1em; font-weight:600; color:#F0D3E0; margin-top:2px;">WEIGHT</div></div>
+            </div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">ENERGY · IN VS BURNED</div>
+              <div style="font-size:11px; font-weight:600; color:#5E9B72;">−146 / day</div>
+            </div>
+            <div style="display:flex; gap:22px; margin-top:12px;">
+              <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">2,326</div><div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B; margin-top:2px;">AVG IN</div></div>
+              <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">2,472</div><div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B; margin-top:2px;">AVG BURNED</div></div>
+            </div>
+            <div style="display:flex; align-items:flex-end; justify-content:space-between; height:56px; margin-top:14px;">
+              <div style="display:flex; align-items:flex-end; gap:3px; height:100%;"><div style="width:9px; height:53%; background:#A63D63; border-radius:3px 3px 0 0;"></div><div style="width:9px; height:69%; background:#232227; border-radius:3px 3px 0 0;"></div></div>
+              <div style="display:flex; align-items:flex-end; gap:3px; height:100%;"><div style="width:9px; height:68%; background:#A63D63; border-radius:3px 3px 0 0;"></div><div style="width:9px; height:90%; background:#232227; border-radius:3px 3px 0 0;"></div></div>
+              <div style="display:flex; align-items:flex-end; gap:3px; height:100%;"><div style="width:9px; height:43%; background:#A63D63; border-radius:3px 3px 0 0;"></div><div style="width:9px; height:64%; background:#232227; border-radius:3px 3px 0 0;"></div></div>
+              <div style="display:flex; align-items:flex-end; gap:3px; height:100%;"><div style="width:9px; height:80%; background:#A63D63; border-radius:3px 3px 0 0;"></div><div style="width:9px; height:96%; background:#232227; border-radius:3px 3px 0 0;"></div></div>
+              <div style="display:flex; align-items:flex-end; gap:3px; height:100%;"><div style="width:9px; height:56%; background:#A63D63; border-radius:3px 3px 0 0;"></div><div style="width:9px; height:71%; background:#232227; border-radius:3px 3px 0 0;"></div></div>
+              <div style="display:flex; align-items:flex-end; gap:3px; height:100%;"><div style="width:9px; height:61%; background:#A63D63; border-radius:3px 3px 0 0;"></div><div style="width:9px; height:80%; background:#232227; border-radius:3px 3px 0 0;"></div></div>
+              <div style="display:flex; align-items:flex-end; gap:3px; height:100%;"><div style="width:9px; height:48%; background:#A63D63; border-radius:3px 3px 0 0;"></div><div style="width:9px; height:52%; background:#232227; border-radius:3px 3px 0 0;"></div></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:9.5px; color:#96949B; margin-top:5px;"><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span></div>
+            <div style="display:flex; gap:14px; margin-top:10px; font-size:10px; color:#96949B;"><span><span style="display:inline-block; width:7px; height:7px; border-radius:2px; background:#A63D63; margin-right:4px;"></span>in</span><span><span style="display:inline-block; width:7px; height:7px; border-radius:2px; background:#232227; margin-right:4px;"></span>burned</span></div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">MACRO ADHERENCE</div>
+              <div style="font-size:11px; color:#96949B;">vs targets</div>
+            </div>
+            <div style="display:grid; gap:10px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="width:16px; font-size:11.5px; font-weight:700; color:#232227;">P</span>
+                <div style="flex:1; height:8px; border-radius:99px; background:#F2F1F2; overflow:hidden;"><div style="height:100%; border-radius:99px; background:#A63D63; width:94%;"></div></div>
+                <span style="font-size:11.5px; color:#66646C; font-variant-numeric:tabular-nums; width:38px; text-align:right;">94%</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="width:16px; font-size:11.5px; font-weight:700; color:#232227;">C</span>
+                <div style="flex:1; height:8px; border-radius:99px; background:#F2F1F2; overflow:hidden;"><div style="height:100%; border-radius:99px; background:#232227; width:86%;"></div></div>
+                <span style="font-size:11.5px; color:#66646C; font-variant-numeric:tabular-nums; width:38px; text-align:right;">86%</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="width:16px; font-size:11.5px; font-weight:700; color:#232227;">F</span>
+                <div style="flex:1; height:8px; border-radius:99px; background:#F2F1F2; overflow:hidden;"><div style="height:100%; border-radius:99px; background:#A9A7AE; width:91%;"></div></div>
+                <span style="font-size:11.5px; color:#66646C; font-variant-numeric:tabular-nums; width:38px; text-align:right;">91%</span>
+              </div>
+            </div>
+            <div style="font-size:11px; color:#96949B; margin-top:12px;">Protein ≥ 170 g on 6 of 7 days — best week this block.</div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">TRAINING</div>
+            <div style="display:flex; margin-top:12px;">
+              <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">5</div><div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B; margin-top:2px;">SESSIONS</div></div>
+              <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">11,860</div><div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B; margin-top:2px;">KG VOLUME</div></div>
+              <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">2:41</div><div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B; margin-top:2px;">ACTIVE</div></div>
+              <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">1,610</div><div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B; margin-top:2px;">KCAL</div></div>
+            </div>
+            <div style="display:flex; height:14px; border-radius:99px; overflow:hidden; gap:2px; margin-top:14px;">
+              <div style="width:12%; background:#E7E5E9;"></div><div style="width:29%; background:#DCA8BE;"></div><div style="width:37%; background:#C97D9C;"></div><div style="width:18%; background:#A63D63;"></div><div style="width:4%; background:#8C2F51;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:7px; font-size:10px; color:#96949B;"><span>Z1 12%</span><span>Z2 29%</span><span>Z3 37%</span><span>Z4 18%</span><span>Z5 4%</span></div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">WEIGHT · WEEK</div>
+              <div style="font-size:11px; font-weight:600; color:#5E9B72;">−0.3 kg</div>
+            </div>
+            <div style="display:flex; align-items:baseline; gap:8px; margin-top:8px;">
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#96949B; font-variant-numeric:tabular-nums;">84.1</span>
+              <span style="font-size:13px; color:#96949B;">→</span>
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">83.8 kg</span>
+            </div>
+            <svg width="100%" height="30" viewBox="0 0 360 30" preserveAspectRatio="none" style="margin-top:8px;"><polyline points="0,8 51,10 103,9 154,15 206,13 257,17 309,16 360,20" fill="none" stroke="#A63D63" stroke-width="2" stroke-linecap="round"></polyline></svg>
+          </div>
+          <div style="background:#F6E3EB; border-radius:18px; padding:18px; margin-top:12px;">
+            <div style="display:flex; align-items:center; gap:8px; font-size:10.5px; letter-spacing:0.18em; font-weight:700; color:#8C2F51;"><svg width="10" height="10" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63"></rect></svg> COACH</div>
+            <div style="font-size:13.5px; color:#232227; line-height:1.65; margin-top:10px;">Protein discipline carried the week: six of seven days over 170 g while calories stayed 146 under burn — that's why the scale gave back 0.3 kg without volume dropping. Thursday's EMOM pushed 40% of the session into Z4; if Saturday's heavy block feels flat, that's the bill. Next week: keep dinners as they are, add one Z2 walk, and take the 28 kg press to 5×4 before chasing 5×5 again.</div>
+          </div>
+          <div style="text-align:center; font-size:11px; color:#96949B; margin-top:16px;">Writes itself every Sunday night · export from Settings</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ calOn }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ calCancel }}" style="position:absolute; inset:0; z-index:76; background:rgba(27,21,24,0.45);"></div>
+        <div data-screen-label="Range picker" style="position:absolute; left:0; right:0; bottom:0; z-index:77; background:#FFFFFF; border-radius:28px 28px 0 0; padding:24px 24px 40px; animation:sheetUp .35s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="width:40px; height:4px; border-radius:99px; background:#E4E2E6; margin:0 auto 18px;"></div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227;">{{ calTitle }}</div>
+            <div style="font-size:11px; letter-spacing:0.12em; font-weight:600; color:#96949B;">AUGUST 2026</div>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:14px;">
+            <div style="flex:1; border:1.5px solid #E9CFDC; border-radius:12px; padding:9px 12px;"><div style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#8C2F51;">FROM</div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#232227; margin-top:2px;">{{ calFromLab }}</div></div>
+            <div style="flex:1; border:1.5px solid #E4E2E6; border-radius:12px; padding:9px 12px;"><div style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B;">TO</div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#232227; margin-top:2px;">{{ calToLab }}</div></div>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(7, 1fr); margin-top:16px;">
+            <div style="text-align:center; font-size:10px; font-weight:600; color:#96949B;">S</div>
+            <div style="text-align:center; font-size:10px; font-weight:600; color:#96949B;">M</div>
+            <div style="text-align:center; font-size:10px; font-weight:600; color:#96949B;">T</div>
+            <div style="text-align:center; font-size:10px; font-weight:600; color:#96949B;">W</div>
+            <div style="text-align:center; font-size:10px; font-weight:600; color:#96949B;">T</div>
+            <div style="text-align:center; font-size:10px; font-weight:600; color:#96949B;">F</div>
+            <div style="text-align:center; font-size:10px; font-weight:600; color:#96949B;">S</div>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(7, 1fr); row-gap:4px; margin-top:6px;">
+            <sc-for list="{{ calCells }}" as="c" hint-placeholder-count="35">
+              <div onClick="{{ c.tap }}" style="height:38px; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; cursor:pointer; border-radius: {{ c.r }}; background: {{ c.bg }}; color: {{ c.col }}; pointer-events: {{ c.pe }};">{{ c.d }}</div>
+            </sc-for>
+          </div>
+          <div style="font-size:10.5px; color:#96949B; margin-top:8px;">Tap a start day, then an end day. Days after today are locked.</div>
+          <div style="display:flex; gap:10px; margin-top:16px;">
+            <button onClick="{{ calCancel }}" style="flex:1; font-family:'Familjen Grotesk',sans-serif; font-size:13.5px; font-weight:600; color:#232227; background:transparent; border:1px solid #D9D7DC; border-radius:12px; padding:12px 0; cursor:pointer;" style-hover="background:#FAF9FA;">Cancel</button>
+            <button onClick="{{ calApply }}" style="flex:1.6; font-family:'Familjen Grotesk',sans-serif; font-size:13.5px; font-weight:600; color:#FFFFFF; background:#A63D63; border:none; border-radius:12px; padding:12px 0; cursor:pointer; opacity: {{ calApplyOp }};" style-hover="background:#8C2F51;">Apply range</button>
           </div>
         </div>
       </sc-if>
@@ -839,7 +1140,7 @@
 
     </div>
   </x-import>
-  <div style="margin-top:20px; font-size:12px; color:#8B8D90; text-align:center; line-height:1.6;">Pitaya · day build · any four taps unlock<br>mic → voice log → confirmation card in Chat · camera → photo log · Train → View activities → tap any workout</div>
+  <div style="margin-top:20px; font-size:12px; color:#8B8D90; text-align:center; line-height:1.6;">Pitaya · day build · any four taps unlock<br>mic → voice log → confirmation card in Chat · camera → photo log · Train → View activities → tap any workout<br>Food → ‹ › steps days · History opens the range view · Today → Sunday Report row opens Week 31</div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script>
@@ -847,7 +1148,7 @@ class Component extends DCLogic {
   state = { locked: true, pins: 0, idx: 0, e: 0, armed: false, flip: false,
     stage: 0, conf: 0, editing: false, it1: 320, it2: 220, src: 'via voice',
     mic: 0, cam: false, trail: false, paused: false, rec: 0, pair: 0, live: false, rout: false, setN: 3, tape: -1, tapeVals: null,
-    actList: false, actSel: -1, actFil: 'all',
+    actList: false, actSel: -1, actFil: 'all', foodDay: 0, fh: false, rep: false, calFor: null, calFrom: null, calTo: null, foodR: [1, 8], actR: [1, 8], bcSel: null, bcRng: 12, bcSi: 99,
     habC: true, habM: false, habS: true, habJ: false, supD: false, supMg: false,
     metric: 'w', si: 11, sel: 'Waist', cmp: 50 };
   componentWillUnmount() { clearInterval(this._iv); }
@@ -896,6 +1197,169 @@ class Component extends DCLogic {
     this.setState({ src });
     setTimeout(() => this.setState({ mic: 0, cam: false, stage: 1, conf: 1, idx: 1 }), src === 'via voice' ? 2300 : 1900);
   }
+  _fd() { return {
+    1: { k: 2310, p: 171, c: 226, f: 73, d: 'Stir-fry & rice' },
+    2: { k: 2566, p: 158, c: 274, f: 88, d: 'Pasta & meatballs' },
+    3: { k: 2215, p: 179, c: 196, f: 68, d: 'Turkey chili' },
+    4: { k: 2398, p: 174, c: 241, f: 76, d: 'Chicken curry & rice' },
+    5: { k: 2281, p: 182, c: 204, f: 71, d: 'Salmon plate' },
+    6: { k: 2512, p: 168, c: 262, f: 82, d: 'Steak & potatoes' },
+    7: { k: 2344, p: 176, c: 228, f: 74, d: 'Burrito bowl' }
+  }; }
+  _wd(d) { return ['Sat','Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d - 1]; }
+  _food(s, eaten, fmt) {
+    const FD = this._fd();
+    const dom = 8 - s.foodDay, today = s.foodDay === 0;
+    const out = {
+      foodToday: today, foodPast: !today,
+      foodDateLab: (this._wd(dom) + ' · August ' + dom).toUpperCase(),
+      foodKcalChip: today ? fmt(eaten) : fmt(FD[dom].k),
+      fdStepLab: today ? 'Today' : (s.foodDay === 1 ? 'Yesterday' : this._wd(dom) + ' · Aug ' + dom),
+      fdPrev: () => this.setState(st => ({ foodDay: Math.min(7, st.foodDay + 1) })),
+      fdNext: () => this.setState(st => ({ foodDay: Math.max(0, st.foodDay - 1) })),
+      fdPrevOp: s.foodDay === 7 ? '0.35' : '1', fdNextOp: today ? '0.35' : '1',
+      fhOpen: () => this.setState({ fh: true })
+    };
+    if (!today) {
+      const D = FD[dom], diff = D.k - 2400;
+      out.pdKcal = fmt(D.k); out.pdP = D.p + 'g'; out.pdC = D.c + 'g'; out.pdF = D.f + 'g';
+      out.pdDelta = diff <= 0 ? '−' + fmt(-diff) + ' under goal' : '+' + fmt(diff) + ' over goal';
+      out.pdDeltaCol = diff <= 0 ? '#5E9B72' : '#D9A23E';
+      out.pdMeals = [
+        { t: '7:05', n: 'Eggs & sourdough', m: '28P · 44C · 22F', k: '520' },
+        { t: '12:30', n: 'Chicken bowl', m: '52P · 58C · 18F', k: '680' },
+        { t: '3:30', n: 'Protein shake, double', m: '48P · 22C · 8F', k: '400' },
+        { t: '6:45', n: D.d, m: (D.p - 128) + 'P · ' + (D.c - 124) + 'C · ' + (D.f - 48) + 'F', k: fmt(D.k - 1600) }
+      ];
+    }
+    return out;
+  }
+  _hist(s, eaten, fmt) {
+    const FD = this._fd(), r = s.foodR;
+    const out = { fhOn: s.fh, fhClose: () => this.setState({ fh: false }), fhRangeLab: 'Aug ' + r[0] + ' – ' + r[1] };
+    const days = []; for (let d = r[0]; d <= Math.min(8, r[1]); d++) days.push(d);
+    const val = (d) => d === 8 ? eaten : FD[d].k;
+    const vals = days.map(val), n = days.length;
+    const lo = Math.min.apply(null, vals.concat(2400)) - 90, hi = Math.max.apply(null, vals.concat(2400)) + 90;
+    const X = (i) => n === 1 ? 180 : 14 + i * (332 / (n - 1));
+    const Y = (v) => 10 + (1 - (v - lo) / (hi - lo)) * 118;
+    out.fhLine = days.map((d, i) => X(i).toFixed(1) + ',' + Y(val(d)).toFixed(1)).join(' ');
+    out.fhDots = days.map((d, i) => ({ x: X(i).toFixed(1), y: Y(val(d)).toFixed(1) }));
+    out.fhGoalY = Y(2400).toFixed(1);
+    out.fhAvg = fmt(vals.reduce((a, b) => a + b, 0) / n) + ' avg';
+    out.fhStartLab = (this._wd(days[0]) + ' AUG ' + days[0]).toUpperCase();
+    out.fhEndLab = (this._wd(days[n - 1]) + ' AUG ' + days[n - 1]).toUpperCase();
+    out.fhRows = days.slice().reverse().map(d => {
+      const isT = d === 8, k = val(d), diff = k - 2400;
+      return {
+        lab: this._wd(d) + ' · Aug ' + d, kcal: fmt(k),
+        sub: isT ? 'today — still logging' : FD[d].p + 'P · ' + FD[d].c + 'C · ' + FD[d].f + 'F',
+        d: isT ? 'in progress' : (diff <= 0 ? '−' + fmt(-diff) : '+' + fmt(diff)),
+        dc: isT ? '#96949B' : (diff <= 0 ? '#5E9B72' : '#D9A23E'),
+        w: Math.min(100, k / 2400 * 86).toFixed(1) + '%',
+        open: () => this.setState({ foodDay: 8 - d, fh: false })
+      };
+    });
+    return out;
+  }
+  _cal(s) {
+    const fmtD = (d) => d ? 'Aug ' + d : '—';
+    const open = (f) => () => { const r = f === 'food' ? this.state.foodR : this.state.actR; this.setState({ calFor: f, calFrom: r[0], calTo: r[1] }); };
+    const out = { calOn: !!s.calFor, calOpenFood: open('food'), calOpenAct: open('act') };
+    if (!s.calFor) return out;
+    out.calTitle = s.calFor === 'food' ? 'Food history — range' : 'Activities — range';
+    out.calFromLab = fmtD(s.calFrom);
+    out.calToLab = s.calTo ? fmtD(s.calTo) : 'pick a day';
+    out.calCancel = () => this.setState({ calFor: null });
+    const ok = s.calFrom && s.calTo;
+    out.calApplyOp = ok ? '1' : '0.4';
+    out.calApply = () => { if (!ok) return; const r = [s.calFrom, s.calTo]; this.setState(s.calFor === 'food' ? { foodR: r, calFor: null } : { actR: r, calFor: null }); };
+    const cells = [];
+    for (let i = 0; i < 6; i++) cells.push({ d: '', bg: 'transparent', col: 'transparent', pe: 'none', r: '0', tap: () => {} });
+    for (let d = 1; d <= 31; d++) {
+      const future = d > 8, isF = d === s.calFrom, isT = d === s.calTo;
+      const inR = s.calTo && d > s.calFrom && d < s.calTo;
+      cells.push({
+        d: '' + d,
+        bg: (isF || isT) ? '#A63D63' : (inR ? '#F6E3EB' : 'transparent'),
+        col: future ? '#C9C7CD' : ((isF || isT) ? '#FFFFFF' : (inR ? '#8C2F51' : '#232227')),
+        pe: future ? 'none' : 'auto',
+        r: (isF && isT) || (isF && !s.calTo) ? '99px' : (isF ? '99px 0 0 99px' : (isT ? '0 99px 99px 0' : (inR ? '0' : '99px'))),
+        tap: () => {
+          if (!s.calFrom || s.calTo) this.setState({ calFrom: d, calTo: null });
+          else if (d >= s.calFrom) this.setState({ calTo: d });
+          else this.setState({ calFrom: d, calTo: null });
+        }
+      });
+    }
+    out.calCells = cells;
+    return out;
+  }
+  _bc(s) {
+    const out = {
+      bcOn: !!s.bcSel, bcClose: () => this.setState({ bcSel: null }),
+      bcFat: () => this.setState({ bcSel: 'fat' }), bcMus: () => this.setState({ bcSel: 'mus' }), bcBmr: () => this.setState({ bcSel: 'bmr' }),
+      bcCur: () => this.setState({ bcSel: s.metric })
+    };
+    if (!s.bcSel) return out;
+    const M = {
+      fat: { n: 'Body fat', u: '%', f: (v) => v.toFixed(1), downGood: true,
+        v: [19.8, 19.7, 19.5, 19.6, 19.3, 19.1, 19.0, 18.8, 18.7, 18.6, 18.5, 18.4],
+        note: 'Estimated by bioimpedance, so single readings wobble — the trend is what counts. Down 1.4 points in 12 weeks while muscle held steady: the deficit is coming out of fat, not lean mass. Morning weigh-ins, after the bathroom and before coffee, keep the readings comparable.' },
+      mus: { n: 'Muscle mass', u: 'kg', f: (v) => v.toFixed(1), downGood: false,
+        v: [37.3, 37.4, 37.5, 37.5, 37.7, 37.8, 37.9, 38.0, 38.0, 38.1, 38.2, 38.2],
+        note: 'Up 0.9 kg across the block — protein over 170 g plus progressive kettlebell volume is doing exactly what it should in a deficit. Flat or dipping weeks after hard sessions are water shifts, not lost muscle; judge it month to month.' },
+      bmr: { n: 'BMR', u: 'kcal / day', f: (v) => Math.round(v).toLocaleString('en-US'), downGood: false, int: true, foot: 'Recalculated each weigh-in · feeds the daily calorie goal',
+        v: [1808, 1810, 1814, 1818, 1818, 1824, 1828, 1831, 1834, 1838, 1842, 1846],
+        note: 'Your resting burn, recalculated from each weigh-in. It has climbed 38 kcal as muscle came on — and it feeds the 2,400 kcal daily goal, so as BMR rises the goal quietly rises with it. Losing weight without BMR falling is the whole game.' },
+      w: { n: 'Weight', u: 'kg', f: (v) => v.toFixed(1), downGood: true, kick: 'BODY · TRENDS', foot: 'Morning weigh-ins · same scale, same time',
+        v: [86.2, 86.0, 85.6, 85.8, 85.1, 84.9, 84.4, 84.6, 84.0, 83.8, 83.5, 83.4],
+        note: 'Down 2.8 kg in 12 weeks — about 0.25 kg a week, the band where fat goes and strength stays. The weekly wobble is water and glycogen; the slope is the truth. Weigh in every morning and let the average do the judging.' },
+      v: { n: 'Volume', u: 'kg / week', f: (v) => Math.round(v).toLocaleString('en-US'), downGood: false, int: true, kick: 'TRAIN · VOLUME', lk: 'WEEKS', foot: 'Tonnage = sets × reps × load, summed per week',
+        v: [9800, 10400, 10100, 11200, 10800, 11600, 11900, 11400, 12100, 11800, 12300, 12480],
+        note: 'Weekly tonnage is up 27% since May without a missed week. Rising volume on falling bodyweight is the strongest signal in this app — strength is being built, not just preserved. Two flat weeks in a row is the cue to nudge load or reps.' },
+      k: { n: 'Calories', u: 'kcal / day', f: (v) => Math.round(v).toLocaleString('en-US'), downGood: true, int: true, kick: 'FOOD · CALORIES', lk: 'WEEKLY AVERAGES', foot: 'Daily average per week · goal 2,400',
+        v: [2380, 2340, 2410, 2290, 2350, 2300, 2320, 2280, 2330, 2290, 2310, 2310],
+        note: 'Averaging 2,310 a day against the 2,400 goal — a small, steady deficit with a ±120 band and no binge-and-starve swings. Boring on purpose: this pattern produced the weight trend, so protect it rather than chase bigger cuts.' }
+    };
+    const m = M[s.bcSel];
+    const nW = s.bcRng, v = m.v.slice(-nW);
+    const wk = ['May 18', 'May 25', 'Jun 1', 'Jun 8', 'Jun 15', 'Jun 22', 'Jun 29', 'Jul 6', 'Jul 13', 'Jul 20', 'Jul 27', 'Aug 8'].slice(-nW);
+    const mn = Math.min.apply(null, v), mx = Math.max.apply(null, v), rng = (mx - mn) || 1;
+    const xy = v.map((x, i) => [6 + i * (347.6 / (v.length - 1)), 14 + (1 - (x - mn) / rng) * 108]);
+    const pts = xy.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+    const d = v[v.length - 1] - v[0], good = m.downGood ? d <= 0 : d >= 0;
+    const df = m.int ? Math.round(Math.abs(d)).toLocaleString('en-US') : Math.abs(d).toFixed(1);
+    out.bcName = m.n; out.bcUnit = m.u; out.bcVal = m.f(v[v.length - 1]); out.bcNote = m.note;
+    out.bcDelta = (d >= 0 ? '+' : '−') + df + ' · ' + nW + ' wk';
+    out.bcKick = m.kick || 'BODY · SMART SCALE'; out.bcListKick = m.lk || 'WEIGH-INS';
+    out.bcFoot = m.foot || 'Bioimpedance estimate · trend beats any single reading';
+    out.bcStartLab = wk[0].toUpperCase(); out.bcRngLab = nW + ' weeks';
+    const rc = (n) => nW === n ? ['#A63D63', '#FFFFFF'] : ['#FFFFFF', '#66646C'];
+    const [b4, c4] = rc(4), [b8, c8] = rc(8), [b12, c12] = rc(12);
+    out.bc4Bg = b4; out.bc4Col = c4; out.bc8Bg = b8; out.bc8Col = c8; out.bc12Bg = b12; out.bc12Col = c12;
+    out.bcR4 = () => this.setState({ bcRng: 4, bcSi: 99 }); out.bcR8 = () => this.setState({ bcRng: 8, bcSi: 99 }); out.bcR12 = () => this.setState({ bcRng: 12, bcSi: 99 });
+    const si = Math.max(0, Math.min(v.length - 1, s.bcSi));
+    const us = s.bcSel === 'fat' ? '%' : ' ' + m.u.split(' ')[0];
+    out.bcTX = xy[si][0].toFixed(1); out.bcTY = xy[si][1].toFixed(1);
+    out.bcTtL = Math.max(2, Math.min(258, xy[si][0] - 50)) + 'px';
+    out.bcTtT = (xy[si][1] - 38).toFixed(1) + 'px';
+    out.bcTtTxt = m.f(v[si]) + us + ' · ' + wk[si].toUpperCase();
+    const step = 347.6 / (v.length - 1);
+    const bScrub = (e) => { const ox = e.nativeEvent.offsetX; this.setState({ bcSi: Math.max(0, Math.min(v.length - 1, Math.round((ox - 6) / step))) }); };
+    out.bcScrubDown = (e) => { if (e.target.setPointerCapture) { try { e.target.setPointerCapture(e.pointerId); } catch (x) {} } bScrub(e); };
+    out.bcScrubMove = (e) => { if (e.buttons > 0) bScrub(e); };
+    out.bcDeltaCol = good ? '#5E9B72' : '#D9A23E';
+    out.bcLine = pts; out.bcArea = '6,128 ' + pts + ' 353.6,128';
+    out.bcDots = xy.map(p => ({ x: p[0].toFixed(1), y: p[1].toFixed(1) }));
+    out.bcLoLab = m.f(mn); out.bcHiLab = m.f(mx);
+    out.bcRows = v.map((x, i) => i).slice(-6).reverse().map(i => {
+      const dd = i === 0 ? 0 : v[i] - v[i - 1];
+      const lab = m.int ? (dd >= 0 ? '+' : '−') + Math.round(Math.abs(dd)).toLocaleString('en-US') : (dd >= 0 ? '+' : '−') + Math.abs(dd).toFixed(1);
+      return { lab: wk[i], v: m.f(v[i]), d: dd === 0 ? '—' : lab, dc: dd === 0 ? '#96949B' : ((m.downGood ? dd < 0 : dd > 0) ? '#5E9B72' : '#D9A23E') };
+    });
+    return out;
+  }
   _acts(s) {
     const CLR = { kb: ['#F6E3EB', '#8C2F51'], cir: ['#F0EEF2', '#66646C'], out: ['#EAF3ED', '#3E7A54'] };
     const ICO = {
@@ -910,39 +1374,39 @@ class Component extends DCLogic {
     const blocksOf = (ws) => ws.map((w, i) => ({ w: w + '%', c: RAMP[i % RAMP.length] }));
     const alt = (n, wa, wb) => Array.from({ length: n }, (_, i) => ({ w: (i % 2 ? wb : wa) + '%', c: i % 2 ? '#4A3540' : '#A63D63' }));
     const A = [
-      { t: 'kb', ic: 'kb', name: 'KB Session B', sub: 'Today · 7:12 AM · kettlebell', stat: '42:16', statLab: '8,140 kg',
+      { t: 'kb', day: 8, ic: 'kb', name: 'KB Session B', sub: 'Today · 7:12 AM · kettlebell', stat: '42:16', statLab: '8,140 kg',
         kick: 'TODAY · 7:12 AM · MIRRORED FROM WATCH', hero: '42:16', aHr: 142, xHr: 168,
         stats: [['TOTAL TIME','42:16'],['VOLUME','8,140 kg'],['CALORIES','486'],['AVG HR','142 bpm'],['MAX HR','168 bpm'],['PRS','1']],
         segs: [seg('Two-hand swing','5 × 10 · 24 kg','6:48','−0:22 vs last'), seg('Clean & press','5 × 5 · 28 kg · PR','9:04','new weight'), seg('Goblet squat','4 × 8 · 24 kg','7:36','−0:08 vs last'), seg('Turkish get-up','3 × 2 · 16 kg','11:12','+0:15 vs last'), seg('Cooldown','stretch + carry','5:40','—')],
         blocks: blocksOf([16, 21, 18, 27, 13]),
         hr: [98,112,126,138,131,146,152,144,158,150,139,148,161,155,142,150,163,168,151,138,124,110], zones: [8,26,44,20,2] },
-      { t: 'out', ic: 'trail', name: 'Sunrise Ridge', sub: 'Wed · 6:48 AM · trail run', stat: '4.2 km', statLab: '+186 m',
+      { t: 'out', day: 6, ic: 'trail', name: 'Sunrise Ridge', sub: 'Wed · 6:48 AM · trail run', stat: '4.2 km', statLab: '+186 m',
         kick: 'WED AUG 6 · 6:48 AM · APPLE WATCH · GPS', loc: 'SUNRISE RIDGE LOOP', aHr: 148, xHr: 172, distLab: '4.2 KM',
         stats: [['DISTANCE','4.2 km'],['ELEV GAIN','+186 m'],['MOVING TIME','26:04'],['STEPS','5,120'],['CALORIES','388'],['AVG HR','148 bpm']],
         route: 'M46 210 C90 186 78 150 122 138 C166 126 178 158 216 146 C258 132 250 92 300 84 C330 79 348 96 356 66', sx: 46, sy: 210, ex: 356, ey: 66,
         splits: [{k:'1', p:'5:48', w:'94%'},{k:'2', p:'6:32', w:'82%'},{k:'3', p:'6:04', w:'89%'},{k:'4', p:'5:41', w:'96%'},{k:'4.2', p:'6:20', w:'85%'}],
         elev: [1832,1840,1848,1859,1866,1872,1880,1893,1902,1913,1918,1910,1898,1886,1874,1868,1859,1850,1846,1840,1836,1832],
         hr: [102,118,132,141,148,155,150,144,152,158,163,168,172,166,158,150,155,148,140,132,120,108], zones: [4,18,42,31,5] },
-      { t: 'cir', ic: 'cir', name: 'EMOM 20', sub: 'Tue · 6:02 PM · circuit', stat: '20:00', statLab: '20 rounds',
+      { t: 'cir', day: 5, ic: 'cir', name: 'EMOM 20', sub: 'Tue · 6:02 PM · circuit', stat: '20:00', statLab: '20 rounds',
         kick: 'TUE AUG 5 · 6:02 PM · MIRRORED FROM WATCH', hero: '20:00', aHr: 158, xHr: 176,
         stats: [['TOTAL TIME','20:00'],['ROUNDS','20 of 20'],['CALORIES','214'],['AVG WORK',':26 /min'],['AVG HR','158 bpm'],['MAX HR','176 bpm']],
         segs: [seg('Odd minutes — swings','12 reps · 24 kg · 10 rounds',':26 avg','fastest :22'), seg('Even minutes — cleans','8 reps · 2×16 kg · 10 rounds',':31 avg','slowest :38'), seg('Rounds unbroken','no minutes missed','20 of 20','—')],
         blocks: alt(20, 5, 5),
         hr: [96,120,138,150,158,151,162,154,165,157,167,159,168,160,170,162,171,163,166,152,134,116], zones: [3,12,34,40,11] },
-      { t: 'out', ic: 'walk', name: 'Afternoon Walk', sub: 'Mon · 1:49 PM · walk', stat: '2.3 km', statLab: '3,822 steps',
+      { t: 'out', day: 4, ic: 'walk', name: 'Afternoon Walk', sub: 'Mon · 1:49 PM · walk', stat: '2.3 km', statLab: '3,822 steps',
         kick: 'MON AUG 4 · 1:49 PM · APPLE WATCH · GPS', loc: 'RIVERSIDE PATH', aHr: 110, xHr: 134, distLab: '2.3 KM',
         stats: [['DISTANCE','2.3 km'],['ELEV GAIN','+48 m'],['MOVING TIME','46:52'],['STEPS','3,822'],['CALORIES','232'],['AVG HR','110 bpm']],
         route: 'M40 190 C110 176 150 196 210 178 C260 164 300 176 352 148', sx: 40, sy: 190, ex: 352, ey: 148,
         splits: [{k:'1', p:'19:42', w:'88%'},{k:'2', p:'20:31', w:'84%'},{k:'2.3', p:'21:08', w:'80%'}],
         elev: [1828,1832,1836,1841,1846,1852,1856,1860,1857,1852,1848,1844,1840,1837,1834,1832,1830,1829,1828,1827,1826,1826],
         hr: [88,96,102,108,112,106,110,114,118,109,105,112,116,120,113,108,104,110,107,102,96,92], zones: [46,44,10,0,0] },
-      { t: 'kb', ic: 'kb', name: 'KB Block A', sub: 'Sat Aug 2 · 7:31 AM · kettlebell', stat: '38:44', statLab: '7,260 kg',
+      { t: 'kb', day: 2, ic: 'kb', name: 'KB Block A', sub: 'Sat Aug 2 · 7:31 AM · kettlebell', stat: '38:44', statLab: '7,260 kg',
         kick: 'SAT AUG 2 · 7:31 AM · MIRRORED FROM WATCH', hero: '38:44', aHr: 139, xHr: 164,
         stats: [['TOTAL TIME','38:44'],['VOLUME','7,260 kg'],['CALORIES','442'],['AVG HR','139 bpm'],['MAX HR','164 bpm'],['PRS','0']],
         segs: [seg('Snatch','5 × 6 · 20 kg','7:12','−0:10 vs last'), seg('Bent-over row','4 × 8 · 24 kg','8:04','—'), seg('Reverse lunge','4 × 6 · 2×16 kg','7:48','+0:12 vs last'), seg('Farmer carry','4 × 40 m · 2×24 kg','6:32','−0:05 vs last'), seg('Mobility','hips + t-spine','6:08','—')],
         blocks: blocksOf([18, 21, 20, 17, 16]),
         hr: [95,108,122,134,140,133,145,151,143,155,148,137,146,158,152,140,148,160,154,141,126,108], zones: [10,28,42,18,2] },
-      { t: 'cir', ic: 'cir', name: 'Tabata Squats', sub: 'Fri Aug 1 · 5:44 PM · circuit', stat: '4:00', statLab: '8 rounds',
+      { t: 'cir', day: 1, ic: 'cir', name: 'Tabata Squats', sub: 'Fri Aug 1 · 5:44 PM · circuit', stat: '4:00', statLab: '8 rounds',
         kick: 'FRI AUG 1 · 5:44 PM · MIRRORED FROM WATCH', hero: '4:00', aHr: 156, xHr: 178,
         stats: [['TOTAL TIME','4:00'],['ROUNDS','8 of 8'],['CALORIES','96'],['TOTAL REPS','86'],['AVG HR','156 bpm'],['MAX HR','178 bpm']],
         segs: [seg('Work — goblet squat','20 s × 8 · 20 kg','9–12 reps','86 total'), seg('Rest','10 s × 8','—','—')],
@@ -951,7 +1415,7 @@ class Component extends DCLogic {
     ];
     const chart = (a, w, h, p) => { const mn = Math.min(...a), mx = Math.max(...a), r = (mx - mn) || 1; return a.map((v, i) => ((i / (a.length - 1)) * w).toFixed(1) + ',' + (p + (1 - (v - mn) / r) * (h - 2 * p)).toFixed(1)).join(' '); };
     const fil = s.actFil;
-    const idxs = A.map((a, i) => i).filter(i => fil === 'all' || (fil === 'gym' ? A[i].t !== 'out' : A[i].t === 'out'));
+    const idxs = A.map((a, i) => i).filter(i => (A[i].day >= s.actR[0] && A[i].day <= s.actR[1]) && (fil === 'all' || (fil === 'gym' ? A[i].t !== 'out' : A[i].t === 'out')));
     const chip = (k) => s.actFil === k ? ['#232227', '#FFFFFF'] : ['#FFFFFF', '#66646C'];
     const [cAB, cAC] = chip('all'), [cGB, cGC] = chip('gym'), [cOB, cOC] = chip('out');
     const sel = s.actSel >= 0 ? A[s.actSel] : null;
@@ -961,6 +1425,7 @@ class Component extends DCLogic {
       actClose: () => this.setState({ actList: false, actSel: -1 }),
       actBack: () => this.setState({ actSel: -1 }),
       actCount: idxs.length + ' of ' + A.length,
+      actRangeLab: 'Aug ' + s.actR[0] + ' – ' + s.actR[1],
       fAllBg: cAB, fAllCol: cAC, fGymBg: cGB, fGymCol: cGC, fOutBg: cOB, fOutCol: cOC,
       filAll: () => this.setState({ actFil: 'all' }), filGym: () => this.setState({ actFil: 'gym' }), filOut: () => this.setState({ actFil: 'out' }),
       actItems: idxs.map(i => { const a = A[i]; return { name: a.name, sub: a.sub, stat: a.stat, statLab: a.statLab, bg: CLR[a.t][0], col: CLR[a.t][1], icon: ICO[a.ic], open: () => this.setState({ actSel: i }) }; }),
@@ -1091,6 +1556,11 @@ class Component extends DCLogic {
       pairTap: () => { if (s.pair === 0) { this.setState({ pair: 1 }); setTimeout(() => this.setState({ pair: 2 }), 1400); } else if (s.pair === 2) this.setState({ pair: 0 }); },
       ...this._tapeVals(s),
       ...this._acts(s),
+      ...this._food(s, eaten, fmt),
+      ...this._hist(s, eaten, fmt),
+      ...this._cal(s),
+      ...this._bc(s),
+      repOn: s.rep, repOpen: () => this.setState({ rep: true }), repClose: () => this.setState({ rep: false }),
       pts, apts: '6,128 ' + pts + ' 353.6,128',
       dots: xy.map(p => ({ x: +p[0].toFixed(1), y: +p[1].toFixed(1) })),
       ttPX: xy[si][0].toFixed(1), ttPY: xy[si][1].toFixed(1),
