@@ -93,8 +93,8 @@ export default function BodyPage() {
   useDataLoggedListener(load);
 
   // ——— chart geometry (design: 360×150, y = 14 + (1−t)·108) ———
-  // Weight plots the last 12 weigh-ins (own dates); volume/kcal plot 12
-  // Mon-start weeks.
+  // Weight plots the FULL history (daily morning weigh-ins, server-
+  // downsampled ≤96 points); volume/kcal plot 12 Mon-start weeks.
   const chart = useMemo(() => {
     if (!data) return null;
     const raw: { v: number; label: string }[] = [];
@@ -308,17 +308,21 @@ export default function BodyPage() {
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
-              {chart.pts.map((p) => (
-                <circle
-                  key={p.x}
-                  cx={p.x}
-                  cy={p.y}
-                  r="3"
-                  fill="#FFFFFF"
-                  stroke="#A63D63"
-                  strokeWidth="1.8"
-                />
-              ))}
+              {/* Per-point dots only while the series is sparse — the
+                  full-history weight line (90+ daily points) reads as a
+                  clean stroke, not a bead chain. */}
+              {chart.pts.length <= 20 &&
+                chart.pts.map((p) => (
+                  <circle
+                    key={p.x}
+                    cx={p.x}
+                    cy={p.y}
+                    r="3"
+                    fill="#FFFFFF"
+                    stroke="#A63D63"
+                    strokeWidth="1.8"
+                  />
+                ))}
               {selected && (
                 <circle
                   cx={selected.x}

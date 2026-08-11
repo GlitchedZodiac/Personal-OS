@@ -18,6 +18,41 @@ crude until 2c.
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).
 
+## 2026-08-11a — VeSync history imported; the weight trend is the whole journey
+
+His ask: "I have been tracking my weight all along and I'd like to report
+the trend as well as other elements that vesync has tracked." (First link
+was the Sensi thermostat sheet — halted, got the real export.)
+
+- **Import route rebuilt** (app/api/health/import/vesync +
+  lib/vesync.ts, 11 tests): the old route parsed DD/MM — his export is
+  MM/DD, which would have landed half the rows on silently wrong dates.
+  Format now detected across the whole file (any day-field >12 decides;
+  ambiguous defaults MM/DD; conflict → 400). Timestamps parse through the
+  USER timezone (settings America/Bogota), not server locale — a UTC
+  serverless import can't shift 2 AM weigh-ins a day back. Near-twin
+  policy: a stored row (ANY source) within ±10 min at ±0.3 kg is the SAME
+  weigh-in → fill its null composition fields, never create a duplicate,
+  never overwrite (he voice-logged scale readings minutes after stepping
+  off, Feb–May).
+- **His full history is in**: 223 CSV rows → 131 imported, 23
+  fill-merged onto manual twins, 69 already recorded, 0 errors.
+  Dec 24 2025 113.55 kg → Aug 11 2026 81.5 kg. **−32.0 kg.**
+- **Body chart shows the whole arc**: overview weighIns = full history,
+  one point per local day (earliest = the morning ritual reading),
+  stride-downsampled ≤96; tape/photos queries decoupled from the old
+  take-120 window (200+ daily rows would have evicted his 2 tapes).
+  Chart dots render only when ≤20 points (dense line, not bead chain).
+  Header reads −32.0 kg · 33 wk. Screenshot-verified.
+- **Chat reports the trend**: weight_trend now returns a full-history
+  Mon-week series (avgWeightKg/avgBodyFatPct/avgMuscleMassKg) plus the
+  recent raw rows w/ ids. Live smoke: "111.8 kg, 33.9% bf (week of Dec
+  22) → 82.1 kg avg this week; latest 81.5. Down 30.3 kg; bf −13.2
+  points." Smoke rows cleaned.
+- VeSync metrics stored but not yet SURFACED (bf%/muscle/BMR/visceral/
+  metabolic-age trends have no screen): deferred — candidates for a Body
+  screen composition panel when a design slice exists.
+
 ## 2026-08-10b — Routines MVP: the backend/AI half the watch was waiting on
 
 Michael's directive via the watch lane ("we shouldn't do workouts, we

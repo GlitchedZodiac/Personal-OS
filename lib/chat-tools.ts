@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg } from "@/lib/prs";
-import { getUtcDayBoundsForTimeZone, getWeekStartDateString, zonedLocalDateTimeToUtc } from "@/lib/timezone";
+import {
+  getDateStringInTimeZone,
+  getUtcDayBoundsForTimeZone,
+  getWeekStartDateString,
+  zonedLocalDateTimeToUtc,
+} from "@/lib/timezone";
 
 // Server-side execution of the chat's read tool (get_health_data). Returns
 // compact JSON the model can quote from — ids included so edit/delete
@@ -126,15 +131,57 @@ export async function executeGetHealthData(
     }
 
     case "weight_trend": {
-      // No window: weight is long-horizon — always return the latest rows,
-      // however old (weeks between weigh-ins is normal).
-      const rows = await prisma.bodyMeasurement.findMany({
-        where: { weightKg: { not: null } },
-        orderBy: { measuredAt: "desc" },
-        take: 20,
-      });
+      // Weight is long-horizon: recent raw rows (with ids, for edits) PLUS a
+      // full-history weekly series so "how's my weight going" gets the whole
+      // journey (VeSync history: daily readings since Dec 2025), compactly.
+      const [recent, all] = await Promise.all([
+        prisma.bodyMeasurement.findMany({
+          where: { weightKg: { not: null } },
+          orderBy: { measuredAt: "desc" },
+          take: 20,
+        }),
+        prisma.bodyMeasurement.findMany({
+          where: { weightKg: { not: null } },
+          orderBy: { measuredAt: "asc" },
+          select: {
+            measuredAt: true,
+            weightKg: true,
+            bodyFatPct: true,
+            muscleMassKg: true,
+          },
+        }),
+      ]);
+
+      // Mon-start weekly averages in the user's timezone.
+      const weeks = new Map<
+        string,
+        { w: number[]; bf: number[]; mm: number[] }
+      >();
+      for (const m of all) {
+        const week = getWeekStartDateString(
+          getDateStringInTimeZone(m.measuredAt, timeZone),
+          1
+        );
+        const bucket = weeks.get(week) ?? { w: [], bf: [], mm: [] };
+        bucket.w.push(m.weightKg as number);
+        if (m.bodyFatPct != null) bucket.bf.push(m.bodyFatPct);
+        if (m.muscleMassKg != null) bucket.mm.push(m.muscleMassKg);
+        weeks.set(week, bucket);
+      }
+      const avg = (xs: number[], digits = 1) =>
+        xs.length > 0
+          ? Math.round((xs.reduce((s, x) => s + x, 0) / xs.length) * 10 ** digits) /
+            10 ** digits
+          : null;
+
       return {
-        measurements: rows.map((m) => ({
+        weeklyTrend: [...weeks.entries()].map(([weekStart, b]) => ({
+          weekStart,
+          avgWeightKg: avg(b.w),
+          avgBodyFatPct: avg(b.bf),
+          avgMuscleMassKg: avg(b.mm),
+        })),
+        measurements: recent.map((m) => ({
           id: m.id,
           measuredAt: m.measuredAt.toISOString().slice(0, 10),
           weightKg: m.weightKg,

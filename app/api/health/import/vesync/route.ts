@@ -1,113 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { parse as parseDate } from "date-fns";
+import { getUserTimeZone } from "@/lib/server-timezone";
+import {
+  COMPOSITION_FIELDS,
+  NEAR_KG,
+  NEAR_MS,
+  detectDateFormat,
+  parseCSV,
+  parseVeSyncTime,
+  roundIfInt,
+  type VeSyncRow,
+} from "@/lib/vesync";
 
-/**
- * VeSync Smart Scale CSV Import
- *
- * Accepts CSV text (multipart form-data with file, or raw text body)
- * from VeSync app export and imports body composition measurements.
- *
- * CSV columns:
- * Time, Weight, BMI, Body Fat, Fat-Free Body Weight, Subcutaneous Fat,
- * Visceral Fat, Body Water, Skeletal Muscles, Muscle Mass, Bone Mass,
- * Protein, BMR, Metabolic Age, Heart Rate
- */
+export const maxDuration = 60;
 
-interface VeSyncRow {
-  time: string;
-  weightKg: number | null;
-  bmi: number | null;
-  bodyFatPct: number | null;
-  fatFreeWeightKg: number | null;
-  subcutaneousFatPct: number | null;
-  visceralFat: number | null;
-  bodyWaterPct: number | null;
-  skeletalMusclePct: number | null;
-  muscleMassKg: number | null;
-  boneMassKg: number | null;
-  proteinPct: number | null;
-  bmrKcal: number | null;
-  metabolicAge: number | null;
-  heartRateBpm: number | null;
-}
-
-function parseVeSyncValue(raw: string): number | null {
-  if (!raw || raw.trim() === "--" || raw.trim() === "") return null;
-  // Remove units like kg, %, kcal, bpm
-  const cleaned = raw.replace(/kg|%|kcal|bpm/gi, "").trim();
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? null : num;
-}
-
-function parseVeSyncTime(timeStr: string): Date | null {
-  // Format: "15/02/2026, 7:41 AM" (DD/MM/YYYY, h:mm AM/PM)
-  // Remove surrounding quotes if present
-  // VeSync uses U+202F (narrow no-break space) before AM/PM — normalize to regular space
-  const cleaned = timeStr
-    .replace(/^"|"$/g, "")
-    .replace(/[\u00A0\u202F\u2009\u200A]/g, " ") // normalize special whitespace
-    .trim();
-  try {
-    const result = parseDate(cleaned, "d/MM/yyyy, h:mm a", new Date());
-    if (isNaN(result.getTime())) throw new Error("Invalid date");
-    return result;
-  } catch {
-    try {
-      const result = parseDate(cleaned, "dd/MM/yyyy, h:mm a", new Date());
-      if (isNaN(result.getTime())) throw new Error("Invalid date");
-      return result;
-    } catch {
-      console.warn(`[VeSync] Could not parse time: "${cleaned}"`);
-      return null;
-    }
-  }
-}
-
-function parseCSV(csvText: string): VeSyncRow[] {
-  // Normalize special whitespace characters (VeSync uses U+202F narrow no-break space)
-  const normalized = csvText.replace(/[\u00A0\u202F\u2009\u200A]/g, " ");
-  const lines = normalized.trim().split("\n");
-  if (lines.length < 2) return [];
-
-  // Skip header row
-  const rows: VeSyncRow[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    // CSV has quoted time field with comma inside, so we need careful parsing
-    // Pattern: "DD/MM/YYYY, H:MM AM",value,value,...
-    const match = line.match(/^"([^"]+)",(.+)$/);
-    if (!match) continue;
-
-    const timeStr = match[1];
-    const rest = match[2].split(",").map((s) => s.trim());
-
-    if (rest.length < 14) continue;
-
-    rows.push({
-      time: timeStr,
-      weightKg: parseVeSyncValue(rest[0]),
-      bmi: parseVeSyncValue(rest[1]),
-      bodyFatPct: parseVeSyncValue(rest[2]),
-      fatFreeWeightKg: parseVeSyncValue(rest[3]),
-      subcutaneousFatPct: parseVeSyncValue(rest[4]),
-      visceralFat: parseVeSyncValue(rest[5]),
-      bodyWaterPct: parseVeSyncValue(rest[6]),
-      skeletalMusclePct: parseVeSyncValue(rest[7]),
-      muscleMassKg: parseVeSyncValue(rest[8]),
-      boneMassKg: parseVeSyncValue(rest[9]),
-      proteinPct: parseVeSyncValue(rest[10]),
-      bmrKcal: parseVeSyncValue(rest[11]),
-      metabolicAge: parseVeSyncValue(rest[12]),
-      heartRateBpm: parseVeSyncValue(rest[13]),
-    });
-  }
-
-  return rows;
-}
+// VeSync Smart Scale CSV import — POST a CSV (multipart file or raw
+// {csvText}). All parsing/format/merge decisions live in lib/vesync.ts;
+// this route owns the DB writes: create new readings as source "vesync",
+// fill-merge composition onto near-minute twins (manual voice-logs of the
+// same weigh-in), never overwrite a stored value.
 
 export async function POST(request: NextRequest) {
   try {
@@ -140,91 +51,117 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for existing measurements to avoid duplicates
-    // Get the date range from the CSV
-    const parsedDates = rows
-      .map((r) => parseVeSyncTime(r.time))
-      .filter((d): d is Date => d !== null);
+    const format = detectDateFormat(rows.map((r) => r.time));
+    if (format === "conflict") {
+      return NextResponse.json(
+        { error: "Ambiguous dates: file mixes MM/DD and DD/MM rows" },
+        { status: 400 }
+      );
+    }
 
-    if (parsedDates.length === 0) {
+    const timeZone = await getUserTimeZone(null);
+
+    const parsed = rows
+      .map((row) => ({ row, measuredAt: parseVeSyncTime(row.time, format, timeZone) }))
+      .filter((p): p is { row: VeSyncRow; measuredAt: Date } => p.measuredAt !== null);
+
+    if (parsed.length === 0) {
       return NextResponse.json(
         { error: "Could not parse any dates from CSV" },
         { status: 400 }
       );
     }
 
-    const minDate = new Date(Math.min(...parsedDates.map((d) => d.getTime())));
-    const maxDate = new Date(Math.max(...parsedDates.map((d) => d.getTime())));
+    const minDate = new Date(Math.min(...parsed.map((p) => p.measuredAt.getTime())));
+    const maxDate = new Date(Math.max(...parsed.map((p) => p.measuredAt.getTime())));
 
-    // Find existing measurements in this date range
+    // Every stored weigh-in near the CSV's range, ANY source — manual rows
+    // logged off this same scale must not re-import as duplicates.
     const existing = await prisma.bodyMeasurement.findMany({
       where: {
         measuredAt: {
-          gte: new Date(minDate.getTime() - 60000), // 1 min tolerance
-          lte: new Date(maxDate.getTime() + 60000),
+          gte: new Date(minDate.getTime() - NEAR_MS),
+          lte: new Date(maxDate.getTime() + NEAR_MS),
         },
-        source: "vesync",
+        weightKg: { not: null },
       },
-      select: { measuredAt: true },
     });
 
-    const existingTimes = new Set(
-      existing.map((e) => Math.floor(e.measuredAt.getTime() / 60000)) // minute precision
-    );
-
     let imported = 0;
+    let merged = 0;
     let skipped = 0;
     let errors = 0;
     const errorMessages: string[] = [];
 
-    const now = new Date();
+    // Oldest first so intra-batch near-duplicate collapsing is deterministic.
+    parsed.sort((a, b) => a.measuredAt.getTime() - b.measuredAt.getTime());
 
-    for (const row of rows) {
-      const measuredAt = parseVeSyncTime(row.time);
-      if (!measuredAt) {
-        errors++;
-        errorMessages.push(`Could not parse time: "${row.time}"`);
-        continue;
-      }
+    type Stored = {
+      id: string;
+      measuredAt: Date;
+      weightKg: number | null;
+      fields: Partial<Record<(typeof COMPOSITION_FIELDS)[number], number | null>>;
+    };
+    const stored: Stored[] = existing.map((e) => ({
+      id: e.id,
+      measuredAt: e.measuredAt,
+      weightKg: e.weightKg,
+      fields: Object.fromEntries(COMPOSITION_FIELDS.map((f) => [f, e[f]])),
+    }));
 
-      // Skip if we already have a measurement at this time
-      const timeKey = Math.floor(measuredAt.getTime() / 60000);
-      if (existingTimes.has(timeKey)) {
+    for (const { row, measuredAt } of parsed) {
+      if (row.weightKg == null) {
         skipped++;
         continue;
       }
 
-      // Skip rows with zero useful data (just weight with no composition)
-      const hasData = row.weightKg !== null;
-      if (!hasData) {
-        skipped++;
-        continue;
-      }
+      const twin = stored.find(
+        (s) =>
+          s.weightKg != null &&
+          Math.abs(s.measuredAt.getTime() - measuredAt.getTime()) <= NEAR_MS &&
+          Math.abs(s.weightKg - row.weightKg!) <= NEAR_KG
+      );
 
       try {
-        await prisma.bodyMeasurement.create({
+        if (twin) {
+          // Same weigh-in already recorded — fill any composition fields it
+          // lacks (never overwrite a stored value), create nothing.
+          const fill: Record<string, number> = {};
+          for (const field of COMPOSITION_FIELDS) {
+            const incoming = roundIfInt(field, row[field]);
+            if (incoming != null && twin.fields[field] == null) {
+              fill[field] = incoming;
+              twin.fields[field] = incoming;
+            }
+          }
+          if (Object.keys(fill).length > 0) {
+            await prisma.bodyMeasurement.update({ where: { id: twin.id }, data: fill });
+            merged++;
+          } else {
+            skipped++;
+          }
+          continue;
+        }
+
+        const created = await prisma.bodyMeasurement.create({
           data: {
             measuredAt,
             weightKg: row.weightKg,
-            bmi: row.bmi,
-            bodyFatPct: row.bodyFatPct,
-            fatFreeWeightKg: row.fatFreeWeightKg,
-            subcutaneousFatPct: row.subcutaneousFatPct,
-            visceralFat: row.visceralFat != null ? Math.round(row.visceralFat) : null,
-            bodyWaterPct: row.bodyWaterPct,
-            skeletalMusclePct: row.skeletalMusclePct,
-            muscleMassKg: row.muscleMassKg,
-            boneMassKg: row.boneMassKg,
-            proteinPct: row.proteinPct,
-            bmrKcal: row.bmrKcal != null ? Math.round(row.bmrKcal) : null,
-            metabolicAge: row.metabolicAge != null ? Math.round(row.metabolicAge) : null,
-            heartRateBpm: row.heartRateBpm != null ? Math.round(row.heartRateBpm) : null,
+            ...Object.fromEntries(
+              COMPOSITION_FIELDS.map((f) => [f, roundIfInt(f, row[f])])
+            ),
             source: "vesync",
-            updatedAt: now,
           },
         });
+        stored.push({
+          id: created.id,
+          measuredAt,
+          weightKg: row.weightKg,
+          fields: Object.fromEntries(
+            COMPOSITION_FIELDS.map((f) => [f, roundIfInt(f, row[f])])
+          ),
+        });
         imported++;
-        existingTimes.add(timeKey); // Prevent intra-batch duplicates
       } catch (err: unknown) {
         errors++;
         const msg = err instanceof Error ? err.message : String(err);
@@ -236,8 +173,11 @@ export async function POST(request: NextRequest) {
       success: true,
       totalRows: rows.length,
       imported,
+      merged,
       skipped,
       errors,
+      dateFormat: format,
+      timeZone,
       errorMessages: errorMessages.length > 0 ? errorMessages : undefined,
       dateRange: {
         from: minDate.toISOString(),

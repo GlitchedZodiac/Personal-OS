@@ -29,11 +29,30 @@ export async function GET(request: NextRequest) {
     const rangeStartStr = addDaysToDateString(weekStartStr, -7 * (WEEKS - 1));
     const { rangeStart } = getUtcDateRangeForTimeZone(rangeStartStr, todayStr, timeZone);
 
-    const [measurements, workouts, food, photos] = await Promise.all([
+    // Weights and tape are queried whole-history and separately: 200+ daily
+    // scale readings (VeSync import) would evict the sparse tape rows from
+    // any recent-N window, and the weight trend must show the entire journey.
+    const [weights, tapeRows, latest, workouts, food, photos] = await Promise.all([
       prisma.bodyMeasurement.findMany({
-        orderBy: { measuredAt: "desc" },
-        take: 120,
+        where: { weightKg: { not: null } },
+        orderBy: { measuredAt: "asc" },
+        select: { measuredAt: true, weightKg: true },
       }),
+      prisma.bodyMeasurement.findMany({
+        where: {
+          OR: [
+            { neckCm: { not: null } },
+            { chestCm: { not: null } },
+            { armsCm: { not: null } },
+            { waistCm: { not: null } },
+            { hipsCm: { not: null } },
+            { legsCm: { not: null } },
+            { calvesCm: { not: null } },
+          ],
+        },
+        orderBy: { measuredAt: "asc" },
+      }),
+      prisma.bodyMeasurement.findFirst({ orderBy: { measuredAt: "desc" } }),
       prisma.workoutLog.findMany({
         where: { startedAt: { gte: rangeStart } },
         select: { startedAt: true, exercises: true },
@@ -58,17 +77,23 @@ export async function GET(request: NextRequest) {
     const bucketOf = (d: Date) =>
       weekIndex.get(getWeekStartDateString(getDateStringInTimeZone(d, timeZone), 1));
 
-    // Weight is its own series: the last 12 weigh-ins whatever their age —
-    // weeks between readings is normal, and a fresh 12-week window would
-    // hide older history entirely.
-    const weighIns = [...measurements]
-      .filter((m) => m.weightKg != null)
-      .slice(0, 12)
-      .reverse()
-      .map((m) => ({
-        date: getDateStringInTimeZone(m.measuredAt, timeZone),
-        value: m.weightKg as number,
-      }));
+    // Weight is its own series over the FULL history — the whole journey is
+    // the point (his ask: "I have been tracking my weight all along"). One
+    // point per local day: the day's EARLIEST reading (the morning ritual
+    // weigh-in; evening re-weighs run heavy), then stride-downsampled so the
+    // chart stays scrubbable.
+    const byDay = new Map<string, number>();
+    for (const m of weights) {
+      const day = getDateStringInTimeZone(m.measuredAt, timeZone);
+      if (!byDay.has(day)) byDay.set(day, m.weightKg as number); // asc order → first = earliest
+    }
+    const daily = [...byDay.entries()].map(([date, value]) => ({ date, value }));
+    const MAX_POINTS = 96;
+    let weighIns = daily;
+    if (daily.length > MAX_POINTS) {
+      const stride = (daily.length - 1) / (MAX_POINTS - 1);
+      weighIns = Array.from({ length: MAX_POINTS }, (_, i) => daily[Math.round(i * stride)]);
+    }
 
     const volumeSeries = weekKeys.map(() => 0);
     for (const w of workouts) {
@@ -109,8 +134,7 @@ export async function GET(request: NextRequest) {
       { points: { date: string; value: number }[] }
     > = {};
     for (const dim of DIMS) {
-      const points = [...measurements]
-        .reverse()
+      const points = tapeRows
         .filter((m) => m[dim] != null)
         .map((m) => ({
           date: getDateStringInTimeZone(m.measuredAt, timeZone),
@@ -119,14 +143,13 @@ export async function GET(request: NextRequest) {
       tape[dim] = { points };
     }
 
-    const latest = measurements[0] ?? null;
     const latestWeight =
-      measurements.find((m) => m.weightKg != null)?.weightKg ?? null;
+      weights.length > 0 ? (weights[weights.length - 1].weightKg as number) : null;
 
     // Photo compare: pair each photo with the weight nearest its date.
     const nearestWeight = (at: Date) => {
       let best: { diff: number; kg: number } | null = null;
-      for (const m of measurements) {
+      for (const m of weights) {
         if (m.weightKg == null) continue;
         const diff = Math.abs(m.measuredAt.getTime() - at.getTime());
         if (!best || diff < best.diff) best = { diff, kg: m.weightKg };

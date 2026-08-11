@@ -4,6 +4,8 @@ Cross-session queue. Format:
 `- **[YYYY-MM-DD] [source]** — what | why deferred | where to pick it up`
 Newest at top. Annotate `[resolved by X, date]` instead of deleting.
 
+- **[2026-08-11] [main]** — body-composition trends have no surface | VeSync history now stores bf%/muscle/BMR/visceral fat/metabolic age per weigh-in (his bf: 34.7% → 20.7%), but only weight charts; chat can quote them via weight_trend weekly series meanwhile | Body screen composition panel — needs a design slice first (PORT GATE)
+
 - **[2026-08-10] [main]** — builder UI can't mint new movements | the web routine builder's free-typed unknown names stay raw strings (no category picker, so no `category` → no mint); the AI chat path mints fine — parity needs a small category select on unrecognized names | app/(tabs)/health/workouts/routines/page.tsx + POST /api/health/sequences (already supports it)
 
 - **[2026-08-10] [main]** — web circuit runner: round parity with the watch | the watch runs circuits round-counted (rounds field, rest-between-rounds countdown, per-step timing); the web live sheet is still set-based and EmomRunner covers only EMOMs — a web circuit mode would read the same rounds/restSecondsDefault | app/(tabs)/health/workouts/page.tsx + components/emom-runner.tsx as the pattern
