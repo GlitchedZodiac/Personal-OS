@@ -22,6 +22,7 @@
     @keyframes sheetUp { from { transform:translateY(100%); } to { transform:none; } }
     @keyframes scan { 0% { top:0; } 100% { top:calc(100% - 3px); } }
     @keyframes shimmer { 0% { transform:translateX(-120%) skewX(-18deg); } 100% { transform:translateX(480%) skewX(-18deg); } }
+    @keyframes pushIn { from { transform:translateX(100%); } to { transform:none; } }
   </style>
 </helmet>
 <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 0 32px; font-family:'Instrument Sans',sans-serif;">
@@ -273,6 +274,19 @@
             <button onClick="{{ liveOpen }}" style="flex:1.5; display:flex; align-items:center; justify-content:center; gap:8px; font-family:'Familjen Grotesk',sans-serif; font-size:13.5px; font-weight:600; color:#FFFFFF; background:#232227; border:none; border-radius:12px; padding:12px 0; cursor:pointer;" style-hover="background:#3A393E;"><span style="width:8px; height:8px; border-radius:50%; background:#DC74A0;"></span> Start live workout</button>
             <button onClick="{{ routOpen }}" style="flex:1; font-family:'Familjen Grotesk',sans-serif; font-size:13.5px; font-weight:600; color:#232227; background:#FFFFFF; border:1px solid #D9D7DC; border-radius:12px; padding:12px 0; cursor:pointer;" style-hover="background:#FAF9FA;">Routines</button>
           </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">THIS WEEK · OVERVIEW</div>
+              <div style="font-size:11px; font-weight:600; color:#5E9B72;">4 of 5 planned</div>
+            </div>
+            <div style="display:flex; margin-top:12px;">
+              <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">4</div><div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B; margin-top:2px;">SESSIONS</div></div>
+              <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">2:15</div><div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B; margin-top:2px;">ACTIVE</div></div>
+              <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">1,320</div><div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B; margin-top:2px;">KCAL</div></div>
+              <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">6.5 <span style="font-size:12px; color:#66646C;">km</span></div><div style="font-size:9.5px; letter-spacing:0.08em; font-weight:600; color:#96949B; margin-top:2px;">OUTDOORS</div></div>
+            </div>
+            <button onClick="{{ actOpen }}" style="width:100%; margin-top:14px; display:flex; align-items:center; justify-content:center; gap:6px; font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#8C2F51; background:#F6E3EB; border:none; border-radius:10px; padding:11px 0; cursor:pointer;" style-hover="background:#F0D3E0;">View activities <span>→</span></button>
+          </div>
           <div style="position:relative; overflow:hidden; background:#A63D63; border-radius:18px; padding:18px; margin-top:12px;">
             <div style="position:absolute; top:0; bottom:0; width:60px; background:rgba(255,255,255,0.18); filter:blur(6px); animation:shimmer 3.2s ease-in-out infinite;"></div>
             <div style="display:flex; align-items:center; gap:8px; font-size:10.5px; letter-spacing:0.18em; font-weight:700; color:#F6E3EB;"><svg width="10" height="10" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#FFFFFF"></rect></svg> NEW PR · THIS MORNING</div>
@@ -498,6 +512,142 @@
         </div>
       </div>
 
+      <sc-if value="{{ actListOn }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; inset:0; z-index:55; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 60px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ actClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">TRAIN · HISTORY</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">Activities</div>
+            </div>
+            <div style="font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 12px; border-radius:99px; font-variant-numeric:tabular-nums;">{{ actCount }}</div>
+          </div>
+          <div style="display:flex; gap:6px; margin-top:14px;">
+            <div onClick="{{ filAll }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 14px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ fAllBg }}; color: {{ fAllCol }};">All</div>
+            <div onClick="{{ filGym }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 14px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ fGymBg }}; color: {{ fGymCol }};">Gym</div>
+            <div onClick="{{ filOut }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 14px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ fOutBg }}; color: {{ fOutCol }};">Outdoor</div>
+          </div>
+          <div style="display:grid; gap:10px; margin-top:14px;">
+            <sc-for list="{{ actItems }}" as="a" hint-placeholder-count="4">
+              <div onClick="{{ a.open }}" style="display:flex; align-items:center; gap:12px; background:#FFFFFF; border-radius:16px; padding:13px 14px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+                <div style="width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none; background: {{ a.bg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ a.col }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{ a.icon }}"></path></svg></div>
+                <div style="flex:1;"><div style="font-size:13.5px; font-weight:600; color:#232227;">{{ a.name }}</div><div style="font-size:11px; color:#96949B; margin-top:2px;">{{ a.sub }}</div></div>
+                <div style="text-align:right;"><div style="font-size:13px; font-weight:600; color:#232227; font-variant-numeric:tabular-nums;">{{ a.stat }}</div><div style="font-size:10px; color:#96949B; margin-top:1px;">{{ a.statLab }}</div></div>
+                <span style="font-size:16px; color:#C9C7CD;">›</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="text-align:center; font-size:11px; color:#96949B; margin-top:16px;">Synced from Apple Watch · older weeks load as you scroll</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ actDetOn }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; inset:0; z-index:56; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding-bottom:56px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <sc-if value="{{ avGps }}" hint-placeholder-val="{{ false }}">
+            <div style="position:relative; height:300px; background:#251C21; overflow:hidden;">
+              <svg width="100%" height="300" viewBox="0 0 392 300" preserveAspectRatio="none">
+                <path d="M0 60 H392 M0 120 H392 M0 180 H392 M0 240 H392 M78 0 V300 M156 0 V300 M234 0 V300 M312 0 V300" stroke="#2C2127" stroke-width="1"></path>
+                <path d="M-10 250 C60 236 120 258 190 244 C250 232 310 246 400 228" fill="none" stroke="#3A2C33" stroke-width="1.5" stroke-dasharray="5 6"></path>
+                <path d="M-10 96 C70 84 140 104 210 88 C280 74 340 88 400 70" fill="none" stroke="#3A2C33" stroke-width="1.5" stroke-dasharray="5 6"></path>
+                <path d="{{ avRoute }}" fill="none" stroke="#CE5C86" stroke-width="4" stroke-linecap="round"></path>
+                <circle cx="{{ avSX }}" cy="{{ avSY }}" r="6" fill="#8FBF9C" stroke="#1B1518" stroke-width="2"></circle>
+                <circle cx="{{ avEX }}" cy="{{ avEY }}" r="7" fill="#CE5C86" stroke="#1B1518" stroke-width="2.5"></circle>
+              </svg>
+              <div style="position:absolute; bottom:12px; left:16px; font-size:10px; letter-spacing:0.12em; color:#7E6F77; font-weight:600;">{{ avLoc }}</div>
+              <div style="position:absolute; top:70px; right:16px; display:flex; align-items:center; gap:6px; font-size:10.5px; font-weight:700; color:#8FBF9C;"><span style="width:7px; height:7px; border-radius:50%; background:#8FBF9C;"></span>GPS</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ avStr }}" hint-placeholder-val="{{ true }}">
+            <div style="position:relative; background:#1B1518; overflow:hidden; padding:112px 22px 22px;">
+              <div style="font-size:10.5px; letter-spacing:0.18em; font-weight:700; color:#7E6F77;">SEGMENT TIMELINE</div>
+              <div style="display:flex; align-items:baseline; gap:10px; margin-top:6px;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:44px; font-weight:700; color:#F0E8EC; font-variant-numeric:tabular-nums; line-height:1;">{{ avHero }}</span><span style="font-size:11px; letter-spacing:0.1em; font-weight:600; color:#7E6F77;">TOTAL</span></div>
+              <div style="display:flex; gap:3px; height:26px; border-radius:8px; overflow:hidden; margin-top:16px;">
+                <sc-for list="{{ avBlocks }}" as="b" hint-placeholder-count="5"><div style="height:100%; width: {{ b.w }}; background: {{ b.c }};"></div></sc-for>
+              </div>
+              <div style="display:flex; justify-content:space-between; font-size:9.5px; color:#7E6F77; margin-top:6px;"><span>0:00</span><span>{{ avHero }}</span></div>
+            </div>
+          </sc-if>
+          <div onClick="{{ actBack }}" style="position:absolute; top:64px; left:16px; z-index:5; width:36px; height:36px; border-radius:50%; background:rgba(242,241,242,0.92); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#FFFFFF;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+          <div style="padding:18px 22px 0;">
+            <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">{{ avKick }}</div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em; margin-top:4px;">{{ avName }}</div>
+            <div style="background:#FFFFFF; border-radius:18px; padding:8px 16px; margin-top:14px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+              <div style="display:grid; grid-template-columns:1fr 1fr;">
+                <sc-for list="{{ avStats }}" as="st" hint-placeholder-count="6">
+                  <div style="padding:10px 0;">
+                    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#232227; font-variant-numeric:tabular-nums;">{{ st.v }}</div>
+                    <div style="font-size:9.5px; letter-spacing:0.1em; font-weight:600; color:#96949B; margin-top:3px;">{{ st.l }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <sc-if value="{{ avStr }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFFFF; border-radius:18px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden;">
+                <div style="padding:14px 16px 8px; font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">SEGMENTS · TIME TO COMPLETE</div>
+                <sc-for list="{{ avSegs }}" as="g" hint-placeholder-count="4">
+                  <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-top:1px solid #F2F1F2;">
+                    <div><div style="font-size:13px; font-weight:600; color:#232227;">{{ g.n }}</div><div style="font-size:11px; color:#96949B; margin-top:2px;">{{ g.s }}</div></div>
+                    <div style="text-align:right;"><div style="font-size:13px; font-weight:600; color:#232227; font-variant-numeric:tabular-nums;">{{ g.t }}</div><div style="font-size:10px; margin-top:1px; color: {{ g.dc }};">{{ g.d }}</div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ avGps }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFFFF; border-radius:18px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden;">
+                <div style="padding:14px 16px 8px; font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">SPLITS · MIN/KM</div>
+                <div style="display:grid; gap:9px; padding:6px 16px 16px;">
+                  <sc-for list="{{ avSplits }}" as="sp" hint-placeholder-count="4">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                      <span style="width:26px; font-size:11px; font-weight:600; color:#66646C; font-variant-numeric:tabular-nums;">{{ sp.k }}</span>
+                      <div style="flex:1; height:14px; border-radius:4px; background:#F2F1F2; position:relative; overflow:hidden;"><div style="position:absolute; left:0; top:0; bottom:0; border-radius:4px; background:#DCA8BE; width: {{ sp.w }};"></div></div>
+                      <span style="width:56px; text-align:right; font-size:11.5px; font-weight:600; color:#232227; font-variant-numeric:tabular-nums;">{{ sp.p }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="background:#FFFFFF; border-radius:18px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">ELEVATION</div>
+                  <div style="font-size:11px; font-weight:600; color:#66646C; font-variant-numeric:tabular-nums;">{{ avElevLo }} – {{ avElevHi }}</div>
+                </div>
+                <svg width="100%" height="110" viewBox="0 0 360 110" preserveAspectRatio="none" style="margin-top:10px;">
+                  <line x1="0" y1="28" x2="360" y2="28" stroke="#F2F1F2" stroke-width="1"></line>
+                  <line x1="0" y1="56" x2="360" y2="56" stroke="#F2F1F2" stroke-width="1"></line>
+                  <line x1="0" y1="84" x2="360" y2="84" stroke="#F2F1F2" stroke-width="1"></line>
+                  <polygon points="{{ avElevPoly }}" fill="#EBE9ED"></polygon>
+                  <polyline points="{{ avElevLine }}" fill="none" stroke="#96949B" stroke-width="2" stroke-linejoin="round"></polyline>
+                </svg>
+                <div style="display:flex; justify-content:space-between; font-size:9.5px; color:#96949B; margin-top:4px;"><span>START</span><span>{{ avDistLab }}</span></div>
+              </div>
+            </sc-if>
+            <div style="background:#FFFFFF; border-radius:18px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">HEART RATE</div>
+                <div style="font-size:11px; font-weight:600; color:#8C2F51; font-variant-numeric:tabular-nums;">avg {{ avAvgHr }} · max {{ avMaxHr }}</div>
+              </div>
+              <svg width="100%" height="110" viewBox="0 0 360 110" preserveAspectRatio="none" style="margin-top:10px;">
+                <line x1="0" y1="28" x2="360" y2="28" stroke="#F2F1F2" stroke-width="1"></line>
+                <line x1="0" y1="56" x2="360" y2="56" stroke="#F2F1F2" stroke-width="1"></line>
+                <line x1="0" y1="84" x2="360" y2="84" stroke="#F2F1F2" stroke-width="1"></line>
+                <polygon points="{{ avHrPoly }}" fill="#F6E3EB"></polygon>
+                <polyline points="{{ avHrLine }}" fill="none" stroke="#A63D63" stroke-width="2.2" stroke-linejoin="round"></polyline>
+              </svg>
+              <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B; margin:14px 0 10px;">TIME IN ZONES</div>
+              <div style="display:grid; gap:8px;">
+                <sc-for list="{{ avZones }}" as="z" hint-placeholder-count="5">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="width:20px; font-size:10.5px; font-weight:700; color:#96949B;">{{ z.z }}</span>
+                    <div style="flex:1; height:8px; border-radius:99px; background:#F2F1F2; overflow:hidden;"><div style="height:100%; border-radius:99px; width: {{ z.w }}; background: {{ z.c }};"></div></div>
+                    <span style="width:36px; text-align:right; font-size:10.5px; color:#66646C; font-variant-numeric:tabular-nums;">{{ z.p }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="text-align:center; font-size:11px; color:#96949B; margin-top:16px;">Recorded on Apple Watch · synced to Pitaya</div>
+          </div>
+        </div>
+      </sc-if>
+
       <sc-if value="{{ micOn }}" hint-placeholder-val="{{ false }}">
         <div onClick="{{ overlayClose }}" style="position:absolute; inset:0; z-index:70; background:rgba(27,21,24,0.45);"></div>
         <div style="position:absolute; left:0; right:0; bottom:0; z-index:71; background:#FFFFFF; border-radius:28px 28px 0 0; padding:28px 24px 44px; animation:sheetUp .35s cubic-bezier(.3,.9,.3,1) both;">
@@ -689,7 +839,7 @@
 
     </div>
   </x-import>
-  <div style="margin-top:20px; font-size:12px; color:#8B8D90; text-align:center; line-height:1.6;">Pitaya · day build · any four taps unlock<br>mic → voice log → confirmation card in Chat · camera → photo log · Train → ● Record for the trail flow</div>
+  <div style="margin-top:20px; font-size:12px; color:#8B8D90; text-align:center; line-height:1.6;">Pitaya · day build · any four taps unlock<br>mic → voice log → confirmation card in Chat · camera → photo log · Train → View activities → tap any workout</div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script>
@@ -697,6 +847,7 @@ class Component extends DCLogic {
   state = { locked: true, pins: 0, idx: 0, e: 0, armed: false, flip: false,
     stage: 0, conf: 0, editing: false, it1: 320, it2: 220, src: 'via voice',
     mic: 0, cam: false, trail: false, paused: false, rec: 0, pair: 0, live: false, rout: false, setN: 3, tape: -1, tapeVals: null,
+    actList: false, actSel: -1, actFil: 'all',
     habC: true, habM: false, habS: true, habJ: false, supD: false, supMg: false,
     metric: 'w', si: 11, sel: 'Waist', cmp: 50 };
   componentWillUnmount() { clearInterval(this._iv); }
@@ -744,6 +895,91 @@ class Component extends DCLogic {
   _openLog(src) {
     this.setState({ src });
     setTimeout(() => this.setState({ mic: 0, cam: false, stage: 1, conf: 1, idx: 1 }), src === 'via voice' ? 2300 : 1900);
+  }
+  _acts(s) {
+    const CLR = { kb: ['#F6E3EB', '#8C2F51'], cir: ['#F0EEF2', '#66646C'], out: ['#EAF3ED', '#3E7A54'] };
+    const ICO = {
+      kb: 'M9 8V6.5a3 3 0 0 1 6 0V8M7.5 8h9c2 2.2 3 4.6 3 7a7.5 7.5 0 0 1-15 0c0-2.4 1-4.8 3-7Z',
+      cir: 'M10 2.5h4M12 5.5a8 8 0 1 0 0.01 0ZM12 9.5v4.5',
+      trail: 'M3 18L9 8l4 5.5 3-4L21 18Z',
+      walk: 'M12 3.5a1.9 1.9 0 1 1-0.01 0M13 8.5l-3 5 4 3V21M10 13.5l-3 2.5M14 16.5l4 2.5'
+    };
+    const ZC = ['#E7E5E9', '#DCA8BE', '#C97D9C', '#A63D63', '#8C2F51'];
+    const RAMP = ['#DCA8BE', '#A63D63', '#C97D9C', '#8C2F51', '#E795B4'];
+    const seg = (n, sub, t, d) => ({ n, s: sub, t, d, dc: d[0] === '−' ? '#5E9B72' : (d[0] === '+' ? '#D9A23E' : '#96949B') });
+    const blocksOf = (ws) => ws.map((w, i) => ({ w: w + '%', c: RAMP[i % RAMP.length] }));
+    const alt = (n, wa, wb) => Array.from({ length: n }, (_, i) => ({ w: (i % 2 ? wb : wa) + '%', c: i % 2 ? '#4A3540' : '#A63D63' }));
+    const A = [
+      { t: 'kb', ic: 'kb', name: 'KB Session B', sub: 'Today · 7:12 AM · kettlebell', stat: '42:16', statLab: '8,140 kg',
+        kick: 'TODAY · 7:12 AM · MIRRORED FROM WATCH', hero: '42:16', aHr: 142, xHr: 168,
+        stats: [['TOTAL TIME','42:16'],['VOLUME','8,140 kg'],['CALORIES','486'],['AVG HR','142 bpm'],['MAX HR','168 bpm'],['PRS','1']],
+        segs: [seg('Two-hand swing','5 × 10 · 24 kg','6:48','−0:22 vs last'), seg('Clean & press','5 × 5 · 28 kg · PR','9:04','new weight'), seg('Goblet squat','4 × 8 · 24 kg','7:36','−0:08 vs last'), seg('Turkish get-up','3 × 2 · 16 kg','11:12','+0:15 vs last'), seg('Cooldown','stretch + carry','5:40','—')],
+        blocks: blocksOf([16, 21, 18, 27, 13]),
+        hr: [98,112,126,138,131,146,152,144,158,150,139,148,161,155,142,150,163,168,151,138,124,110], zones: [8,26,44,20,2] },
+      { t: 'out', ic: 'trail', name: 'Sunrise Ridge', sub: 'Wed · 6:48 AM · trail run', stat: '4.2 km', statLab: '+186 m',
+        kick: 'WED AUG 6 · 6:48 AM · APPLE WATCH · GPS', loc: 'SUNRISE RIDGE LOOP', aHr: 148, xHr: 172, distLab: '4.2 KM',
+        stats: [['DISTANCE','4.2 km'],['ELEV GAIN','+186 m'],['MOVING TIME','26:04'],['STEPS','5,120'],['CALORIES','388'],['AVG HR','148 bpm']],
+        route: 'M46 210 C90 186 78 150 122 138 C166 126 178 158 216 146 C258 132 250 92 300 84 C330 79 348 96 356 66', sx: 46, sy: 210, ex: 356, ey: 66,
+        splits: [{k:'1', p:'5:48', w:'94%'},{k:'2', p:'6:32', w:'82%'},{k:'3', p:'6:04', w:'89%'},{k:'4', p:'5:41', w:'96%'},{k:'4.2', p:'6:20', w:'85%'}],
+        elev: [1832,1840,1848,1859,1866,1872,1880,1893,1902,1913,1918,1910,1898,1886,1874,1868,1859,1850,1846,1840,1836,1832],
+        hr: [102,118,132,141,148,155,150,144,152,158,163,168,172,166,158,150,155,148,140,132,120,108], zones: [4,18,42,31,5] },
+      { t: 'cir', ic: 'cir', name: 'EMOM 20', sub: 'Tue · 6:02 PM · circuit', stat: '20:00', statLab: '20 rounds',
+        kick: 'TUE AUG 5 · 6:02 PM · MIRRORED FROM WATCH', hero: '20:00', aHr: 158, xHr: 176,
+        stats: [['TOTAL TIME','20:00'],['ROUNDS','20 of 20'],['CALORIES','214'],['AVG WORK',':26 /min'],['AVG HR','158 bpm'],['MAX HR','176 bpm']],
+        segs: [seg('Odd minutes — swings','12 reps · 24 kg · 10 rounds',':26 avg','fastest :22'), seg('Even minutes — cleans','8 reps · 2×16 kg · 10 rounds',':31 avg','slowest :38'), seg('Rounds unbroken','no minutes missed','20 of 20','—')],
+        blocks: alt(20, 5, 5),
+        hr: [96,120,138,150,158,151,162,154,165,157,167,159,168,160,170,162,171,163,166,152,134,116], zones: [3,12,34,40,11] },
+      { t: 'out', ic: 'walk', name: 'Afternoon Walk', sub: 'Mon · 1:49 PM · walk', stat: '2.3 km', statLab: '3,822 steps',
+        kick: 'MON AUG 4 · 1:49 PM · APPLE WATCH · GPS', loc: 'RIVERSIDE PATH', aHr: 110, xHr: 134, distLab: '2.3 KM',
+        stats: [['DISTANCE','2.3 km'],['ELEV GAIN','+48 m'],['MOVING TIME','46:52'],['STEPS','3,822'],['CALORIES','232'],['AVG HR','110 bpm']],
+        route: 'M40 190 C110 176 150 196 210 178 C260 164 300 176 352 148', sx: 40, sy: 190, ex: 352, ey: 148,
+        splits: [{k:'1', p:'19:42', w:'88%'},{k:'2', p:'20:31', w:'84%'},{k:'2.3', p:'21:08', w:'80%'}],
+        elev: [1828,1832,1836,1841,1846,1852,1856,1860,1857,1852,1848,1844,1840,1837,1834,1832,1830,1829,1828,1827,1826,1826],
+        hr: [88,96,102,108,112,106,110,114,118,109,105,112,116,120,113,108,104,110,107,102,96,92], zones: [46,44,10,0,0] },
+      { t: 'kb', ic: 'kb', name: 'KB Block A', sub: 'Sat Aug 2 · 7:31 AM · kettlebell', stat: '38:44', statLab: '7,260 kg',
+        kick: 'SAT AUG 2 · 7:31 AM · MIRRORED FROM WATCH', hero: '38:44', aHr: 139, xHr: 164,
+        stats: [['TOTAL TIME','38:44'],['VOLUME','7,260 kg'],['CALORIES','442'],['AVG HR','139 bpm'],['MAX HR','164 bpm'],['PRS','0']],
+        segs: [seg('Snatch','5 × 6 · 20 kg','7:12','−0:10 vs last'), seg('Bent-over row','4 × 8 · 24 kg','8:04','—'), seg('Reverse lunge','4 × 6 · 2×16 kg','7:48','+0:12 vs last'), seg('Farmer carry','4 × 40 m · 2×24 kg','6:32','−0:05 vs last'), seg('Mobility','hips + t-spine','6:08','—')],
+        blocks: blocksOf([18, 21, 20, 17, 16]),
+        hr: [95,108,122,134,140,133,145,151,143,155,148,137,146,158,152,140,148,160,154,141,126,108], zones: [10,28,42,18,2] },
+      { t: 'cir', ic: 'cir', name: 'Tabata Squats', sub: 'Fri Aug 1 · 5:44 PM · circuit', stat: '4:00', statLab: '8 rounds',
+        kick: 'FRI AUG 1 · 5:44 PM · MIRRORED FROM WATCH', hero: '4:00', aHr: 156, xHr: 178,
+        stats: [['TOTAL TIME','4:00'],['ROUNDS','8 of 8'],['CALORIES','96'],['TOTAL REPS','86'],['AVG HR','156 bpm'],['MAX HR','178 bpm']],
+        segs: [seg('Work — goblet squat','20 s × 8 · 20 kg','9–12 reps','86 total'), seg('Rest','10 s × 8','—','—')],
+        blocks: alt(16, 8.3, 4.2),
+        hr: [94,128,152,164,158,170,162,174,166,176,168,178,161,146,124,104], zones: [5,10,22,38,25] }
+    ];
+    const chart = (a, w, h, p) => { const mn = Math.min(...a), mx = Math.max(...a), r = (mx - mn) || 1; return a.map((v, i) => ((i / (a.length - 1)) * w).toFixed(1) + ',' + (p + (1 - (v - mn) / r) * (h - 2 * p)).toFixed(1)).join(' '); };
+    const fil = s.actFil;
+    const idxs = A.map((a, i) => i).filter(i => fil === 'all' || (fil === 'gym' ? A[i].t !== 'out' : A[i].t === 'out'));
+    const chip = (k) => s.actFil === k ? ['#232227', '#FFFFFF'] : ['#FFFFFF', '#66646C'];
+    const [cAB, cAC] = chip('all'), [cGB, cGC] = chip('gym'), [cOB, cOC] = chip('out');
+    const sel = s.actSel >= 0 ? A[s.actSel] : null;
+    const out = {
+      actListOn: s.actList, actDetOn: !!sel,
+      actOpen: () => this.setState({ actList: true }),
+      actClose: () => this.setState({ actList: false, actSel: -1 }),
+      actBack: () => this.setState({ actSel: -1 }),
+      actCount: idxs.length + ' of ' + A.length,
+      fAllBg: cAB, fAllCol: cAC, fGymBg: cGB, fGymCol: cGC, fOutBg: cOB, fOutCol: cOC,
+      filAll: () => this.setState({ actFil: 'all' }), filGym: () => this.setState({ actFil: 'gym' }), filOut: () => this.setState({ actFil: 'out' }),
+      actItems: idxs.map(i => { const a = A[i]; return { name: a.name, sub: a.sub, stat: a.stat, statLab: a.statLab, bg: CLR[a.t][0], col: CLR[a.t][1], icon: ICO[a.ic], open: () => this.setState({ actSel: i }) }; }),
+      avGps: false, avStr: false
+    };
+    if (sel) {
+      out.avGps = sel.t === 'out'; out.avStr = sel.t !== 'out';
+      out.avName = sel.name; out.avKick = sel.kick; out.avHero = sel.hero || '';
+      out.avLoc = sel.loc || ''; out.avRoute = sel.route || 'M0 0'; out.avSX = sel.sx || 0; out.avSY = sel.sy || 0; out.avEX = sel.ex || 0; out.avEY = sel.ey || 0;
+      out.avDistLab = sel.distLab || '';
+      out.avStats = sel.stats.map(x => ({ l: x[0], v: x[1] }));
+      out.avSegs = sel.segs || []; out.avBlocks = sel.blocks || []; out.avSplits = sel.splits || [];
+      const hp = chart(sel.hr, 360, 110, 8);
+      out.avHrLine = hp; out.avHrPoly = '0,110 ' + hp + ' 360,110';
+      out.avAvgHr = sel.aHr + ' bpm'; out.avMaxHr = sel.xHr + ' bpm';
+      if (sel.elev) { const ep = chart(sel.elev, 360, 110, 8); out.avElevPoly = '0,110 ' + ep + ' 360,110'; out.avElevLine = ep; out.avElevHi = Math.max(...sel.elev).toLocaleString('en-US') + ' m'; out.avElevLo = Math.min(...sel.elev).toLocaleString('en-US') + ' m'; }
+      out.avZones = sel.zones.map((p, i) => ({ z: 'Z' + (i + 1), p: p + '%', w: Math.min(100, p * 2.2) + '%', c: ZC[i] }));
+    }
+    return out;
   }
   renderVals() {
     const s = this.state;
@@ -854,6 +1090,7 @@ class Component extends DCLogic {
       watchFace: s.pair === 2 ? '#A63D63' : '#454349',
       pairTap: () => { if (s.pair === 0) { this.setState({ pair: 1 }); setTimeout(() => this.setState({ pair: 2 }), 1400); } else if (s.pair === 2) this.setState({ pair: 0 }); },
       ...this._tapeVals(s),
+      ...this._acts(s),
       pts, apts: '6,128 ' + pts + ' 353.6,128',
       dots: xy.map(p => ({ x: +p[0].toFixed(1), y: +p[1].toFixed(1) })),
       ttPX: xy[si][0].toFixed(1), ttPY: xy[si][1].toFixed(1),

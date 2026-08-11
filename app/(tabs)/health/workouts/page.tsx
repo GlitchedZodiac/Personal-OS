@@ -24,6 +24,12 @@ interface TrainData {
   date: string;
   weekNumber: number;
   weekVolumeKg: number;
+  weekOverview: {
+    sessions: number;
+    activeMinutes: number;
+    kcal: number;
+    outdoorKm: number;
+  };
   latestPR: {
     exerciseName: string;
     kind: string;
@@ -418,6 +424,58 @@ export default function TrainPage() {
           Routines
         </button>
       </div>
+
+      {/* THIS WEEK · OVERVIEW (design 2026-08-11 rev). Surfaced deviation:
+          the design's "4 of 5 planned" needs a weekly plan target that
+          doesn't exist yet — the label shows the live session count. */}
+      {data?.weekOverview && (
+        <div className="mt-3 rounded-[18px] bg-card p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+          <div className="flex items-center justify-between">
+            <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+              THIS WEEK · OVERVIEW
+            </p>
+            <p className="text-[11px] font-semibold text-[#5E9B72]">
+              {data.weekOverview.sessions} this week
+            </p>
+          </div>
+          <div className="mt-3 flex">
+            {(
+              [
+                [String(data.weekOverview.sessions), "SESSIONS", null],
+                [
+                  `${Math.floor(data.weekOverview.activeMinutes / 60)}:${String(
+                    data.weekOverview.activeMinutes % 60
+                  ).padStart(2, "0")}`,
+                  "ACTIVE",
+                  null,
+                ],
+                [fmt(data.weekOverview.kcal), "KCAL", null],
+                [data.weekOverview.outdoorKm.toFixed(1), "OUTDOORS", "km"],
+              ] as const
+            ).map(([value, label, unit]) => (
+              <div key={label} className="flex-1">
+                <div
+                  className="text-[19px] font-bold text-foreground tabular-nums"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {value}
+                  {unit && <span className="text-[12px] text-[#66646C]"> {unit}</span>}
+                </div>
+                <div className="mt-0.5 text-[9.5px] font-semibold tracking-[0.08em] text-muted-foreground">
+                  {label}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => router.push("/health/workouts/activities")}
+            className="mt-3.5 flex w-full items-center justify-center gap-1.5 rounded-[10px] bg-accent py-[11px] text-[13px] font-semibold text-[#8C2F51] hover:bg-[#F0D3E0]"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            View activities <span>→</span>
+          </button>
+        </div>
+      )}
 
       {/* NEW PR banner */}
       {data?.latestPR && (

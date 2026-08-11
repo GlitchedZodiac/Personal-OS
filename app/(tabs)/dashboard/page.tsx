@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { TrainIcon } from "@/components/pitaya-icons";
+import { SettingsIcon, TrainIcon } from "@/components/pitaya-icons";
 import { useDataLoggedListener } from "@/components/use-data-logged";
 import { SheetPortal } from "@/components/sheet-portal";
+import { MacroTargetsSheet } from "@/components/macro-targets-sheet";
 import {
   getOrCreateMicrophoneStream,
   deactivateMicrophoneStream,
@@ -40,11 +41,15 @@ interface TodayData {
   habits: string[];
 }
 
+// His stack, his order (2026-08-11 ask): creatine, magnesium, complex B,
+// journaling, mobility — steps stays as the daily movement floor.
 const HABITS = [
   { key: "creatine", label: "Creatine" },
+  { key: "magnesium", label: "Magnesium" },
+  { key: "complex-b", label: "Complex B" },
+  { key: "journal", label: "Journal" },
   { key: "mobility", label: "Mobility" },
   { key: "10k steps", label: "10k steps" },
-  { key: "journal", label: "Journal" },
 ];
 
 // Local prompt rotation until the chat rebuild writes reflective ones.
@@ -85,6 +90,7 @@ export default function TodayPage() {
   const router = useRouter();
   const [data, setData] = useState<TodayData | null>(null);
   const [flip, setFlip] = useState(false);
+  const [showTargets, setShowTargets] = useState(false);
   const [memoState, setMemoState] = useState<MemoState>("idle");
   const [memoSeconds, setMemoSeconds] = useState(0);
   const [showJournal, setShowJournal] = useState(false);
@@ -343,8 +349,16 @@ export default function TodayPage() {
         )}
       </div>
 
-      {/* Calorie ring card */}
-      <div className="mt-[18px] rounded-[20px] bg-card p-5 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+      {/* Calorie ring card — the gear opens the same Targets sheet Food
+          uses ("there's nowhere for me to enter my goal", 2026-08-11). */}
+      <div className="relative mt-[18px] rounded-[20px] bg-card p-5 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+        <button
+          onClick={() => setShowTargets(true)}
+          aria-label="Set calorie and macro targets"
+          className="absolute right-3.5 top-3.5 flex h-8 w-8 items-center justify-center rounded-full bg-accent text-[#8C2F51] hover:bg-[#F0D3E0]"
+        >
+          <SettingsIcon size={16} />
+        </button>
         <button
           onClick={() => setFlip((v) => !v)}
           className="flex w-full items-center gap-5 text-left"
@@ -617,14 +631,15 @@ export default function TodayPage() {
           </p>
           <p className="text-[11px] text-muted-foreground">tap to tick</p>
         </div>
-        <div className="flex gap-2.5">
+        {/* 6 habits wrap 3-up on phones instead of crushing into one row */}
+        <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6">
           {HABITS.map(({ key, label }) => {
             const checked = data?.habits.includes(key) ?? false;
             return (
               <button
                 key={key}
                 onClick={() => toggleHabit(key)}
-                className="flex-1 text-center"
+                className="text-center"
               >
                 <div
                   className="mx-auto flex h-10 w-10 items-center justify-center rounded-[14px] transition-colors duration-200"
@@ -708,6 +723,12 @@ export default function TodayPage() {
           </div>
         </SheetPortal>
       )}
+
+      <MacroTargetsSheet
+        open={showTargets}
+        onClose={() => setShowTargets(false)}
+        onSaved={load}
+      />
     </div>
   );
 }

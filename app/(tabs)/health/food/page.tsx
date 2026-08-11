@@ -68,11 +68,12 @@ const MEAL_TILE: Record<string, { bg: string; fg: string }> = {
 // and dinner, so those two are the slots worth nagging about.
 const PROMPTED_MEALS = ["lunch", "dinner"] as const;
 
+// His real stack (2026-08-11) — same habit_checks keys Today ticks, so a
+// check here IS the habit check there.
 const SUPPLEMENTS = [
   { key: "creatine", label: "Creatine · 5g" },
-  { key: "omega-3", label: "Omega-3" },
-  { key: "vitamin-d", label: "Vitamin D" },
   { key: "magnesium", label: "Magnesium · evening" },
+  { key: "complex-b", label: "Complex B" },
 ];
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");

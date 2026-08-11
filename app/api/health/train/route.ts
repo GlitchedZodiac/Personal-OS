@@ -69,6 +69,8 @@ export async function GET(request: NextRequest) {
           description: true,
           exercises: true,
           durationMinutes: true,
+          caloriesBurned: true,
+          distanceMeters: true,
         },
       }),
       prisma.personalRecord.findFirst({ orderBy: { achievedAt: "desc" } }),
@@ -126,6 +128,19 @@ export async function GET(request: NextRequest) {
         todaysWorkout = w;
       }
     }
+
+    // THIS WEEK · OVERVIEW (design 2026-08-11 rev): sessions, active time,
+    // burn, outdoor distance for the current Mon-start week.
+    const weekOverview = { sessions: 0, activeMinutes: 0, kcal: 0, outdoorKm: 0 };
+    for (const w of workouts) {
+      const localDate = getDateStringInTimeZone(w.startedAt, timeZone);
+      if (getWeekStartDateString(localDate, 1) !== weekStartStr) continue;
+      weekOverview.sessions += 1;
+      weekOverview.activeMinutes += w.durationMinutes ?? 0;
+      weekOverview.kcal += Math.round(w.caloriesBurned ?? 0);
+      weekOverview.outdoorKm += (w.distanceMeters ?? 0) / 1000;
+    }
+    weekOverview.outdoorKm = Math.round(weekOverview.outdoorKm * 10) / 10;
 
     const weeklyVolume = [...buckets.entries()].map(([weekStart, volumeKg]) => ({
       weekStart,
@@ -226,6 +241,7 @@ export async function GET(request: NextRequest) {
       date: todayStr,
       weekNumber: isoWeek(todayStr),
       weekVolumeKg,
+      weekOverview,
       latestPR,
       session,
       weeklyVolume,

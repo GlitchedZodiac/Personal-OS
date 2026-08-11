@@ -4,6 +4,12 @@ Cross-session queue. Format:
 `- **[YYYY-MM-DD] [source]** — what | why deferred | where to pick it up`
 Newest at top. Annotate `[resolved by X, date]` instead of deleting.
 
+- **[2026-08-11] [MICHAEL — dock photo suite spec]** — the dock camera grows into the full capture surface: (1) take a photo OR pick from the photo library (he shoots outside the app too); (2) multiple photos in one capture; (3) attach context to the photo(s) by typed note OR voice ("this label, and I had 2.5 servings — also store it as a usual") → the AI proposes MULTIPLE actions from one capture (log food scaled by servings + save product), each as its own confirm card in the chat thread; (4) this fold finishes the last legacy path — the camera flow still runs photo→analyze→legacy confirm outside the thread (see 2b dock-fold item). Contract sketch: dock capture → /api/ai/chat/stream with image parts + optional note/voice transcript; scan-label logic becomes a chat tool; proposals land as cards | large — build as its own block | components/voice-input.tsx camera path + app/api/ai/chat/stream multimodal input
+
+- **[2026-08-11] [main]** — journal "+" should offer camera OR library | Tonight's-page + button currently only opens the camera capture on the Today card; add a photo-library picker option (input accept both, or an action sheet) | app/(tabs)/dashboard/page.tsx journal card
+
+- **[2026-08-11] [main]** — macro targets slider rebrand | Today + Food now both open MacroTargetsSheet (gear on the calorie ring); he wants the legacy three-way percent slider (components/macro-slider.tsx — 1%-granular, "very unique and easy to move") inside it, restyled to Pitaya (thinner bar, brand colors, "not so ugly") | components/macro-targets-sheet.tsx + macro-slider.tsx
+
 - **[2026-08-11] [main]** — body-composition trends have no surface | VeSync history now stores bf%/muscle/BMR/visceral fat/metabolic age per weigh-in (his bf: 34.7% → 20.7%), but only weight charts; chat can quote them via weight_trend weekly series meanwhile | Body screen composition panel — needs a design slice first (PORT GATE)
 
 - **[2026-08-10] [main]** — builder UI can't mint new movements | the web routine builder's free-typed unknown names stay raw strings (no category picker, so no `category` → no mint); the AI chat path mints fine — parity needs a small category select on unrecognized names | app/(tabs)/health/workouts/routines/page.tsx + POST /api/health/sequences (already supports it)

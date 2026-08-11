@@ -275,7 +275,15 @@ export default function ChatPage() {
           const res = await fetch("/api/ai/transcribe", { method: "POST", body: form });
           const body = await res.json().catch(() => ({}));
           if (res.ok && body.text?.trim()) {
-            send(body.text.trim(), "voice");
+            // Mid-draft dictation APPENDS instead of sending — his "split"
+            // ask: keep talking or typing, then hit send deliberately.
+            const spoken = body.text.trim();
+            setDraft((prev) => {
+              if (prev.trim()) return `${prev.trim()} ${spoken}`;
+              // empty draft → the classic flow: speak and it sends
+              sendRef.current?.(spoken, "voice");
+              return prev;
+            });
           } else {
             toast.error("Couldn't hear that — try again.");
           }
@@ -784,8 +792,20 @@ export default function ChatPage() {
           disabled={busy}
           className="min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground"
         />
-        {draft.trim() ? (
-          // Typed something → the button sends. Mic returns when it's empty.
+        {/* Mic is always available (mid-draft dictation appends); the send
+            arrow joins it whenever there's text — his "split" ask. */}
+        <button
+          type="button"
+          onClick={() =>
+            recording ? recorderRef.current?.stop() : startVoice()
+          }
+          disabled={busy || transcribing}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors"
+          style={{ background: recording ? "#A63D63" : "#F6E3EB" }}
+        >
+          <MicGlyph color={recording ? "#FFFFFF" : "#8C2F51"} />
+        </button>
+        {draft.trim() && (
           <button
             type="submit"
             disabled={busy}
@@ -804,18 +824,6 @@ export default function ChatPage() {
               <path d="M22 2 11 13" />
               <path d="M22 2 15 22l-4-9-9-4Z" />
             </svg>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() =>
-              recording ? recorderRef.current?.stop() : startVoice()
-            }
-            disabled={busy || transcribing}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors"
-            style={{ background: recording ? "#A63D63" : "#F6E3EB" }}
-          >
-            <MicGlyph color={recording ? "#FFFFFF" : "#8C2F51"} />
           </button>
         )}
       </form>

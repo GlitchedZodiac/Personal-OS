@@ -94,6 +94,33 @@ export function SettingsIcon(props: IconProps) {
   );
 }
 
+/* ── Activity icons (Train → Activities, design 2026-08-11 rev ICO map,
+      verbatim paths; kettlebell = TrainIcon above) ─────────────────────── */
+
+export function CircuitIcon(props: IconProps) {
+  return (
+    <Stroke24 {...props}>
+      <path d="M10 2.5h4M12 5.5a8 8 0 1 0 0.01 0ZM12 9.5v4.5" />
+    </Stroke24>
+  );
+}
+
+export function TrailIcon(props: IconProps) {
+  return (
+    <Stroke24 {...props}>
+      <path d="M3 18L9 8l4 5.5 3-4L21 18Z" />
+    </Stroke24>
+  );
+}
+
+export function WalkIcon(props: IconProps) {
+  return (
+    <Stroke24 {...props}>
+      <path d="M12 3.5a1.9 1.9 0 1 1-0.01 0M13 8.5l-3 5 4 3V21M10 13.5l-3 2.5M14 16.5l4 2.5" />
+    </Stroke24>
+  );
+}
+
 /* ── Dock icons (chat · mic · camera, verbatim) ─────────────────────── */
 
 export function ChatBubbleIcon(props: IconProps) {

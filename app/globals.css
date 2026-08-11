@@ -337,6 +337,15 @@ main {
   }
 }
 
+@keyframes pushIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
 @keyframes vu {
   0%,
   100% {

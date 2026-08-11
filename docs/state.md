@@ -18,6 +18,46 @@ crude until 2c.
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).
 
+## 2026-08-11b — Activities port (cloud design) + Michael's batch
+
+His cloud design rev (claude.ai/design "Health app design system" →
+Pitaya App.dc.html, +238 lines, imported via DesignSync into
+docs/design/) added the training-history surfaces; ported same-day per
+THE PORT GATE, plus the quick wins from his voice-note batch.
+
+- **THIS WEEK · OVERVIEW** on Train (design verbatim): sessions / active
+  h:mm / kcal / outdoors km for the Mon-week + "View activities →".
+  Deviation surfaced: design's "4 of 5 planned" needs a weekly plan
+  target that doesn't exist — label shows the live session count.
+- **Activities** (/health/workouts/activities): push-in list, All/Gym/
+  Outdoor chips, typed icon circles (kettlebell/circuit/trail/walk —
+  extracted verbatim into pitaya-icons.tsx), count pill, infinite
+  scroll (GET /api/health/workouts/activities cursor pagination; 103
+  activities). Strava titles trimmed of their stat tails (splits on
+  ·/•).
+- **Activity detail** (GET /api/health/workouts/activity?id=): outdoor →
+  dark GPS panel (real polyline projected; 14 activities have routes;
+  no-route rows show the grid honestly), ELEVATION (altitudeStream),
+  HR chart + TIME IN ZONES (hrStream/timeInZones, design zone ramp);
+  strength/circuit → SEGMENT TIMELINE (hero from stepSeconds, block
+  bar: proportions for circuits, alternating rounds for EMOMs) +
+  SEGMENTS · TIME TO COMPLETE with per-movement Δ vs the previous run
+  of the same routine (server compares stepSeconds positionally).
+  Deviations surfaced: SPLITS card omitted (no per-km data stored);
+  "Apple Watch" copy is source-aware (Strava/live/chat history).
+- **Chat composer split** (his ask): mic stays visible always; send
+  arrow joins it when text exists; dictating with a draft APPENDS to it
+  instead of auto-sending. (His "still just a microphone" report = the
+  stale home-icon bundle from 2026-08-09i — re-add still pending on his
+  phone.)
+- **Habits are his real stack**: creatine, magnesium, complex B,
+  journal, mobility, 10k steps (3-up grid on phones); Food SUPPLEMENTS
+  now the same three supplement keys (omega-3/vitamin-d rows were
+  invented — dropped). Same habit_checks keys → a tick is a tick.
+- **Targets reachable from Today**: gear on the calorie ring opens the
+  same MacroTargetsSheet as Food. Slider rebrand + journal library-
+  picker + the dock photo suite → deferred-items (specs filed).
+
 ## 2026-08-11a — VeSync history imported; the weight trend is the whole journey
 
 His ask: "I have been tracking my weight all along and I'd like to report
