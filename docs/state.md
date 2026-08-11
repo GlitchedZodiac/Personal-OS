@@ -5,11 +5,12 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-09 ([watch] server-truth PRs + PORT GATE parity;
-device install runbook ready — next watch session needs Michael present)
-**Current phase:** Watch: simulator-complete (core loop + server-truth PRs +
-fonts/glyphs); real-device install is the next step (docs/
-watch-device-runbook.md). Web: Pitaya stages continuing per 09f order.
+**Last updated:** 2026-08-11 ([watch] streams contract adopted, on-wrist OTA)
+**Current phase:** Watch: LIVE ON MICHAEL'S WRIST (Release, OTA-updated) —
+routines-first IA, EMOM + circuit runners, weights editor, streams
+enrichment feeding Activities charts. Next watch blocks: circuits from the
+AI builder (main lane), GPS routes (3.5), rest-timer/sleep surfaces per
+design. Web: Pitaya stages continuing; Activities detail + streams live.
 **Branch in flight:** `claude/phase1-modernization` (web) ·
 `claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch).
 
