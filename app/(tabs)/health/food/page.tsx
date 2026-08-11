@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useDataLoggedListener } from "@/components/use-data-logged";
 import { SheetPortal } from "@/components/sheet-portal";
 import { MacroTargetsSheet } from "@/components/macro-targets-sheet";
+import { fetchServerSettings } from "@/lib/settings";
 
 // Pitaya Food — port of the design's Food screen (docs/design/
 // pitaya-app.dc.html, screen 2): date header + kcal pill, the day
@@ -119,6 +121,8 @@ function compressImage(file: File, maxW = 1100): Promise<string> {
 }
 
 export default function FoodPage() {
+  const router = useRouter();
+  const [goal, setGoal] = useState<number | null>(null);
   const [entries, setEntries] = useState<FoodEntry[] | null>(null);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [supplementsDone, setSupplementsDone] = useState<string[]>([]);
@@ -130,7 +134,23 @@ export default function FoodPage() {
   const [saveUsualFor, setSaveUsualFor] = useState<FoodEntry | null>(null);
   const [showTargets, setShowTargets] = useState(false);
   const labelInputRef = useRef<HTMLInputElement>(null);
-  const dateStr = localDateStr();
+  // Day stepper (design 2026-08-11e rev): view any past day read-only;
+  // ?date=YYYY-MM-DD deep-links (Food History rows land here).
+  const todayStr = localDateStr();
+  const [viewDate, setViewDate] = useState(() => {
+    if (typeof window === "undefined") return localDateStr();
+    const q = new URLSearchParams(window.location.search).get("date");
+    return q && /^\d{4}-\d{2}-\d{2}$/.test(q) && q <= localDateStr() ? q : localDateStr();
+  });
+  const isToday = viewDate === todayStr;
+  const dateStr = viewDate;
+
+  const stepDay = (dir: -1 | 1) => {
+    const [y, m, d] = viewDate.split("-").map(Number);
+    const next = new Date(y, m - 1, d + dir);
+    const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+    if (nextStr <= todayStr) setViewDate(nextStr);
+  };
 
   const load = useCallback(() => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -151,8 +171,27 @@ export default function FoodPage() {
   useEffect(load, [load]);
   useDataLoggedListener(load);
 
+  useEffect(() => {
+    fetchServerSettings()
+      .then((s) => setGoal(s.calorieTarget ?? null))
+      .catch(() => setGoal(null));
+  }, []);
+
   const dayTotal = useMemo(
     () => (entries ?? []).reduce((sum, e) => sum + (e.calories || 0), 0),
+    [entries]
+  );
+
+  const dayMacros = useMemo(
+    () =>
+      (entries ?? []).reduce(
+        (acc, e) => ({
+          p: acc.p + (e.proteinG || 0),
+          c: acc.c + (e.carbsG || 0),
+          f: acc.f + (e.fatG || 0),
+        }),
+        { p: 0, c: 0, f: 0 }
+      ),
     [entries]
   );
 
@@ -169,10 +208,29 @@ export default function FoodPage() {
     (m) => !(entries ?? []).some((e) => e.mealType === m)
   );
 
-  const dateHeader = new Date()
-    .toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric" })
-    .toUpperCase()
-    .replace(",", " ·");
+  const dateHeader = (() => {
+    const [y, m, d] = viewDate.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d))
+      .toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", timeZone: "UTC" })
+      .toUpperCase()
+      .replace(",", " ·");
+  })();
+
+  const stepLabel = (() => {
+    if (isToday) return "Today";
+    const [y, m, d] = viewDate.split("-").map(Number);
+    const yest = new Date();
+    yest.setDate(yest.getDate() - 1);
+    const yestStr = `${yest.getFullYear()}-${String(yest.getMonth() + 1).padStart(2, "0")}-${String(yest.getDate()).padStart(2, "0")}`;
+    if (viewDate === yestStr) return "Yesterday";
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  })();
+
 
   // ── Log a usual / product with one tap ──
   const logFavorite = async (fav: Favorite, servingCount = 1) => {
@@ -348,17 +406,103 @@ export default function FoodPage() {
         </div>
       </div>
 
-      {/* Day timeline */}
+      {/* Day stepper (design 2026-08-11e rev): ‹ day › + History */}
+      <div className="mt-3.5 flex items-center gap-2.5">
+        <button
+          onClick={() => stepDay(-1)}
+          aria-label="Previous day"
+          className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-card hover:bg-[#FAF9FA]"
+        >
+          <span className="-mt-0.5 text-base leading-none text-foreground">‹</span>
+        </button>
+        <div
+          className="flex-1 text-center text-[13px] font-semibold text-foreground"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          {stepLabel}
+        </div>
+        <button
+          onClick={() => stepDay(1)}
+          aria-label="Next day"
+          className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-card hover:bg-[#FAF9FA]"
+          style={{ opacity: isToday ? 0.35 : 1 }}
+        >
+          <span className="-mt-0.5 text-base leading-none text-foreground">›</span>
+        </button>
+        <button
+          onClick={() => router.push("/health/food/history")}
+          className="flex flex-none items-center gap-1.5 rounded-full bg-accent px-[13px] py-2 text-[11.5px] font-semibold text-[#8C2F51] hover:bg-[#F0D3E0]"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C2F51" strokeWidth="2" strokeLinecap="round">
+            <rect x="3" y="5" width="18" height="16" rx="3" />
+            <path d="M8 3v4M16 3v4M3 10h18" />
+          </svg>
+          History
+        </button>
+      </div>
+
+      {/* Past day: DAY TOTAL summary (design foodPast state) */}
+      {!isToday && entries !== null && (
+        <div className="mt-3.5 rounded-[18px] bg-card p-[18px] shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+          <div className="flex items-baseline justify-between">
+            <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+              DAY TOTAL
+            </p>
+            {goal != null && (
+              <p
+                className="text-[11px] font-semibold"
+                style={{ color: dayTotal - goal <= 0 ? "#5E9B72" : "#D9A23E" }}
+              >
+                {dayTotal - goal <= 0
+                  ? `−${fmt(goal - dayTotal)} under goal`
+                  : `+${fmt(dayTotal - goal)} over goal`}
+              </p>
+            )}
+          </div>
+          <div className="mt-2.5 flex items-baseline gap-2">
+            <span
+              className="text-[40px] font-bold leading-none text-foreground tabular-nums"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {fmt(dayTotal)}
+            </span>
+            <span className="text-xs text-[#66646C]">
+              kcal{goal != null ? ` · goal ${fmt(goal)}` : ""}
+            </span>
+          </div>
+          <div className="mt-3 flex gap-4 text-xs text-[#66646C] tabular-nums">
+            <span>
+              <span className="font-bold text-foreground">{fmt(dayMacros.p)}g</span> protein
+            </span>
+            <span>
+              <span className="font-bold text-foreground">{fmt(dayMacros.c)}g</span> carbs
+            </span>
+            <span>
+              <span className="font-bold text-foreground">{fmt(dayMacros.f)}g</span> fat
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Day timeline (today) / MEALS (past) — rows keep delete either way */}
       <div className="mt-[18px] overflow-hidden rounded-[18px] bg-card shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+        {!isToday && timeline.length > 0 && (
+          <p className="px-4 pb-1.5 pt-3.5 text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+            MEALS
+          </p>
+        )}
         {timeline.map((entry) => {
           const tile = MEAL_TILE[entry.mealType] ?? MEAL_TILE.snack;
           return (
-            <button
+            <div
               key={entry.id}
-              onClick={() => setSaveUsualFor(entry)}
               className="flex w-full items-center justify-between border-b border-muted px-4 py-3.5 text-left last:border-b-0"
             >
-              <div className="flex min-w-0 items-center gap-3">
+              <button
+                onClick={() => setSaveUsualFor(entry)}
+                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+              >
                 <div
                   className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] text-[9px] tracking-[0.08em]"
                   style={{ background: tile.bg, color: tile.fg }}
@@ -383,16 +527,30 @@ export default function FoodPage() {
                     {macroLine(entry)}
                   </p>
                 </div>
-              </div>
+              </button>
               <span className="ml-2 shrink-0 text-[13.5px] font-semibold tabular-nums text-foreground">
                 {fmt(entry.calories)}
               </span>
-            </button>
+              {/* his ask: delete wrong logs — visible ✕ (removal used to
+                  hide inside the save-usual sheet), confirm before it goes */}
+              <button
+                onClick={() => {
+                  if (window.confirm(`Delete "${entry.foodDescription}"?`)) {
+                    deleteEntry(entry);
+                  }
+                }}
+                aria-label={`Delete ${entry.foodDescription}`}
+                className="ml-2.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[13px] leading-none text-[#C9C7CD] hover:bg-[#F6E3EB] hover:text-[#8C2F51]"
+              >
+                ✕
+              </button>
+            </div>
           );
         })}
 
-        {/* Not-logged prompts — the design's dashed row */}
-        {missingMeals.map((meal) => (
+        {/* Not-logged prompts — the design's dashed row (today only;
+            past days are closed) */}
+        {isToday && missingMeals.map((meal) => (
           <div
             key={meal}
             className="flex items-center justify-between border-b border-muted px-4 py-3.5 last:border-b-0"
@@ -411,13 +569,27 @@ export default function FoodPage() {
           </div>
         ))}
 
-        {entries !== null && timeline.length === 0 && missingMeals.length === 0 && (
+        {entries !== null && timeline.length === 0 && (isToday ? missingMeals.length === 0 : true) && (
           <p className="px-4 py-6 text-center text-[12.5px] text-muted-foreground">
-            Nothing logged yet today.
+            {isToday ? "Nothing logged yet today." : "Nothing was logged this day."}
           </p>
         )}
       </div>
 
+      {!isToday && (
+        <p className="mt-3.5 text-center text-[11px] text-muted-foreground">
+          Past days are closed.{" "}
+          <button
+            onClick={() => router.push("/health/food/history")}
+            className="font-semibold text-[#8C2F51]"
+          >
+            Open full history →
+          </button>
+        </p>
+      )}
+
+      {isToday && (
+      <>
       {/* MY USUALS */}
       <p className="micro-label mb-2.5 mt-5">My usuals</p>
       <div className="flex gap-2.5 overflow-x-auto pb-1">
@@ -479,6 +651,8 @@ export default function FoodPage() {
           })}
         </div>
       </div>
+      </>
+      )}
 
       {/* ——— Label reading confirm (AI proposes → you confirm → it saves) ——— */}
       {reading && (
