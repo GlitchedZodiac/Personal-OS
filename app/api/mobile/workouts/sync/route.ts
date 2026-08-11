@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireMobileSession } from "@/lib/mobile-session";
 import { prisma } from "@/lib/prisma";
 import { detectAndRecordPRs, type NewPR } from "@/lib/prs";
+import { buildStreamMetrics } from "@/lib/strava";
 
 type MobileWorkoutPayload = {
   externalId?: string;
@@ -57,6 +58,25 @@ export async function POST(request: NextRequest) {
     // watch can celebrate server-confirmed records after sync.
     const prResults: Array<{ externalId: string | null; newPRs: NewPR[] }> = [];
 
+    // Watch sends raw parallel streams (hrStream bpm + timeStream elapsed-s,
+    // optional altitudeStream); the SERVER owns the analytics — same
+    // downsample/zones/load math the Strava import runs, so the Activities
+    // detail charts light up identically for watch-recorded sessions.
+    const enrichMetrics = (
+      raw: Prisma.InputJsonValue | undefined
+    ): Prisma.InputJsonValue | undefined => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+      const m = raw as Record<string, unknown>;
+      const hr = Array.isArray(m.hrStream) ? (m.hrStream as number[]) : [];
+      const time = Array.isArray(m.timeStream) ? (m.timeStream as number[]) : [];
+      if (hr.length < 2 || time.length < 2 || m.timeInZones) return raw;
+      const alt = Array.isArray(m.altitudeStream)
+        ? (m.altitudeStream as number[])
+        : undefined;
+      const computed = buildStreamMetrics({ heartrate: hr, time, altitude: alt });
+      return { ...m, ...computed } as Prisma.InputJsonValue;
+    };
+
     for (const item of items) {
       const externalSource =
         typeof item.externalSource === "string" && item.externalSource.trim().length > 0
@@ -93,7 +113,7 @@ export async function POST(request: NextRequest) {
             : Math.round(Number(item.maxHeartRateBpm)),
         elevationGainM: toNullableNumber(item.elevationGainM),
         routeData: item.routeData ?? Prisma.JsonNull,
-        metricsData: item.metricsData ?? Prisma.JsonNull,
+        metricsData: enrichMetrics(item.metricsData) ?? Prisma.JsonNull,
         exercises: item.exercises ?? Prisma.JsonNull,
         deviceType:
           typeof item.deviceType === "string" && item.deviceType.trim().length > 0

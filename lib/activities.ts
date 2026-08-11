@@ -5,7 +5,18 @@
 
 export type ActivityType = "kb" | "cir" | "out";
 
-const OUTDOOR_TYPES = new Set(["run", "walk", "hike", "cycling", "trail_run", "ride"]);
+// Treadmill types are "out" too (distance work) — they just carry no GPS,
+// so the detail renders the distance header instead of a map.
+const OUTDOOR_TYPES = new Set([
+  "run",
+  "walk",
+  "hike",
+  "cycling",
+  "trail_run",
+  "ride",
+  "treadmill_walk",
+  "treadmill_run",
+]);
 
 export interface RunMetrics {
   sequenceId?: string;

@@ -77,6 +77,33 @@ cheaply, refetch when it moves. Slugs join the catalog id namespace
 (`one-arm-clean-squat-thruster` alongside `kb-swing`) and appear as
 `steps[].exercise` in sequences.
 
+## Workout-sync streams contract (added 2026-08-11 — main lane live)
+
+`POST /api/mobile/workouts/sync` items may now carry raw parallel streams
+inside `metricsData`:
+
+```
+metricsData: {
+  hrStream:  [Int],   // bpm samples during the session
+  timeStream: [Int],  // elapsed seconds from start, parallel to hrStream
+  altitudeStream?: [Double],
+  ...existing keys (sequenceId, roundsCompleted, stepSeconds) unchanged
+}
+```
+
+The SERVER owns analytics (same policy as PR detection): on sync it runs
+the identical downsample/time-in-zones/training-load math the Strava
+import uses and stores the enriched metricsData. The app's Activities
+detail then renders the HR chart, TIME IN ZONES, and load for
+watch-recorded sessions with zero extra watch work. Don't pre-compute
+zones on-wrist; don't downsample below ~1 sample/5s — send what
+HealthKit gives (the server downsamples to ≤120 points for storage).
+
+`workoutType` vocabulary grows: `treadmill_walk`, `treadmill_run`,
+`hike` (existing `walk`/`run`/`trail_run` unchanged). Treadmill types
+render a distance-hero header instead of a GPS map; `stepCount` is
+already an accepted column — send it when HealthKit has it.
+
 ## Pairing-code contract (v2 auth — build when iPhone Devices UI lands)
 
 Design (watch screens 01–03): watch shows a short code; iPhone confirms in

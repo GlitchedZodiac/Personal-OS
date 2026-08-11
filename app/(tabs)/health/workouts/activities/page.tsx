@@ -376,8 +376,26 @@ export default function ActivitiesPage() {
         className="min-h-screen bg-[#F2F1F2] pb-14"
         style={{ animation: "pushIn .38s cubic-bezier(.3,.9,.3,1) both" }}
       >
-        {/* header panel: GPS map (out) or segment timeline (strength/circuit) */}
-        {det.type === "out" ? (
+        {/* header panel: GPS map (out), distance hero (treadmill/no-GPS out),
+            or segment timeline (strength/circuit) */}
+        {det.type === "out" && !route ? (
+          <div className="relative overflow-hidden bg-[#251C21] px-[22px] pb-[22px] pt-16">
+            <div className="text-[10.5px] font-bold tracking-[0.18em] text-[#7E6F77]">
+              {/treadmill/i.test(det.workoutType) ? "TREADMILL" : "INDOOR · NO GPS"}
+            </div>
+            <div className="mt-1.5 flex items-baseline gap-2.5">
+              <span
+                className="text-[44px] font-bold leading-none text-[#F0E8EC] tabular-nums"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {((det.distanceMeters ?? 0) / 1000).toFixed(1)} km
+              </span>
+              <span className="text-[11px] font-semibold tracking-[0.1em] text-[#7E6F77]">
+                {det.durationMinutes}:00 TOTAL
+              </span>
+            </div>
+          </div>
+        ) : det.type === "out" ? (
           <div className="relative h-[300px] overflow-hidden bg-[#251C21]">
             <svg width="100%" height="300" viewBox="0 0 392 300" preserveAspectRatio="none">
               <path

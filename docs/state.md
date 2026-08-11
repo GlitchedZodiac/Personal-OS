@@ -18,6 +18,28 @@ crude until 2c.
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).
 
+## 2026-08-11e — Watch-stream enrichment + treadmill types; design rev in
+
+Michael's treadmill-walk detail was bare (avg HR only): watch sessions
+sync no streams. Fixed the app half + contracted the watch half:
+
+- **Sync enriches raw streams server-side**: metricsData
+  {hrStream, timeStream, altitudeStream?} on POST /api/mobile/workouts/
+  sync now runs the same buildStreamMetrics as Strava (downsample ≤120,
+  timeInZones, loadScore) — watch adopts by just sending samples
+  (docs/watch-contract.md § Workout-sync streams; prompt handed to
+  Michael). timeInZones-already-present rows pass through untouched.
+- **Treadmill vocabulary**: treadmill_walk/treadmill_run/hike in
+  lib/activities OUTDOOR_TYPES; no-GPS outdoor details render a
+  TREADMILL/INDOOR distance-hero dark header instead of the empty map
+  grid.
+- **Design rev imported + committed** (487 new lines): FOOD · HISTORY
+  (day drill-down w/ meals), calorie history chart, WEEKLY AVERAGES,
+  MACRO ADHERENCE, ENERGY IN VS BURNED, Sunday-written WEEKLY REPORT
+  w/ COACH paragraph, WEIGHT · WEEK, composition (BMR/muscle), FROM
+  range picker, TRAIN · VOLUME. **PORT IS THE NEXT BLOCK** — slice
+  inventory per PORT GATE rule 2 before building.
+
 ## 2026-08-11d — Chat coaches the whole record; PROD DEPLOYED
 
 - **get_health_data grew workout_history + food_history** (full-history
