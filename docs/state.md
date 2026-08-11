@@ -18,6 +18,26 @@ crude until 2c.
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).
 
+## 2026-08-11d — Chat coaches the whole record; PROD DEPLOYED
+
+- **get_health_data grew workout_history + food_history** (full-history
+  Mon-week series: sessions, strength/outdoor, volume, active minutes,
+  burn, km, load; intake vs target with loggedDays honesty) and
+  from/to range args on recent_* — "coach me since I started" and
+  "what did I eat June 5th" both resolve against Nov 2024+. Live smoke:
+  the coach cited the May 2025 block, the Jan–Mar 2026 rebuild, and the
+  29.7 kg weekly-avg arc unprompted, then flagged strength thinning.
+- **TRAILS card → activity detail**: Train's trail summary deep-links
+  to /health/workouts/activities?id= (page reads the param).
+- **`vercel deploy --prod` shipped everything** (Michael's go, via his
+  "is this in production" check): routines MVP, VeSync history + Body
+  arc, Activities port, habits/composer/targets batch, Strava full
+  history, coaching tools. Prod-verified: body overview serves 96
+  points 2025-12-24 → 2026-08-11; activities total 108.
+- His mic-permission complaint + Apple Health sync: both answered in
+  chat — the durable fix for each is the thin iOS companion (queued,
+  Phase 3); Shortcuts bridge offered as the stopgap.
+
 ## 2026-08-11c — Full Strava history in + enriched; history audit
 
 His ask: "I would like our app to have all the history I've done."
