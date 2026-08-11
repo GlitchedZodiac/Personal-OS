@@ -30,6 +30,12 @@ struct WorkoutListView: View {
                 row(kind: .walk, title: "Walk", subtitle: "open goal") {
                     WalkGlyph(color: Theme.accent, size: 15)
                 }
+                row(kind: .treadmill, title: "Treadmill", subtitle: "indoor · distance & HR") {
+                    WalkGlyph(color: Theme.accent, size: 15)
+                }
+                row(kind: .hike, title: "Hike", subtitle: "elevation & heart rate") {
+                    PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 15)
+                }
             }
             .padding(.horizontal, 2)
         }

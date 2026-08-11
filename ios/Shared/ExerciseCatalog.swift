@@ -4,7 +4,7 @@
 
 import Foundation
 
-public struct ExerciseDef: Hashable, Identifiable, Sendable {
+public struct ExerciseDef: Codable, Hashable, Identifiable, Sendable {
     /// Canonical id — must match lib/exercises.ts exactly; stored in
     /// personal_records and written into workout exercises payloads.
     public let id: String
@@ -13,7 +13,7 @@ public struct ExerciseDef: Hashable, Identifiable, Sendable {
     public let aliases: [String]
 }
 
-public enum ExerciseCategory: String, CaseIterable, Sendable {
+public enum ExerciseCategory: String, CaseIterable, Codable, Sendable {
     case kettlebell = "kettlebell"
     case barbell = "barbell"
     case dumbbell = "dumbbell"
@@ -22,7 +22,8 @@ public enum ExerciseCategory: String, CaseIterable, Sendable {
 }
 
 public enum ExerciseCatalog {
-    public static let all: [ExerciseDef] = [
+    /// Generated built-ins (lib/exercises.ts).
+    static let builtin: [ExerciseDef] = [
         ExerciseDef(id: "kb-swing", name: "Kettlebell Swing", category: .kettlebell, aliases: ["swing", "swings", "two hand swing", "russian swing", "american swing", "columpio", "balanceo", "kettlebell swings"]),
         ExerciseDef(id: "kb-one-arm-swing", name: "One-Arm Kettlebell Swing", category: .kettlebell, aliases: ["one arm swing", "single arm swing", "one hand swing"]),
         ExerciseDef(id: "kb-goblet-squat", name: "Goblet Squat", category: .kettlebell, aliases: ["goblet squats", "sentadilla goblet", "sentadilla copa"]),
@@ -72,8 +73,20 @@ public enum ExerciseCatalog {
         ExerciseDef(id: "face-pull", name: "Face Pull", category: .machine, aliases: ["face pulls"]),
     ]
 
+    /// AI-created customs from GET /api/mobile/exercises, set at runtime
+    /// (persisted by the app for offline cold-starts). Setting them rebuilds
+    /// the normalization index.
+    public private(set) static var custom: [ExerciseDef] = []
+
+    public static func setCustom(_ defs: [ExerciseDef]) {
+        custom = defs
+        cachedIndex = nil
+    }
+
+    public static var all: [ExerciseDef] { builtin + custom }
+
     /// Kettlebell first — the wrist picker's primary set.
-    public static let kettlebell: [ExerciseDef] = all.filter { $0.category == .kettlebell }
+    public static var kettlebell: [ExerciseDef] { all.filter { $0.category == .kettlebell } }
 
     public static func byId(_ id: String) -> ExerciseDef? {
         all.first { $0.id == id }
@@ -105,8 +118,12 @@ public enum ExerciseCatalog {
     }
 
     /// Longest keys first so "clean and press" wins over "clean" on the
-    /// containment pass — mirrors the server index ordering.
-    static let index: [IndexEntry] = {
+    /// containment pass — mirrors the server index ordering. Rebuilt when
+    /// customs change.
+    private static var cachedIndex: [IndexEntry]?
+
+    static var index: [IndexEntry] {
+        if let cached = cachedIndex { return cached }
         var entries: [IndexEntry] = []
         for def in all {
             entries.append(IndexEntry(key: fold(def.name), def: def))
@@ -116,8 +133,10 @@ public enum ExerciseCatalog {
                 entries.append(IndexEntry(key: fold(alias), def: def))
             }
         }
-        return entries.sorted { $0.key.count > $1.key.count }
-    }()
+        let built = entries.sorted { $0.key.count > $1.key.count }
+        cachedIndex = built
+        return built
+    }
 
     /// Map a free-text exercise name (typed, spoken, or from history rows)
     /// to a catalog entry — exact fold-match first, then whole-word

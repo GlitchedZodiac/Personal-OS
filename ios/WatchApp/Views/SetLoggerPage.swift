@@ -119,8 +119,23 @@ struct ExercisePickerView: View {
 
     var body: some View {
         List {
+            if !ExerciseCatalog.custom.isEmpty {
+                Section {
+                    ForEach(ExerciseCatalog.custom) { exercise in
+                        row(exercise)
+                    }
+                } header: {
+                    Text("MY MOVES")
+                        .font(Theme.text(8, weight: .bold))
+                        .kerning(1)
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+
             Section {
-                ForEach(ExerciseCatalog.kettlebell) { exercise in
+                ForEach(ExerciseCatalog.kettlebell.filter { def in
+                    !ExerciseCatalog.custom.contains(where: { $0.id == def.id })
+                }) { exercise in
                     row(exercise)
                 }
             } header: {

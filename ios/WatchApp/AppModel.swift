@@ -13,7 +13,7 @@ import WatchKit
 // MARK: - Workout kinds
 
 public enum WorkoutKind: String, CaseIterable, Identifiable {
-    case kettlebell, walk, run, hike, other
+    case kettlebell, walk, treadmill, run, hike, other
 
     public var id: String { rawValue }
 
@@ -21,18 +21,21 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         switch self {
         case .kettlebell: return "Kettlebell"
         case .walk: return "Walk"
+        case .treadmill: return "Treadmill"
         case .run: return "Run"
         case .hike: return "Hike"
         case .other: return "Other"
         }
     }
 
-    /// workout_logs.workoutType value — matches what the web app writes
-    /// ("strength" for kettlebell sessions, per live data).
+    /// workout_logs.workoutType value — matches the app's vocabulary
+    /// ("strength" for kettlebell; treadmill_walk added 2026-08-11; the app
+    /// renders no-GPS types with a distance-hero header).
     public var workoutTypeString: String {
         switch self {
         case .kettlebell: return "strength"
         case .walk: return "walk"
+        case .treadmill: return "treadmill_walk"
         case .run: return "run"
         case .hike: return "hike"
         case .other: return "other"
@@ -42,14 +45,14 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
     public var isOutdoor: Bool {
         switch self {
         case .walk, .run, .hike: return true
-        case .kettlebell, .other: return false
+        case .kettlebell, .treadmill, .other: return false
         }
     }
 
     public var activityType: HKWorkoutActivityType {
         switch self {
         case .kettlebell: return .functionalStrengthTraining
-        case .walk: return .walking
+        case .walk, .treadmill: return .walking
         case .run: return .running
         case .hike: return .hiking
         case .other: return .other
@@ -158,6 +161,7 @@ public final class AppModel: ObservableObject {
     private let api: MobileAPIClient
     private let queue: OfflineWorkoutQueue?
     private let prCache: PRBaselineCache?
+    private let customExerciseCache: CustomExerciseCache?
     /// Smoke runs set this to "watch_smoke" so test rows NEVER share the real
     /// app's externalSource namespace — cleanup can then target watch_smoke
     /// alone (a real 07:28 row was once deleted by an app_watch-wide sweep;
@@ -181,6 +185,10 @@ public final class AppModel: ObservableObject {
         self.api = MobileAPIClient(baseURL: baseURL, sessionStore: store)
         self.queue = try? OfflineWorkoutQueue()
         self.prCache = try? PRBaselineCache()
+        self.customExerciseCache = try? CustomExerciseCache()
+        if let cached = customExerciseCache?.load() {
+            ExerciseCatalog.setCustom(cached)
+        }
     }
 
     // MARK: - Boot & pairing
@@ -265,6 +273,21 @@ public final class AppModel: ObservableObject {
             #if DEBUG
             sequences.append(contentsOf: debugInjected)
             #endif
+        }
+
+        // AI-created custom exercises → merged into the catalog/normalizer,
+        // cached for offline cold-starts.
+        if let list = try? await api.fetchExercises() {
+            let defs = list.exercises.map { row in
+                ExerciseDef(
+                    id: row.id,
+                    name: row.name,
+                    category: row.category.flatMap { ExerciseCategory(rawValue: $0) } ?? .kettlebell,
+                    aliases: row.aliases ?? []
+                )
+            }
+            ExerciseCatalog.setCustom(defs)
+            customExerciseCache?.save(defs)
         }
 
         do {
@@ -666,6 +689,21 @@ public final class AppModel: ObservableObject {
             prs: prs
         )
 
+        // Raw streams ride along for the server's zone/load enrichment
+        // (streams contract 2026-08-11 — the server downsamples and computes;
+        // the wrist just reports what HealthKit saw).
+        let hrStream = recorder.hrStream
+        let metrics = WorkoutMetricsData(
+            sequenceId: sequence?.id,
+            sequenceName: sequence?.name,
+            roundsCompleted: rounds,
+            stepSeconds: circuitStepSeconds.contains(where: { $0 > 0 })
+                ? circuitStepSeconds : nil,
+            hrStream: hrStream.isEmpty ? nil : hrStream,
+            timeStream: hrStream.isEmpty ? nil : recorder.timeStream,
+            altitudeStream: recorder.altitudeStream.isEmpty ? nil : recorder.altitudeStream
+        )
+
         pendingItem = WorkoutSyncItem(
             externalSource: externalSourceOverride ?? "app_watch",
             startedAt: started,
@@ -675,16 +713,11 @@ public final class AppModel: ObservableObject {
             description: description,
             caloriesBurned: totals?.activeCalories.map { ($0 * 10).rounded() / 10 },
             distanceMeters: totals?.distanceMeters.map { $0.rounded() },
+            stepCount: totals?.stepCount,
             avgHeartRateBpm: totals?.avgHeartRate.map { Int($0.rounded()) },
             maxHeartRateBpm: totals?.maxHeartRate.map { Int($0.rounded()) },
             exercises: entries.isEmpty ? nil : entries,
-            metricsData: sequence.map {
-                WorkoutMetricsData(
-                    sequenceId: $0.id, sequenceName: $0.name, roundsCompleted: rounds,
-                    stepSeconds: circuitStepSeconds.contains(where: { $0 > 0 })
-                        ? circuitStepSeconds : nil
-                )
-            },
+            metricsData: metrics.isEmpty ? nil : metrics,
             deviceType: "apple_watch"
         )
 

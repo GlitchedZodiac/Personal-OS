@@ -166,6 +166,7 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
     public let description: String?
     public let caloriesBurned: Double?
     public let distanceMeters: Double?
+    public let stepCount: Int?
     public let avgHeartRateBpm: Int?
     public let maxHeartRateBpm: Int?
     public let exercises: [ExerciseEntry]?
@@ -184,6 +185,7 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         description: String? = nil,
         caloriesBurned: Double? = nil,
         distanceMeters: Double? = nil,
+        stepCount: Int? = nil,
         avgHeartRateBpm: Int? = nil,
         maxHeartRateBpm: Int? = nil,
         exercises: [ExerciseEntry]? = nil,
@@ -201,6 +203,7 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         self.description = description
         self.caloriesBurned = caloriesBurned
         self.distanceMeters = distanceMeters
+        self.stepCount = stepCount
         self.avgHeartRateBpm = avgHeartRateBpm
         self.maxHeartRateBpm = maxHeartRateBpm
         self.exercises = exercises
@@ -313,8 +316,10 @@ public struct SequenceListResponse: Codable, Sendable {
     public let sequences: [SequenceDef]
 }
 
-/// Extra run metadata carried in workout_logs.metricsData — a sequence run
-/// references its source here (per docs/watch-contract.md).
+/// Extra run metadata carried in workout_logs.metricsData. Raw streams go
+/// up unprocessed — the SERVER runs the same downsample/zones/load math as
+/// the Strava import (streams contract, 2026-08-11); never pre-compute
+/// zones on-wrist.
 public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     public let sequenceId: String?
     public let sequenceName: String?
@@ -322,16 +327,45 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     /// Total working seconds per step index (circuit runs: start→Done deltas
     /// summed across rounds) — Michael's "track how long each move takes".
     public let stepSeconds: [Int]?
+    /// Raw HR samples (bpm) at HealthKit's natural cadence (~1/5 s).
+    public let hrStream: [Int]?
+    /// Elapsed seconds from session start, parallel to hrStream.
+    public let timeStream: [Int]?
+    /// Relative altitude (m) parallel to timeStream — outdoor sessions only.
+    public let altitudeStream: [Double]?
 
     public init(
-        sequenceId: String?, sequenceName: String?, roundsCompleted: Int?,
-        stepSeconds: [Int]? = nil
+        sequenceId: String? = nil, sequenceName: String? = nil,
+        roundsCompleted: Int? = nil, stepSeconds: [Int]? = nil,
+        hrStream: [Int]? = nil, timeStream: [Int]? = nil,
+        altitudeStream: [Double]? = nil
     ) {
         self.sequenceId = sequenceId
         self.sequenceName = sequenceName
         self.roundsCompleted = roundsCompleted
         self.stepSeconds = stepSeconds
+        self.hrStream = hrStream
+        self.timeStream = timeStream
+        self.altitudeStream = altitudeStream
     }
+
+    public var isEmpty: Bool {
+        sequenceId == nil && stepSeconds == nil && hrStream == nil
+    }
+}
+
+// MARK: - Custom exercises (GET /api/mobile/exercises)
+
+public struct CustomExerciseRow: Codable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let category: String?
+    public let aliases: [String]?
+}
+
+public struct CustomExerciseListResponse: Codable, Sendable {
+    public let exercises: [CustomExerciseRow]
+    public let updatedAt: Date?
 }
 
 // MARK: - Daily health snapshot

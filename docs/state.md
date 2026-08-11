@@ -13,6 +13,21 @@ watch-device-runbook.md). Web: Pitaya stages continuing per 09f order.
 **Branch in flight:** `claude/phase1-modernization` (web) ·
 `claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch).
 
+## 2026-08-11f — [watch] Raw streams adopted; treadmill/hike; customs ready
+
+Adopted the 2026-08-11 streams contract end-to-end, proven against prod:
+the recorder appends HR samples at HealthKit's natural cadence
+(hrStream/timeStream, ~1/5 s) plus barometric altitudeStream on outdoor
+sessions (CMAltimeter; NSMotionUsageDescription added) and a session
+stepCount query at finish — all raw, server enriches (smoke row came back
+with SERVER-computed timeInZones + loadScore from 3 samples at t=2/7/13 s).
+Also: Treadmill (treadmill_walk, indoor) and Hike rows in the picker;
+GET /api/mobile/exercises merged into the catalog/normalizer with a disk
+cache and a MY MOVES picker section (endpoint live but empty — lights up
+when the AI mints the first custom); home-grid content +12% per Michael
+(icons 30 pt, titles 13 pt, boxes unchanged). HealthKit will re-prompt
+once on the wrist (new steps read). Release pushed OTA to his watch.
+
 ## 2026-08-10a — [watch] Routines-first: circuits, weights editor, countdown
 
 Michael's direction crystallized on-wrist: routines are the center (his

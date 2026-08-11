@@ -76,8 +76,11 @@ enum Smoke {
         // baselines before evaluating PRs, so refresh explicitly.
         await model.refreshHistory()
 
-        log("autorun: starting kettlebell workout (recorder off — no HK sheet)…")
-        await model.startWorkout(.kettlebell, useRecorder: false)
+        // RECORDER=1: use the real HealthKit recorder (works when the sim
+        // install already granted HK) so stream capture gets smoked too.
+        let useRecorder = env["PITAYA_SMOKE_RECORDER"] == "1"
+        log("autorun: starting kettlebell workout (recorder \(useRecorder ? "ON" : "off"))…")
+        await model.startWorkout(.kettlebell, useRecorder: useRecorder)
 
         // Below-baseline set (no PR expected on real history), then a heavy
         // single designed to beat any stored swing weight PR.
@@ -94,7 +97,8 @@ enum Smoke {
         model.logSet()
         log("set 2: swing 48kg×5 pr=\(model.loggedSets.last?.isWeightPR ?? false)")
 
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        // With the recorder on, linger so several HR samples accumulate.
+        try? await Task.sleep(nanoseconds: useRecorder ? 15_000_000_000 : 3_000_000_000)
         await model.finishWorkout(.kettlebell)
         log("finished — reviewing (unsaved), now saving…")
         await model.saveWorkout()

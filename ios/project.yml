@@ -79,9 +79,12 @@ targets:
           - InstrumentSans-Medium.ttf
           - InstrumentSans-SemiBold.ttf
         NSHealthShareUsageDescription: >-
-          Pitaya reads heart rate and calories to show live workout metrics.
+          Pitaya reads heart rate, calories, and steps to show live workout
+          metrics and sync your training.
         NSHealthUpdateUsageDescription: >-
           Pitaya saves workouts you record on the watch to Apple Health.
+        NSMotionUsageDescription: >-
+          Pitaya reads elevation from the barometer during outdoor workouts.
     entitlements:
       path: WatchApp/PersonalOSWatch.entitlements
       properties:

@@ -13,17 +13,17 @@ struct HomeGridView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 6) {
-                    DragonfruitLogo(size: 17)
+                HStack(spacing: 7) {
+                    DragonfruitLogo(size: 19)
                     Text("Pitaya")
-                        .font(Theme.display(16))
+                        .font(Theme.display(18))
                         .foregroundStyle(Theme.textBright)
                     Spacer()
                 }
                 .padding(.horizontal, 5)
 
                 Text(subtitleLine)
-                    .font(Theme.text(8.5))
+                    .font(Theme.text(9.5))
                     .foregroundStyle(Theme.textMuted)
                     .padding(.horizontal, 5)
                     .padding(.top, 1)
@@ -38,19 +38,19 @@ struct HomeGridView: View {
                         circle: Theme.accentDim,
                         live: true
                     ) {
-                        PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 12)
+                        PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 14)
                     } action: {
                         model.openWorkoutList()
                     }
                     tile(
                         title: "Sleep", subtitle: "soon", circle: Theme.waterDim, live: false
                     ) {
-                        PitayaGlyph(paths: Glyphs.moon, style: .fill, color: Theme.water, size: 11)
+                        PitayaGlyph(paths: Glyphs.moon, style: .fill, color: Theme.water, size: 13)
                     } action: {}
                     tile(
                         title: "Journal", subtitle: "soon", circle: Color(hex: 0x1E2A22), live: false
                     ) {
-                        PitayaGlyph(paths: Glyphs.pencil, color: Theme.mint, size: 11)
+                        PitayaGlyph(paths: Glyphs.pencil, color: Theme.mint, size: 13)
                     } action: {}
                     comingSoonTile
                 }
@@ -73,15 +73,15 @@ struct HomeGridView: View {
                     Circle().fill(circle)
                     glyph()
                 }
-                .frame(width: 27, height: 27)
+                .frame(width: 30, height: 30)
                 Spacer(minLength: 4)
                 Text(title)
-                    .font(Theme.text(11.5, weight: .semibold))
+                    .font(Theme.text(13, weight: .semibold))
                     .foregroundStyle(live ? Theme.textBright : Theme.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 Text(subtitle)
-                    .font(Theme.text(8))
+                    .font(Theme.text(9))
                     .foregroundStyle(Theme.textTertiary)
                     .lineLimit(1)
             }
@@ -97,17 +97,17 @@ struct HomeGridView: View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack {
                 Circle().fill(Theme.card)
-                PitayaMark(size: 7, color: Theme.textFaint)
+                PitayaMark(size: 8, color: Theme.textFaint)
             }
-            .frame(width: 24, height: 24)
+            .frame(width: 30, height: 30)
             Spacer(minLength: 4)
             Text("Coming soon")
-                .font(Theme.text(11, weight: .semibold))
+                .font(Theme.text(12, weight: .semibold))
                 .foregroundStyle(Theme.textMuted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text("a fourth space")
-                .font(Theme.text(8))
+                .font(Theme.text(9))
                 .foregroundStyle(Theme.textFaint)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -5,6 +5,7 @@
 // totals from the builder rather than trusting its own wall clock.
 
 #if os(watchOS)
+import CoreMotion
 import Foundation
 import HealthKit
 
@@ -22,11 +23,21 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     @Published public private(set) var activeCalories: Double?
     @Published public private(set) var distanceMeters: Double?
 
+    // Raw streams for the server's zone/load enrichment (streams contract
+    // 2026-08-11): appended at HealthKit's natural HR cadence, cleared on
+    // the next start so AppModel can read them after finish().
+    public private(set) var hrStream: [Int] = []
+    public private(set) var timeStream: [Int] = []
+    public private(set) var altitudeStream: [Double] = []
+
     private let store = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private var startedAt: Date?
     private var ticker: Timer?
+    private var altimeter: CMAltimeter?
+    private var latestAltitude: Double?
+    private var collectAltitude = false
 
     public struct Totals: Sendable {
         public let startedAt: Date
@@ -36,6 +47,7 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         public let avgHeartRate: Double?
         public let maxHeartRate: Double?
         public let distanceMeters: Double?
+        public let stepCount: Int?
     }
 
     // MARK: - Authorization
@@ -46,6 +58,7 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
             HKQuantityType(.heartRate),
             HKQuantityType(.activeEnergyBurned),
             HKQuantityType(.distanceWalkingRunning),
+            HKQuantityType(.stepCount),
         ]
         try await store.requestAuthorization(toShare: share, read: read)
     }
@@ -77,6 +90,21 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         self.session = session
         self.builder = builder
 
+        hrStream = []
+        timeStream = []
+        altitudeStream = []
+        latestAltitude = nil
+        collectAltitude = outdoor && CMAltimeter.isRelativeAltitudeAvailable()
+        if collectAltitude {
+            let altimeter = CMAltimeter()
+            altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, _ in
+                if let data {
+                    self?.latestAltitude = data.relativeAltitude.doubleValue
+                }
+            }
+            self.altimeter = altimeter
+        }
+
         let start = Date()
         startedAt = start
         session.startActivity(with: start)
@@ -102,6 +130,8 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         guard let session, let builder, let startedAt else { return nil }
         phase = .ending
         stopTicker()
+        altimeter?.stopRelativeAltitudeUpdates()
+        altimeter = nil
 
         session.end()
         let end = Date()
@@ -122,7 +152,8 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
             activeCalories: activeCalories,
             avgHeartRate: avgHeartRate,
             maxHeartRate: maxHeartRate,
-            distanceMeters: distanceMeters
+            distanceMeters: distanceMeters,
+            stepCount: await queryStepCount(from: startedAt, to: end)
         )
 
         self.session = nil
@@ -131,6 +162,24 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         elapsed = totals.durationSeconds
         phase = .idle
         return totals
+    }
+
+    /// Session step total — queried at finish (live-builder statistics don't
+    /// reliably carry stepCount across activity types).
+    private func queryStepCount(from start: Date, to end: Date) async -> Int? {
+        await withCheckedContinuation { continuation in
+            let query = HKStatisticsQuery(
+                quantityType: HKQuantityType(.stepCount),
+                quantitySamplePredicate: HKQuery.predicateForSamples(
+                    withStart: start, end: end
+                ),
+                options: .cumulativeSum
+            ) { _, result, _ in
+                let steps = result?.sumQuantity()?.doubleValue(for: .count())
+                continuation.resume(returning: steps.map { Int($0) })
+            }
+            store.execute(query)
+        }
     }
 
     // MARK: - Ticker
@@ -159,6 +208,19 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
             heartRate = stats.mostRecentQuantity()?.doubleValue(for: bpm)
             avgHeartRate = stats.averageQuantity()?.doubleValue(for: bpm)
             maxHeartRate = stats.maximumQuantity()?.doubleValue(for: bpm)
+
+            // Append to the raw streams at HK's own cadence (one point per
+            // distinct elapsed second, whenever a new HR sample arrives).
+            if let hr = heartRate {
+                let t = Int(builder.elapsedTime)
+                if timeStream.last != t {
+                    timeStream.append(t)
+                    hrStream.append(Int(hr))
+                    if collectAltitude {
+                        altitudeStream.append(latestAltitude ?? altitudeStream.last ?? 0)
+                    }
+                }
+            }
         }
 
         let kcalType = HKQuantityType(.activeEnergyBurned)

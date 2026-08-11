@@ -101,6 +101,14 @@ public actor MobileAPIClient {
         )
     }
 
+    /// AI-created custom exercises — merged into the on-watch catalog.
+    public func fetchExercises() async throws -> CustomExerciseListResponse {
+        try await send(
+            path: "/api/mobile/exercises", method: "GET",
+            body: Optional<Int>.none, authorized: true
+        )
+    }
+
     /// Saved sequences (routines) — read-only on the wrist per contract.
     public func fetchSequences() async throws -> SequenceListResponse {
         try await send(
