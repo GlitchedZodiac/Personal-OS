@@ -43,6 +43,14 @@ describe("zonedLocalDateTimeToUtc", () => {
     ).toBe("2026-08-09T01:00:00.000Z");
   });
 
+  it("survives LOCAL MIDNIGHT (the ICU h24 trap every day-bounds hits)", () => {
+    // hour12:false + hourCycle renders midnight as "24" on some ICUs,
+    // which shifted every local-day boundary a day early (2026-08-11).
+    expect(
+      zonedLocalDateTimeToUtc("2026-07-29", "America/Bogota", 0, 0, 0).toISOString()
+    ).toBe("2026-07-29T05:00:00.000Z");
+  });
+
   it("respects DST in zones that observe it", () => {
     expect(
       zonedLocalDateTimeToUtc("2026-07-01", "America/New_York", 12, 0, 0).toISOString()

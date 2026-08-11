@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useDataLoggedListener } from "@/components/use-data-logged";
 import { SheetPortal } from "@/components/sheet-portal";
@@ -71,6 +72,7 @@ function localDateStr() {
 }
 
 export default function BodyPage() {
+  const router = useRouter();
   const [data, setData] = useState<Overview | null>(null);
   const [metric, setMetric] = useState<MetricKey>("weight");
   const [scrubIdx, setScrubIdx] = useState<number | null>(null);
@@ -137,6 +139,30 @@ export default function BodyPage() {
       metric === "weight" ? `${v.toFixed(1)} kg` : metric === "volume" ? `${fmt(Math.round(v))} kg` : `${fmt(Math.round(v))} kcal`,
     [metric]
   );
+
+  // Composition mini-series for the SMART SCALE card (12-wk, 3 metrics).
+  const [composition, setComposition] = useState<Record<
+    string,
+    { series: { weekStart: string; value: number }[] }
+  > | null>(null);
+
+  useEffect(() => {
+    Promise.all(
+      ["fat", "muscle", "bmr"].map((m) =>
+        fetch(`/api/health/body/metric?metric=${m}&weeks=12`)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null)
+      )
+    ).then(([fat, muscle, bmr]) => {
+      if (fat || muscle || bmr) {
+        setComposition({
+          fat: fat ?? { series: [] },
+          muscle: muscle ?? { series: [] },
+          bmr: bmr ?? { series: [] },
+        });
+      }
+    });
+  }, []);
 
   const deltaText = useMemo(() => {
     if (!chart || chart.empty || chart.pts.length < 2) return "";
@@ -285,9 +311,17 @@ export default function BodyPage() {
               </button>
             ))}
           </div>
-          <span className="text-[10.5px] font-semibold text-[#8C2F51]">
-            {deltaText}
-          </span>
+          {/* design 11e: the delta chip drills into the weekly trend view */}
+          <button
+            onClick={() =>
+              router.push(
+                `/health/body/metric?m=${metric === "weight" ? "weight" : metric === "volume" ? "volume" : "kcal"}`
+              )
+            }
+            className="flex items-center gap-1 rounded-full bg-accent px-2.5 py-[5px] text-[10.5px] font-semibold text-[#8C2F51] hover:bg-[#F0D3E0]"
+          >
+            {deltaText} ›
+          </button>
         </div>
 
         {chart && !chart.empty ? (
@@ -368,6 +402,72 @@ export default function BodyPage() {
           </p>
         )}
       </div>
+
+      {/* BODY COMPOSITION · SMART SCALE (design 11e) — tap a metric to
+          drill into its weekly trend */}
+      {composition && (
+        <div className="mt-3 rounded-[18px] bg-card p-[18px] shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+          <div className="flex items-center justify-between">
+            <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+              BODY COMPOSITION · SMART SCALE
+            </p>
+            <p className="text-[11px] text-muted-foreground">12 weeks</p>
+          </div>
+          <div className="mt-3.5 grid grid-cols-3 gap-3.5">
+            {(
+              [
+                ["fat", "BODY FAT", "%", "#A63D63", true],
+                ["muscle", "MUSCLE", " kg", "#232227", false],
+                ["bmr", "BMR", "", "#A9A7AE", false],
+              ] as const
+            ).map(([key, label, unit, color, downGood]) => {
+              const s = composition[key];
+              if (!s || s.series.length === 0) return <div key={key} />;
+              const last = s.series[s.series.length - 1].value;
+              const delta = s.series.length >= 2 ? last - s.series[0].value : 0;
+              const good = downGood ? delta <= 0 : delta >= 0;
+              const vals = s.series.map((p) => p.value);
+              const mn = Math.min(...vals);
+              const span = Math.max(...vals) - mn || 1;
+              const spark = vals
+                .map(
+                  (v, i) =>
+                    `${((i / Math.max(1, vals.length - 1)) * 100).toFixed(1)},${(3 + (1 - (v - mn) / span) * 20).toFixed(1)}`
+                )
+                .join(" ");
+              return (
+                <button key={key} onClick={() => router.push(`/health/body/metric?m=${key}`)} className="text-left hover:opacity-75">
+                  <p className="text-[9.5px] font-semibold tracking-[0.08em] text-muted-foreground">
+                    {label} ›
+                  </p>
+                  <p
+                    className="mt-[3px] text-[19px] font-bold text-foreground tabular-nums"
+                    style={{ fontFamily: "var(--font-display)" }}
+                  >
+                    {key === "bmr" ? fmt(Math.round(last)) : last.toFixed(1)}
+                    {unit && <span className="text-[11px] text-[#66646C]">{unit}</span>}
+                  </p>
+                  <p
+                    className="text-[10.5px] font-semibold"
+                    style={{ color: good ? "#5E9B72" : "#D9A23E" }}
+                  >
+                    {delta >= 0 ? "+" : "−"}
+                    {key === "bmr"
+                      ? `${fmt(Math.round(Math.abs(delta)))} kcal`
+                      : Math.abs(delta).toFixed(1)}
+                  </p>
+                  <svg width="100%" height="26" viewBox="0 0 100 26" preserveAspectRatio="none" className="mt-[5px]">
+                    <polyline points={spark} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-[11px] leading-[1.5] text-muted-foreground">
+            Tap a metric to drill in · syncs each weigh-in from your smart scale.
+          </p>
+        </div>
+      )}
 
       {/* Measurements */}
       <div className="mt-3 rounded-[18px] bg-card p-[18px] shadow-[0_2px_12px_rgba(35,34,39,0.06)]">

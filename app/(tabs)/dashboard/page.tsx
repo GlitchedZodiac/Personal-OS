@@ -666,17 +666,15 @@ export default function TodayPage() {
             Sunday Report
           </p>
           <p className="mt-0.5 text-[11.5px] text-secondary-foreground">
-            writes itself Sunday night
+            writes itself Sunday night · last week ready
           </p>
         </div>
         <button
-          onClick={() =>
-            toast("Sunday Report is on the bench — PDF export ships next.")
-          }
+          onClick={() => router.push("/health/report")}
           className="rounded-[8px] bg-accent px-3.5 py-2 text-xs font-semibold text-[#8C2F51]"
           style={{ fontFamily: "var(--font-display)" }}
         >
-          PDF
+          Open →
         </button>
       </div>
 

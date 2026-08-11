@@ -49,6 +49,11 @@ export function normalizeTimeZone(timeZone?: string | null) {
 
 export function getZonedDateParts(date: Date, timeZone: string): ZonedDateParts {
   const normalizedZone = normalizeTimeZone(timeZone);
+  // NEVER add hour12:false here: combined with hourCycle it flips ICU to
+  // h24, local MIDNIGHT renders as hour "24", and every day-bounds
+  // computation lands a day early (caught 2026-08-11 — food history
+  // bucketed today's lunch onto yesterday). h23 alone is unambiguous;
+  // the % 24 is belt-and-braces against future ICU drift.
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: normalizedZone,
     year: "numeric",
@@ -57,7 +62,6 @@ export function getZonedDateParts(date: Date, timeZone: string): ZonedDateParts 
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    hour12: false,
     hourCycle: "h23",
   });
 
@@ -68,7 +72,7 @@ export function getZonedDateParts(date: Date, timeZone: string): ZonedDateParts 
     year: toInteger(lookup.year),
     month: toInteger(lookup.month),
     day: toInteger(lookup.day),
-    hour: toInteger(lookup.hour),
+    hour: toInteger(lookup.hour) % 24,
     minute: toInteger(lookup.minute),
     second: toInteger(lookup.second),
   };

@@ -18,6 +18,43 @@ crude until 2c.
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).
 
+## 2026-08-11f — History drill-downs ported + THE MIDNIGHT TIMEZONE BUG
+
+The design-11e history suite is live, and building it surfaced a
+prod-affecting core bug.
+
+- **⚠️ TIMEZONE FIX (lib/timezone.ts)**: `hour12:false` combined with
+  `hourCycle:'h23'` flips some ICUs to h24 — local MIDNIGHT renders as
+  hour "24", getTimeZoneOffsetMinutes computes a day-forward asUtc, and
+  `zonedLocalDateTimeToUtc` lands EVERY day-boundary a day early
+  (environment-dependent: this Mac's dev server had it; vitest's ICU
+  didn't — tests passed because none used midnight). Symptom that
+  exposed it: food history bucketed today's lunch onto yesterday. Fix:
+  h23 only + hour % 24, pinned by a local-midnight test. Every
+  day/week range in the app runs through this helper — deployed same
+  hour. Stale weekly report (computed on shifted bounds) purged; it
+  regenerates on next open.
+- **Sunday Report** (/health/report, Today card → Open): persisted
+  weekly_reports written by cron Sun 11 PM Bogotá (vercel.json Mon
+  04:00 UTC) or backfilled on demand; hero verdict + energy in-vs-
+  training-burn paired bars + macro adherence + training/zones +
+  weight week + COACH paragraph (COACH_MODEL, real numbers only —
+  smoke on his real week honestly said "Undertracked. One session, no
+  food data."). Deviations: PDF deferred; burn labeled training-only.
+- **Food day stepper + past-day view + History**: ‹ › steps days
+  (?date= deep-links), past days read-only (DAY TOTAL vs goal +
+  MEALS), History screen = calories-vs-goal trend w/ dashed goal line
+  + BY DAY goal-tick rows + shared RangePicker calendar sheet (month
+  nav added over the design's single-month demo; future locked).
+- **Body composition**: SMART SCALE card (fat/muscle/BMR sparklines)
+  + /health/body/metric drill-in (4/8/12-wk chips, scrub chart, weekly
+  rows, WHAT IT MEANS; also weight/volume/kcal via the chart delta
+  chip — design's bcCur). Static explainer copy (demo notes cited
+  demo numbers — deviation).
+- **Deletes (his ask)**: every food row has a confirm-first ✕ (was
+  buried in the save-usual sheet); activity detail gained "Delete this
+  workout". Activities got the from–to range pill.
+
 ## 2026-08-11e — Watch-stream enrichment + treadmill types; design rev in
 
 Michael's treadmill-walk detail was bare (avg HR only): watch sessions

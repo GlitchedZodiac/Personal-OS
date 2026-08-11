@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { decodePolyline } from "@/lib/polyline";
 import { CircuitIcon, TrailIcon, TrainIcon, WalkIcon } from "@/components/pitaya-icons";
+import { RangePicker } from "@/components/range-picker";
 
 // Train → Activities — port of the design's activity-history push-in screens
 // (docs/design/pitaya-app.dc.html, 2026-08-11 rev: actList + actDet views).
@@ -201,19 +203,28 @@ export default function ActivitiesPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<"all" | "gym" | "out">("all");
   const [detail, setDetail] = useState<ActivityDetail | null>(null);
+  const [range, setRange] = useState<{ from: string | null; to: string | null }>({
+    from: null,
+    to: null,
+  });
+  const [pickerOpen, setPickerOpen] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  const loadPage = useCallback(async (before: string | null) => {
-    const url = before
-      ? `/api/health/workouts/activities?before=${encodeURIComponent(before)}`
-      : "/api/health/workouts/activities";
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const body = await res.json();
-    setItems((prev) => (before ? [...prev, ...body.items] : body.items));
-    setTotal(body.total);
-    setNextBefore(body.nextBefore);
-  }, []);
+  const loadPage = useCallback(
+    async (before: string | null) => {
+      const qs = new URLSearchParams();
+      if (before) qs.set("before", before);
+      if (range.from) qs.set("from", range.from);
+      if (range.to) qs.set("to", range.to);
+      const res = await fetch(`/api/health/workouts/activities?${qs.toString()}`);
+      if (!res.ok) return;
+      const body = await res.json();
+      setItems((prev) => (before ? [...prev, ...body.items] : body.items));
+      setTotal(body.total);
+      setNextBefore(body.nextBefore);
+    },
+    [range]
+  );
 
   useEffect(() => {
     loadPage(null);
@@ -616,6 +627,28 @@ export default function ActivitiesPage() {
             {sourceLabel(det).charAt(0) + sourceLabel(det).slice(1).toLowerCase()} · synced to
             Pitaya
           </div>
+
+          {/* his ask: delete a wrong workout — confirm-first, PRs rebuild
+              server-side on the next backfill */}
+          <button
+            onClick={async () => {
+              if (!window.confirm(`Delete "${det.name}" and its logged data?`)) return;
+              const res = await fetch(
+                `/api/health/workouts?id=${encodeURIComponent(det.id)}`,
+                { method: "DELETE" }
+              );
+              if (res.ok) {
+                toast.success("Workout deleted");
+                setDetail(null);
+                loadPage(null);
+              } else {
+                toast.error("Couldn't delete");
+              }
+            }}
+            className="mx-auto mt-3 block text-[12.5px] font-semibold text-[#B4536F]"
+          >
+            Delete this workout
+          </button>
         </div>
       </div>
     );
@@ -651,10 +684,24 @@ export default function ActivitiesPage() {
         </div>
       </div>
 
-      <div className="mt-3.5 flex gap-1.5">
+      <div className="mt-3.5 flex items-center gap-1.5">
         {chip("all", "All")}
         {chip("gym", "Gym")}
         {chip("out", "Outdoor")}
+        <div className="flex-1" />
+        <button
+          onClick={() => setPickerOpen(true)}
+          className="flex items-center gap-1.5 rounded-full border border-[#E4E2E6] bg-white px-3 py-1.5 text-[11.5px] font-semibold text-[#8C2F51] hover:bg-[#FAF9FA]"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C2F51" strokeWidth="2" strokeLinecap="round">
+            <rect x="3" y="5" width="18" height="16" rx="3" />
+            <path d="M8 3v4M16 3v4M3 10h18" />
+          </svg>
+          {range.from && range.to
+            ? `${range.from.slice(5).replace("-", "/")} – ${range.to.slice(5).replace("-", "/")}`
+            : "All time"}
+        </button>
       </div>
 
       <div className="mt-3.5 grid gap-2.5">
@@ -692,6 +739,18 @@ export default function ActivitiesPage() {
           ? "Synced from your devices · older weeks load as you scroll"
           : "Synced from your devices · that's the whole history"}
       </div>
+
+      <RangePicker
+        open={pickerOpen}
+        title="Activities — range"
+        from={range.from}
+        to={range.to}
+        onCancel={() => setPickerOpen(false)}
+        onApply={(from, to) => {
+          setPickerOpen(false);
+          setRange({ from, to });
+        }}
+      />
     </div>
   );
 }
