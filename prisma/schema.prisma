@@ -262,6 +262,10 @@ model DailyHealthSnapshot {
   restingHeartRateBpm          Int?
   activeEnergyKcal             Float?
   walkingRunningDistanceMeters Float?
+  sleepMinutes                 Int? // HealthKit sleepAnalysis, asleep total
+  sleepDeepMinutes             Int?
+  sleepRemMinutes              Int?
+  hrvMs                        Float? // heartRateVariabilitySDNN, daily average
   source                       String   @default("apple_health")
   rawData                      Json?
   createdAt                    DateTime @default(now())
@@ -270,6 +274,18 @@ model DailyHealthSnapshot {
   @@unique([localDate, timeZone, source])
   @@index([localDate, timeZone])
   @@map("daily_health_snapshots")
+}
+
+model PushDevice {
+  id         String   @id @default(uuid())
+  token      String   @unique // APNs device token (hex)
+  platform   String   @default("ios")
+  bundleId   String?
+  environment String  @default("production") // or "sandbox" for debug builds
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@map("push_devices")
 }
 
 model Reminder {

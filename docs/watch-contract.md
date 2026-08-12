@@ -104,6 +104,31 @@ HealthKit gives (the server downsamples to ≤120 points for storage).
 render a distance-hero header instead of a GPS map; `stepCount` is
 already an accepted column — send it when HealthKit has it.
 
+## Companion contract (added 2026-08-12 — main lane LIVE, build against it)
+
+Everything the iOS companion needs from the server exists now.
+
+**`POST /api/mobile/health/daily`** (bearer) accepts, additive:
+
+```
+{ localDate, timeZone, source?,          // existing
+  steps, restingHeartRateBpm, activeEnergyKcal, walkingRunningDistanceMeters,
+  sleepMinutes?, sleepDeepMinutes?, sleepRemMinutes?,   // NEW
+  hrvMs?,                                               // NEW (SDNN daily avg)
+  weightSamples?: [{ measuredAt: ISO, weightKg: Double }],  // NEW
+  rawData? }
+```
+
+Weight rule: send EVERY HealthKit bodyMass sample — the server dedupes
+them against the VeSync history with the same near-twin rule (±10 min,
+±0.3 kg = the same weigh-in). Response returns `weightsImported` /
+`weightsSkipped` so the app can show what landed. Never filter on-device.
+
+**`POST /api/mobile/push/register`** (bearer): `{ token (hex APNs), platform?,
+bundleId?, environment: "production"|"sandbox" }` → `{registered, id}`.
+`DELETE ?token=` unregisters. Pushes carry Michael's own reminders only —
+no AI-initiated content (his rule, 2026-08-11).
+
 ## Pairing-code contract (v2 auth — build when iPhone Devices UI lands)
 
 Design (watch screens 01–03): watch shows a short code; iPhone confirms in
