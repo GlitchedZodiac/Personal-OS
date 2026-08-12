@@ -144,6 +144,13 @@ The heart of the section. Design in **dark mode first**, then light.
   mini-player: play/pause, verse-back/verse-forward, speed. Design the
   player docked above the tab bar, and the reading view's follow-along
   state (current verse subtly emphasized).
+- **Printed-Bible typography (all of it available from the text source).**
+  Section headings and psalm titles, **poetry set with proper
+  indentation** (Psalms must not read as prose), and an optional
+  **red-letter toggle** for the words of Christ. Design the poetry
+  treatment explicitly — it is most of the Old Testament's beauty.
+- **Search** — full-text with phrase support ("fear of the Lord"), paged
+  results, and a scope selector (whole Bible / this book / this term).
 - **Word study sheet** — tap a word → original-language entry, definition,
   and every other occurrence, as a bottom sheet.
 - **Open in Logos** — a quiet affordance on any passage or reference.

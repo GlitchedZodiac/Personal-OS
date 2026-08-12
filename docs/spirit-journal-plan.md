@@ -169,6 +169,37 @@ leading — that's why it reads well on a phone.)
   - `/v3/passage/search/` ✅ — full-text ESV search.
   Caps still apply (per-query verse limits, daily limits, no whole-book
   reproduction, required copyright line) — cache aggressively.
+
+  **Capability audit, all live-tested 2026-08-12 — five things worth
+  building around:**
+
+  1. **Multiple passages in ONE request.** `q=Romans 9:13;Ephesians
+     1:4;John 6:44` returns all three, separately parsed. **A thematic
+     thread is therefore a single API call**, not one per verse — the
+     curriculum's headline feature is cheap. This shapes the thread
+     data model: store the ref string, fetch once, cache once.
+  2. **Per-verse anchors.** HTML returns `id="v19023001"` plus
+     `<a class="va" rel="v19023001">` on every verse. **Verse-level
+     selection, highlighting, and note anchoring get their coordinates
+     for free** — no custom parser, and highlight ranges stay stable
+     across refetches because the ids are canonical (book/chapter/verse
+     encoded).
+  3. **Real typography markup.** Section headings (`<h3>`), psalm titles
+     (`h4.psalm-title`), poetry indentation (`block-indent`, 10 blocks in
+     Psalm 23), and **words of Christ (`class="woc"`, red-letter)**.
+     Psalms will read like a printed Bible rather than a wall of prose,
+     and red-letter is a one-line CSS toggle.
+  4. **Full-text search with phrase support.** `"fear of the Lord"`
+     returned 27 results, paged. This powers his own concordance work and
+     the app's "find every place X appears" without any extra dataset.
+  5. **Audio per passage** — mp3 URLs at any granularity, verse range
+     included in the filename, so a follow-along player is trivial.
+
+  **No rate-limit headers are exposed**, so the caching strategy can't be
+  reactive: **cache every fetched passage permanently in our own DB**
+  (allowed for personal use within the caps) and treat the API as a
+  fill-on-miss source. This also makes offline reading free, and means a
+  term's readings can be pre-fetched the night the term is generated.
 - **Spanish: NBLA** (Lockman) — copyrighted; **verify licensing before
   design locks it**. Fallback: Reina-Valera 1909 (PD).
 - **⚠️ RSB notes: not obtainable.** Ligonier sells the Reformation Study
