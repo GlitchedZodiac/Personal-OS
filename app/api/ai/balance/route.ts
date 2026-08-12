@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getDemoAIBudgetSummary, isDemoModeServer } from "@/lib/demo-ai-budget";
 
-// Check OpenAI billing / credit balance
-// Tries multiple endpoints since OpenAI has changed these over time
+// AI spend, best available truth:
+// 1. An org ADMIN key is connected (Settings → AI status) → REAL
+//    month-to-date costs from /v1/organization/costs.
+// 2. No admin key → honest "estimate only" answer; the card explains and
+//    offers the connect flow. The legacy dashboard/billing endpoints are
+//    gone for modern keys — don't probe them.
+
 export async function GET() {
   if (isDemoModeServer()) {
     const summary = await getDemoAIBudgetSummary();
@@ -15,113 +21,65 @@ export async function GET() {
     }
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const secret = await prisma.integrationSecret.findUnique({
+    where: { name: "openai_admin_key" },
+  });
+  const adminKey = secret?.value ?? process.env.OPENAI_ADMIN_KEY;
 
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "No API key configured" },
-      { status: 500 }
-    );
-  }
-
-  const headers = {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json",
-  };
-
-  try {
-    // Try the newer organization billing endpoint first
-    // This provides credit grants (prepaid credits)
-    const creditRes = await fetch(
-      "https://api.openai.com/dashboard/billing/credit_grants",
-      { headers }
-    );
-
-    if (creditRes.ok) {
-      const creditData = await creditRes.json();
-      return NextResponse.json({
-        available: true,
-        totalGranted: creditData.total_granted ?? null,
-        totalUsed: creditData.total_used ?? null,
-        totalAvailable: creditData.total_available ?? null,
-        grants: creditData.grants?.data?.map(
-          (g: { id: string; grant_amount: number; used_amount: number; effective_at: number; expires_at: number }) => ({
-            id: g.id,
-            amount: g.grant_amount,
-            used: g.used_amount,
-            effectiveAt: g.effective_at,
-            expiresAt: g.expires_at,
-          })
-        ) ?? [],
-      });
-    }
-
-    // Try the subscription endpoint as fallback
-    const subRes = await fetch(
-      "https://api.openai.com/dashboard/billing/subscription",
-      { headers }
-    );
-
-    if (subRes.ok) {
-      const subData = await subRes.json();
-
-      // Also try to get usage for current month
-      const now = new Date();
-      const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      const endDay = now.getDate() + 1;
-      const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
-
-      let usageTotal: number | null = null;
-      try {
-        const usageRes = await fetch(
-          `https://api.openai.com/dashboard/billing/usage?start_date=${startDate}&end_date=${endDate}`,
-          { headers }
-        );
-        if (usageRes.ok) {
-          const usageData = await usageRes.json();
-          usageTotal = usageData.total_usage
-            ? usageData.total_usage / 100
-            : null; // Comes in cents
-        }
-      } catch {
-        // Usage endpoint failed — that's ok
-      }
-
-      return NextResponse.json({
-        available: true,
-        plan: subData.plan?.title ?? subData.plan?.id ?? "Unknown",
-        hardLimitUsd: subData.hard_limit_usd ?? null,
-        softLimitUsd: subData.soft_limit_usd ?? null,
-        monthlyUsageUsd: usageTotal,
-        accessUntil: subData.access_until
-          ? new Date(subData.access_until * 1000).toISOString()
-          : null,
-      });
-    }
-
-    // Both endpoints failed — key might be valid but doesn't have billing access
-    // Verify key works by checking models
-    const modelsRes = await fetch("https://api.openai.com/v1/models", {
-      headers,
-      method: "GET",
-    });
-
+  if (!adminKey) {
     return NextResponse.json({
       available: false,
-      keyValid: modelsRes.ok,
-      message: modelsRes.ok
-        ? "API key is valid but billing endpoints are not accessible. Check your balance at platform.openai.com"
-        : "API key appears to be invalid or expired.",
-      dashboardUrl: "https://platform.openai.com/settings/organization/billing/overview",
+      adminKeyConnected: false,
+      message:
+        "OpenAI doesn't expose spend to regular API keys. Connect an org admin key to see real month-to-date costs.",
+      dashboardUrl:
+        "https://platform.openai.com/settings/organization/billing/overview",
+    });
+  }
+
+  try {
+    const now = new Date();
+    const monthStart = Math.floor(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000
+    );
+    const res = await fetch(
+      `https://api.openai.com/v1/organization/costs?start_time=${monthStart}&limit=31`,
+      { headers: { Authorization: `Bearer ${adminKey}` } }
+    );
+    if (!res.ok) {
+      return NextResponse.json({
+        available: false,
+        adminKeyConnected: true,
+        message: `Costs endpoint answered ${res.status} — the admin key may have been revoked. Reconnect it in Settings.`,
+      });
+    }
+    const body = (await res.json()) as {
+      data?: { start_time: number; results?: { amount?: { value?: number } }[] }[];
+    };
+    let monthSpendUsd = 0;
+    const days: { date: string; usd: number }[] = [];
+    for (const bucket of body.data ?? []) {
+      let dayUsd = 0;
+      for (const r of bucket.results ?? []) {
+        dayUsd += r.amount?.value ?? 0;
+      }
+      monthSpendUsd += dayUsd;
+      days.push({
+        date: new Date(bucket.start_time * 1000).toISOString().slice(0, 10),
+        usd: Math.round(dayUsd * 100) / 100,
+      });
+    }
+    return NextResponse.json({
+      available: true,
+      adminKeyConnected: true,
+      monthSpendUsd: Math.round(monthSpendUsd * 100) / 100,
+      days,
+      monthStart: new Date(monthStart * 1000).toISOString().slice(0, 10),
     });
   } catch (error) {
-    console.error("Balance check error:", error);
+    console.error("Costs fetch error:", error);
     return NextResponse.json(
-      {
-        available: false,
-        error: "Failed to check balance",
-        dashboardUrl: "https://platform.openai.com/settings/organization/billing/overview",
-      },
+      { available: false, adminKeyConnected: true, error: "Costs fetch failed" },
       { status: 500 }
     );
   }

@@ -1059,6 +1059,14 @@ model UserExercise {
   @@map("user_exercises")
 }
 
+model IntegrationSecret {
+  name      String   @id // e.g. "openai_admin_key"
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("integration_secrets")
+}
+
 model WeeklyReport {
   id        String   @id @default(uuid())
   weekStart String   @unique // Mon YYYY-MM-DD (user-local) of the reported week

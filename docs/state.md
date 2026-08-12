@@ -18,6 +18,28 @@ crude until 2c.
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).
 
+## 2026-08-11g2 — Admin-key integration; roadmap locked; companion is next
+
+- **OpenAI real spend**: integration_secrets table + write-only
+  /api/ai/admin-key (GET connected-only · POST validates against
+  /v1/organization/costs before storing — a project key gets the exact
+  "needs an ORG ADMIN key" error · DELETE disconnects). /api/ai/balance
+  rewritten: admin key present → real month-to-date costs summed from
+  the costs buckets; absent → honest estimate-only message (dead legacy
+  dashboard/billing probes removed). AI status card grew the paste-once
+  connect flow + real-spend row. Michael pastes the key in Settings —
+  it never transits chat and never returns to the client.
+- **Roadmap locked (his order)**: companion → dock photo suite →
+  progression intelligence (PURE MATH, no AI — his no-hidden-tokens
+  rule; N-consistent-runs gate, no back-to-back raises) → barcode/meals.
+  Proactive AI check-ins REJECTED. Details in deferred-items APPROVED
+  ROADMAP entry.
+- **Companion kickoff ready**: docs/companion-kickoff-prompt.md (thin
+  WKWebView shell, native mic/cam grant for our origin, HealthKit →
+  /api/mobile/health/daily with background delivery, APNs). Main-lane
+  obligations when the watch lane starts: sleepMinutes/hrvMs/weightKg
+  fields + HealthKit-weight dedup + /api/mobile/push/register.
+
 ## 2026-08-11g — First-real-day feedback batch; Spirit/Journal take the bar
 
 His first full day on the new build (watch circuit ran + synced with HR
