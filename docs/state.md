@@ -14,6 +14,45 @@ design. Web: Pitaya stages continuing; Activities detail + streams live.
 **Branch in flight:** `claude/phase1-modernization` (web) ·
 `claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch).
 
+## 2026-08-12a — [watch] GPS ROUTES (Phase 3.5) + the iOS app icon
+
+The Strava-replacement capture piece, proven end-to-end in the simulator
+against prod with a scripted Salento track:
+
+- **RouteTracker** (CoreLocation, best-for-navigation, .fitness): accuracy
+  gate at 50 m, sub-metre jitter ignored, fixes feed BOTH
+  HKWorkoutRouteBuilder (route lands in Apple Health) and our own buffer.
+  Started only for outdoor kinds; background location declared.
+- **Wire format reuses the app's existing map contract** — routeData
+  `{summaryPolyline, points[], source}`. The polyline is the same
+  precision-5 encoding Strava imports use, so watch routes render on the
+  ALREADY-BUILT activity map with zero main-lane work. Encoder verified
+  against Google's canonical reference string AND round-tripped through
+  the app's own lib/polyline.ts decoder (exact). Raw points ride at 1/5 s
+  for future server-side splits.
+- **Elevation gain** from the barometer (positive deltas, 0.5 m noise
+  floor) → the existing `elevationGainM` column ("+186 m" on TRAILS);
+  altitudeStream still ships raw. GPS distance fills in only when
+  HealthKit has none — HK stays authoritative.
+- **Trail live page (design 12) ported**: mint blinking GPS pill
+  (SEARCHING → GPS → NO GPS), the map box with the design's three contour
+  curves verbatim + the live track drawn from real fixes (aspect-corrected
+  for latitude, hollow start dot, filled head), distance hero, ELEV M ·
+  /KM pace · BPM. Outdoor sessions get it as their second page.
+- **THREE bugs caught by self-smoke, all crash-class**: (1)
+  allowsBackgroundLocationUpdates threw because CoreLocation validates
+  UIBackgroundModes even on watchOS — declared it AND made the setter
+  conditional so a missing key can never crash mid-walk; (2) a live route
+  insert racing finishWorkout() deadlocked the save — sensors now stop
+  BEFORE the session ends, and finishRoute has a 6 s deadline so Apple
+  Health can never cost a workout; (3) `lastT = Int.min` in the
+  downsampler overflowed on the first point (Michael's crash report
+  pinpointed the line) — now an Optional.
+- Smoke: 27 fixes → polyline decoded back to 27 points inside the
+  simulated track, HK workout saved, server enrichment intact, row swept.
+- **iOS app icon shipped** — the home screen placeholder is gone; the
+  dragonfruit is flattened opaque (iOS rejects alpha) at 1024².
+
 ## 2026-08-11g — [watch] iOS COMPANION SHIPPED to Michael's iPhone
 
 The thin companion per the kickoff directive — built, sim-verified

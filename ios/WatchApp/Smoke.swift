@@ -59,6 +59,24 @@ enum Smoke {
             log("sample circuit injected")
         }
 
+        // WALK variant: an outdoor session with the real recorder + GPS, held
+        // open for N seconds while a route is fed in (simctl location), then
+        // finished and saved — proves the whole route pipeline to prod.
+        if let seconds = env["PITAYA_SMOKE_WALK"].flatMap(Int.init), model.phase == .home {
+            model.externalSourceOverride = "watch_smoke"
+            log("walk: starting outdoor session for \(seconds)s…")
+            await model.startWorkout(.walk)
+            try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+            let route = model.recorder.route
+            log("walk: fixes=\(route.coordinates.count) gpsDistance=\(Int(route.distanceMeters))m")
+            log("walk: finishing…")
+            await model.finishWorkout(.walk)
+            log("walk: finished — summary dist=\(model.summary?.distanceMeters ?? -1)")
+            await model.saveWorkout()
+            log("walk: saved — syncState=\(String(describing: model.syncState))")
+            return
+        }
+
         // HOLD variant: start a kettlebell session, log one set, and stay on
         // the live set-logger screen (for visual verification runs).
         if env["PITAYA_SMOKE_HOLD"] == "1", model.phase == .home {

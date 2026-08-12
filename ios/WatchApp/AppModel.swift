@@ -716,8 +716,10 @@ public final class AppModel: ObservableObject {
             stepCount: totals?.stepCount,
             avgHeartRateBpm: totals?.avgHeartRate.map { Int($0.rounded()) },
             maxHeartRateBpm: totals?.maxHeartRate.map { Int($0.rounded()) },
+            elevationGainM: totals?.elevationGainMeters,
             exercises: entries.isEmpty ? nil : entries,
             metricsData: metrics.isEmpty ? nil : metrics,
+            routeData: totals?.routeData,
             deviceType: "apple_watch"
         )
 

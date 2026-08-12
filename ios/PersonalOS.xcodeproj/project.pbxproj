@@ -21,18 +21,21 @@
 		310B0256403A7D299CD83E0B /* CustomExerciseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */; };
 		348ED9F32442F6B9D6D65ECF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 674D825EB1855E75A9381EE7 /* Assets.xcassets */; };
 		3907BAA59C9AC5461171670C /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
+		39D5185076FAC8169E6993F8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0B3EC5A28C6DC130B5F45FE1 /* Assets.xcassets */; };
 		3C4D117DD1598B40D7AAC1FA /* WebShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B38DC7F103BB0BBB78466C /* WebShellView.swift */; };
 		3CEB3D4F1FB7CF28281BD4C4 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
 		3D27EC707EF2442F6A321307 /* InstrumentSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 006CA2CFCE38709ABB5C790F /* InstrumentSans-Medium.ttf */; };
 		480F47558B0D592A5ADB0746 /* CompanionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF0284F25AF6DA96F5873EB /* CompanionModel.swift */; };
 		5427D9F48D8059CB0AC1580D /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
 		55E9EAB4707D71D7514C4CF6 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
+		6207641BFC15B4427525659D /* TrailPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE040138C592BFC1248B7D1 /* TrailPage.swift */; };
 		6EF00415B4AD3B33E2B6C717 /* Smoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAABEEDD8A9DD0E43F18673C /* Smoke.swift */; };
 		6FFE9221290D2657D9C64588 /* PersonalOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2BE5E7DEF13CBB8EFDE90AC /* PersonalOSApp.swift */; };
 		7348E390E2D5C943EBAB1253 /* PitayaVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2020045D700AEC8774E254 /* PitayaVector.swift */; };
 		74BAAB263357D00A03E05E4B /* InstrumentSans-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DCB60A5B0C7DC32000E873A6 /* InstrumentSans-SemiBold.ttf */; };
 		7C1C73B93520F304DF109AAD /* CustomExerciseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */; };
 		7CEC08ACE05C328348AD7791 /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
+		7DC9C0F3539C60B452675007 /* RouteTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA99F817ED45C90C522F36AB /* RouteTracker.swift */; };
 		7FDC7116A0E356DF685AA40D /* HealthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19835752792B8774D2AD643F /* HealthStore.swift */; };
 		836DABC6857606F8BB040B10 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0960EA68534280B484B235 /* AppModel.swift */; };
 		83FB94B008C61E0037CDB980 /* MobileAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977A9107D8035E968679A59C /* MobileAPIModels.swift */; };
@@ -43,9 +46,11 @@
 		9D732791423DF4AD53F31380 /* FamiljenGrotesk-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DE19A2C40C78F1DB0C5E021D /* FamiljenGrotesk-Medium.ttf */; };
 		A02A6000CD7F80F1C1B81CF8 /* PitayaGlyphs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79984AFEC08AF2C2C87E907E /* PitayaGlyphs.swift */; };
 		B00B0A7ABDF2552A868200C3 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B00C978153160C55EFA8A /* Theme.swift */; };
+		B207070B7B7A1738BBF3F1F1 /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */; };
 		B4FE0E0A8D8734ED1191377D /* PitayaWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A818535E93E67612022919 /* PitayaWatchApp.swift */; };
 		B51F6AD550EEB2F65BC6677F /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D0C5609A11F08C551F2A60 /* SummaryView.swift */; };
 		B5954AB70A7B681072E2CFCD /* SetLoggerPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1377A069127D2D8A55879B3B /* SetLoggerPage.swift */; };
+		D029562938A0F67D6B37E745 /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */; };
 		D04C12C02EB0A78E098EEC8F /* InstrumentSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F0AF3ED8F961B0749F4434D0 /* InstrumentSans-Regular.ttf */; };
 		D1667DF004D2B8CCD9737C26 /* MobileAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977A9107D8035E968679A59C /* MobileAPIModels.swift */; };
 		D6E5E44C068FD03F5D914953 /* PitayaWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D67C6689A274F536320D83D /* PitayaWidgets.swift */; };
@@ -84,6 +89,7 @@
 		006CA2CFCE38709ABB5C790F /* InstrumentSans-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "InstrumentSans-Medium.ttf"; sourceTree = "<group>"; };
 		03B38DC7F103BB0BBB78466C /* WebShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebShellView.swift; sourceTree = "<group>"; };
 		09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomExerciseCache.swift; sourceTree = "<group>"; };
+		0B3EC5A28C6DC130B5F45FE1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		12D0C5609A11F08C551F2A60 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		1377A069127D2D8A55879B3B /* SetLoggerPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetLoggerPage.swift; sourceTree = "<group>"; };
 		19835752792B8774D2AD643F /* HealthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStore.swift; sourceTree = "<group>"; };
@@ -107,17 +113,20 @@
 		779544B3E1F855E1019BE07F /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		79984AFEC08AF2C2C87E907E /* PitayaGlyphs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaGlyphs.swift; sourceTree = "<group>"; };
 		7E4AC2F072E9A3D3911A6CBF /* PersonalOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PersonalOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteModels.swift; sourceTree = "<group>"; };
 		8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SequenceViews.swift; sourceTree = "<group>"; };
 		90514349C02B2B967189761C /* LiveWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveWorkoutView.swift; sourceTree = "<group>"; };
 		93B03235195B45C26E62AD2A /* PersonalOS WatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "PersonalOS WatchWidgets.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		977A9107D8035E968679A59C /* MobileAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAPIModels.swift; sourceTree = "<group>"; };
 		9D67C6689A274F536320D83D /* PitayaWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaWidgets.swift; sourceTree = "<group>"; };
+		ACE040138C592BFC1248B7D1 /* TrailPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailPage.swift; sourceTree = "<group>"; };
 		ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineWorkoutQueue.swift; sourceTree = "<group>"; };
 		BAB5F2EC88271FD5EC8C556E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		BC2020045D700AEC8774E254 /* PitayaVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaVector.swift; sourceTree = "<group>"; };
 		BE7B00C978153160C55EFA8A /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		C877F517D2C66C9CB8017AB8 /* FamiljenGrotesk-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "FamiljenGrotesk-Bold.ttf"; sourceTree = "<group>"; };
 		D2BE5E7DEF13CBB8EFDE90AC /* PersonalOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalOSApp.swift; sourceTree = "<group>"; };
+		DA99F817ED45C90C522F36AB /* RouteTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteTracker.swift; sourceTree = "<group>"; };
 		DCB60A5B0C7DC32000E873A6 /* InstrumentSans-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "InstrumentSans-SemiBold.ttf"; sourceTree = "<group>"; };
 		DE19A2C40C78F1DB0C5E021D /* FamiljenGrotesk-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "FamiljenGrotesk-Medium.ttf"; sourceTree = "<group>"; };
 		DE4FCE8EC35856A1AC60D762 /* CompanionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionViews.swift; sourceTree = "<group>"; };
@@ -141,6 +150,7 @@
 				8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */,
 				1377A069127D2D8A55879B3B /* SetLoggerPage.swift */,
 				12D0C5609A11F08C551F2A60 /* SummaryView.swift */,
+				ACE040138C592BFC1248B7D1 /* TrailPage.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -169,6 +179,7 @@
 			isa = PBXGroup;
 			children = (
 				977A9107D8035E968679A59C /* MobileAPIModels.swift */,
+				87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -182,6 +193,7 @@
 				570E4172D82BFC1B6E10D848 /* Info.plist */,
 				42ADF8B3E198AEB2237AD08D /* PersonalOSWatch.entitlements */,
 				E9A818535E93E67612022919 /* PitayaWatchApp.swift */,
+				DA99F817ED45C90C522F36AB /* RouteTracker.swift */,
 				FAABEEDD8A9DD0E43F18673C /* Smoke.swift */,
 				2FAD62BC2C3D39E29DAEB3A3 /* WorkoutRecorder.swift */,
 				C3803332AC85DD368948FF1A /* Fonts */,
@@ -244,6 +256,7 @@
 		C4655E30656B97F40D1ADC7A /* iOSApp */ = {
 			isa = PBXGroup;
 			children = (
+				0B3EC5A28C6DC130B5F45FE1 /* Assets.xcassets */,
 				3EF0284F25AF6DA96F5873EB /* CompanionModel.swift */,
 				DE4FCE8EC35856A1AC60D762 /* CompanionViews.swift */,
 				BAB5F2EC88271FD5EC8C556E /* Info.plist */,
@@ -276,6 +289,7 @@
 			buildConfigurationList = 2355FC1A2E7518D10603EC0F /* Build configuration list for PBXNativeTarget "PersonalOS" */;
 			buildPhases = (
 				0C643070322A965CD35F1302 /* Sources */,
+				366560F08F26FE43B560B218 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -370,6 +384,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		366560F08F26FE43B560B218 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				39D5185076FAC8169E6993F8 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6EF89D349FCB04D0D88AE698 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -404,6 +426,7 @@
 				1E57C0B28724B24673F91B65 /* PRBaselines.swift in Sources */,
 				6FFE9221290D2657D9C64588 /* PersonalOSApp.swift in Sources */,
 				7348E390E2D5C943EBAB1253 /* PitayaVector.swift in Sources */,
+				B207070B7B7A1738BBF3F1F1 /* RouteModels.swift in Sources */,
 				05317DBD031E73DDAE8151C6 /* SessionStore.swift in Sources */,
 				FD0ABE944039C2090164EB53 /* Theme.swift in Sources */,
 				3C4D117DD1598B40D7AAC1FA /* WebShellView.swift in Sources */,
@@ -437,12 +460,15 @@
 				A02A6000CD7F80F1C1B81CF8 /* PitayaGlyphs.swift in Sources */,
 				F7AC3277CC304EB90CFA8B16 /* PitayaVector.swift in Sources */,
 				B4FE0E0A8D8734ED1191377D /* PitayaWatchApp.swift in Sources */,
+				D029562938A0F67D6B37E745 /* RouteModels.swift in Sources */,
+				7DC9C0F3539C60B452675007 /* RouteTracker.swift in Sources */,
 				0B73A4EC13599FACFA029DF5 /* SequenceViews.swift in Sources */,
 				1AD7225F8119DEE334552638 /* SessionStore.swift in Sources */,
 				B5954AB70A7B681072E2CFCD /* SetLoggerPage.swift in Sources */,
 				6EF00415B4AD3B33E2B6C717 /* Smoke.swift in Sources */,
 				B51F6AD550EEB2F65BC6677F /* SummaryView.swift in Sources */,
 				B00B0A7ABDF2552A868200C3 /* Theme.swift in Sources */,
+				6207641BFC15B4427525659D /* TrailPage.swift in Sources */,
 				267048DC6977B56F65B7C242 /* WorkoutRecorder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

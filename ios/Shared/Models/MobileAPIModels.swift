@@ -169,8 +169,10 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
     public let stepCount: Int?
     public let avgHeartRateBpm: Int?
     public let maxHeartRateBpm: Int?
+    public let elevationGainM: Double?
     public let exercises: [ExerciseEntry]?
     public let metricsData: WorkoutMetricsData?
+    public let routeData: WorkoutRouteData?
     public let source: String
     public let syncStatus: String
     public let deviceType: String?
@@ -188,8 +190,10 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         stepCount: Int? = nil,
         avgHeartRateBpm: Int? = nil,
         maxHeartRateBpm: Int? = nil,
+        elevationGainM: Double? = nil,
         exercises: [ExerciseEntry]? = nil,
         metricsData: WorkoutMetricsData? = nil,
+        routeData: WorkoutRouteData? = nil,
         source: String = "mobile",
         syncStatus: String = "synced",
         deviceType: String? = "apple_watch"
@@ -206,8 +210,10 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         self.stepCount = stepCount
         self.avgHeartRateBpm = avgHeartRateBpm
         self.maxHeartRateBpm = maxHeartRateBpm
+        self.elevationGainM = elevationGainM
         self.exercises = exercises
         self.metricsData = metricsData
+        self.routeData = routeData
         self.source = source
         self.syncStatus = syncStatus
         self.deviceType = deviceType

@@ -17,8 +17,13 @@ struct LiveWorkoutView: View {
             if kind == .kettlebell {
                 SetLoggerPage().tag(1)
             }
+            if kind.isOutdoor {
+                // Design 12 — the GPS/route face for outdoor sessions.
+                TrailPage(recorder: model.recorder, route: model.recorder.route, kind: kind)
+                    .tag(1)
+            }
             ControlsPage(recorder: model.recorder, kind: kind, isSequence: false)
-                .tag(kind == .kettlebell ? 2 : 1)
+                .tag(kind == .kettlebell || kind.isOutdoor ? 2 : 1)
         }
         .tabViewStyle(.verticalPage)
         .onAppear {
