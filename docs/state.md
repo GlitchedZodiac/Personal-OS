@@ -14,6 +14,37 @@ design. Web: Pitaya stages continuing; Activities detail + streams live.
 **Branch in flight:** `claude/phase1-modernization` (web) ·
 `claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch).
 
+## 2026-08-11g — [watch] iOS COMPANION SHIPPED to Michael's iPhone
+
+The thin companion per the kickoff directive — built, sim-verified
+end-to-end, Release-installed to his iPhone 17 Pro Max via devicectl:
+
+- **WKWebView shell**: prod web IS the UI; persistent cookie store (PIN
+  login survives), light-first chrome (no black safe-area bands), bounce
+  off, external links open Safari, back/forward gestures on.
+- **Durable mic/camera**: native usage descriptions + WKPermissionDecision
+  .grant for the personal-os-plum origin ONLY — the every-launch
+  getUserMedia prompt dies (his standing complaint).
+- **HealthKit → /api/mobile/health/daily**: reads bodyMass, sleepAnalysis,
+  HRV SDNN, restingHeartRate, stepCount, activeEnergy, distance; posts
+  today (+ yesterday once per launch) and re-posts on HKObserverQuery
+  background delivery (hourly). sleepMinutes/hrvMs/weightKg ride in
+  rawData until the announced columns ship. PROVEN in sim: grant sheet →
+  Connected → row landed on prod (zeros from the empty sim store —
+  today/yesterday get overwritten by his real phone's upsert).
+- **Native pairing** (PIN pad, same bearer flow as the watch, separate
+  Keychain service) + minimal Companion settings sheet reachable by SHAKE
+  or pitaya://settings (URL scheme registered): Health status/sync-now,
+  push status, unpair.
+- **APNs groundwork**: full token flow wired (UNUserNotificationCenter →
+  register → POST /api/mobile/push/register when it exists) — but NO
+  aps-environment entitlement on the free personal team (it would break
+  provisioning like the Sign-In-with-Apple incident); settings shows
+  "needs Apple Developer Program". The $99 decision now gates reminders.
+- Shared refactor: SVG parser + DragonfruitLogo moved to
+  Shared/PitayaVector.swift (both targets); fixed a nested-ObservableObject
+  render bug (health manager changes now forward to the model).
+
 ## 2026-08-11f — [watch] Raw streams adopted; treadmill/hike; customs ready
 
 Adopted the 2026-08-11 streams contract end-to-end, proven against prod:

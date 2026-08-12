@@ -11,6 +11,7 @@
 		09DE6BDE7477E9EAD65961D0 /* PersonalOS WatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 93B03235195B45C26E62AD2A /* PersonalOS WatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0B73A4EC13599FACFA029DF5 /* SequenceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */; };
 		119C8051CB463E710DA49416 /* HomeGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D569AE319D0679E013CC7F3 /* HomeGridView.swift */; };
+		192FB618D1D7D216B916DBA0 /* CompanionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE4FCE8EC35856A1AC60D762 /* CompanionViews.swift */; };
 		1AD7225F8119DEE334552638 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
 		1E57C0B28724B24673F91B65 /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
 		1F4F7858F490CDE118F92780 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 779544B3E1F855E1019BE07F /* Components.swift */; };
@@ -20,12 +21,15 @@
 		310B0256403A7D299CD83E0B /* CustomExerciseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */; };
 		348ED9F32442F6B9D6D65ECF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 674D825EB1855E75A9381EE7 /* Assets.xcassets */; };
 		3907BAA59C9AC5461171670C /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
+		3C4D117DD1598B40D7AAC1FA /* WebShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B38DC7F103BB0BBB78466C /* WebShellView.swift */; };
 		3CEB3D4F1FB7CF28281BD4C4 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
 		3D27EC707EF2442F6A321307 /* InstrumentSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 006CA2CFCE38709ABB5C790F /* InstrumentSans-Medium.ttf */; };
+		480F47558B0D592A5ADB0746 /* CompanionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF0284F25AF6DA96F5873EB /* CompanionModel.swift */; };
 		5427D9F48D8059CB0AC1580D /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
 		55E9EAB4707D71D7514C4CF6 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
 		6EF00415B4AD3B33E2B6C717 /* Smoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAABEEDD8A9DD0E43F18673C /* Smoke.swift */; };
 		6FFE9221290D2657D9C64588 /* PersonalOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2BE5E7DEF13CBB8EFDE90AC /* PersonalOSApp.swift */; };
+		7348E390E2D5C943EBAB1253 /* PitayaVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2020045D700AEC8774E254 /* PitayaVector.swift */; };
 		74BAAB263357D00A03E05E4B /* InstrumentSans-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DCB60A5B0C7DC32000E873A6 /* InstrumentSans-SemiBold.ttf */; };
 		7C1C73B93520F304DF109AAD /* CustomExerciseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */; };
 		7CEC08ACE05C328348AD7791 /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
@@ -48,6 +52,7 @@
 		E055B584F27FDA5F0F34016F /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
 		F00FF746AAAD6C758063B052 /* FamiljenGrotesk-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C877F517D2C66C9CB8017AB8 /* FamiljenGrotesk-Bold.ttf */; };
 		F6905EC6F5599D66A96803A0 /* FamiljenGrotesk-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4E3A0588ED582B61CC96FCD3 /* FamiljenGrotesk-SemiBold.ttf */; };
+		F7AC3277CC304EB90CFA8B16 /* PitayaVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2020045D700AEC8774E254 /* PitayaVector.swift */; };
 		FD0ABE944039C2090164EB53 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B00C978153160C55EFA8A /* Theme.swift */; };
 /* End PBXBuildFile section */
 
@@ -77,6 +82,7 @@
 
 /* Begin PBXFileReference section */
 		006CA2CFCE38709ABB5C790F /* InstrumentSans-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "InstrumentSans-Medium.ttf"; sourceTree = "<group>"; };
+		03B38DC7F103BB0BBB78466C /* WebShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebShellView.swift; sourceTree = "<group>"; };
 		09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomExerciseCache.swift; sourceTree = "<group>"; };
 		12D0C5609A11F08C551F2A60 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		1377A069127D2D8A55879B3B /* SetLoggerPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetLoggerPage.swift; sourceTree = "<group>"; };
@@ -84,6 +90,7 @@
 		1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseCatalog.swift; sourceTree = "<group>"; };
 		2D2267F0F55DAA9167B98D75 /* PersonalOS Watch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PersonalOS Watch.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2FAD62BC2C3D39E29DAEB3A3 /* WorkoutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutRecorder.swift; sourceTree = "<group>"; };
+		3EF0284F25AF6DA96F5873EB /* CompanionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionModel.swift; sourceTree = "<group>"; };
 		40DD35A02B11408515079C64 /* PRBaselines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRBaselines.swift; sourceTree = "<group>"; };
 		42ADF8B3E198AEB2237AD08D /* PersonalOSWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PersonalOSWatch.entitlements; sourceTree = "<group>"; };
 		4A0960EA68534280B484B235 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -107,11 +114,13 @@
 		9D67C6689A274F536320D83D /* PitayaWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaWidgets.swift; sourceTree = "<group>"; };
 		ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineWorkoutQueue.swift; sourceTree = "<group>"; };
 		BAB5F2EC88271FD5EC8C556E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		BC2020045D700AEC8774E254 /* PitayaVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaVector.swift; sourceTree = "<group>"; };
 		BE7B00C978153160C55EFA8A /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		C877F517D2C66C9CB8017AB8 /* FamiljenGrotesk-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "FamiljenGrotesk-Bold.ttf"; sourceTree = "<group>"; };
 		D2BE5E7DEF13CBB8EFDE90AC /* PersonalOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalOSApp.swift; sourceTree = "<group>"; };
 		DCB60A5B0C7DC32000E873A6 /* InstrumentSans-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "InstrumentSans-SemiBold.ttf"; sourceTree = "<group>"; };
 		DE19A2C40C78F1DB0C5E021D /* FamiljenGrotesk-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "FamiljenGrotesk-Medium.ttf"; sourceTree = "<group>"; };
+		DE4FCE8EC35856A1AC60D762 /* CompanionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionViews.swift; sourceTree = "<group>"; };
 		E9A818535E93E67612022919 /* PitayaWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaWatchApp.swift; sourceTree = "<group>"; };
 		EA94BE4FFDB0509B29D5AF96 /* PairingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingViews.swift; sourceTree = "<group>"; };
 		F0AF3ED8F961B0749F4434D0 /* InstrumentSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "InstrumentSans-Regular.ttf"; sourceTree = "<group>"; };
@@ -235,9 +244,12 @@
 		C4655E30656B97F40D1ADC7A /* iOSApp */ = {
 			isa = PBXGroup;
 			children = (
+				3EF0284F25AF6DA96F5873EB /* CompanionModel.swift */,
+				DE4FCE8EC35856A1AC60D762 /* CompanionViews.swift */,
 				BAB5F2EC88271FD5EC8C556E /* Info.plist */,
 				65026F55D9A5F18E5741377D /* PersonalOS.entitlements */,
 				D2BE5E7DEF13CBB8EFDE90AC /* PersonalOSApp.swift */,
+				03B38DC7F103BB0BBB78466C /* WebShellView.swift */,
 			);
 			path = iOSApp;
 			sourceTree = "<group>";
@@ -246,6 +258,7 @@
 			isa = PBXGroup;
 			children = (
 				1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */,
+				BC2020045D700AEC8774E254 /* PitayaVector.swift */,
 				40DD35A02B11408515079C64 /* PRBaselines.swift */,
 				BE7B00C978153160C55EFA8A /* Theme.swift */,
 				449EE58B96B9E0C6D63189ED /* Models */,
@@ -380,6 +393,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				480F47558B0D592A5ADB0746 /* CompanionModel.swift in Sources */,
+				192FB618D1D7D216B916DBA0 /* CompanionViews.swift in Sources */,
 				310B0256403A7D299CD83E0B /* CustomExerciseCache.swift in Sources */,
 				55E9EAB4707D71D7514C4CF6 /* ExerciseCatalog.swift in Sources */,
 				7FDC7116A0E356DF685AA40D /* HealthStore.swift in Sources */,
@@ -388,8 +403,10 @@
 				E055B584F27FDA5F0F34016F /* OfflineWorkoutQueue.swift in Sources */,
 				1E57C0B28724B24673F91B65 /* PRBaselines.swift in Sources */,
 				6FFE9221290D2657D9C64588 /* PersonalOSApp.swift in Sources */,
+				7348E390E2D5C943EBAB1253 /* PitayaVector.swift in Sources */,
 				05317DBD031E73DDAE8151C6 /* SessionStore.swift in Sources */,
 				FD0ABE944039C2090164EB53 /* Theme.swift in Sources */,
+				3C4D117DD1598B40D7AAC1FA /* WebShellView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -418,6 +435,7 @@
 				3907BAA59C9AC5461171670C /* PRBaselines.swift in Sources */,
 				9890184C4B9B3D1073B8B4D7 /* PairingViews.swift in Sources */,
 				A02A6000CD7F80F1C1B81CF8 /* PitayaGlyphs.swift in Sources */,
+				F7AC3277CC304EB90CFA8B16 /* PitayaVector.swift in Sources */,
 				B4FE0E0A8D8734ED1191377D /* PitayaWatchApp.swift in Sources */,
 				0B73A4EC13599FACFA029DF5 /* SequenceViews.swift in Sources */,
 				1AD7225F8119DEE334552638 /* SessionStore.swift in Sources */,

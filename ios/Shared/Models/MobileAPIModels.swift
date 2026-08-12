@@ -378,6 +378,9 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
     public let activeEnergyKcal: Double?
     public let walkingRunningDistanceMeters: Double?
     public let source: String
+    /// Extras riding until dedicated columns ship (announced 2026-08-11):
+    /// sleepMinutes, hrvMs, weightKg.
+    public let rawData: [String: Double]?
 
     public init(
         localDate: String,
@@ -386,7 +389,8 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
         restingHeartRateBpm: Int? = nil,
         activeEnergyKcal: Double? = nil,
         walkingRunningDistanceMeters: Double? = nil,
-        source: String = "apple_health"
+        source: String = "apple_health",
+        rawData: [String: Double]? = nil
     ) {
         self.localDate = localDate
         self.timeZone = timeZone
@@ -395,6 +399,7 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
         self.activeEnergyKcal = activeEnergyKcal
         self.walkingRunningDistanceMeters = walkingRunningDistanceMeters
         self.source = source
+        self.rawData = rawData
     }
 }
 
