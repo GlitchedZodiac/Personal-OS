@@ -5,6 +5,13 @@ is the **prompt itself** — paste it into Claude Design, then expand.
 Section 4's study system is fully specified on purpose: Michael asked for
 it to be designed *for* him, not left ad hoc.
 
+**Round 4 (2026-08-12):** ESV API key acquired and live-verified — text,
+HTML **with inline cross-references and footnotes**, **audio**, and
+search all confirmed working, so §3 now includes reference tooltips and
+audio as v1. Adds the Church Series Follow-Along (§2b) and three
+recommendations: term rationale, the hard-sayings commitment, and
+second-reading intelligence.
+
 ---
 
 ## PASTE FROM HERE
@@ -47,7 +54,26 @@ counters anywhere in this section.
   choosing.
 - **The Transcript** — what he has studied across his life (see §6).
 
-Design **Year at a glance**, **Term/Syllabus**, and the daily page below.
+**On the Term page, three things that make this a university and not a
+generator:**
+
+- **"Why this term, why now"** — one short paragraph of rationale when a
+  term is announced (*"two terms in narrative; this one goes to an
+  epistle, and Ephesians pairs with the Exile because both are about a
+  people being formed"*). Intent, stated. Give it real space.
+- **The hard-sayings commitment** — a short standing statement, in the
+  app's own voice, that this curriculum **does not skip the difficult
+  texts** (Judges 19, the conquest, the imprecatory psalms, Romans 9's
+  hardening). When a term contains one, badge it honestly on the
+  syllabus. This is the anti-fluff guarantee and the credibility of the
+  whole product.
+- **Second reading** — when a term revisits a book he has studied before,
+  show it: *"You read Romans in 2026 and left three questions open in
+  chapters 9–11 — this term goes deeper there."* Design the returning-
+  student state; it is a 300-level course, not the 100-level again.
+
+Design **Year at a glance**, **Term/Syllabus** (with the three elements
+above), and the daily page below.
 
 ### 2. Today's Spirit (the screen he opens every morning)
 
@@ -72,6 +98,26 @@ Top to bottom:
 
 No menus, no backlog, no library on this screen. **One day at a time.**
 
+### 2b. Church Series Follow-Along
+
+His church preaches in series but announces little ahead; the first
+sermon explains where the series is going. So the app **learns the series
+from him** and builds a parallel Sunday track.
+
+Design:
+1. **"My church started a series" entry flow** with three equal inputs —
+   **speak it** (a voice summary), **photograph the slides** (multi-photo
+   capture; the app parses title, outline, passages), or **paste a
+   transcript**. Show the AI's parsed draft — series title, expected
+   length, passages, themes — for his confirmation before it commits.
+2. **The Sunday track** — a *parallel* card on Today's Spirit, never
+   replacing the term: *"Sunday · Galatians 3 — the passage, its context,
+   and three questions to bring back."* The week's follow-along deepens
+   what was preached so **he arrives next Sunday primed**.
+3. **Sermon capture** — a voice note during or after the sermon, tagged
+   to the passages preached, landing in the same Passage Notebook.
+4. **Promote to term** — an option when a series runs long.
+
 ### 3. The Reader
 
 The heart of the section. Design in **dark mode first**, then light.
@@ -86,9 +132,18 @@ The heart of the section. Design in **dark mode first**, then light.
 - **Linked bilingual mode** — two panes, English and Spanish, **locked to
   the same verse: scrolling one moves the other.** Design the toggle and
   both the stacked (phone) and side-by-side (landscape/tablet) layouts.
-- **Cross-references** — a footnote drawer showing machine references
-  (Treasury of Scripture Knowledge) *visually distinct from* the user's
-  own hand-made links, which are precious and should look it.
+- **Reference tooltips (confirmed available).** Superscript letters
+  inline in the text; tapping one raises a small popup — first the
+  reference line ("See ch. 11:14"), tapping again expands to **the actual
+  verse text with an Open button**. Design both popup states; this is the
+  single most-used study gesture. A footnote drawer holds translation
+  footnotes. Machine cross-references (ESV + Treasury of Scripture
+  Knowledge) must look *visually distinct* from his own hand-made links,
+  which are precious and should look it.
+- **Audio (confirmed available).** A play control on any passage with a
+  mini-player: play/pause, verse-back/verse-forward, speed. Design the
+  player docked above the tab bar, and the reading view's follow-along
+  state (current verse subtly emphasized).
 - **Word study sheet** — tap a word → original-language entry, definition,
   and every other occurrence, as a bottom sheet.
 - **Open in Logos** — a quiet affordance on any passage or reference.

@@ -122,7 +122,7 @@ posture*, not capability:
 | Tabs / multiple sources open | **Build (v2)** — generalizes the parallel-harmony view |
 | Weekly memory work tied to readiness | **Build** — see §4 |
 | Maps, historical sites, archaeology | **Build, curated per teaching** — PD atlases + OpenBible.info geodata + Wikimedia imagery. Never a standalone atlas |
-| Audio Bible | **v2, licensing-gated** — PD audio exists for KJV/WEB; ESV audio must be confirmed with Crossway |
+| Audio Bible | **v1 — CONFIRMED WORKING** via the ESV API audio endpoint (no extra license) |
 | Typography / text size / fonts | **Build in v1, not last** — see §5 |
 | Exegetical guides, syntax graphs, sense lexicon | **Don't build. Link to Logos.** Decades of licensed scholarly data; unwinnable and off-thesis |
 | RSB (Sproul) footnotes in-app | **Not licensable — see §6** |
@@ -152,10 +152,23 @@ leading — that's why it reads well on a phone.)
 
 ## 6. Texts, licensing, and two honest No's
 
-- **English: ESV via the Crossway API.** Same text as his physical
-  Reformation Study Bible, so paper and app agree. Accept the caps
-  (per-query verse limits, daily limits, no whole-book reproduction,
-  required copyright line). **Action: apply for the key.**
+- **English: ESV via the Crossway API — ✅ KEY ACQUIRED AND VERIFIED
+  2026-08-12.** Stored as `ESV_API_KEY` in `.env.local` (gitignored;
+  name-only in `.env.example`). **Michael must also add it to Vercel
+  himself.** Live-tested endpoints:
+  - `/v3/passage/text/` ✅ — plain text
+  - `/v3/passage/html/` ✅ — **and it carries cross-references and
+    footnotes inline** (Romans 3 returned 48 `class="cf"` crossref
+    anchors with `title="See ch. 11:14"` and 13 footnote links). That is
+    *exactly* the tap-a-letter → "See ch. 11:14" → verse-preview popup
+    from his Logos screenshots, **available natively from the ESV API**.
+    The Reader gets Logos-style reference tooltips for free.
+  - `/v3/passage/audio/` ✅ — **ESV audio works** (302 → mp3 at
+    audio.esv.org, David Cochran Heath narration). **This promotes audio
+    from "v2, licensing-gated" to v1-available at no extra cost.**
+  - `/v3/passage/search/` ✅ — full-text ESV search.
+  Caps still apply (per-query verse limits, daily limits, no whole-book
+  reproduction, required copyright line) — cache aggressively.
 - **Spanish: NBLA** (Lockman) — copyrighted; **verify licensing before
   design locks it**. Fallback: Reina-Valera 1909 (PD).
 - **⚠️ RSB notes: not obtainable.** Ligonier sells the Reformation Study
@@ -251,6 +264,69 @@ Psalms").
 it audits God's performance. If prayer is recorded at all it belongs in
 **Journal as a tag with no verdicts**.
 
+## 9b. Church Series Follow-Along (his round-4 ask)
+
+His church preaches in series but announces little in advance; the first
+sermon of a series is the one that explains where it's going. So the app
+learns the series **from him, in whatever form he has it**, and builds a
+follow-along around it.
+
+**Inputs, easiest first — all already possible with shipped plumbing:**
+1. **Speak it.** "Pastor started Galatians Sunday, about ten weeks, on
+   freedom from legalism" → the app drafts the follow-along.
+2. **Photograph the slides.** The dock's multi-photo capture + vision
+   already reads slides; snap them and the app parses series title,
+   outline, and passages.
+3. **Paste a transcript** from a recording.
+4. *Future:* upload sermon audio (he may buy a Plaud recorder) →
+   transcription. `/api/ai/transcribe` exists, but a 45-minute sermon
+   exceeds Whisper's 25 MB request limit — needs chunking. **v2.**
+
+**Output — a parallel Sunday track, NOT a replacement term.** He said
+"in addition to." The term keeps running; the church track sits beside
+it: *"Sunday: Galatians 3 · the passage, its context, and three
+questions to bring back."*
+
+**The loop that makes it valuable:** the sermon lands Sunday → the week's
+follow-along deepens exactly what was preached → **he arrives the next
+Sunday already primed.** Sermon capture (voice notes tagged to the
+passages preached) feeds the same Passage Notebook, so his church life
+and his study become one record instead of two. No other app does this.
+
+**Optional escalation:** if a series runs long, he can promote it to the
+term itself — the app becomes the study companion to his church's
+teaching rather than a parallel curriculum.
+
+## 9c. Three additions Claude recommends (round 4)
+
+1. **"Why this term, why now."** A university course has a rationale.
+   When a term is announced, one short paragraph explaining the choice —
+   *"two terms in narrative; this one goes to an epistle, and Ephesians
+   pairs with the Exile because both are about a people being formed."*
+   Nearly free to build (one field on the term) and it is the difference
+   between an app with **intent** and one that feels like a shuffle. It
+   is what earns the authority the whole "decided for me" model depends
+   on.
+
+2. **The hard-sayings commitment — the anti-fluff guarantee.** Devotional
+   content almost universally skips Judges 19, the conquest, the
+   imprecatory psalms, Romans 9's hardening, 1 Samuel 15. This curriculum
+   **does not skip them**: when it hits a hard text it says so plainly,
+   gives the historical situation, shows how the tradition has wrestled
+   (including where honest people land differently), and refuses the
+   easy moral. For a man who wants doctrine and history rather than
+   comfort, this single commitment is the credibility of the whole
+   product. State it in the app's own words on the term page.
+
+3. **Second-reading intelligence — progressive education across YEARS.**
+   When a term revisits a book he has studied before, the app surfaces
+   **what he marked and what he asked last time**, and teaches at a
+   higher level: *"You read Romans in 2026 and left three questions open
+   in chapters 9–11 — that's where this term goes deeper."* A 300-level
+   course, not the 100-level again. This is the strongest argument that
+   the app is lifelong rather than a one-year novelty, and it only works
+   because his notes, highlights, and questions accumulate in one place.
+
 ## 10. Staging — what "polished at launch" means
 
 **v1 (must feel finished, nothing half-built):** the daily page (term +
@@ -260,8 +336,13 @@ cross-refs · Strong's word study · Passage Notebook + open questions ·
 memory deck · coverage map with paper-counts · Logos deep-links · AI
 etiquette per §2.
 
-**v2:** tabs/multi-source · curated maps & site imagery · audio ·
-source-library reader · parallel-harmony view · sermon capture.
+**v1 additions from round 4:** ESV audio playback (confirmed working) ·
+Logos-style cross-reference tooltips (native from the ESV API) · church
+follow-along from a spoken or photographed series.
+
+**v2:** tabs/multi-source · curated maps & site imagery ·
+source-library reader · parallel-harmony view · sermon audio upload
+(needs Whisper chunking).
 
 Better a small app that decides for him and reads beautifully than a
 half-built Logos.
