@@ -47,6 +47,23 @@ export function PitayaLogo({ size = 76, tile = true }: { size?: number; tile?: b
   );
 }
 
+/** Tab-bar-sized dragonfruit mark — the logo's fruit in currentColor, the
+ *  placeholder icon for sections that exist but aren't designed yet
+ *  (Spirit, Journal — Michael 2026-08-11). */
+export function PitayaMarkIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+      <circle cx="24" cy="26" r="12.5" stroke="currentColor" strokeWidth="3.4" />
+      <circle cx="20" cy="23" r="1.6" fill="currentColor" />
+      <circle cx="27" cy="27" r="1.6" fill="currentColor" />
+      <circle cx="22" cy="30" r="1.6" fill="currentColor" />
+      <circle cx="28" cy="21.5" r="1.6" fill="currentColor" />
+      <path d="M28 12 Q31 8 36 9 Q34 14 30 14.5 Z" fill="currentColor" opacity="0.85" />
+      <path d="M18 13 Q14 10 10.5 12 Q13 16 17 15.5 Z" fill="currentColor" opacity="0.6" />
+    </svg>
+  );
+}
+
 /* ── Tab bar icons (design tab bar, verbatim paths) ─────────────────── */
 
 export function BodyIcon(props: IconProps) {

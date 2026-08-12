@@ -325,10 +325,17 @@ export default function ActivitiesPage() {
             ? `${det.roundsCompleted} of ${det.totalRounds}`
             : String(det.roundsCompleted)
           : "—";
-      const avgWork =
-        det.workSeconds && det.roundsCompleted
-          ? `:${String(Math.round(det.workSeconds / det.roundsCompleted)).padStart(2, "0")} /rd`
-          : "—";
+      // ":1065 /rd" incident: a 1-round circuit has no per-round average
+      // worth showing — fall back to per-movement, always mm:ss.
+      const perRound =
+        det.workSeconds && det.roundsCompleted && det.roundsCompleted > 1
+          ? mmss(det.workSeconds / det.roundsCompleted) + " /round"
+          : null;
+      const perMove =
+        det.workSeconds && det.segments.length > 1
+          ? mmss(det.workSeconds / det.segments.length) + " /move"
+          : null;
+      const avgWork = perRound ?? perMove ?? "—";
       return [
         ["TOTAL TIME", heroTime(det)],
         ["ROUNDS", rounds],
@@ -469,6 +476,8 @@ export default function ActivitiesPage() {
                 </div>
                 <div className="mt-1.5 flex justify-between text-[9.5px] text-[#7E6F77]">
                   <span>0:00</span>
+                  {/* his note: the bar read as zones — say what it is */}
+                  <span>one block per movement · width = its time</span>
                   <span>{heroTime(det)}</span>
                 </div>
               </>

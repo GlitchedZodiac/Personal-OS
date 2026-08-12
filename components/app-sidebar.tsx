@@ -4,20 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  BodyIcon,
+  PitayaMarkIcon,
   FoodIcon,
   PitayaLogo,
   SettingsIcon,
   TodayIcon,
-  TrainIcon,
 } from "@/components/pitaya-icons";
 
 // Desktop rail — same five surfaces as the tab bar, same design icons.
 const navItems = [
   { label: "Today", href: "/dashboard", Icon: TodayIcon },
-  { label: "Body", href: "/health/body", Icon: BodyIcon },
+  { label: "Spirit", href: "/spirit", Icon: PitayaMarkIcon },
   { label: "Food", href: "/health/food", Icon: FoodIcon },
-  { label: "Train", href: "/health/workouts", Icon: TrainIcon },
+  { label: "Journal", href: "/journal", Icon: PitayaMarkIcon },
   { label: "Settings", href: "/settings", Icon: SettingsIcon },
 ];
 

@@ -18,6 +18,33 @@ crude until 2c.
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).
 
+## 2026-08-11g — First-real-day feedback batch; Spirit/Journal take the bar
+
+His first full day on the new build (watch circuit ran + synced with HR
+streams — the whole 11e pipeline worked live). Batch from his voice
+notes:
+
+- **Bulk weight corrections**: "both workouts at 20 kg except windmills
+  at 8" stalled the chat loop (21 single-entry cards). edit_workout_entry
+  gained an `assignments` mode — ordered rules, '*' = all, later
+  overrides — ONE card per workout; PATCH /entry accepts it; prompt
+  pinned. His stated correction applied through the real route: 21
+  entries weighted, PRs rebuilt → **47 current records**, Train now
+  reads 4,060 kg this week w/ Renegade Row 20 kg banner.
+- **Tab bar**: Body→**Spirit**, Train→**Journal** (his call — spiritual
+  morning routine + a proper journal come later; placeholder pages w/
+  the dragonfruit mark; PitayaMarkIcon added). Body/Train stay reachable
+  from Today's cards; all routes intact.
+- **Macro split is his meeting-sliders bar**: one always-100% bar, two
+  draggable dividers, segments ARE the percentages, grams live
+  (macro-targets-sheet rebuilt; no more arithmetic-to-100).
+- **Detail fixes**: AVG WORK ":1065 /rd" → mm:ss "/round" only when
+  rounds>1, else "/move"; segment-timeline bar gained its key ("one
+  block per movement · width = its time" — he read it as zones).
+- AI-balance question answered in chat: OpenAI only exposes real spend
+  via an org ADMIN key (/v1/organization/costs) — offer stands if he
+  creates one; estimate stays otherwise.
+
 ## 2026-08-11f — History drill-downs ported + THE MIDNIGHT TIMEZONE BUG
 
 The design-11e history suite is live, and building it surfaced a

@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rebuildPersonalRecords } from "@/lib/prs";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
-import { applyEntryEdit, findEntryIndex } from "@/lib/workout-edit";
+import {
+  applyEntryEdit,
+  applyWeightAssignments,
+  findEntryIndex,
+  type WeightAssignment,
+} from "@/lib/workout-edit";
 
 export const maxDuration = 60;
 
@@ -18,6 +23,7 @@ export async function PATCH(request: NextRequest) {
       id?: unknown;
       match?: { name?: unknown; index?: unknown };
       set?: object;
+      assignments?: WeightAssignment[];
     };
     const id = typeof body.id === "string" ? body.id : null;
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
@@ -28,15 +34,27 @@ export async function PATCH(request: NextRequest) {
     }
 
     await ensureUserExercisesLoaded();
-    const index = findEntryIndex(workout.exercises, body.match ?? {});
-    if (index < 0) {
-      return NextResponse.json(
-        { error: "No matching exercise entry in that workout" },
-        { status: 404 }
-      );
-    }
 
-    const edit = applyEntryEdit(workout.exercises, index, body.set ?? {});
+    // Bulk weight mode — one call carries "everything at 20, windmills at 8".
+    let edit:
+      | { ok: true; exercises: object[]; changed: string[] }
+      | { ok: false; error: string };
+    let editedIndex = -1;
+    if (Array.isArray(body.assignments) && body.assignments.length > 0) {
+      const bulk = applyWeightAssignments(workout.exercises, body.assignments);
+      edit = bulk.ok
+        ? { ok: true, exercises: bulk.exercises, changed: [`weightKg×${bulk.touched}`] }
+        : bulk;
+    } else {
+      editedIndex = findEntryIndex(workout.exercises, body.match ?? {});
+      if (editedIndex < 0) {
+        return NextResponse.json(
+          { error: "No matching exercise entry in that workout" },
+          { status: 404 }
+        );
+      }
+      edit = applyEntryEdit(workout.exercises, editedIndex, body.set ?? {});
+    }
     if (!edit.ok) {
       return NextResponse.json({ error: edit.error }, { status: 400 });
     }
@@ -57,7 +75,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({
       workout: updated,
-      editedIndex: index,
+      editedIndex,
       changed: edit.changed,
       prRebuild,
     });

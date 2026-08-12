@@ -50,6 +50,68 @@ export function findEntryIndex(exercises: unknown, match: EntryMatch): number {
   return -1;
 }
 
+export interface WeightAssignment {
+  /** Substring/normalized match against entry names; "" or "*" = every entry. */
+  match: string;
+  weightKg: number;
+}
+
+/**
+ * Bulk weight correction — "everything at 20 kg except the windmills at 8"
+ * (2026-08-11: 21 single-entry cards stalled the loop; one card must carry
+ * the whole correction). Assignments apply in order, later = more specific:
+ * [{match:"*",weightKg:20},{match:"windmill",weightKg:8}]. Matching is
+ * catalog-normalized then substring-folded so "windmills" hits
+ * "Kettlebell Windmill (each side)" and "Round 3 — ..." prefixes.
+ */
+export function applyWeightAssignments(
+  exercises: unknown,
+  assignments: WeightAssignment[]
+):
+  | { ok: true; exercises: object[]; touched: number }
+  | { ok: false; error: string } {
+  if (!Array.isArray(exercises) || exercises.length === 0) {
+    return { ok: false, error: "This workout has no entries" };
+  }
+  const valid = assignments
+    .map((a) => ({
+      match: typeof a.match === "string" ? a.match.trim() : "",
+      weightKg: toPositive(a.weightKg),
+    }))
+    .filter((a): a is { match: string; weightKg: number } => a.weightKg !== undefined);
+  if (valid.length === 0) return { ok: false, error: "No valid weights given" };
+
+  const next = exercises.map((row) => ({ ...(row as ExerciseRow) }));
+  const touchedIdx = new Set<number>();
+
+  for (const a of valid) {
+    const all = a.match === "" || a.match === "*";
+    const def = all ? null : normalizeExerciseName(a.match);
+    const fold = all ? "" : foldExerciseName(a.match);
+    for (let i = 0; i < next.length; i++) {
+      const row = next[i];
+      if (!row || typeof row.name !== "string") continue;
+      let hit = all;
+      if (!hit && def) {
+        const rowDef = normalizeExerciseName(row.name);
+        hit = Boolean(rowDef && rowDef.id === def.id);
+      }
+      if (!hit && fold) {
+        hit = foldExerciseName(row.name).includes(fold);
+      }
+      if (hit) {
+        row.weightKg = a.weightKg;
+        touchedIdx.add(i);
+      }
+    }
+  }
+
+  if (touchedIdx.size === 0) {
+    return { ok: false, error: "No entries matched" };
+  }
+  return { ok: true, exercises: next as object[], touched: touchedIdx.size };
+}
+
 export function applyEntryEdit(
   exercises: unknown,
   index: number,

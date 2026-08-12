@@ -451,6 +451,7 @@ LOGGING (food, weight/measurements, workouts, water):
 EDITING & DELETING:
 - To change or remove an existing entry: first get_health_data (recent_food / recent_workouts / weight_trend) to find the entry's id, then propose edit_food_log or delete_entry. These are also confirm-first proposals.
 - Workout corrections ("the windmills I just did were 8 kg, not 20"): get_health_data recent_workouts → edit_workout_entry targeting that one movement. Change only what the user corrected; PRs recalculate on save. If that workout was a routine run (it carries sequenceName) and the corrected weight differs from the routine's prescription, ASK afterwards whether to update the routine's prescribed weight too — if yes, get_health_data routines then update_routine.
+- BULK weights ("both workouts were at 20 kg except the windmills at 8"): edit_workout_entry with assignments — ONE card per workout ([{match:'*',weightKg:20},{match:'windmill',weightKg:8}]), never a card per entry. Two workouts = two cards, that's all.
 - When several entries match, pick the most recent and say which one you chose.
 - If the user amends something whose card is still [pending], re-propose the corrected full card. If the card was [saved], the data is in the log — use edit_workout_entry/edit_food_log/delete_entry on the real entry, NEVER log it again (that double-counts).
 
@@ -707,14 +708,14 @@ const EDIT_WORKOUT_ENTRY = {
   type: "function" as const,
   name: "edit_workout_entry",
   description:
-    "Propose correcting ONE movement of an already-saved workout ('the windmills I just did were 8 kg, not 20') — found via get_health_data recent_workouts. Only the named fields change; PRs recalculate automatically. The user confirms before anything saves.",
+    "Propose correcting a saved workout's movements (found via get_health_data recent_workouts). Two modes: match+set corrects ONE entry ('the windmills were 8 kg, not 20'); assignments sets WEIGHTS across many entries in one proposal ('everything at 20 kg except windmills at 8' → assignments [{match:'*',weightKg:20},{match:'windmill',weightKg:8}] — later assignments override earlier, '*' means every entry). One card per WORKOUT, never per entry. PRs recalculate automatically. The user confirms before anything saves.",
   parameters: {
     type: "object" as const,
     properties: {
       id: { type: "string" as const, description: "The workout log id" },
       label: {
         type: "string" as const,
-        description: "What's being corrected, e.g. 'windmills in this morning's circuit'",
+        description: "What's being corrected, e.g. 'weights in tonight's circuit'",
       },
       match: {
         type: "object" as const,
@@ -728,7 +729,7 @@ const EDIT_WORKOUT_ENTRY = {
             description: "0-based position in the exercises array, when known — wins over name",
           },
         },
-        description: "Which entry to change",
+        description: "Single-entry mode: which entry to change",
         additionalProperties: false,
       },
       set: {
@@ -740,15 +741,32 @@ const EDIT_WORKOUT_ENTRY = {
           seconds: { type: "number" as const },
           weightKg: { type: "number" as const },
         },
-        description: "Only the fields that change",
+        description: "Single-entry mode: only the fields that change",
         additionalProperties: false,
+      },
+      assignments: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            match: {
+              type: "string" as const,
+              description: "Entry-name substring ('windmill') or '*' for every entry",
+            },
+            weightKg: { type: "number" as const },
+          },
+          required: ["match", "weightKg"],
+          additionalProperties: false,
+        },
+        description:
+          "Bulk-weight mode: ordered weight rules for this workout; later rules override earlier ones",
       },
       message: {
         type: "string" as const,
         description: "One-line bubble accompanying the edit card",
       },
     },
-    required: ["id", "label", "match", "set", "message"],
+    required: ["id", "label", "message"],
   },
 };
 

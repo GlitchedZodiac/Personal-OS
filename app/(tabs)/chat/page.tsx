@@ -441,7 +441,12 @@ export default function ChatPage() {
         const res = await fetch("/api/health/workouts/entry", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: data.id, match: data.match, set: data.set }),
+          body: JSON.stringify({
+            id: data.id,
+            match: data.match,
+            set: data.set,
+            assignments: data.assignments,
+          }),
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || "Edit failed");
@@ -632,11 +637,19 @@ export default function ChatPage() {
             <div className="py-3 text-[13.5px] leading-relaxed text-foreground">
               <span className="font-semibold">{String(data.label ?? "Entry")}</span>
               {" → "}
-              {Object.entries((data.set as object) ?? {})
-                .map(([k, v]) =>
-                  k === "weightKg" ? `${v} kg` : k === "seconds" ? `${v}s` : `${k} ${v}`
-                )
-                .join(" · ")}
+              {Array.isArray(data.assignments) && data.assignments.length > 0
+                ? (data.assignments as { match: string; weightKg: number }[])
+                    .map((a) =>
+                      a.match === "*" || a.match === ""
+                        ? `everything ${a.weightKg} kg`
+                        : `${a.match} ${a.weightKg} kg`
+                    )
+                    .join(" · ")
+                : Object.entries((data.set as object) ?? {})
+                    .map(([k, v]) =>
+                      k === "weightKg" ? `${v} kg` : k === "seconds" ? `${v}s` : `${k} ${v}`
+                    )
+                    .join(" · ")}
             </div>
           )}
 

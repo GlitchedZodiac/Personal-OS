@@ -4,21 +4,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  BodyIcon,
+  PitayaMarkIcon,
   FoodIcon,
   SettingsIcon,
   TodayIcon,
-  TrainIcon,
 } from "@/components/pitaya-icons";
 
 // Pitaya tab bar — five even tabs with the design's own icons
 // (docs/design/pitaya-app.dc.html). The chat/mic/camera dock floats above
 // this bar as its own pill (components/voice-input.tsx), per the design.
 const tabs = [
-  { label: "Body", href: "/health/body", Icon: BodyIcon },
+  { label: "Spirit", href: "/spirit", Icon: PitayaMarkIcon },
   { label: "Food", href: "/health/food", Icon: FoodIcon },
   { label: "Today", href: "/dashboard", Icon: TodayIcon },
-  { label: "Train", href: "/health/workouts", Icon: TrainIcon },
+  { label: "Journal", href: "/journal", Icon: PitayaMarkIcon },
   { label: "Settings", href: "/settings", Icon: SettingsIcon },
 ];
 
