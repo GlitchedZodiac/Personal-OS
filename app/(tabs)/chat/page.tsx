@@ -40,6 +40,7 @@ interface ChatMsg {
     kind?: string;
     data?: ProposalData;
     status?: "pending" | "saved" | "rejected";
+    thumbs?: string[];
   } | null;
   createdAt?: string;
 }
@@ -55,6 +56,7 @@ const KIND_TITLES: Record<string, string> = {
   routine_update: "ROUTINE UPDATE",
   exercise: "NEW MOVEMENT",
   edit_workout: "WORKOUT FIX",
+  product: "SAVE TO MY USUALS",
 };
 
 function fmtTime(iso?: string) {
@@ -118,9 +120,15 @@ export default function ChatPage() {
   const sendRef = useRef<typeof send | null>(null);
 
   const send = useCallback(
-    async (text: string, source: "text" | "voice") => {
+    async (
+      text: string,
+      source: "text" | "voice" | "photo",
+      photos?: { images: string[]; thumbs: string[] }
+    ) => {
       const clean = text.trim();
-      if (!clean || busy) return;
+      const images = photos?.images ?? [];
+      // A capture with no words still sends — the photos are the message.
+      if ((!clean && images.length === 0) || busy) return;
       setBusy(true);
       setDraft("");
       setStreamText("");
@@ -130,8 +138,8 @@ export default function ChatPage() {
         {
           id: `local-${Date.now()}`,
           role: "user",
-          content: clean,
-          meta: { source },
+          content: clean || `(${images.length} photo${images.length === 1 ? "" : "s"})`,
+          meta: { source, ...(photos?.thumbs?.length ? { thumbs: photos.thumbs } : {}) },
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -143,6 +151,8 @@ export default function ChatPage() {
           body: JSON.stringify({
             message: clean,
             source,
+            images,
+            thumbs: photos?.thumbs ?? [],
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
         });
@@ -230,23 +240,37 @@ export default function ChatPage() {
   sendRef.current = send;
 
   useEffect(() => {
+    // One shape for both hand-off paths (navigated → sessionStorage, or
+    // live → event): text, source, and optionally a photo capture.
+    type HandOff = {
+      text?: string;
+      source?: string;
+      photos?: { images: string[]; thumbs: string[] };
+    };
+    const dispatch = (payload: HandOff) => {
+      const text = payload.text ?? "";
+      const photos = payload.photos;
+      if (!text && !photos?.images?.length) return;
+      const source: "text" | "voice" | "photo" = photos
+        ? "photo"
+        : payload.source === "voice"
+          ? "voice"
+          : "text";
+      sendRef.current?.(text, source, photos);
+    };
+
     const pending = sessionStorage.getItem("pitaya:pending-chat");
     if (pending) {
       sessionStorage.removeItem("pitaya:pending-chat");
       try {
-        const { text, source } = JSON.parse(pending);
-        if (text) sendRef.current?.(text, source === "voice" ? "voice" : "text");
+        dispatch(JSON.parse(pending) as HandOff);
       } catch {
         // malformed handoff — ignore
       }
     }
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as
-        | { text?: string; source?: string }
-        | undefined;
-      if (detail?.text) {
-        sendRef.current?.(detail.text, detail.source === "voice" ? "voice" : "text");
-      }
+      const detail = (e as CustomEvent).detail as HandOff | undefined;
+      if (detail) dispatch(detail);
     };
     window.addEventListener("pitaya:chat-send", handler);
     return () => window.removeEventListener("pitaya:chat-send", handler);
@@ -451,6 +475,24 @@ export default function ChatPage() {
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || "Edit failed");
         followUp = "Fixed — PRs recalculated.";
+      } else if (kind === "product") {
+        const res = await fetch("/api/health/favorites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            foodDescription: data.foodDescription,
+            mealType: data.mealType ?? "snack",
+            calories: data.calories,
+            proteinG: data.proteinG,
+            carbsG: data.carbsG,
+            fatG: data.fatG,
+            servingLabel: data.servingLabel,
+            kind: "product",
+            logNow: false, // the paired log_food card owns what was eaten
+          }),
+        });
+        if (!res.ok) throw new Error("Save failed");
+        followUp = `${String(data.foodDescription ?? "Product")} is in My usuals — one tap next time.`;
       } else if (kind === "delete") {
         const entity = String(data.entity ?? "food");
         const endpoint =
@@ -633,6 +675,26 @@ export default function ChatPage() {
             </div>
           )}
 
+          {kind === "product" && (
+            <div className="py-2">
+              <p
+                className="text-[15px] font-bold text-foreground"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {String(data.foodDescription ?? "Product")}
+              </p>
+              {data.servingLabel != null && (
+                <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#8C2F51]">
+                  per {String(data.servingLabel)}
+                </p>
+              )}
+              <p className="mt-1.5 text-[13px] tabular-nums text-secondary-foreground">
+                {String(data.calories ?? 0)} kcal · {String(data.proteinG ?? 0)}P ·{" "}
+                {String(data.carbsG ?? 0)}C · {String(data.fatG ?? 0)}F
+              </p>
+            </div>
+          )}
+
           {kind === "edit_workout" && (
             <div className="py-3 text-[13.5px] leading-relaxed text-foreground">
               <span className="font-semibold">{String(data.label ?? "Entry")}</span>
@@ -653,7 +715,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          {!["food", "routine", "routine_update", "exercise", "edit_workout"].includes(kind) && (
+          {!["food", "routine", "routine_update", "exercise", "edit_workout", "product"].includes(kind) && (
             <div className="py-3 text-[13.5px] leading-relaxed text-foreground">
               {kind === "delete" ? (
                 <>Delete <span className="font-semibold">{String(data.label ?? "this entry")}</span>?</>
@@ -751,14 +813,28 @@ export default function ChatPage() {
         {messages.map((msg) => {
           if (msg.role === "proposal") return renderProposal(msg);
           if (msg.role === "user") {
+            const thumbs = msg.meta?.thumbs ?? [];
             return (
               <div key={msg.id} className="max-w-[300px] self-end">
+                {thumbs.length > 0 && (
+                  <div className="mb-1.5 flex flex-wrap justify-end gap-1.5">
+                    {thumbs.map((src, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={i}
+                        src={src}
+                        alt=""
+                        className="h-[74px] w-[74px] rounded-[12px] border border-[#E9CFDC] object-cover"
+                      />
+                    ))}
+                  </div>
+                )}
                 <div className="rounded-[18px] rounded-br-[5px] bg-primary px-3.5 py-[11px] text-sm leading-relaxed text-white">
                   {msg.content}
                 </div>
-                {msg.meta?.source === "voice" && (
+                {(msg.meta?.source === "voice" || msg.meta?.source === "photo") && (
                   <p className="mt-1 text-right text-[10.5px] text-muted-foreground">
-                    via voice
+                    {msg.meta.source === "photo" ? "via photo" : "via voice"}
                   </p>
                 )}
               </div>

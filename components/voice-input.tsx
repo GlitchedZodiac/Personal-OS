@@ -23,6 +23,9 @@ import { toast } from "sonner";
 import { getSettings } from "@/lib/settings";
 import { deactivateMicrophoneStream, getOrCreateMicrophoneStream } from "@/lib/microphone";
 
+// One capture = up to this many photos (plate + label + receipt…).
+const MAX_SHOTS = 6;
+
 interface VoiceInputProps {
   onDataLogged?: () => void;
 }
@@ -106,16 +109,16 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   // conversational proposal cards replace the dock's old review UI, and
   // follow-ups ("make it two eggs") work by just talking again.
   const handOffToChat = useCallback(
-    (text: string, source: "text" | "voice") => {
+    (
+      text: string,
+      source: "text" | "voice" | "photo",
+      photos?: { images: string[]; thumbs: string[] }
+    ) => {
+      const detail = { text, source, ...(photos ? { photos } : {}) };
       if (onChatScreen) {
-        window.dispatchEvent(
-          new CustomEvent("pitaya:chat-send", { detail: { text, source } })
-        );
+        window.dispatchEvent(new CustomEvent("pitaya:chat-send", { detail }));
       } else {
-        sessionStorage.setItem(
-          "pitaya:pending-chat",
-          JSON.stringify({ text, source })
-        );
+        sessionStorage.setItem("pitaya:pending-chat", JSON.stringify(detail));
         router.push("/chat");
       }
     },
@@ -134,7 +137,14 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const [lastFailedText, setLastFailedText] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [captureShots, setCaptureShots] = useState<{ full: string; thumb: string }[]>([]);
+  const [captureNote, setCaptureNote] = useState("");
+  const libraryInputRef = useRef<HTMLInputElement>(null);
+  // While the capture sheet is open, dictation fills its note instead of
+  // sending a standalone chat message.
+  const captureOpenRef = useRef(false);
+  captureOpenRef.current = captureOpen;
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   // Rolling conversation memory so follow-ups work ("actually make that 2 eggs").
@@ -280,7 +290,11 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
       setIsTranscribing(false);
 
       // Into the chat thread — proposals render there, follow-ups by voice.
-      handOffToChat(text.trim(), "voice");
+      if (captureOpenRef.current) {
+        setCaptureNote((prev) => (prev ? `${prev} ${text.trim()}` : text.trim()));
+      } else {
+        handOffToChat(text.trim(), "voice");
+      }
     } catch (error) {
       console.error("Transcription failed:", error);
       const msg = error instanceof Error ? error.message : "Failed to transcribe audio";
@@ -326,59 +340,53 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
     []
   );
 
-  const handlePhotoSelect = useCallback(
+  // Capture sheet (2026-08-12): photos — camera OR library, several at a
+  // time — plus typed/spoken context, handed to the chat thread as ONE
+  // message so the AI can propose every action it implies (log the meal,
+  // save the product, …), each confirmed on its own card. Replaces the
+  // legacy photo→analyze→dock-card path.
+  const handleShotsSelected = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      // Reset the input so the same file can be re-selected
-      e.target.value = "";
+      const files = Array.from(e.target.files ?? []);
+      e.target.value = ""; // let the same file be picked again
+      if (files.length === 0) return;
 
       setIsAnalyzingPhoto(true);
-      setLastFailedText(null);
-
       try {
-        const dataUrl = await compressImage(file, 1024, 0.8);
-        setPhotoPreview(dataUrl);
-
-        const res = await fetch("/api/health/food/analyze-photo", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: dataUrl }),
-        });
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || "Photo analysis failed");
+        const room = MAX_SHOTS - captureShots.length;
+        if (files.length > room) {
+          toast.error(`Up to ${MAX_SHOTS} photos per capture.`);
         }
-
-        const data = await res.json();
-
-        // Tag each item with source: "photo" so the batch API logs it correctly
-        const taggedItems = (data.items || []).map((item: FoodItem) => ({
-          ...item,
-          source: "photo",
-        }));
-
-        // Inject into the existing confirmation flow
-        setAiResponse({
-          type: "food",
-          message: data.message || "📸 Food photo analyzed!",
-          items: taggedItems,
-        });
-        setShowConfirmation(true);
+        const shots = await Promise.all(
+          files.slice(0, Math.max(0, room)).map(async (file) => ({
+            full: await compressImage(file, 1024, 0.8),
+            thumb: await compressImage(file, 220, 0.5),
+          }))
+        );
+        setCaptureShots((prev) => [...prev, ...shots]);
+        setCaptureOpen(true);
       } catch (error) {
-        console.error("Photo analysis failed:", error);
-        const msg =
-          error instanceof Error ? error.message : "Failed to analyze photo";
-        toast.error(msg);
+        console.error("Photo read failed:", error);
+        toast.error("Couldn't read that photo.");
       } finally {
         setIsAnalyzingPhoto(false);
-        setPhotoPreview(null);
       }
     },
-    [compressImage]
+    [compressImage, captureShots.length]
   );
+
+  const sendCapture = useCallback(() => {
+    if (captureShots.length === 0) return;
+    const payload = {
+      images: captureShots.map((s) => s.full),
+      thumbs: captureShots.map((s) => s.thumb),
+    };
+    const note = captureNote.trim();
+    setCaptureOpen(false);
+    setCaptureShots([]);
+    setCaptureNote("");
+    handOffToChat(note, "photo", payload);
+  }, [captureShots, captureNote, handOffToChat]);
 
   const handleEditItem = (index: number) => {
     if (aiResponse?.items) {
@@ -902,40 +910,163 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
           </Card>
         )}
 
-        {/* Photo analyzing overlay */}
-        {isAnalyzingPhoto && (
-          <Card className="mb-3 rounded-[24px] border-amber-500/30 bg-amber-500/5 shadow-lg">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-3">
-                {photoPreview && (
-                  <img
-                    src={photoPreview}
-                    alt="Analyzing..."
-                    className="h-12 w-12 rounded-lg object-cover"
-                  />
-                )}
-                <div className="flex-1">
-                  <p className="text-xs font-medium text-amber-400">
-                    Analyzing your meal...
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    AI vision is identifying food items
-                  </p>
+        {/* ——— Capture sheet: photos + context → one chat message ——— */}
+        {captureOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
+              onClick={() => setCaptureOpen(false)}
+            />
+            <div className="fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-10 pt-6 sheet-up">
+              <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
+              <p
+                className="text-xl font-bold text-foreground"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                Add photos
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                A plate, a label, a receipt — several at once. Say or type what
+                they are and the chat proposes each action.
+              </p>
+
+              {captureShots.length > 0 && (
+                <div className="mt-3.5 flex flex-wrap gap-2">
+                  {captureShots.map((shot, i) => (
+                    <div key={i} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={shot.thumb}
+                        alt=""
+                        className="h-[70px] w-[70px] rounded-[12px] border border-[#E9CFDC] object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCaptureShots((prev) => prev.filter((_, j) => j !== i))
+                        }
+                        aria-label="Remove photo"
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#232227] text-[11px] leading-none text-white"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <Loader2 className="h-5 w-5 animate-spin text-amber-400 shrink-0" />
+              )}
+
+              <div className="mt-3.5 flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={captureShots.length >= MAX_SHOTS || isAnalyzingPhoto}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-[12px] border border-[#D9D7DC] py-3 text-[13px] font-semibold text-foreground disabled:opacity-50"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  <CameraIcon size={17} /> Take photo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => libraryInputRef.current?.click()}
+                  disabled={captureShots.length >= MAX_SHOTS || isAnalyzingPhoto}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-[12px] border border-[#D9D7DC] py-3 text-[13px] font-semibold text-foreground disabled:opacity-50"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {/* No library glyph exists in the design — plain stroke
+                      shape in the icon set's style (undesigned element). */}
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="5" width="18" height="14" rx="3" />
+                    <path d="M3 16l4.5-4.5 4 4 3-3L21 17" />
+                    <circle cx="9" cy="9.5" r="1.3" />
+                  </svg>
+                  Library
+                </button>
               </div>
-            </CardContent>
-          </Card>
+
+              <div className="mt-3 flex items-end gap-2">
+                <textarea
+                  value={captureNote}
+                  onChange={(e) => setCaptureNote(e.target.value)}
+                  rows={2}
+                  placeholder={
+                    isTranscribing
+                      ? "Transcribing…"
+                      : "e.g. I had 2.5 servings of this — save it as a usual"
+                  }
+                  className="min-h-[52px] flex-1 resize-none rounded-[12px] border border-border bg-background px-3 py-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  disabled={isTranscribing}
+                  aria-label="Dictate a note"
+                  className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full transition-colors"
+                  style={{ background: isRecording ? "#A63D63" : "#F6E3EB" }}
+                >
+                  {isTranscribing ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-[#8C2F51]" />
+                  ) : (
+                    <MicIcon size={20} />
+                  )}
+                </button>
+              </div>
+
+              <div className="mt-4 flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCaptureOpen(false);
+                    setCaptureShots([]);
+                    setCaptureNote("");
+                  }}
+                  className="flex-1 rounded-[12px] border border-[#D9D7DC] py-3 text-[13.5px] font-semibold text-foreground"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={sendCapture}
+                  disabled={captureShots.length === 0 || isAnalyzingPhoto}
+                  className="flex-[1.5] rounded-[12px] bg-primary py-3 text-[13.5px] font-semibold text-white disabled:opacity-50"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {isAnalyzingPhoto
+                    ? "Reading…"
+                    : captureShots.length > 0
+                      ? `Send ${captureShots.length} photo${captureShots.length === 1 ? "" : "s"}`
+                      : "Send"}
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
-        {/* Hidden file input for camera */}
+        {/* Hidden inputs: camera (take one) and library (pick many) */}
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
           capture="environment"
           className="hidden"
-          onChange={handlePhotoSelect}
+          onChange={handleShotsSelected}
+        />
+        <input
+          ref={libraryInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleShotsSelected}
         />
 
         {/* Main dock — design: floating pill, chat 46 · mic 54 raspberry · camera 46 */}
@@ -990,8 +1121,8 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
 
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isProcessing || isTranscribing || isRecording || isAnalyzingPhoto}
+            onClick={() => setCaptureOpen(true)}
+            disabled={isProcessing || isTranscribing || isRecording}
             className="flex h-[46px] w-[46px] items-center justify-center rounded-full text-[#8C2F51] transition-all duration-200 hover:scale-105 hover:bg-secondary disabled:opacity-50"
           >
             {isAnalyzingPhoto ? (
@@ -1015,11 +1146,6 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
         {isProcessing && (
           <p className="text-center text-xs text-muted-foreground mt-3">
             Processing with AI...
-          </p>
-        )}
-        {isAnalyzingPhoto && (
-          <p className="text-center text-xs text-amber-400 mt-3 animate-pulse font-medium">
-            Analyzing food photo...
           </p>
         )}
       </div>

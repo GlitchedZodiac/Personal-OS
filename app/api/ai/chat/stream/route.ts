@@ -22,6 +22,7 @@ export const maxDuration = 60;
 
 const MAX_TURNS = 5;
 const HISTORY_LIMIT = 20;
+const MAX_IMAGES = 6; // one capture's worth — plate, label, receipt…
 
 interface FunctionCallItem {
   type: "function_call";
@@ -51,13 +52,34 @@ export async function POST(request: NextRequest) {
   let message = "";
   let source = "text";
   let requestedTimeZone: string | null = null;
+  let images: string[] = [];
+  let thumbs: string[] = [];
   try {
     const body = await request.json();
     message = typeof body.message === "string" ? body.message.trim() : "";
-    source = body.source === "voice" ? "voice" : "text";
+    source = body.source === "voice" ? "voice" : body.source === "photo" ? "photo" : "text";
     requestedTimeZone = typeof body.timeZone === "string" ? body.timeZone : null;
+    // Photo captures: up to MAX_IMAGES data URLs go to the model; the tiny
+    // thumbs are what the transcript keeps (full frames would bloat the row).
+    if (Array.isArray(body.images)) {
+      images = body.images
+        .filter((v: unknown): v is string => typeof v === "string" && v.startsWith("data:image/"))
+        .slice(0, MAX_IMAGES);
+    }
+    if (Array.isArray(body.thumbs)) {
+      thumbs = body.thumbs
+        .filter((v: unknown): v is string => typeof v === "string" && v.startsWith("data:image/"))
+        .slice(0, MAX_IMAGES);
+    }
   } catch {
     // fall through to the empty-message check
+  }
+  // A capture with no words is still a message — the photos are the content.
+  if (!message && images.length > 0) {
+    message =
+      images.length === 1
+        ? "(photo — log what you see)"
+        : `(${images.length} photos — log what you see)`;
   }
   if (!message) {
     return new Response(JSON.stringify({ error: "No message provided" }), {
@@ -105,8 +127,21 @@ export async function POST(request: NextRequest) {
   });
 
   await prisma.chatMessage.create({
-    data: { role: "user", content: message, meta: { source } },
+    data: {
+      role: "user",
+      content: message,
+      meta: { source, ...(thumbs.length > 0 ? { thumbs } : {}) },
+    },
   });
+
+  // Responses API multimodal shape: one user item, text part + image parts.
+  const userContent =
+    images.length > 0
+      ? [
+          { type: "input_text", text: message },
+          ...images.map((url) => ({ type: "input_image", image_url: url })),
+        ]
+      : message;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -117,7 +152,7 @@ export async function POST(request: NextRequest) {
       try {
         // Responses API input list — grows with each loop turn.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let input: any[] = [...history, { role: "user", content: message }];
+        let input: any[] = [...history, { role: "user", content: userContent }];
         let finalText = "";
 
         for (let turn = 0; turn < MAX_TURNS; turn++) {

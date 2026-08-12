@@ -448,6 +448,14 @@ LOGGING (food, weight/measurements, workouts, water):
 - Logging tools are PROPOSALS: the app shows a confirm card and saves only after the user taps Confirm. Your "message" is the bubble that accompanies the card — brief, human.
 - Kettlebell workouts: capture exercise, sets, reps, weightKg per movement.
 
+PHOTOS (the user can send several at once, with or without words):
+- Read every photo. A plate → estimate the meal; a nutrition label → use its EXACT per-serving numbers (never estimate over a label you can read); a receipt or menu → the items actually eaten; a scale screen → a measurement; a whiteboard/notebook → a routine.
+- Photos are evidence, the words are the instruction. "This label, I had two and a half servings" = multiply the label's per-serving macros by 2.5. "Save it as a usual" ALSO means propose it as a product. Honor both.
+- Several photos of ONE meal = one log_food proposal listing each item. Several UNRELATED photos = one proposal each, in the order sent. Never merge unrelated things into one card.
+- One capture may need several actions (log the food AND save the product AND log a workout). Emit every needed proposal in the same turn — the user confirms each card separately.
+- "Save it as a usual / remember this one" over a LABEL = save_food_product with the PER-SERVING numbers exactly as printed (plus log_food for what they actually ate, scaled by their servings). Over a plate with no label, there's nothing exact to store — log it and say so.
+- If a photo is too blurry or ambiguous to price honestly, say so and ask for the one detail you need instead of inventing numbers.
+
 EDITING & DELETING:
 - To change or remove an existing entry: first get_health_data (recent_food / recent_workouts / weight_trend) to find the entry's id, then propose edit_food_log or delete_entry. These are also confirm-first proposals.
 - Workout corrections ("the windmills I just did were 8 kg, not 20"): get_health_data recent_workouts → edit_workout_entry targeting that one movement. Change only what the user corrected; PRs recalculate on save. If that workout was a routine run (it carries sequenceName) and the corrected weight differs from the routine's prescription, ASK afterwards whether to update the routine's prescribed weight too — if yes, get_health_data routines then update_routine.
@@ -770,6 +778,40 @@ const EDIT_WORKOUT_ENTRY = {
   },
 };
 
+const SAVE_FOOD_PRODUCT = {
+  type: "function" as const,
+  name: "save_food_product",
+  description:
+    "Propose saving a food to the user's personal library from a nutrition label ('save it as a usual', 'remember this one'). Macros are PER SERVING, exactly as printed. Pairs with log_food when they also ate some — emit both.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      foodDescription: {
+        type: "string" as const,
+        description: "Product name as it should appear in My usuals, e.g. 'Griego protein yogurt'",
+      },
+      servingLabel: {
+        type: "string" as const,
+        description: "The label's serving size verbatim, e.g. '1 cup (170 g)'",
+      },
+      calories: { type: "number" as const, description: "PER SERVING" },
+      proteinG: { type: "number" as const, description: "PER SERVING" },
+      carbsG: { type: "number" as const, description: "PER SERVING" },
+      fatG: { type: "number" as const, description: "PER SERVING" },
+      mealType: {
+        type: "string" as const,
+        enum: ["breakfast", "lunch", "dinner", "snack"],
+        description: "Default meal slot when logged later",
+      },
+      message: {
+        type: "string" as const,
+        description: "One-line bubble accompanying the product card",
+      },
+    },
+    required: ["foodDescription", "calories", "proteinG", "carbsG", "fatG", "message"],
+  },
+};
+
 // Proposal tools reuse the legacy schemas (same fields the dock confirms
 // with today), flattened to the Responses tool shape.
 function toResponsesTool(fn: { name: string; description: string; parameters: object }) {
@@ -794,4 +836,5 @@ export const CHAT_RESPONSES_TOOLS = [
   UPDATE_ROUTINE,
   CREATE_EXERCISE,
   EDIT_WORKOUT_ENTRY,
+  SAVE_FOOD_PRODUCT,
 ];

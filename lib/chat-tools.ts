@@ -383,6 +383,7 @@ export const PROPOSAL_TOOL_NAMES = new Set([
   "update_routine",
   "create_exercise",
   "edit_workout_entry",
+  "save_food_product",
 ]);
 
 export type ProposalKind =
@@ -395,7 +396,8 @@ export type ProposalKind =
   | "routine"
   | "routine_update"
   | "exercise"
-  | "edit_workout";
+  | "edit_workout"
+  | "product";
 
 export function proposalKindFor(toolName: string): ProposalKind | null {
   switch (toolName) {
@@ -419,6 +421,8 @@ export function proposalKindFor(toolName: string): ProposalKind | null {
       return "exercise";
     case "edit_workout_entry":
       return "edit_workout";
+    case "save_food_product":
+      return "product";
     default:
       return null;
   }

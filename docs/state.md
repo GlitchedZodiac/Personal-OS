@@ -18,6 +18,38 @@ crude until 2c.
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).
 
+## 2026-08-12a — Companion server half + THE DOCK PHOTO SUITE
+
+Roadmap items 2 (server side) and 3, both shipped.
+
+**Companion's server dependencies (watch lane starts against these):**
+- `/api/mobile/health/daily` grew sleepMinutes/sleepDeepMinutes/
+  sleepRemMinutes/hrvMs + `weightSamples[]`. Weight is NOT a snapshot
+  field — samples write to body_measurements behind the VeSync near-twin
+  rule (±10 min, ±0.3 kg), so Apple Health can't duplicate the CSV
+  history. Smoke: sample matching today's 81.5 kg SKIPPED, a second one
+  imported; response reports weightsImported/weightsSkipped.
+- `POST /api/mobile/push/register` (+ DELETE) stores APNs tokens, hex-
+  validated. His reminders only — no AI-initiated pushes.
+- Contract written into docs/watch-contract.md § Companion.
+
+**Dock photo suite (his spec, complete):**
+- Camera button now opens a CAPTURE SHEET: **Take photo** OR **Library**
+  (multi-select), up to 6 shots, thumbnails with remove, a note field,
+  and a mic that dictates INTO the note (capture-open ref reroutes
+  transcription) — then one hand-off to the chat thread.
+- `/api/ai/chat/stream` accepts `images[]` (Responses multimodal
+  input_image parts) + `thumbs[]`; the transcript stores only thumbs
+  (full frames would bloat rows) and renders them above the bubble.
+- NEW `save_food_product` proposal tool — the missing half of his exact
+  ask: "this label, 2.5 servings, save it as a usual" now yields TWO
+  cards (log_food scaled + SAVE TO MY USUALS with per-serving label
+  values). Verified live on a synthetic label: 150 kcal/23P/9C/2F per
+  serving read exactly, ×2.5 = 375/57.5/22.5/5. Two different labels in
+  one capture → both items priced correctly in one card.
+- Legacy photo→analyze→dock-card path RETIRED (the last un-folded dock
+  surface; /api/health/food/analyze-photo now has no caller).
+
 ## 2026-08-11g2 — Admin-key integration; roadmap locked; companion is next
 
 - **OpenAI real spend**: integration_secrets table + write-only
