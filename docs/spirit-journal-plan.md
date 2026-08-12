@@ -197,19 +197,49 @@ Plan types (a plan = ordered passage ranges + connective teaching):
 often, by which plan. **Paper counts** — one tap, "read this on paper,"
 or the map lies and the feature dies.
 
-## 8. The study layer
+## 8. The study system — PRESCRIBED, not user-invented
 
-Verse tap-and-drag selection → action bar (highlight · note · link ·
-word study · voice note · ask · memorize). **Semantic highlighting** with
-a user-defined legend (promise · command · attribute of God · warning ·
-covenant · Christ), browsable by color — colors as a queryable index, not
-decoration. **Typed notes** (observation · question · cross-link ·
-doctrine · application) anchored to ranges; templates offered
-(Observation→Interpretation→Application, COMA, SOAP). **Verse links carry
-their reason.** **Passage-anchored AI threads** — asking about Judges 4
-stores that exchange on Judges 4 forever, searchable. **One search** over
-Scripture + notes + highlights + questions + corpus. **Open-questions
-list** — growth made visible without scoring anything.
+Michael's round-4 note: *"I don't need to create the highlighting and
+note taking structure… I'm a terrible student with very little study
+habits… I need your help taking the pain away from developing the study
+system and instead lay one out for me."* So it is specified, not offered
+as configuration. Full spec (colors, gestures, states) lives in
+**docs/spirit-design-prompt.md §4**. The essentials:
+
+**Governing distinction:** *highlights describe the TEXT; notes describe
+HIS ENGAGEMENT.* This is what keeps the taxonomy from bloating — a
+question is not a property of Scripture, it is his state, so it is a note
+kind rather than a color.
+
+**Six highlight categories (ceiling — more causes abandonment):** God
+`#D9A23E` · Promise & Covenant `#4C7DBF` · Command `#3E7A54` · Sin &
+Consequence `#B4533F` · Christ `#7B5EA7` · Context `#4E7C8A`. The first
+five are the classic redemptive-historical grid; **Context is his
+signature lens** (culture/history/geography needing unpacking). Rendered
+as an 18% tint + 3px edge bar, never a highlighter fill, and **always
+labeled by name** so the system never depends on remembering hues.
+
+**Suggested highlights are the keystone.** The app already writes the
+day's teaching, so it pre-marks the passage in an *unaccepted* outline
+style; he taps to accept or dismiss. A man with no study habits curates
+instead of initiating — and learns the grid by example. This single
+mechanic is what makes the rest survive contact with him.
+
+**Five note kinds:** Observation · Question (→ open-questions list) ·
+Connection (→ verse link) · Conviction · Doctrine. **He should almost
+never type** — the primary path is a voice note on a verse, transcribed,
+with the app proposing the kind for one-tap confirmation.
+
+**Cross-referencing = three reasons:** Fulfills · Parallels · Tension.
+Machine references (TSK) stay visually distinct from his own hand-made
+links.
+
+**Rhythm without willpower:** daily (accept marks, one spoken note) →
+weekly review (two minutes) → term summary (becomes the transcript).
+
+Plus: passage-anchored AI threads, one search across Scripture + his
+layer + corpus, browse-by-category ("every Promise I've marked in the
+Psalms").
 
 ## 9. Accepted additions / declined
 
@@ -258,41 +288,12 @@ interval, dueAt, ease) · `SourceDoc`/`SourceChunk` (corpus + embeddings)
 5. **Church alignment** — does the app follow his church's series when
    one is running?
 
-## 13. Paste-ready Claude Design prompt (round 2 — supersedes round 1)
+## 13. The design prompt
 
-> Extend the Pitaya app design (Familjen Grotesk + Instrument Sans,
-> raspberry #A63D63 family, white cards on #F2F1F2, push-in drill-downs,
-> iOS frame) with **Spirit** — not a Bible app with plans, but **a
-> curriculum that decides for him**, like a pastor's preaching calendar.
-> Historical, cultural, and doctrinal depth; serious and unhurried.
->
-> (1) **Today's Spirit** — the current TERM stated at the top ("Term 3 ·
-> The Exile · week 2 of 8"), then today's teaching (the story, the
-> historical/cultural context, the doctrinal note, the practical turn, a
-> closing question that saves to his notebook), today's reading with
-> progress, and a closing **"one more thing"** curiosity card. No menus,
-> no backlog, **never a 'days behind' counter**.
-> (2) **The Term page** — the syllabus he can see but not edit: what this
-> term covers week by week, what's next, and what past terms covered.
-> (3) **The Reader** — the heart. Verse tap with drag-to-extend, action
-> bar (highlight · note · voice note · link · word study · ask),
-> **semantic highlighting** where each color carries a user-assigned
-> meaning plus a legend editor and browse-by-color, inline
-> cross-references, footnote drawer, and **a linked two-pane bilingual
-> mode (ESV ⇄ Spanish) where scrolling one moves the other**. Typography
-> matters: generous leading, adjustable size, night mode.
-> (4) **Passage Notebook** — typed notes (observation / question /
-> cross-link / doctrine / application), verse links with reasons,
-> passage-anchored AI threads, all searchable, plus an **open questions**
-> list.
-> (5) **Coverage map** — every book, when last read, how often, with a
-> one-tap "read this on paper."
-> (6) **Memory deck** — one verse a week organized by *occasion*
-> (the gospel, suffering, doubt, assurance), spaced repetition, and a
-> weekly review that asks him to use it in a real conversation.
-> (7) **Word study sheet** — Strong's entry, definition, every occurrence.
-> (8) **Source library reader** — public-domain theology where every
-> quotation in a teaching is tappable to its real source text.
->
-> Also design a **Journal** tab: archive of entries (photo, voice, text),
-> tags, search, "on this day," entries optionally linked to a passage.
+Lives standalone and paste-ready at **docs/spirit-design-prompt.md**
+(round 3): the university framing, terms/syllabus/no-guilt, the daily
+page incl. the supplementary Bible-in-a-year track and the "one more
+thing" card, the Reader (typography, bilingual linked scroll, Logos
+deep-link), **the fully-specified study system (§4)**, notebook + open
+questions, transcript, memory-by-occasion, source library, AI on-screen
+etiquette, and an explicit do-NOT-design list.
