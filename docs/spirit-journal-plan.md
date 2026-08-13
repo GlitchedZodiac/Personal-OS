@@ -195,11 +195,18 @@ leading — that's why it reads well on a phone.)
   5. **Audio per passage** — mp3 URLs at any granularity, verse range
      included in the filename, so a follow-along player is trivial.
 
-  **No rate-limit headers are exposed**, so the caching strategy can't be
-  reactive: **cache every fetched passage permanently in our own DB**
-  (allowed for personal use within the caps) and treat the API as a
-  fill-on-miss source. This also makes offline reading free, and means a
-  term's readings can be pre-fetched the night the term is generated.
+  **No rate-limit headers are exposed**, so caching must be preemptive —
+  but ⚠️ **the earlier "cache everything permanently" idea conflicts with
+  Crossway's license**, which forbids assembling a complete or
+  substantially complete copy of the ESV. Track 2 (Bible-in-a-year)
+  traverses the whole canon; permanently caching it = a full ESV copy in
+  our DB. **Resolution:** (a) ESV cache is an LRU with a verse budget
+  comfortably under "substantially complete" — term passages pinned for
+  the term, then evictable; (b) **Track 2 reads a free-license text**
+  (BSB, or Geneva 1599 for flavor) so full-canon coverage never touches
+  the ESV cap; (c) if he ever wants ESV-everywhere offline, ask Crossway
+  for elevated permission — they grant it case by case. Offline term
+  readings stay free (pinned); offline whole-Bible uses the PD/free text.
 - **Spanish: NBLA** (Lockman) — copyrighted; **verify licensing before
   design locks it**. Fallback: Reina-Valera 1909 (PD).
 - **⚠️ RSB notes: not obtainable.** Ligonier sells the Reformation Study
@@ -391,9 +398,32 @@ body, resolvedAt?) · `VerseLink` (fromRange, toRange, reason) ·
 interval, dueAt, ease) · `SourceDoc`/`SourceChunk` (corpus + embeddings)
 · `CrossRef` (TSK import) · `PlaceRef` (geodata + imagery per teaching).
 
+## 11b. Round-5 audit additions (final pass)
+
+- **Export is back (it silently fell out of the round-3 rewrite): his
+  notes, highlights, questions, and term summaries export to Markdown
+  from settings — non-negotiable for a lifelong archive.**
+- **Canonical refs, not ESV ids:** notes/highlights anchor to internal
+  book/chapter/verse integers (the ESV ids decode to these), so his
+  layer survives translation switches (NBLA/RV numbering differs in
+  spots, e.g. Psalm titles).
+- **Term-batch pregeneration is the cost model:** when a term is
+  announced, generate ALL its teachings in one visible batch (~40–56
+  pieces), not a nightly drip — predictable cost shown once, the whole
+  term readable offline, and a **pause switch** on the curriculum.
+  Fits his no-hidden-tokens rule better than a cron.
+- **One reshuffle at year start:** the year plan is dealt once; he may
+  reject it once for a re-deal, then it's fixed. Preserves "decided for
+  me" while answering "what if the year is bad."
+- **Memory deck includes the Westminster Shorter Catechism** (public
+  domain) alongside verses — dropped wording restored.
+- **Spanish v1 gate:** linked bilingual scroll ships v1 with whichever
+  Spanish text is cleared by then — NBLA if licensed, else RV1909. The
+  feature doesn't wait on Lockman.
+
 ## 12. Decisions Michael owns
 
-1. **Apply for the Crossway ESV API key** (recommended: yes).
+1. ~~Apply for the Crossway ESV API key~~ ✅ acquired + verified 2026-08-12.
 2. **Verify NBLA licensing** before design locks Spanish.
 3. **Term length + rotation** — 6–8 weeks feels right; confirm.
 4. **Posture default** — Teach-from-Reformed vs Compare-traditions.

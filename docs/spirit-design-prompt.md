@@ -1,4 +1,4 @@
-# Spirit — Claude Design prompt (round 3, paste-ready)
+# Spirit — Claude Design prompt (round 5, paste-ready)
 
 Companion to `docs/spirit-journal-plan.md` (the plan of record). This file
 is the **prompt itself** — paste it into Claude Design, then expand.
@@ -290,6 +290,16 @@ and the citation chip that appears inline in a teaching.
   traditions · Just the text* — so a doctrine like baptism can render the
   Westminster case and the 1689 case each at full strength, with the real
   division named.
+
+### 9b. Settings & ownership (small screen, big trust)
+
+- **Export** — his notebook, highlights, questions, and term summaries
+  out to Markdown. One button, always works.
+- **Curriculum pause** — pausing the term is guilt-free and visible.
+- **Term generation moment** — when a term is announced, its teachings
+  generate as one visible batch ("Preparing Term 3 — 42 studies"); show
+  that state once, never a nightly shimmer.
+- Translation + posture controls live here too.
 
 ### 10. Do NOT design
 
