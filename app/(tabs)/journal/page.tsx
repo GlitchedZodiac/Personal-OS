@@ -18,7 +18,7 @@ export default function JournalPage() {
     .replace(",", " ·");
 
   return (
-    <div className="min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
+    <div className="stagger-children min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
       <div className="flex items-end justify-between">
         <div>
           <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground">

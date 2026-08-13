@@ -28,14 +28,32 @@ interface DayData {
   citations?: { label: string; sourceKey: string }[] | null;
 }
 
+interface CompletionResult {
+  done: number;
+  total: number;
+  streak: number;
+  completedToday: number;
+  termDone: boolean;
+  next: {
+    id: string;
+    weekIndex: number;
+    dayIndex: number;
+    title: string;
+    estMinutes: number;
+  } | null;
+}
+
 export default function SpiritStudyPage() {
   const router = useRouter();
   const [term, setTerm] = useState<{ orderIndex: number; title: string } | null>(null);
   const [day, setDay] = useState<DayData | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [readingDone, setReadingDone] = useState(false);
   const [qSaved, setQSaved] = useState(false);
   const [paperBusy, setPaperBusy] = useState(false);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
+  const [celebration, setCelebration] = useState<CompletionResult | null>(null);
+  const [completing, setCompleting] = useState(false);
 
   const load = useCallback(() => {
     fetch("/api/spirit/today")
@@ -45,11 +63,39 @@ export default function SpiritStudyPage() {
           setTerm(d.term);
           setDay(d.day);
           setReadingDone(d.readingDone);
+          setProgress(d.progress ?? null);
         }
       })
       .catch(() => {});
   }, []);
   useEffect(load, [load]);
+
+  const completeStudy = async () => {
+    if (!day || completing) return;
+    setCompleting(true);
+    try {
+      const res = await fetch("/api/spirit/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dayId: day.id }),
+      });
+      if (res.ok) {
+        setCelebration(await res.json());
+        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+      }
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const goNext = () => {
+    // The eager path — load the next study in place, fresh state.
+    setCelebration(null);
+    setQSaved(false);
+    setDay(null);
+    window.scrollTo({ top: 0 });
+    load();
+  };
 
   const saveQuestion = async () => {
     if (!day || qSaved) return;
@@ -112,11 +158,11 @@ export default function SpiritStudyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
+    <div className="push-in stagger-children min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.push("/spirit")}
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
+          className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
           aria-label="Back to Spirit"
         >
           <span className="-mt-0.5 text-lg leading-none text-[#232227]">‹</span>
@@ -125,12 +171,13 @@ export default function SpiritStudyPage() {
           <div className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground">
             TERM {term.orderIndex} · {term.title.toUpperCase()} · WK {day.weekIndex} · DAY{" "}
             {day.dayIndex}
+            {progress ? ` · STUDY ${progress.done + 1} OF ${progress.total}` : ""}
           </div>
           <div
             className="text-[26px] font-bold tracking-[-0.02em] text-foreground"
             style={{ fontFamily: "var(--font-display)" }}
           >
-            Today's study
+            The study
           </div>
         </div>
         <span className="flex-none rounded-full bg-accent px-[11px] py-[5px] text-[11px] font-semibold text-[#8C2F51]">
@@ -277,7 +324,7 @@ export default function SpiritStudyPage() {
         <div className="mt-3 flex gap-2.5">
           <button
             onClick={() => router.push("/spirit/read")}
-            className="flex-[1.5] rounded-[10px] bg-[#A63D63] py-[11px] text-[13px] font-semibold text-white hover:bg-[#8C2F51]"
+            className="tap-scale flex-[1.5] rounded-[10px] bg-[#A63D63] py-[11px] text-[13px] font-semibold text-white hover:bg-[#8C2F51]"
             style={{ fontFamily: "var(--font-display)" }}
           >
             Open reader
@@ -315,8 +362,79 @@ export default function SpiritStudyPage() {
           </p>
           <p className="mt-[5px] text-[12.5px] leading-[1.65] text-[#454349]">{day.oneMoreBody}</p>
           <p className="mt-2 text-[10px] text-muted-foreground">
-            your serendipity — the curriculum stays sequenced · closes the day
+            your serendipity — the curriculum stays sequenced · closes the study
           </p>
+        </div>
+      )}
+
+      {/* complete → celebration → the eager path */}
+      {!celebration ? (
+        <button
+          onClick={completeStudy}
+          disabled={completing}
+          className="tap-scale mt-4 w-full rounded-[14px] bg-[#232227] py-[15px] text-[14px] font-semibold text-white transition-colors hover:bg-[#38343C] disabled:opacity-60"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          {completing ? "…" : "Complete this study →"}
+        </button>
+      ) : (
+        <div className="fade-up mt-4 rounded-[20px] bg-[#232227] p-5">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-[#3E7A54] text-lg text-white">
+              ✓
+            </span>
+            <div>
+              <p className="text-[15px] font-semibold text-white" style={{ fontFamily: "var(--font-display)" }}>
+                Study {celebration.done} of {celebration.total} — kept.
+              </p>
+              <p className="mt-0.5 text-[11.5px] text-[#C9C7CD]">
+                {celebration.streak > 1 ? `${celebration.streak}-day streak · ` : ""}
+                {celebration.completedToday >= 2
+                  ? `a double portion today (${celebration.completedToday})`
+                  : "the next one is unlocked — no calendar owns it"}
+              </p>
+            </div>
+          </div>
+          {celebration.termDone ? (
+            <div className="mt-4 rounded-[13px] bg-[#2A272E] px-4 py-3.5">
+              <p className="text-[10px] font-bold tracking-[0.14em] text-[#DCA8BE]">
+                THE TERM IS COMPLETE
+              </p>
+              <p className="mt-1 text-[13px] leading-[1.6] text-[#F2F1F2]">
+                Every study of {term.title} is done. Its summary files into the
+                Transcript, and the next term takes the lectern.
+              </p>
+              <button
+                onClick={() => router.push("/spirit/transcript")}
+                className="tap-scale mt-3 rounded-[10px] bg-[#A63D63] px-4 py-2.5 text-xs font-semibold text-white"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                Open the Transcript →
+              </button>
+            </div>
+          ) : celebration.next ? (
+            <div className="mt-4 flex gap-2.5">
+              <button
+                onClick={goNext}
+                className="tap-scale flex-[1.7] rounded-[11px] bg-[#A63D63] px-3 py-3 text-left text-white"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                <span className="block text-[10px] font-bold tracking-[0.1em] text-[#F0D3E0]">
+                  EAGER? WK {celebration.next.weekIndex} · DAY {celebration.next.dayIndex} WAITS
+                </span>
+                <span className="mt-0.5 block text-[13px] font-semibold leading-snug">
+                  {celebration.next.title} →
+                </span>
+              </button>
+              <button
+                onClick={() => router.push("/spirit")}
+                className="tap-scale flex-1 rounded-[11px] border border-[#4A4550] py-3 text-[12.5px] font-semibold text-[#F2F1F2]"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                Done for today
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
 

@@ -5,17 +5,67 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-13 (SPIRIT round-2 port: themed Reader with
-Literata + audio + two-stage crossref tooltips, Notebook, Memory deck,
-Church Sunday track, Spirit settings + export, Journal coming-soon)
-**Current phase:** Spirit is live end-to-end on real data — spine
-(2026-08-13a) + the round-2 design port (2026-08-13b). Next Spirit
-blocks: term-batch generation pipeline, Track 2 free-license text,
-Strong's word study, Library screen, NBLA pane (license pending).
-Health modules unchanged and live.
+**Last updated:** 2026-08-13 (SPIRIT self-paced: generation pipeline ran
+— all 42 Judges studies written; completion-based progression; free
+Bible navigator; motion pass; streak/double-portion)
+**Current phase:** Spirit is a self-paced university (2026-08-13c) on
+top of the spine (a) + round-2 port (b). Next Spirit blocks: next-term
+syllabus authoring, Track 2 free-license text, Strong's word study,
+Library screen, NBLA pane (license pending), Bible-navigator design
+slice for round 3. Health modules unchanged and live.
 **Branch in flight:** `claude/phase1-modernization` (pushed; prod deploys
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).
+
+## 2026-08-13c — SPIRIT goes SELF-PACED (his correction, same day)
+
+Michael's review of b: "it shouldn't be something I'm blocked into
+because it's 'x' day of the year… like an online class — where I can
+eat away as much as possible… I plan one a day but I might be eager and
+do two." The pastor still sets the ORDER (announced, not chosen — his
+standing rule); the PACE is now entirely his.
+
+- **Completion-based progression:** StudyCompletion model; the current
+  study is a POSITION (first study without a completion, syllabus
+  order), never a date. POST /api/spirit/complete records it, returns
+  streak + the next study; DELETE undoes a mis-tap. Finishing the last
+  study completes the term and activates the next.
+- **Generation pipeline SHIPPED AND RUN:** POST /api/spirit/generate
+  {week} — one sol-model call writes a week's six studies (specimen
+  wk5d4 as the style anchor; quotes forbidden unless from stored
+  SourceDocs; pull-verse TEXT fetched from the ESV API after
+  generation, never model-recalled; suggested refs validated to
+  canonical ints inside the reading; citations filtered to real keys).
+  The Term screen carries the VISIBLE BATCH card (progress bar, week-by
+  -week counts, retry line). The Judges' 42 studies were written this
+  session (≈33k output tokens, sol tier — quality spot-checked: wk1d1
+  "A good beginning is not the same as faithfulness", real ESV pull
+  text, EMPTY citations where the library had nothing — the no-fake-
+  quotes guardrail held).
+- **Study page:** "Complete this study →" → celebration card (study n
+  of 42 · streak · double-portion note) → the EAGER PATH ("Wk 1 · Day 2
+  waits — {title} →") loads the next study in place, or "Done for
+  today". Term-complete ceremony wired.
+- **Home:** University card is a Continue card — study counter,
+  progress bar "n of 42 · self-paced", button says Begin/Continue/"One
+  more — eager day"; term-complete card when finished.
+- **Streaks (no-guilt):** streak = consecutive LOCAL days
+  (America/Bogota via lib/timezone) with a completed study or reading;
+  pill hidden at zero, gaps just restart the count, double portions
+  counted quietly. NEVER "days behind" — that language is banned.
+- **Free Bible:** /spirit/bible — OT/NT shelf, all 66 books with HIS
+  mark counts, chapter-grid sheet with marked-chapter dots,
+  "Continue where you left" (localStorage spirit-last-free-read).
+  Reader ?free=1: FREE READING kicker, no term coupling, no mark-read,
+  back goes to the shelf. Home's "Open the Bible" tile → the navigator.
+  (No design slice exists for the navigator — built in-system, flagged
+  for round 3.)
+- **Motion pass (his "lacking imagination" note):** the app's existing
+  idiom applied across Spirit — stagger-children entrances, push-in
+  subscreen transitions (new .push-in/.fade-up utilities), tap-scale
+  press feedback, animated progress bars, fade-up celebration.
+- **Syllabus rows** are completion-derived (✓ = HIS finished weeks,
+  n/6 partials, "unwritten" before generation) — no calendar fiction.
 
 ## 2026-08-13b — SPIRIT: the round-2 design port
 

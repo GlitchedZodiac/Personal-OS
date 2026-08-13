@@ -168,11 +168,11 @@ export default function SpiritChurchPage() {
   const week = series?.weeks?.find?.((w) => w.index === series.currentWeek) ?? series?.weeks?.[0];
 
   return (
-    <div className="min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
+    <div className="push-in stagger-children min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.push("/spirit")}
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
+          className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
           aria-label="Back to Spirit"
         >
           <span className="-mt-0.5 text-lg leading-none text-[#232227]">‹</span>
@@ -219,7 +219,7 @@ export default function SpiritChurchPage() {
               <button
                 key={m}
                 onClick={() => pick(m)}
-                className="flex items-center gap-3.5 rounded-[16px] bg-white p-4 text-left shadow-[0_2px_12px_rgba(35,34,39,0.06)] hover:bg-[#FAF9FA]"
+                className="tap-scale flex items-center gap-3.5 rounded-[16px] bg-white p-4 text-left shadow-[0_2px_12px_rgba(35,34,39,0.06)] hover:bg-[#FAF9FA]"
               >
                 <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-accent">
                   {icon}

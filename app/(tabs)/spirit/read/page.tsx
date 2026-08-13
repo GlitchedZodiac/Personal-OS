@@ -63,6 +63,7 @@ export default function SpiritReaderPage() {
   const router = useRouter();
   const { prefs, update, tokens: T, fontSize, fontFamily } = useReaderPrefs();
   const [q, setQ] = useState<string | null>(null);
+  const [freeMode, setFreeMode] = useState(false);
   const [dayMeta, setDayMeta] = useState<{
     id: string;
     kicker: string;
@@ -113,6 +114,12 @@ export default function SpiritReaderPage() {
     const qp = p.get("q");
     const wantAudio = p.get("audio") === "1";
     if (wantAudio) setAudOn(true);
+    if (p.get("free") === "1") {
+      // Free reading — the whole shelf, no term coupling, no mark-read.
+      setFreeMode(true);
+      setQ(qp ?? localStorage.getItem("spirit-last-free-read") ?? "John 1");
+      return;
+    }
     fetch("/api/spirit/today")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -132,6 +139,19 @@ export default function SpiritReaderPage() {
       })
       .catch(() => setQ(qp ?? "John 1"));
   }, []);
+
+  // Free reading remembers its spot — "pick up anywhere" includes
+  // where you left.
+  useEffect(() => {
+    if (freeMode && data?.canonical) {
+      try {
+        localStorage.setItem("spirit-last-free-read", data.canonical);
+      } catch {
+        // no memory, still readable
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.canonical]);
 
   const load = useCallback(async () => {
     if (!q) return;
@@ -431,16 +451,16 @@ export default function SpiritReaderPage() {
 
   return (
     <div
-      className="min-h-screen px-[22px] pb-56 pt-12 transition-colors duration-300 lg:px-8"
+      className="push-in min-h-screen px-[22px] pb-56 pt-12 transition-colors duration-300 lg:px-8"
       style={{ background: T.bg }}
     >
       {/* header */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push("/spirit")}
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-full border"
+          onClick={() => router.push(freeMode ? "/spirit/bible" : "/spirit")}
+          className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border"
           style={{ background: T.card, borderColor: T.rule }}
-          aria-label="Back to Spirit"
+          aria-label="Back"
         >
           <span className="-mt-0.5 text-lg leading-none" style={{ color: T.ink }}>‹</span>
         </button>
@@ -449,7 +469,7 @@ export default function SpiritReaderPage() {
             className="truncate text-[11px] font-semibold tracking-[0.18em]"
             style={{ color: T.faint }}
           >
-            {dayMeta?.kicker ?? "SPIRIT · READER"}
+            {freeMode ? "FREE READING · PICK UP ANYWHERE" : dayMeta?.kicker ?? "SPIRIT · READER"}
           </div>
           <div
             className="truncate text-[26px] font-bold tracking-[-0.02em]"
@@ -529,7 +549,7 @@ export default function SpiritReaderPage() {
       </div>
 
       {/* suggested banner */}
-      {data && (
+      {data && !freeMode && (
         <div
           className="mt-3 flex items-center gap-2.5 rounded-xl border-[1.5px] border-dashed border-[#DCA8BE] px-[13px] py-[9px]"
           style={{ background: T.card }}
@@ -808,7 +828,7 @@ export default function SpiritReaderPage() {
       )}
 
       {/* mark read */}
-      {dayMeta && data && (
+      {dayMeta && data && !freeMode && (
         <button
           onClick={markRead}
           disabled={marking}

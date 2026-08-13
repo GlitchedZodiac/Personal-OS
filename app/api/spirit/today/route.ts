@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { refParts } from "@/lib/bible-refs";
+import { DEFAULT_TIME_ZONE, getDateStringInTimeZone } from "@/lib/timezone";
 
-// GET — the Spirit home + Today's Study in one call: active term, the
-// current devotional day (v0: latest seeded day at or before the term
-// position; the generation pipeline will make this exact), reading
-// state, and the layer counts the home shows.
+// GET — the Spirit home + the current study in one call. SELF-PACED:
+// the "current" study is a POSITION (first study he hasn't completed,
+// in syllabus order), never a calendar date. Finish one, the next
+// unlocks; an eager day does two; nothing is ever owed.
 
 export async function GET() {
   try {
@@ -14,11 +15,18 @@ export async function GET() {
       return NextResponse.json({ term: null, day: null });
     }
 
-    // v0 day resolution: the most recently generated day of the term.
-    const day = await prisma.devotionalDay.findFirst({
-      where: { termId: term.id },
-      orderBy: [{ weekIndex: "desc" }, { dayIndex: "desc" }],
-    });
+    // Position resolution: first day without a completion, in order.
+    const [allDays, completions] = await Promise.all([
+      prisma.devotionalDay.findMany({
+        where: { termId: term.id },
+        orderBy: [{ weekIndex: "asc" }, { dayIndex: "asc" }],
+      }),
+      prisma.studyCompletion.findMany({
+        select: { dayId: true, completedAt: true },
+      }),
+    ]);
+    const doneIds = new Set(completions.map((c) => c.dayId));
+    const day = allDays.find((d) => !doneIds.has(d.id)) ?? null;
 
     const [
       readRow,
@@ -58,27 +66,45 @@ export async function GET() {
       prisma.readingLog.findMany({
         select: { readAt: true },
         orderBy: { readAt: "desc" },
-        take: 120,
+        take: 365,
       }),
     ]);
 
     const bookSet = new Set(readBooks.map((r) => refParts(r.refStart).book));
 
-    // Reading streak: consecutive calendar days (server-local) with any
-    // reading, counting back from today or yesterday. Purely descriptive
-    // — the UI hides it at zero, never shames.
-    const dayKeys = new Set(
-      readDays.map((r) => r.readAt.toISOString().slice(0, 10)),
-    );
+    // Streak: consecutive LOCAL days (his midnight, America/Bogota)
+    // with a completed study or a reading. Descriptive only — the UI
+    // hides it at zero; a gap simply restarts the count, no shame copy.
+    const dayKeys = new Set<string>();
+    for (const c of completions) {
+      dayKeys.add(getDateStringInTimeZone(c.completedAt, DEFAULT_TIME_ZONE));
+    }
+    for (const r of readDays) {
+      dayKeys.add(getDateStringInTimeZone(r.readAt, DEFAULT_TIME_ZONE));
+    }
     let streak = 0;
     const cursor = new Date();
-    if (!dayKeys.has(cursor.toISOString().slice(0, 10))) {
+    if (!dayKeys.has(getDateStringInTimeZone(cursor, DEFAULT_TIME_ZONE))) {
       cursor.setDate(cursor.getDate() - 1);
     }
-    while (dayKeys.has(cursor.toISOString().slice(0, 10))) {
+    while (dayKeys.has(getDateStringInTimeZone(cursor, DEFAULT_TIME_ZONE))) {
       streak += 1;
       cursor.setDate(cursor.getDate() - 1);
     }
+
+    const todayKey = getDateStringInTimeZone(new Date(), DEFAULT_TIME_ZONE);
+    const completedToday = completions.filter(
+      (c) => getDateStringInTimeZone(c.completedAt, DEFAULT_TIME_ZONE) === todayKey,
+    ).length;
+
+    // Days where he did 2+ studies — the double portions, counted
+    // quietly, celebrated never demanded.
+    const perDay = new Map<string, number>();
+    for (const c of completions) {
+      const k = getDateStringInTimeZone(c.completedAt, DEFAULT_TIME_ZONE);
+      perDay.set(k, (perDay.get(k) ?? 0) + 1);
+    }
+    const doublePortions = [...perDay.values()].filter((n) => n >= 2).length;
 
     return NextResponse.json({
       term: {
@@ -94,6 +120,15 @@ export async function GET() {
       },
       day,
       readingDone: Boolean(readRow),
+      progress: {
+        done: doneIds.size,
+        total: allDays.length,
+        target: term.weeks * 6,
+        generated: Boolean(term.generatedAt),
+        completedToday,
+        doublePortions,
+        termDone: allDays.length > 0 && !day,
+      },
       stats: {
         notes: noteCount,
         openQuestions,

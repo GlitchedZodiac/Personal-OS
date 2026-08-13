@@ -68,11 +68,11 @@ export default function SpiritSettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
+    <div className="push-in stagger-children min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.push("/spirit")}
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
+          className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
           aria-label="Back to Spirit"
         >
           <span className="-mt-0.5 text-lg leading-none text-[#232227]">‹</span>
@@ -142,7 +142,7 @@ export default function SpiritSettingsPage() {
         <p className="text-[10px] font-bold tracking-[0.16em] text-muted-foreground">OWNERSHIP</p>
         <button
           onClick={doExport}
-          className="mt-2.5 w-full rounded-[11px] py-3 text-[12.5px] font-semibold transition-colors"
+          className="tap-scale mt-2.5 w-full rounded-[11px] py-3 text-[12.5px] font-semibold transition-colors"
           style={{
             fontFamily: "var(--font-display)",
             background: expState === 2 ? "#EAF3ED" : "#A63D63",

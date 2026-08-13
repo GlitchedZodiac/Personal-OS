@@ -1081,22 +1081,35 @@ model UserExercise {
 // and highlights survive translation switches (docs/spirit-journal-plan).
 
 model Term {
-  id         String   @id @default(uuid())
-  orderIndex Int // 1-based across the whole curriculum
-  title      String // "The Judges"
-  kick       String // "OT NARRATIVE"
-  rationale  String // "why this term, why now"
-  hardNote   String? // hard-sayings statement when the term contains one
-  secondNote String? // second-reading note when revisiting a book
-  weeks      Int
-  syllabus   Json // [{week, label, ref, hard?: true}]
-  status     String   @default("upcoming") // upcoming | active | completed
-  startedAt  DateTime?
-  createdAt  DateTime @default(now())
+  id          String    @id @default(uuid())
+  orderIndex  Int // 1-based across the whole curriculum
+  title       String // "The Judges"
+  kick        String // "OT NARRATIVE"
+  rationale   String // "why this term, why now"
+  hardNote    String? // hard-sayings statement when the term contains one
+  secondNote  String? // second-reading note when revisiting a book
+  weeks       Int
+  syllabus    Json // [{week, label, ref, hard?: true}]
+  status      String    @default("upcoming") // upcoming | active | completed
+  startedAt   DateTime?
+  generatedAt DateTime? // when the visible batch finished writing its studies
+  createdAt   DateTime  @default(now())
 
   days DevotionalDay[]
 
   @@map("spirit_terms")
+}
+
+// One row per study HE finished — the term advances by completion,
+// not by calendar. Self-paced like a course: one a day planned, two
+// on an eager day, never owed.
+model StudyCompletion {
+  id          String   @id @default(uuid())
+  dayId       String   @unique
+  completedAt DateTime @default(now())
+
+  @@index([completedAt])
+  @@map("spirit_study_completions")
 }
 
 model DevotionalDay {

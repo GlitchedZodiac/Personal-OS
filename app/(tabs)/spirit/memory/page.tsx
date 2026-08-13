@@ -90,11 +90,11 @@ export default function SpiritMemoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
+    <div className="push-in stagger-children min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.push("/spirit")}
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
+          className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
           aria-label="Back to Spirit"
         >
           <span className="-mt-0.5 text-lg leading-none text-[#232227]">‹</span>
@@ -134,7 +134,7 @@ export default function SpiritMemoryPage() {
               <>
                 <button
                   onClick={reveal}
-                  className="mt-4 w-full rounded-[11px] bg-[#A63D63] py-3 text-[13px] font-semibold text-white hover:bg-[#8C2F51]"
+                  className="tap-scale mt-4 w-full rounded-[11px] bg-[#A63D63] py-3 text-[13px] font-semibold text-white hover:bg-[#8C2F51]"
                   style={{ fontFamily: "var(--font-display)" }}
                 >
                   Reveal the verse
@@ -164,7 +164,7 @@ export default function SpiritMemoryPage() {
                   <button
                     onClick={() => review("got")}
                     disabled={busy}
-                    className="flex-1 rounded-[10px] bg-[#3E7A54] py-[11px] text-[12.5px] font-semibold text-white disabled:opacity-60"
+                    className="tap-scale flex-1 rounded-[10px] bg-[#3E7A54] py-[11px] text-[12.5px] font-semibold text-white disabled:opacity-60"
                     style={{ fontFamily: "var(--font-display)" }}
                   >
                     Got it — space it out
@@ -172,7 +172,7 @@ export default function SpiritMemoryPage() {
                   <button
                     onClick={() => review("again")}
                     disabled={busy}
-                    className="flex-1 rounded-[10px] border border-[#4A4550] py-[11px] text-[12.5px] font-semibold text-[#F2F1F2] disabled:opacity-60"
+                    className="tap-scale flex-1 rounded-[10px] border border-[#4A4550] py-[11px] text-[12.5px] font-semibold text-[#F2F1F2] disabled:opacity-60"
                     style={{ fontFamily: "var(--font-display)" }}
                   >
                     Show again this week
