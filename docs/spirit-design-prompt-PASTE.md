@@ -1,28 +1,3 @@
-# Spirit — Claude Design prompt (round 5, paste-ready)
-
-Companion to `docs/spirit-journal-plan.md` (the plan of record). This file
-is the **prompt itself** — paste it into Claude Design, then expand.
-Section 4's study system is fully specified on purpose: Michael asked for
-it to be designed *for* him, not left ad hoc.
-
-**Rounds 4–5 (2026-08-12):** ESV API key acquired and live-verified —
-text, HTML **with inline cross-references, footnotes, per-verse anchors,
-poetry indentation and red-letter markup**, **audio**, multi-passage
-fetch, and phrase search all confirmed working. So §3 carries reference
-tooltips, audio, printed-Bible typography, and search as v1. Round 4
-added Church Series Follow-Along (§2b) plus term rationale, the
-hard-sayings commitment, and second-reading intelligence (§1). Round 5
-added Settings & ownership (§9b): export, curriculum pause, and the
-term-batch generation moment.
-
-**Clean copy-paste version (no meta, no markers):**
-`docs/spirit-design-prompt-PASTE.md`. **Build kickoff for the next
-chat:** `docs/spirit-kickoff-prompt.md`.
-
----
-
-## PASTE FROM HERE
-
 Extend the **Pitaya** app design — same system throughout: Familjen
 Grotesk (display) + Instrument Sans (text), raspberry `#A63D63` family,
 white cards on `#F2F1F2`, 16–18px card radii, push-in drill-down screens,
@@ -314,5 +289,3 @@ Badges, streaks-as-pressure, "days behind" counters, a general-purpose
 atlas or reference browser (maps and images appear **only** in service of
 the day's teaching), exegetical/syntax diagram tooling (that is Logos —
 link out), or any surface where the AI speaks for God about his life.
-
-## PASTE TO HERE
