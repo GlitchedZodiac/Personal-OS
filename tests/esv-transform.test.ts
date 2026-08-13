@@ -33,6 +33,20 @@ describe("transformPassage", () => {
     );
   });
 
+  it("removes crossref/footnote markers from the text it renders", () => {
+    const m = load("esv-Judges_4.json");
+    const v2 = m.verses.find((v) => v.verseNum === 2)!;
+    // Before the fix, stray marker letters glued to words: "zJabin",
+    // "ySold". The clean text must carry the words unprefixed.
+    expect(v2.text).toContain("Jabin king of Canaan");
+    expect(v2.text).not.toMatch(/[a-z]Jabin/);
+    expect(v2.text).not.toMatch(/LORD [a-z]sold/);
+    for (const v of m.verses) {
+      const letters = v.crossrefs.map((c) => c.letter);
+      expect(new Set(letters).size).toBe(letters.length);
+    }
+  });
+
   it("lifts cross-references out per verse", () => {
     const m = load("esv-Judges_4.json");
     const withXr = m.verses.filter((v) => v.crossrefs.length > 0);

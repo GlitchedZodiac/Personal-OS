@@ -3,6 +3,7 @@ import {
   Familjen_Grotesk,
   IBM_Plex_Mono,
   Instrument_Sans,
+  Literata,
 } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/sw-register";
 import { Toaster } from "@/components/ui/sonner";
@@ -24,6 +25,13 @@ const monoFont = IBM_Plex_Mono({
   variable: "--font-mono-ui",
   subsets: ["latin"],
   weight: ["400", "500", "600"],
+});
+
+// The Reader's serif — Scripture set like a printed page.
+const serifFont = Literata({
+  variable: "--font-serif",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -65,7 +73,7 @@ export default function RootLayout({
         <meta name="msapplication-TileColor" content="#F2F1F2" />
       </head>
       <body
-        className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} app-shell`}
+        className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} ${serifFont.variable} app-shell`}
         suppressHydrationWarning
       >
         {children}

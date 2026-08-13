@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  PitayaMarkIcon,
+  JournalIcon,
+  SpiritIcon,
   FoodIcon,
   PitayaLogo,
   SettingsIcon,
@@ -14,9 +15,9 @@ import {
 // Desktop rail — same five surfaces as the tab bar, same design icons.
 const navItems = [
   { label: "Today", href: "/dashboard", Icon: TodayIcon },
-  { label: "Spirit", href: "/spirit", Icon: PitayaMarkIcon },
+  { label: "Spirit", href: "/spirit", Icon: SpiritIcon },
   { label: "Food", href: "/health/food", Icon: FoodIcon },
-  { label: "Journal", href: "/journal", Icon: PitayaMarkIcon },
+  { label: "Journal", href: "/journal", Icon: JournalIcon },
   { label: "Settings", href: "/settings", Icon: SettingsIcon },
 ];
 

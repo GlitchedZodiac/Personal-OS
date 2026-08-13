@@ -111,6 +111,29 @@ export function SettingsIcon(props: IconProps) {
   );
 }
 
+/* ── Spirit + Journal tab icons (design 2026-08-13 rev footer, verbatim:
+      book-with-cross · journal pen) ────────────────────────────────────── */
+
+export function SpiritIcon(props: IconProps) {
+  return (
+    <Stroke24 {...props}>
+      <path d="M4 19.5V5a2.5 2.5 0 0 1 2.5-2.5H19a1 1 0 0 1 1 1V17" />
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20v4.5H6.5A2.5 2.5 0 0 1 4 19.5Z" />
+      <path d="M12 5.8v5.4M9.6 8h4.8" />
+    </Stroke24>
+  );
+}
+
+export function JournalIcon(props: IconProps) {
+  return (
+    <Stroke24 {...props}>
+      <path d="M13.2 6.2 17.8 10.8 8.3 20.3 2.5 21.5 3.7 15.7 13.2 6.2Z" />
+      <path d="M13.2 6.2l1.8-1.8a2.05 2.05 0 0 1 2.9 0l1.7 1.7a2.05 2.05 0 0 1 0 2.9l-1.8 1.8" />
+      <path d="M10.6 13.4 8.9 15.1" />
+    </Stroke24>
+  );
+}
+
 /* ── Activity icons (Train → Activities, design 2026-08-11 rev ICO map,
       verbatim paths; kettlebell = TrainIcon above) ─────────────────────── */
 

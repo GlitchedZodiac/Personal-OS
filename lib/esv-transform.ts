@@ -100,19 +100,29 @@ export function transformPassage(
     const headingMatch = [...lookback.matchAll(/<h3[^>]*>([\s\S]*?)<\/h3>/g)].pop();
     const psalmMatch = [...lookback.matchAll(/<h4 [^>]*class="psalm-title"[^>]*>([\s\S]*?)<\/h4>/g)].pop();
 
+    // Crossref markers appear as a.cf anchors — sometimes sup-wrapped,
+    // sometimes bare, and ESV reuses a letter within a verse for the
+    // same note. Lift them (deduped by letter) AND remove them from the
+    // segment, or stripTags leaves stray letters glued to words
+    // ("zJabin").
     const crossrefs: VerseSegment["crossrefs"] = [];
-    const cfRe = /<sup><a class="cf"[^>]*title="([^"]*)"[^>]*>([a-z0-9]+)<\/a><\/sup>/g;
+    const cfRe = /(?:<sup[^>]*>\s*)?<a[^>]*class="cf[^"]*"[^>]*title="([^"]*)"[^>]*>([a-z0-9]+)<\/a>(?:\s*<\/sup>)?/g;
     let cf: RegExpExecArray | null;
     while ((cf = cfRe.exec(segment))) {
-      crossrefs.push({ letter: cf[2], ref: cf[1].replace(/^See /, "") });
+      const letter = cf[2];
+      if (!crossrefs.some((c) => c.letter === letter)) {
+        crossrefs.push({ letter, ref: cf[1].replace(/^See /, "") });
+      }
     }
+    segment = segment.replace(cfRe, "");
 
     const footnotes: VerseSegment["footnotes"] = [];
-    const fnRe = /<sup><a class="fn"[^>]*>(\d+)<\/a><\/sup>/g;
+    const fnRe = /(?:<sup[^>]*>\s*)?<a[^>]*class="fn[^"]*"[^>]*>(\d+)<\/a>(?:\s*<\/sup>)?/g;
     let fn: RegExpExecArray | null;
     while ((fn = fnRe.exec(segment))) {
       footnotes.push({ marker: fn[1], text: footnoteBodies.get(fn[1]) ?? "" });
     }
+    segment = segment.replace(fnRe, "");
 
     const woc = /class="woc"/.test(segment);
 

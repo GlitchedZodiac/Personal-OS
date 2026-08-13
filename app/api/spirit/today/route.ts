@@ -20,23 +20,65 @@ export async function GET() {
       orderBy: [{ weekIndex: "desc" }, { dayIndex: "desc" }],
     });
 
-    const [readRow, noteCount, openQuestions, linkCount, readBooks, upcoming] =
-      await Promise.all([
-        day
-          ? prisma.readingLog.findFirst({ where: { dayId: day.id } })
-          : Promise.resolve(null),
-        prisma.spiritNote.count(),
-        prisma.spiritNote.count({ where: { kind: "question", resolvedAt: null } }),
-        prisma.verseLink.count(),
-        prisma.readingLog.findMany({ select: { refStart: true }, distinct: ["refStart"] }),
-        prisma.term.findMany({
-          where: { status: "upcoming" },
-          orderBy: { orderIndex: "asc" },
-          select: { orderIndex: true, title: true, kick: true },
-        }),
-      ]);
+    const [
+      readRow,
+      noteCount,
+      openQuestions,
+      linkCount,
+      readBooks,
+      upcoming,
+      completed,
+      memDue,
+      weeklyVerse,
+      prefs,
+      series,
+      readDays,
+    ] = await Promise.all([
+      day
+        ? prisma.readingLog.findFirst({ where: { dayId: day.id } })
+        : Promise.resolve(null),
+      prisma.spiritNote.count(),
+      prisma.spiritNote.count({ where: { kind: "question", resolvedAt: null } }),
+      prisma.verseLink.count(),
+      prisma.readingLog.findMany({ select: { refStart: true }, distinct: ["refStart"] }),
+      prisma.term.findMany({
+        where: { status: "upcoming" },
+        orderBy: { orderIndex: "asc" },
+        select: { orderIndex: true, title: true, kick: true },
+      }),
+      prisma.term.findMany({
+        where: { status: "completed" },
+        orderBy: { orderIndex: "asc" },
+        select: { orderIndex: true, title: true },
+      }),
+      prisma.memoryVerse.count({ where: { nextDueAt: { lte: new Date() } } }),
+      prisma.memoryVerse.findFirst({ orderBy: [{ nextDueAt: "asc" }] }),
+      prisma.spiritPref.findUnique({ where: { id: "main" } }),
+      prisma.churchSeries.findFirst({ where: { status: "active" } }),
+      prisma.readingLog.findMany({
+        select: { readAt: true },
+        orderBy: { readAt: "desc" },
+        take: 120,
+      }),
+    ]);
 
     const bookSet = new Set(readBooks.map((r) => refParts(r.refStart).book));
+
+    // Reading streak: consecutive calendar days (server-local) with any
+    // reading, counting back from today or yesterday. Purely descriptive
+    // — the UI hides it at zero, never shames.
+    const dayKeys = new Set(
+      readDays.map((r) => r.readAt.toISOString().slice(0, 10)),
+    );
+    let streak = 0;
+    const cursor = new Date();
+    if (!dayKeys.has(cursor.toISOString().slice(0, 10))) {
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    while (dayKeys.has(cursor.toISOString().slice(0, 10))) {
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
 
     return NextResponse.json({
       term: {
@@ -57,8 +99,33 @@ export async function GET() {
         openQuestions,
         links: linkCount,
         booksRead: bookSet.size,
+        memDue,
+        streak,
       },
+      weeklyVerse: weeklyVerse
+        ? {
+            refLabel: weeklyVerse.refLabel,
+            occasion: weeklyVerse.occasion,
+            refStart: weeklyVerse.refStart,
+          }
+        : null,
+      prefs: {
+        posture: prefs?.posture ?? "westminster",
+        termPaused: prefs?.termPaused ?? false,
+      },
+      series: series
+        ? {
+            id: series.id,
+            title: series.title,
+            currentWeek: series.currentWeek,
+            expectedWeeks: series.expectedWeeks,
+            week: (Array.isArray(series.weeks) ? series.weeks : []).find(
+              (w) => (w as { index?: number }).index === series.currentWeek,
+            ) ?? null,
+          }
+        : null,
       upcoming,
+      completed,
     });
   } catch (error) {
     console.error("Spirit today error:", error);

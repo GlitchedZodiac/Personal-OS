@@ -5,18 +5,110 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-10 (Routines MVP backend/AI: rounds live in
-mobile sequences, user-minted exercises + /api/mobile/exercises live,
-AI builds/edits routines any-equipment, post-hoc entry fix via chat)
-**Current phase:** Routines are the product's center per Michael's
-2026-08-10 walkthrough. The watch's circuit runner + weights editor were
-already built; the backend/AI pieces it waited on are now live (entry
-2026-08-10b). **WATCH LANE: `rounds` is in `/api/mobile/sequences` and
-`GET /api/mobile/exercises` exists — adopt both.** Food stays deliberately
-crude until 2c.
+**Last updated:** 2026-08-13 (SPIRIT round-2 port: themed Reader with
+Literata + audio + two-stage crossref tooltips, Notebook, Memory deck,
+Church Sunday track, Spirit settings + export, Journal coming-soon)
+**Current phase:** Spirit is live end-to-end on real data — spine
+(2026-08-13a) + the round-2 design port (2026-08-13b). Next Spirit
+blocks: term-batch generation pipeline, Track 2 free-license text,
+Strong's word study, Library screen, NBLA pane (license pending).
+Health modules unchanged and live.
 **Branch in flight:** `claude/phase1-modernization` (pushed; prod deploys
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).
+
+## 2026-08-13b — SPIRIT: the round-2 design port
+
+Design round 2 imported (docs/design/pitaya-app.dc.html refreshed —
+17 screens; NOTE: the canvas file now exceeds the 256 KiB design-MCP
+read cap, its interaction-script tail truncates on import; all screen
+HTML fits) and ported same-day:
+
+- **Reader rework:** light/dark/night themed surfaces (lib/spirit-theme
+  .ts tokens, localStorage per-device), Literata serif via next/font
+  (`--font-serif`), chapter chips, Type & theme sheet (size dots ·
+  serif/sans · justified+hyphenated · 3 swatches), suggested-marks
+  banner, poetry hanging indents, selection dimming, two-stage crossref
+  tooltips (tap sup → ref card → tap again → verse text fetched from the
+  cache → Open), ESV audio mini-player (play/pause · chapter ‹ › · speed
+  1/1.25/1.5 · elapsed), ⋯ overflow with **Memorize** (occasion picker →
+  deck) and **Copy with attribution**, Word mode designed-stub (honest:
+  waits for a Strong's dataset; Logos ref.ly link meanwhile), legend
+  sheet now shows whole-Bible per-category counts + expandable refs
+  (GET /api/spirit/layer).
+- **Transform fix (root-cause):** ESV crossref/footnote markers were
+  collected but never stripped — letters glued to words ("zJabin");
+  markers also repeat a letter per verse (duplicate React keys). Lift
+  regex widened (sup-wrapped OR bare a.cf), markers now removed from
+  text, letters deduped; fixture tests assert clean text + unique
+  letters (8/8).
+- **Passage Notebook** (/spirit/notebook): grouped by chapter, search,
+  All/Open-questions views, kind chips + category-dot filters, OPEN
+  badges with resurface line, Ask threads included.
+  GET /api/spirit/notebook.
+- **Memory deck** (/spirit/memory): occasion-first review card (say it
+  aloud → reveal fetches ESV text → "Got it — space it out" doubles the
+  interval to 90-day cap / "Show again this week" = 3 days), occasions
+  grid, computed weekly-review line (marks + questions, no verdicts),
+  end-of-term summary row. MemoryVerse model;
+  GET/POST/PATCH/DELETE /api/spirit/memory. Cards enter ONLY from the
+  Reader (⋯ → Memorize) — deck starts empty, honestly.
+- **Church Sunday track** (/spirit/church): Speak it (mic→transcribe) /
+  Photograph the slides (≤4, vision parse) / Paste a transcript →
+  AI parses to a proposal → HE confirms (editable rows) → series commits
+  + the current week's follow-along card generates (context + exactly 3
+  questions). ChurchSeries model; GET/POST/PUT /api/spirit/church. Smoke:
+  the Galatians announcement parsed to "Sons Not Slaves — Galatians · ≈8
+  Sundays · Gal 1–2 preached · Gal 3 next" and week 2 generated 3 real
+  questions (rows deleted after smoke).
+- **Spirit settings** (/spirit/settings): translation chips (NBLA inert —
+  license pending), posture Westminster/1689/Compare (SpiritPref
+  singleton), **Export everything** (markdown of notes/highlights/links/
+  Ask threads/deck/reading log — /api/spirit/export, no ESV text per
+  license), pause-the-term toggle, term-generation card kept HONEST (no
+  fake 28-of-42 progress; states the pipeline is the next block).
+- **Spirit home:** gear → settings, this-week's-verse card → Memory
+  (next-due card + cached snippet), posture ⇄ chip on the University
+  card, real Notebook/Memory tiles, Sunday card shows the live series
+  week, reading-streak pill (hidden at 0), transcript mini-map on the
+  new ramp.
+- **Transcript:** honest read-throughs (CHAPTERS[66] in lib/bible-refs;
+  a book counts once only when every chapter is covered) — legend is
+  now not yet/once/twice/3+/this term; pill counts completed books
+  (today: truthful "0 of 66", Judges+Ruth black as this-term).
+- **Today's study:** audio ▶ chip on the assignment (opens reader
+  w/ autoplay), week-progress bar. **Term:** completed terms lead the
+  year rail, footer verbatim. **Journal:** design's coming-soon port.
+- Today API extended: memDue, streak, weeklyVerse, prefs, active series,
+  completed terms.
+- ESV_API_KEY added to Vercel (prod/preview/dev) via CLI — Michael's
+  Vercel connection covers env writes; nothing needed from him.
+- Verified: tsc clean, 111 vitest pass (incl. new transform
+  assertions), all screens browser-driven at mobile size (night theme
+  screenshot-verified; action bar via DOM-dispatch — the Browser pane's
+  tap translation flaked, not the app).
+
+**Deviations from the design, surfaced deliberately:** NBLA pane renders
+its built layout with a Spanish license-pending note (no text without a
+license); Word study is a designed-stub until a Strong's dataset lands
+(footer/link promise "long-press a word" NOT carried); audio player
+shows elapsed time, not per-verse follow-along (ESV serves one mp3 — no
+verse timings exist); settings' generation card shows no fabricated
+progress; design's "TSK cross-references" footer corrected to "via
+Crossway API" (the crossrefs are ESV's own apparatus).
+
+## 2026-08-13a — SPIRIT: the spine (model → ESV → APIs → first screens)
+
+Milestones 1–3 of the Spirit build (see spirit-journal-plan.md):
+schema (Term/DevotionalDay/ReadingLog/Highlight/SpiritNote/VerseLink/
+StudyThread/SourceDoc/EsvPassage LRU cache), lib/bible-refs +
+lib/esv-transform (pure, fixture-tested) + lib/esv (pinned LRU per
+Crossway license), seed (The Judges term + wk5d4 study + 2 sources, NO
+fabricated history), APIs (today/passage/layer/read/transcript/ask/
+source — Ask is retrieval-never-recall and DECLINED a Calvin question it
+had no source for, verbatim guardrail proof), screens (home, study,
+reader v1, term, transcript) + SpiritIcon/JournalIcon extracted into the
+navs.
 
 ## 2026-08-12a — Companion server half + THE DOCK PHOTO SUITE
 

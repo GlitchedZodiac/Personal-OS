@@ -29,6 +29,36 @@ function refPair(body: Record<string, unknown>, a = "refStart", b = "refEnd") {
   return { start, end: Number.isInteger(end) && end >= start ? end : start };
 }
 
+// GET — the legend: whole-Bible counts per category with a few recent
+// refs each ("every promise I've marked in the Psalms" is queryable).
+export async function GET() {
+  try {
+    const highlights = await prisma.highlight.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { category: true, refStart: true, refEnd: true },
+    });
+    const { formatRef } = await import("@/lib/bible-refs");
+    const byCat = new Map<string, string[]>();
+    for (const h of highlights) {
+      const list = byCat.get(h.category) ?? [];
+      if (list.length < 8) list.push(formatRef(h.refStart, h.refEnd));
+      byCat.set(h.category, list);
+    }
+    const counts: Record<string, { count: number; refs: string[] }> = {};
+    for (const cat of CATEGORIES) {
+      const refs = byCat.get(cat) ?? [];
+      counts[cat] = {
+        count: highlights.filter((h) => h.category === cat).length,
+        refs,
+      };
+    }
+    return NextResponse.json({ counts });
+  } catch (error) {
+    console.error("Spirit legend error:", error);
+    return NextResponse.json({ error: "Failed to load legend" }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;

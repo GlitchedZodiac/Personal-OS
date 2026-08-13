@@ -1202,6 +1202,57 @@ model SourceDoc {
   @@map("spirit_sources")
 }
 
+// Memory deck — verses HE chose to keep, filed by life occasion.
+// The prompt is the occasion phrased as a situation; the verse text
+// is retrieved from the ESV cache at review time, never stored twice.
+model MemoryVerse {
+  id         String    @id @default(uuid())
+  refStart   Int
+  refEnd     Int
+  refLabel   String // "Psalm 46:1"
+  occasion   String // "Assurance", "Anxiety", "Temptation"…
+  prompt     String // occasion phrased as a situation to answer aloud
+  why        String? // his one-line reason for keeping it
+  intervalDays Int     @default(3)
+  nextDueAt  DateTime  @default(now())
+  lastSeenAt DateTime?
+  timesGot   Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  @@index([nextDueAt])
+  @@map("spirit_memory_verses")
+}
+
+// Church sermon series — the Sunday track. Runs beside the term,
+// never instead of it. weeks Json: [{index, passageRef, title,
+// context, questions[], status: preached|next|future}]
+model ChurchSeries {
+  id            String   @id @default(uuid())
+  title         String // "Sons, Not Slaves — Galatians"
+  expectedWeeks Int?
+  lengthNote    String? // "pastor said 'through the fall'"
+  passages      Json // [{ref, label, status}]
+  themes        String?
+  weeks         Json     @default("[]")
+  currentWeek   Int      @default(1)
+  status        String   @default("active") // active | done | promoted
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("spirit_church_series")
+}
+
+// Singleton Spirit preferences (reader typography lives on-device;
+// this row holds the choices that shape generation and pacing).
+model SpiritPref {
+  id         String   @id @default("main")
+  posture    String   @default("westminster") // westminster | 1689 | compare
+  termPaused Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  @@map("spirit_prefs")
+}
+
 // ESV passage cache — LRU with pinning, NEVER a full-canon store
 // (Crossway's license forbids a substantially complete copy; term
 // passages pin for the term, the rest evicts).

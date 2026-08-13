@@ -24,6 +24,7 @@
     @keyframes shimmer { 0% { transform:translateX(-120%) skewX(-18deg); } 100% { transform:translateX(480%) skewX(-18deg); } }
     @keyframes pushIn { from { transform:translateX(100%); } to { transform:none; } }
   </style>
+  <link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400..700;1,7..72,400..700&display=swap" rel="stylesheet">
 </helmet>
 <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 0 32px; font-family:'Instrument Sans',sans-serif;">
   <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="440px" height="956px" hint-size="440px,956px">
@@ -543,7 +544,10 @@
               <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">SAT · AUGUST 8</div>
               <div style="font-family:'Familjen Grotesk',sans-serif; font-size:30px; font-weight:700; color:#232227; letter-spacing:-0.02em; margin-top:2px;">Spirit</div>
             </div>
-            <div style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 12px; border-radius:99px;"><svg width="9" height="9" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63"></rect></svg> {{ spStreakLab }}</div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 12px; border-radius:99px;"><svg width="9" height="9" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63"></rect></svg> {{ spStreakLab }}</div>
+              <div onClick="{{ setOpen }}" style="width:30px; height:30px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#FAF9FA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#66646C" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"></path></svg></div>
+            </div>
           </div>
 
           <div onClick="{{ vwTap }}" style="display:flex; align-items:center; gap:11px; background:#F6E3EB; border-radius:14px; padding:12px 14px; margin-top:16px; cursor:pointer;" style-hover="background:#F0D3E0;">
@@ -579,10 +583,10 @@
               <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:8px;">Notebook</div>
               <div style="font-size:11px; color:#66646C; margin-top:2px;">{{ nbOpenLab }} · 34 notes</div>
             </div>
-            <div onClick="{{ askTap }}" style="background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.6L3 21l1.9-5.6A8.5 8.5 0 1 1 21 11.5Z"></path><path d="M9.6 9.5a2.4 2.4 0 0 1 4.7.8c0 1.6-2.3 2-2.3 3.2M12 16.8h.01"></path></svg>
-              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:8px;">Ask anything</div>
-              <div style="font-size:11px; color:#66646C; margin-top:2px;">anchored · always cited</div>
+            <div onClick="{{ spLibOpen }}" style="background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h5.5v15H4zM9.5 4.5H15v15H9.5z"></path><path d="M15.2 5.2l4.6 1.3-3.9 13.7-4.6-1.3"></path></svg>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:8px;">Library</div>
+              <div style="font-size:11px; color:#66646C; margin-top:2px;">18 sources · every quote cited</div>
             </div>
             <div onClick="{{ spMemOpen }}" style="background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3.5 3.5 0 0 0-3.4 4.4A3.5 3.5 0 0 0 7 14a3.5 3.5 0 0 0 5 4.9A3.5 3.5 0 0 0 17 14a3.5 3.5 0 0 0-1.6-6.6A3.5 3.5 0 0 0 12 3Z"></path></svg>
@@ -592,7 +596,7 @@
           </div>
 
 
-          <div onClick="{{ sunTap }}" style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+          <div onClick="{{ serOpen }}" style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">SUNDAY · SERMON FOLLOW-ALONG</div>
               <span style="font-size:9.5px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:2.5px 9px; border-radius:99px;">series · wk 2</span>
@@ -614,19 +618,6 @@
             </sc-if>
           </div>
 
-          <div style="display:flex; gap:12px; margin-top:12px;">
-            <div onClick="{{ spMemOpen }}" style="flex:1; background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
-              <div style="font-size:10.5px; letter-spacing:0.14em; font-weight:600; color:#96949B;">MEMORY</div>
-              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#232227; margin-top:6px;">{{ memDueLab }}</div>
-              <div style="font-size:11.5px; color:#66646C; margin-top:2px;">Rom 8 · Ps 46 · WSC Q.1</div>
-            </div>
-            <div onClick="{{ spNbOpen }}" style="flex:1; background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
-              <div style="font-size:10.5px; letter-spacing:0.14em; font-weight:600; color:#96949B;">NOTEBOOK</div>
-              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#232227; margin-top:6px;">{{ nbOpenLab }}</div>
-              <div style="font-size:11.5px; color:#66646C; margin-top:2px;">34 notes · 12 verse links</div>
-            </div>
-          </div>
-
           <div onClick="{{ spCovOpen }}" style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">THE TRANSCRIPT · LIFETIME</div>
@@ -638,18 +629,6 @@
             <div style="font-size:10.5px; color:#96949B; margin-top:10px;">Judges in progress · darker = read more often · open the map →</div>
           </div>
 
-          <div style="display:flex; gap:12px; margin-top:12px;">
-            <div onClick="{{ spPlanOpen }}" style="flex:1; background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
-              <div style="font-size:10.5px; letter-spacing:0.14em; font-weight:600; color:#96949B;">THE TERM</div>
-              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:6px;">Syllabus · wk 5 of 7</div>
-              <div style="font-size:11px; color:#66646C; margin-top:2px;">Why this term · next: Gideon</div>
-            </div>
-            <div onClick="{{ spLibOpen }}" style="flex:1; background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
-              <div style="font-size:10.5px; letter-spacing:0.14em; font-weight:600; color:#96949B;">LIBRARY</div>
-              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:6px;">18 sources</div>
-              <div style="font-size:11px; color:#66646C; margin-top:2px;">Calvin · Henry · the confessions</div>
-            </div>
-          </div>
         </div>
 
         <div data-screen-label="Journal — coming soon" style="width:440px; height:100%; overflow-y:auto; flex:none; box-sizing:border-box; padding:74px 22px 200px;">
@@ -1252,54 +1231,103 @@
       </sc-if>
 
       <sc-if value="{{ spReadOn }}" hint-placeholder-val="{{ false }}">
-        <div data-screen-label="Reader — Judges 4" style="position:absolute; inset:0; z-index:60; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 220px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+        <div data-screen-label="Reader" style="position:absolute; inset:0; z-index:60; background: {{ rdBg }}; transition:background .35s; overflow-y:auto; box-sizing:border-box; padding:74px 22px 220px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
           <div style="display:flex; align-items:center; gap:12px;">
-            <div onClick="{{ spReadClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div onClick="{{ spReadClose }}" style="width:36px; height:36px; border-radius:50%; background: {{ rdCard }}; border:1px solid {{ rdRule }}; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;"><span style="font-size:18px; color: {{ rdInk }}; line-height:1; margin-top:-2px;">‹</span></div>
             <div style="flex:1;">
-              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">TERM 2 · THE JUDGES · WEEK 5</div>
-              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">Judges 4</div>
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color: {{ rdFaint }};">TERM 2 · THE JUDGES · WEEK 5</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color: {{ rdInk }}; letter-spacing:-0.02em;">{{ chTitle }}</div>
             </div>
-            <div onClick="{{ spLegOpen }}" style="display:flex; align-items:center; gap:6px; font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:7px 13px; border-radius:99px; cursor:pointer; flex:none;" style-hover="background:#F0D3E0;"><span style="display:flex; gap:2.5px;"><span style="width:7px; height:7px; border-radius:50%; background:#5E9B72;"></span><span style="width:7px; height:7px; border-radius:50%; background:#B08035;"></span><span style="width:7px; height:7px; border-radius:50%; background:#A63D63;"></span></span>Legend</div>
+            <div onClick="{{ spLegOpen }}" style="display:flex; align-items:center; gap:6px; font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:7px 13px; border-radius:99px; cursor:pointer; flex:none;" style-hover="background:#F0D3E0;"><span style="display:flex; gap:2.5px;"><span style="width:7px; height:7px; border-radius:50%; background:#D9A23E;"></span><span style="width:7px; height:7px; border-radius:50%; background:#4C7DBF;"></span><span style="width:7px; height:7px; border-radius:50%; background:#7B5EA7;"></span></span>Legend</div>
           </div>
-          <div style="display:flex; align-items:center; gap:8px; margin-top:14px;">
-            <button onClick="{{ spModeR }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 14px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ mdRBg }}; color: {{ mdRCol }};">Reading</button>
-            <button onClick="{{ spModeS }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 14px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ mdSBg }}; color: {{ mdSCol }};">Study</button>
+          <div style="display:flex; align-items:center; gap:6px; margin-top:14px;">
+            <sc-for list="{{ chRows }}" as="c" hint-placeholder-count="3">
+              <button onClick="{{ c.tap }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11px; font-weight:600; padding:6px 12px; border-radius:99px; border:1px solid {{ rdRule }}; cursor:pointer; transition:background .25s; background: {{ c.bg }}; color: {{ c.col }};">{{ c.lab }}</button>
+            </sc-for>
             <div style="flex:1;"></div>
-            <span style="font-size:11px; color:#96949B;">tap a verse to work on it</span>
+            <button onClick="{{ biTap }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:10.5px; font-weight:700; padding:6px 10px; border-radius:99px; border:1px solid {{ rdRule }}; cursor:pointer; transition:background .25s; background: {{ biBg }}; color: {{ biCol }};">ESV ⇄ NBLA</button>
+            <button onClick="{{ typeOpen }}" style="width:30px; height:30px; border-radius:50%; border:1px solid {{ rdRule }}; background: {{ rdCard }}; color: {{ rdInk }}; font-family:'Literata',serif; font-size:12px; font-weight:600; cursor:pointer;">Aa</button>
+            <button onClick="{{ audStart }}" style="width:30px; height:30px; border-radius:50%; border:none; background:#A63D63; color:#FFFFFF; font-size:9px; cursor:pointer;" style-hover="background:#8C2F51;">▶</button>
           </div>
-          <div style="display:flex; align-items:center; gap:9px; background:#FFFFFF; border:1.5px dashed #DCA8BE; border-radius:12px; padding:9px 13px; margin-top:12px;">
+          <div style="display:flex; align-items:center; gap:9px; background: {{ rdCard }}; border:1.5px dashed #DCA8BE; border-radius:12px; padding:9px 13px; margin-top:12px;">
             <span style="width:15px; height:15px; border-radius:5px; border:1.5px dashed #A63D63; flex:none; box-sizing:border-box;"></span>
-            <span style="flex:1; font-size:11.5px; color:#454349; line-height:1.45;">{{ suggLine }}</span>
+            <span style="flex:1; font-size:11.5px; color: {{ rdSub }}; line-height:1.45;">{{ suggLine }}</span>
           </div>
-          <div style="background:#FFFFFF; border-radius:18px; padding:16px 14px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+          <sc-if value="{{ biOn }}" hint-placeholder-val="{{ false }}">
+            <div style="background: {{ rdCard }}; border-radius:18px; margin-top:12px; box-shadow: {{ rdShadow }}; overflow:hidden;">
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 14px; border-bottom:1px solid {{ rdRule }};"><span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color: {{ rdFaint }};">ENGLISH · ESV</span><span style="font-size:9.5px; color: {{ rdFaint }};">locked to verse</span></div>
+              <div id="biA" onScroll="{{ biScroll }}" style="height:225px; overflow-y:auto; padding:8px 12px; box-sizing:border-box;">
+                <sc-for list="{{ biRows }}" as="r" hint-placeholder-count="9">
+                  <div onClick="{{ r.tap }}" style="padding:6px 8px 6px 10px; border-radius:8px; cursor:pointer; background: {{ r.bg }}; border-left: {{ r.bl }};">
+                    <div style="font-family: {{ rdFace }}; font-size:13.5px; color: {{ rdInk }}; line-height:1.65;"><span style="font-size:9px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">{{ r.n }}</span>{{ r.en }}</div>
+                    <sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#DC74A0; margin-top:3px;">✎ {{ r.note }}</div></sc-if>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:center; gap:4px; padding:6px 0; background: {{ rdChip }}; border-top:1px solid {{ rdRule }}; border-bottom:1px solid {{ rdRule }}; cursor:grab;"><span style="width:34px; height:4px; border-radius:99px; background: {{ rdRule }};"></span></div>
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 14px; border-bottom:1px solid {{ rdRule }};"><span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color: {{ rdFaint }};">ESPAÑOL · NBLA</span><span style="font-size:9.5px; color: {{ rdFaint }};">se desplazan juntos</span></div>
+              <div id="biB" onScroll="{{ biScroll }}" style="height:225px; overflow-y:auto; padding:8px 12px; box-sizing:border-box;">
+                <sc-for list="{{ biRows }}" as="r" hint-placeholder-count="9">
+                  <div onClick="{{ r.tap }}" style="padding:6px 8px 6px 10px; border-radius:8px; cursor:pointer; background: {{ r.bg }}; border-left: {{ r.bl }};">
+                    <div style="font-family: {{ rdFace }}; font-size:13.5px; color: {{ rdInk }}; line-height:1.65;"><span style="font-size:9px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">{{ r.n }}</span>{{ r.es }}</div>
+                    <sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#DC74A0; margin-top:3px;">✎ {{ r.note }}</div></sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="text-align:center; font-size:10px; color: {{ rdFaint }}; margin-top:9px;">One selection, both panes — his marks live on the verse, not the translation.</div>
+          </sc-if>
+
+          <sc-if value="{{ biOff }}" hint-placeholder-val="{{ true }}">
+          <div style="background: {{ rdCard }}; border-radius:18px; padding:16px 14px; margin-top:12px; box-shadow: {{ rdShadow }};">
+            <sc-if value="{{ hasHead }}" hint-placeholder-val="{{ false }}"><div style="font-family: {{ rdFace }}; font-style:italic; font-size:12px; color: {{ rdFaint }}; border-bottom:1px solid {{ rdRule }}; padding:0 9px 10px; margin-bottom:8px; line-height:1.6;">{{ chHead }}</div></sc-if>
             <sc-for list="{{ spVerses }}" as="v" hint-placeholder-count="9">
-              <div onClick="{{ v.tap }}" style="padding:7px 9px 7px 11px; border-radius:9px; cursor:pointer; transition:background .2s, box-shadow .2s; background: {{ v.bg }}; box-shadow: {{ v.sh }}; border-left: {{ v.bl }};">
-                <div style="font-size:14.5px; color:#232227; line-height:1.75;"><span style="font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:6px;">{{ v.n }}</span>{{ v.t }}</div>
-                <sc-if value="{{ v.hasTag }}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:600; margin-top:4px; padding:2px 8px; border-radius:99px; background:#FFFFFF; color: {{ v.tagCol }};"><span style="width:6px; height:6px; border-radius:50%; background: {{ v.tagCol }};"></span>{{ v.tag }}</div></sc-if>
-                <sc-if value="{{ v.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#8C2F51; margin-top:4px;">✎ {{ v.note }}</div></sc-if>
-                <sc-if value="{{ v.hasXr }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#66646C; margin-top:4px;"><span style="font-weight:700; color:#8C2F51;">⇄ TSK</span> {{ v.xr }}</div></sc-if>
-                <sc-if value="{{ v.hasSugg }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:7px; margin-top:6px;"><span style="display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:600; padding:2.5px 9px; border-radius:99px; border:1.5px dashed {{ v.suggCol }}; color: {{ v.suggCol }}; background:#FFFFFF;"><span style="width:6px; height:6px; border-radius:50%; border:1.5px solid {{ v.suggCol }}; box-sizing:border-box;"></span>Suggested · {{ v.suggLab }}</span><span onClick="{{ v.sAcc }}" style="width:23px; height:23px; border-radius:50%; background:#EAF3ED; color:#3E7A54; display:inline-flex; align-items:center; justify-content:center; font-size:11px; cursor:pointer; transition:transform .15s;" style-hover="transform:scale(1.15);">✓</span><span onClick="{{ v.sDis }}" style="width:23px; height:23px; border-radius:50%; background:#F2F1F2; color:#96949B; display:inline-flex; align-items:center; justify-content:center; font-size:10px; cursor:pointer; transition:transform .15s;" style-hover="transform:scale(1.15);">✕</span></div></sc-if>
+              <div onClick="{{ v.tap }}" style="padding:7px 9px 7px 11px; border-radius:9px; cursor:pointer; transition:background .2s, box-shadow .2s, opacity .4s; background: {{ v.bg }}; box-shadow: {{ v.sh }}; border-left: {{ v.bl }}; opacity: {{ v.op }}; margin-top: {{ v.stMt }};">
+                <sc-if value="{{ v.notPoem }}" hint-placeholder-val="{{ true }}"><div style="font-family: {{ rdFace }}; font-size: {{ rdFs }}; color: {{ rdInk }}; line-height:1.75; text-align: {{ rdAlign }}; hyphens: {{ rdHyph }};"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color: {{ v.nCol }}; vertical-align:super; margin-right:6px;">{{ v.n }}</span>{{ v.t }}<sc-if value="{{ v.hasSup }}" hint-placeholder-val="{{ false }}"><sup onClick="{{ v.supTap }}" style="font-size:10px; font-weight:700; color: {{ v.supCol }}; text-decoration: {{ v.supUnd }}; cursor:pointer; margin-left:3px;">{{ v.supL }}</sup></sc-if></div></sc-if>
+                <sc-if value="{{ v.isPoem }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; gap:7px;">
+                    <span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color: {{ v.nCol }}; margin-top:3px; flex:none;">{{ v.n }}</span>
+                    <div style="flex:1;">
+                      <sc-for list="{{ v.lines }}" as="ln" hint-placeholder-count="2">
+                        <div style="font-family: {{ rdFace }}; font-size: {{ rdFs }}; color: {{ rdInk }}; line-height:1.7; padding-left:1.5em; text-indent:-1.5em;">{{ ln.x }}</div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ v.tipOn }}" hint-placeholder-val="{{ false }}">
+                  <div onClick="{{ v.tipTap }}" style="margin-top:7px; background: {{ rdChip }}; border:1px solid {{ rdRule }}; border-radius:11px; padding:9px 12px; animation:fadeUp .2s ease both; cursor:pointer; max-width:340px;">
+                    <div style="font-size:8.5px; letter-spacing:0.1em; font-weight:700; color: {{ v.supCol }};">{{ v.tipKind }}</div>
+                    <div style="font-size:12px; font-weight:600; color: {{ rdInk }}; margin-top:3px;">{{ v.tipRef }}</div>
+                    <sc-if value="{{ v.tipStage1 }}" hint-placeholder-val="{{ true }}"><div style="font-size:10px; color: {{ rdFaint }}; margin-top:3px;">tap again for the verse</div></sc-if>
+                    <sc-if value="{{ v.tipStage2 }}" hint-placeholder-val="{{ false }}"><div style="font-family: {{ rdFace }}; font-size:12.5px; color: {{ rdSub }}; font-style:italic; line-height:1.65; margin-top:5px;">{{ v.tipTxt }}</div><div style="display:inline-flex; margin-top:8px; font-family:'Familjen Grotesk',sans-serif; font-size:10.5px; font-weight:600; color:#FFFFFF; background:#A63D63; border-radius:99px; padding:4px 12px;">Open ›</div></sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ v.hasTag }}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:600; margin-top:4px; padding:2px 8px; border-radius:99px; background: {{ rdChip }}; border:1px solid {{ rdRule }}; color: {{ v.tagCol }};"><span style="width:6px; height:6px; border-radius:50%; background: {{ v.tagCol }};"></span>{{ v.tag }}</div></sc-if>
+                <sc-if value="{{ v.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color: {{ v.nCol }}; margin-top:4px;">✎ {{ v.note }}</div></sc-if>
+                <sc-if value="{{ v.hasXr }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color: {{ rdSub }}; margin-top:4px;"><span style="font-weight:700; color: {{ v.nCol }};">⇄ TSK</span> {{ v.xr }}</div></sc-if>
+                <sc-if value="{{ v.hasSugg }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:7px; margin-top:6px;"><span style="display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:600; padding:2.5px 9px; border-radius:99px; border:1.5px dashed {{ v.suggCol }}; color: {{ v.suggCol }}; background: {{ rdCard }};"><span style="width:6px; height:6px; border-radius:50%; border:1.5px solid {{ v.suggCol }}; box-sizing:border-box;"></span>Suggested · {{ v.suggLab }}</span><span onClick="{{ v.sAcc }}" style="width:23px; height:23px; border-radius:50%; background:#EAF3ED; color:#3E7A54; display:inline-flex; align-items:center; justify-content:center; font-size:11px; cursor:pointer; transition:transform .15s;" style-hover="transform:scale(1.15);">✓</span><span onClick="{{ v.sDis }}" style="width:23px; height:23px; border-radius:50%; background:#F2F1F2; color:#96949B; display:inline-flex; align-items:center; justify-content:center; font-size:10px; cursor:pointer; transition:transform .15s;" style-hover="transform:scale(1.15);">✕</span></div></sc-if>
               </div>
             </sc-for>
           </div>
+          </sc-if>
           <button onClick="{{ spDayTap }}" style="width:100%; margin-top:14px; font-family:'Familjen Grotesk',sans-serif; font-size:13.5px; font-weight:600; border:none; border-radius:12px; padding:13px 0; cursor:pointer; transition:background .3s; background: {{ dayBg }}; color: {{ dayCol }};">{{ dayTxt }}</button>
-          <div style="text-align:center; font-size:10.5px; color:#96949B; margin-top:12px; line-height:1.6;">ESV text via Crossway API · cross-references from the Treasury of Scripture Knowledge<br>offline once loaded · long-press a word for word study</div>
+          <div style="text-align:center; font-size:10.5px; color: {{ rdFaint }}; margin-top:12px; line-height:1.6;">ESV text via Crossway API · cross-references from the Treasury of Scripture Knowledge<br>offline once loaded · long-press a word for word study · Open in Logos ›</div>
         </div>
       </sc-if>
 
       <sc-if value="{{ spBarOn }}" hint-placeholder-val="{{ false }}">
-        <div style="position:absolute; left:0; right:0; bottom:0; z-index:62; background:#FFFFFF; border-radius:24px 24px 0 0; padding:16px 20px 34px; box-shadow:0 -12px 40px rgba(35,34,39,0.18); animation:sheetUp .3s cubic-bezier(.3,.9,.3,1) both;">
+        <div style="position:absolute; left:0; right:0; bottom:0; z-index:62; background: {{ rdCard }}; border-radius:24px 24px 0 0; padding:16px 20px 34px; box-shadow:0 -12px 40px rgba(20,15,18,0.3); animation:sheetUp .3s cubic-bezier(.3,.9,.3,1) both;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:10.5px; letter-spacing:0.14em; font-weight:700; color:#8C2F51;">JUDGES 4:{{ spSelN }} SELECTED</span>
-            <div onClick="{{ spSelClear }}" style="width:26px; height:26px; border-radius:50%; background:#F2F1F2; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px; color:#66646C;">✕</div>
+            <span style="font-size:10.5px; letter-spacing:0.14em; font-weight:700; color:#A63D63;">{{ spSelRef }} SELECTED</span>
+            <div onClick="{{ spSelClear }}" style="width:26px; height:26px; border-radius:50%; background: {{ rdChip }}; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px; color: {{ rdSub }};">✕</div>
           </div>
           <sc-if value="{{ barAct }}" hint-placeholder-val="{{ true }}">
             <div style="display:flex; gap:6px; margin-top:14px;">
-              <div onClick="{{ spHlMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background:#FAF9FA;" style-hover="background:#F6E3EB;"><div style="display:flex; justify-content:center; gap:2.5px;"><span style="width:9px; height:9px; border-radius:50%; background:#5E9B72;"></span><span style="width:9px; height:9px; border-radius:50%; background:#A63D63;"></span></div><div style="font-size:10px; font-weight:600; color:#232227; margin-top:5px;">Highlight</div></div>
-              <div onClick="{{ spNoteMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background:#FAF9FA;" style-hover="background:#F6E3EB;"><div style="font-size:14px; line-height:11px; color:#8C2F51;">✎</div><div style="font-size:10px; font-weight:600; color:#232227; margin-top:5px;">Note</div></div>
-              <div onClick="{{ spLinkMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background:#FAF9FA;" style-hover="background:#F6E3EB;"><div style="font-size:13px; line-height:11px; color:#8C2F51;">⇄</div><div style="font-size:10px; font-weight:600; color:#232227; margin-top:5px;">Link</div></div>
-              <div onClick="{{ spWsOpen }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background:#FAF9FA;" style-hover="background:#F6E3EB;"><div style="font-size:12px; line-height:11px; font-weight:700; color:#8C2F51;">אב</div><div style="font-size:10px; font-weight:600; color:#232227; margin-top:5px;">Word</div></div>
-              <div onClick="{{ spAskMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background:#FAF9FA;" style-hover="background:#F6E3EB;"><div style="font-size:13px; line-height:11px; color:#8C2F51;">?</div><div style="font-size:10px; font-weight:600; color:#232227; margin-top:5px;">Ask</div></div>
+              <div onClick="{{ spHlMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background: {{ rdChip }};" style-hover="background:#F6E3EB;"><div style="display:flex; justify-content:center; gap:2.5px;"><span style="width:9px; height:9px; border-radius:50%; background:#5E9B72;"></span><span style="width:9px; height:9px; border-radius:50%; background:#A63D63;"></span></div><div style="font-size:10px; font-weight:600; color: {{ rdInk }}; margin-top:5px;">Highlight</div></div>
+              <div onClick="{{ spNoteMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background: {{ rdChip }};" style-hover="background:#F6E3EB;"><div style="font-size:14px; line-height:11px; color:#8C2F51;">✎</div><div style="font-size:10px; font-weight:600; color: {{ rdInk }}; margin-top:5px;">Note</div></div>
+              <div onClick="{{ spLinkMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background: {{ rdChip }};" style-hover="background:#F6E3EB;"><div style="font-size:13px; line-height:11px; color:#8C2F51;">⇄</div><div style="font-size:10px; font-weight:600; color: {{ rdInk }}; margin-top:5px;">Link</div></div>
+              <div onClick="{{ spWsOpen }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background: {{ rdChip }};" style-hover="background:#F6E3EB;"><div style="font-size:12px; line-height:11px; font-weight:700; color:#8C2F51;">אב</div><div style="font-size:10px; font-weight:600; color: {{ rdInk }}; margin-top:5px;">Word</div></div>
+              <div onClick="{{ spAskMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background: {{ rdChip }};" style-hover="background:#F6E3EB;"><div style="font-size:13px; line-height:11px; color:#8C2F51;">?</div><div style="font-size:10px; font-weight:600; color: {{ rdInk }}; margin-top:5px;">Ask</div></div>
             </div>
             <div style="font-size:10px; color:#96949B; margin-top:10px;">Memorize &amp; copy live under ⋯ · highlights, notes and links cost zero AI</div>
           </sc-if>
@@ -1307,7 +1335,7 @@
             <div style="font-size:11px; color:#66646C; margin-top:12px;">Colors mean something — pick the meaning, not the shade.</div>
             <div style="display:flex; gap:5px; margin-top:10px;">
               <sc-for list="{{ hlOpts }}" as="h" hint-placeholder-count="6">
-                <div onClick="{{ h.tap }}" style="flex:1; text-align:center; cursor:pointer;"><div style="height:34px; border-radius:10px; border:1.5px solid {{ h.dot }}; background: {{ h.bg }};" style-hover="transform:scale(1.05);"></div><div style="font-size:8.5px; font-weight:600; color:#66646C; margin-top:4px; line-height:1.2;">{{ h.lab }}</div></div>
+                <div onClick="{{ h.tap }}" style="flex:1; text-align:center; cursor:pointer;"><div style="height:34px; border-radius:10px; border:1.5px solid {{ h.dot }}; background: {{ h.bg }};" style-hover="transform:scale(1.05);"></div><div style="font-size:8.5px; font-weight:600; color: {{ rdSub }}; margin-top:4px; line-height:1.2;">{{ h.lab }}</div></div>
               </sc-for>
             </div>
           </sc-if>
@@ -1410,6 +1438,57 @@
         </div>
       </sc-if>
 
+      <sc-if value="{{ audOn }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; left:14px; right:14px; bottom:170px; z-index:61; background: {{ rdCard }}; border:1px solid {{ rdRule }}; border-radius:16px; padding:10px 12px; box-shadow:0 12px 32px rgba(20,15,18,0.28); display:flex; align-items:center; gap:9px; animation:fadeUp .3s ease both;">
+          <div onClick="{{ audTog }}" style="width:36px; height:36px; border-radius:50%; background:#A63D63; color:#FFFFFF; display:flex; align-items:center; justify-content:center; font-size:10px; letter-spacing:-1px; cursor:pointer; flex:none;" style-hover="background:#8C2F51;">{{ audPlayIco }}</div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600; color: {{ rdInk }}; white-space:nowrap; overflow:hidden;">{{ audLab }}</div>
+            <div style="font-size:10px; color: {{ rdFaint }};">following along · {{ audVN }}</div>
+          </div>
+          <div onClick="{{ audPrev }}" style="width:28px; height:28px; border-radius:50%; background: {{ rdChip }}; color: {{ rdInk }}; display:flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer; flex:none;">‹</div>
+          <div onClick="{{ audNext }}" style="width:28px; height:28px; border-radius:50%; background: {{ rdChip }}; color: {{ rdInk }}; display:flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer; flex:none;">›</div>
+          <div onClick="{{ audSpdTap }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:10.5px; font-weight:700; color: {{ rdInk }}; background: {{ rdChip }}; border-radius:99px; padding:6px 9px; cursor:pointer; flex:none; font-variant-numeric:tabular-nums;">{{ audSpdLab }}</div>
+          <div onClick="{{ audClose }}" style="width:24px; height:24px; border-radius:50%; color: {{ rdFaint }}; display:flex; align-items:center; justify-content:center; font-size:11px; cursor:pointer; flex:none;">✕</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ typeOn }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ typeClose }}" style="position:absolute; inset:0; z-index:67; background:rgba(15,11,14,0.5);"></div>
+        <div data-screen-label="Type settings" style="position:absolute; left:0; right:0; bottom:0; z-index:68; background: {{ rdCard }}; border-radius:28px 28px 0 0; padding:24px 24px 40px; animation:sheetUp .35s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="width:40px; height:4px; border-radius:99px; background: {{ rdRule }}; margin:0 auto 18px;"></div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color: {{ rdInk }};">Type &amp; theme</div>
+          <div style="font-size:12px; color: {{ rdFaint }}; margin-top:3px;">The typography is the product — set it once, read for years.</div>
+          <div style="display:flex; align-items:center; gap:12px; margin-top:16px;">
+            <div onClick="{{ sizeDec }}" style="width:44px; height:38px; border-radius:11px; border:1px solid {{ rdRule }}; background: {{ rdChip }}; color: {{ rdInk }}; display:flex; align-items:center; justify-content:center; font-family:'Literata',serif; font-size:13px; cursor:pointer;">A−</div>
+            <div style="flex:1; display:flex; justify-content:center; gap:7px;">
+              <sc-for list="{{ sizeDots }}" as="d" hint-placeholder-count="5"><span style="width:9px; height:9px; border-radius:50%; background: {{ d.c }}; transition:background .2s;"></span></sc-for>
+            </div>
+            <div onClick="{{ sizeInc }}" style="width:44px; height:38px; border-radius:11px; border:1px solid {{ rdRule }}; background: {{ rdChip }}; color: {{ rdInk }}; display:flex; align-items:center; justify-content:center; font-family:'Literata',serif; font-size:17px; cursor:pointer;">A+</div>
+          </div>
+          <div style="display:flex; gap:6px; background: {{ rdChip }}; border:1px solid {{ rdRule }}; border-radius:12px; padding:4px; margin-top:12px;">
+            <sc-for list="{{ serifRows }}" as="o" hint-placeholder-count="2">
+              <div onClick="{{ o.tap }}" style="flex:1; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600; padding:8px 0; border-radius:9px; cursor:pointer; transition:background .2s; background: {{ o.bg }}; color: {{ o.col }};">{{ o.lab }}</div>
+            </sc-for>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px;">
+            <div>
+              <div style="font-size:13px; font-weight:600; color: {{ rdInk }};">Justified + hyphenated</div>
+              <div style="font-size:10.5px; color: {{ rdFaint }};">set like a printed page</div>
+            </div>
+            <div onClick="{{ justTap }}" style="width:44px; height:26px; border-radius:99px; position:relative; cursor:pointer; transition:background .25s; background: {{ justBg }};"><span style="position:absolute; top:2px; width:22px; height:22px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 4px rgba(0,0,0,0.2); transition:left .25s; left: {{ justX }};"></span></div>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:16px;">
+            <sc-for list="{{ thOpts }}" as="t" hint-placeholder-count="3">
+              <div onClick="{{ t.tap }}" style="flex:1; text-align:center; cursor:pointer;">
+                <div style="height:52px; border-radius:13px; border:2px solid {{ t.ring }}; background: {{ t.sw }}; display:flex; align-items:center; justify-content:center; transition:border-color .2s;"><span style="font-family:'Literata',serif; font-size:16px; color: {{ t.swInk }};">Aa</span></div>
+                <div style="font-size:10.5px; font-weight:600; color: {{ rdSub }}; margin-top:6px;">{{ t.lab }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:10px; color: {{ rdFaint }}; margin-top:14px; text-align:center;">Night is a designed surface, not an inversion — highlight tints are re-tuned for it.</div>
+        </div>
+      </sc-if>
+
       <sc-if value="{{ uniOn }}" hint-placeholder-val="{{ false }}">
         <div data-screen-label="Today's study" style="position:absolute; inset:0; z-index:56; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 200px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
           <div style="display:flex; align-items:center; gap:12px;">
@@ -1459,7 +1538,7 @@
           <div style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">TODAY'S READING · THE ASSIGNMENT</div>
-              <span style="font-size:11px; color:#96949B;">≈ 12 min</span>
+              <div style="display:flex; align-items:center; gap:7px;"><span style="font-size:11px; color:#96949B;">≈ 12 min</span><span onClick="{{ audFromCard }}" style="width:26px; height:26px; border-radius:50%; background:#F6E3EB; color:#8C2F51; display:inline-flex; align-items:center; justify-content:center; font-size:9px; cursor:pointer;" style-hover="background:#F0D3E0;">▶</span></div>
             </div>
             <div style="font-family:'Familjen Grotesk',sans-serif; font-size:17px; font-weight:600; color:#232227; margin-top:7px;">Judges 4–5 · Deborah &amp; Barak</div>
             <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
@@ -1566,6 +1645,251 @@
         </div>
       </sc-if>
 
+      <sc-if value="{{ nbOn }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Passage Notebook" style="position:absolute; inset:0; z-index:58; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 200px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ nbClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">HIS LAYER · ANCHORED TO PASSAGES</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">Notebook</div>
+            </div>
+            <span style="font-size:11px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 11px; border-radius:99px; flex:none;">34 notes</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:12px; padding:11px 14px; margin-top:16px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#96949B" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.8-3.8"></path></svg>
+            <span style="font-size:12.5px; color:#96949B;">Search Scripture, notes, highlights, questions, sources…</span>
+          </div>
+          <div style="display:flex; gap:6px; margin-top:12px;">
+            <sc-for list="{{ nbViews }}" as="o" hint-placeholder-count="2">
+              <div onClick="{{ o.tap }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:7px 14px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .2s; background: {{ o.bg }}; color: {{ o.col }};">{{ o.lab }}</div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ nbAll }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; gap:5px; margin-top:10px; flex-wrap:wrap;">
+              <sc-for list="{{ nbKinds }}" as="k" hint-placeholder-count="6">
+                <div onClick="{{ k.tap }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:10.5px; font-weight:600; padding:5px 11px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .2s; background: {{ k.bg }}; color: {{ k.col }};">{{ k.lab }}</div>
+              </sc-for>
+            </div>
+            <div style="display:flex; align-items:center; gap:7px; margin-top:10px;">
+              <sc-for list="{{ nbCats }}" as="c" hint-placeholder-count="6">
+                <span onClick="{{ c.tap }}" style="width:18px; height:18px; border-radius:6px; background: {{ c.dot }}; cursor:pointer; box-shadow:0 0 0 2px {{ c.ring }};" style-hover="transform:scale(1.15);"></span>
+              </sc-for>
+              <span style="font-size:10.5px; color:#96949B; margin-left:4px;">{{ nbCatLab }}</span>
+            </div>
+            <sc-for list="{{ nbGroups }}" as="g" hint-placeholder-count="3">
+              <div style="margin-top:16px;">
+                <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B; padding:0 2px;">{{ g.pass }}</div>
+                <div style="display:grid; gap:1px; background:#E4E2E6; border:1px solid #E4E2E6; border-radius:14px; overflow:hidden; margin-top:8px;">
+                  <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+                    <div style="background:#FFFFFF; padding:12px 14px;">
+                      <div style="display:flex; align-items:center; gap:7px;">
+                        <span style="font-family:'Familjen Grotesk',sans-serif; font-size:9.5px; font-weight:700; letter-spacing:0.08em; color:#8C2F51; background:#F6E3EB; padding:2.5px 9px; border-radius:99px;">{{ it.k }}</span>
+                        <sc-if value="{{ it.catOn }}" hint-placeholder-val="{{ false }}"><span style="width:9px; height:9px; border-radius:3px; background: {{ it.catDot }};"></span></sc-if>
+                        <span style="flex:1; font-size:11px; font-weight:600; color:#454349;">{{ it.v }}</span>
+                        <sc-if value="{{ it.oqOn }}" hint-placeholder-val="{{ false }}"><span style="font-size:8.5px; font-weight:700; letter-spacing:0.06em; color:#B4533F; border:1px solid #B4533F55; border-radius:99px; padding:2px 7px;">OPEN</span></sc-if>
+                      </div>
+                      <div style="font-size:12.5px; color:#454349; line-height:1.6; margin-top:6px; font-style:italic;">{{ it.x }}</div>
+                      <sc-if value="{{ it.oqOn }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#96949B; margin-top:5px;">{{ it.re }}</div></sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+            <div style="font-size:10.5px; color:#96949B; margin-top:14px; text-align:center; line-height:1.6;">Voice first — spoken notes transcribe and propose their kind.<br>Ask exchanges live here too, on the verse where you asked.</div>
+          </sc-if>
+          <sc-if value="{{ nbOq }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:11.5px; color:#66646C; margin-top:14px; line-height:1.6;">Questions you wrote and never resolved. They resurface when you return to the passage — growth made visible, nothing scored.</div>
+            <div style="display:grid; gap:10px; margin-top:12px;">
+              <sc-for list="{{ nbOqRows }}" as="q" hint-placeholder-count="4">
+                <div style="background:#FFFFFF; border-radius:14px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+                  <div style="font-size:13.5px; font-weight:600; color:#232227; line-height:1.5;">{{ q.q }}</div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span style="font-size:10.5px; color:#96949B;">{{ q.at }}</span>
+                    <span style="font-size:10px; font-weight:600; color:#8C2F51;">{{ q.re }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ memOn }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Memory" style="position:absolute; inset:0; z-index:58; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 200px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ memClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">PRIVATE REINFORCEMENT · BY OCCASION</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">Memory</div>
+            </div>
+            <span style="font-size:11px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 11px; border-radius:99px; flex:none;">{{ memDueN }} due</span>
+          </div>
+          <div style="background:#232227; border-radius:20px; padding:20px; margin-top:16px;">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#DCA8BE;">REVIEW · {{ memOcc }}</div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:18px; font-weight:600; color:#FFFFFF; line-height:1.45; margin-top:10px;">{{ memPrompt }}</div>
+            <sc-if value="{{ memHid }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ memRevTap }}" style="width:100%; margin-top:16px; font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#FFFFFF; background:#A63D63; border:none; border-radius:11px; padding:12px 0; cursor:pointer;" style-hover="background:#8C2F51;">Reveal the verse</button>
+              <div style="font-size:10px; color:#837F8B; margin-top:9px; text-align:center;">say it aloud first — rehearsal for real conversations, not flashcards</div>
+            </sc-if>
+            <sc-if value="{{ memRev }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#2A272E; border-radius:13px; padding:14px 16px; margin-top:14px; animation:fadeUp .25s ease both;">
+                <div style="font-size:10px; letter-spacing:0.12em; font-weight:700; color:#DC74A0;">{{ memRef }}</div>
+                <div style="font-family:'Literata',serif; font-size:15px; color:#E9E6EC; font-style:italic; line-height:1.7; margin-top:6px;">“{{ memVtxt }}”</div>
+                <div style="font-size:11px; color:#C4C0C9; line-height:1.55; margin-top:8px;">{{ memWhy }}</div>
+              </div>
+              <div style="display:flex; gap:10px; margin-top:12px; animation:fadeUp .25s ease both .05s;">
+                <button onClick="{{ memGot }}" style="flex:1; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#FFFFFF; background:#3E7A54; border:none; border-radius:10px; padding:11px 0; cursor:pointer;">Got it — space it out</button>
+                <button onClick="{{ memAgain }}" style="flex:1; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#F2F1F2; background:transparent; border:1px solid #4A4550; border-radius:10px; padding:11px 0; cursor:pointer;">Show again this week</button>
+              </div>
+            </sc-if>
+          </div>
+          <div style="margin-top:16px;">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B; padding:0 2px;">BY OCCASION — NOT BY REFERENCE</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:9px;">
+              <sc-for list="{{ memOccs }}" as="o" hint-placeholder-count="6">
+                <div style="background:#FFFFFF; border-radius:13px; padding:12px 14px; box-shadow:0 2px 8px rgba(35,34,39,0.05); cursor:pointer;" style-hover="background:#FAF9FA;">
+                  <div style="font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#232227;">{{ o.lab }}</div>
+                  <div style="font-size:10.5px; color:#96949B; margin-top:2px;">{{ o.n }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:14px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">WEEKLY REVIEW · SUNDAY · 2 MIN</div>
+              <span style="font-size:10px; color:#96949B;">no verdicts</span>
+            </div>
+            <div style="font-size:12.5px; color:#454349; line-height:1.65; margin-top:8px;">This week: 9 marks accepted · 1 new question opened · Psalm 46:1 used once in conversation. Next Sunday it asks you to use the verse, not recite it.</div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; background:#FFFFFF; border-radius:14px; padding:13px 16px; margin-top:10px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#232227;">End of term · the summary</div>
+              <div style="font-size:11px; color:#66646C; margin-top:2px;">What was covered, marked most, still open — files into the Transcript</div>
+            </div>
+            <span style="font-size:14px; color:#C9C7CD;">›</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ serOn }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Church series" style="position:absolute; inset:0; z-index:59; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 200px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ serClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">CHURCH · THE SUNDAY TRACK</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#232227; letter-spacing:-0.02em;">My church started a series</div>
+            </div>
+          </div>
+          <sc-if value="{{ ser0 }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:12.5px; color:#66646C; line-height:1.65; margin-top:14px;">Your church announces little ahead — the first sermon explains where the series is going. Tell the app what you heard, any way you like:</div>
+            <div style="display:grid; gap:10px; margin-top:14px;">
+              <div onClick="{{ serPick }}" style="background:#FFFFFF; border-radius:16px; padding:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer; display:flex; align-items:center; gap:14px;" style-hover="background:#FAF9FA;">
+                <div style="width:44px; height:44px; border-radius:50%; background:#F6E3EB; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"></path></svg></div>
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#232227;">Speak it</div><div style="font-size:11.5px; color:#66646C; margin-top:2px;">“Pastor started Galatians today, sounded like eight weeks…”</div></div>
+                <span style="font-size:14px; color:#C9C7CD;">›</span>
+              </div>
+              <div onClick="{{ serPick }}" style="background:#FFFFFF; border-radius:16px; padding:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer; display:flex; align-items:center; gap:14px;" style-hover="background:#FAF9FA;">
+                <div style="width:44px; height:44px; border-radius:50%; background:#F6E3EB; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5a2 2 0 0 1 2-2h1.6l1.4-2h6l1.4 2H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"></path><circle cx="12" cy="12.5" r="3.4"></circle></svg></div>
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#232227;">Photograph the slides</div><div style="font-size:11.5px; color:#66646C; margin-top:2px;">multi-photo — the app parses title, outline, passages</div></div>
+                <span style="font-size:14px; color:#C9C7CD;">›</span>
+              </div>
+              <div onClick="{{ serPick }}" style="background:#FFFFFF; border-radius:16px; padding:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer; display:flex; align-items:center; gap:14px;" style-hover="background:#FAF9FA;">
+                <div style="width:44px; height:44px; border-radius:50%; background:#F6E3EB; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2.5" width="8" height="4" rx="1.2"></rect><path d="M16 4.5h2a2 2 0 0 1 2 2V19a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 19V6.5a2 2 0 0 1 2-2h2M8.5 11h7M8.5 15h7"></path></svg></div>
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#232227;">Paste a transcript</div><div style="font-size:11.5px; color:#66646C; margin-top:2px;">from the church's podcast or your own recording</div></div>
+                <span style="font-size:14px; color:#C9C7CD;">›</span>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ ser1 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+              <span style="font-size:10px; letter-spacing:0.14em; font-weight:700; color:#8C2F51;">PARSED FROM YOUR PHOTOS</span>
+              <span style="flex:1; height:1px; background:#E4E2E6;"></span>
+              <span style="font-size:10px; color:#96949B;">confirm before it commits</span>
+            </div>
+            <div style="display:grid; gap:1px; background:#E4E2E6; border:1px solid #E4E2E6; border-radius:16px; overflow:hidden; margin-top:10px;">
+              <div style="background:#FFFFFF; padding:13px 16px; display:flex; justify-content:space-between; align-items:center;"><div><div style="font-size:10px; font-weight:700; letter-spacing:0.1em; color:#96949B;">SERIES TITLE</div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:14.5px; font-weight:600; color:#232227; margin-top:3px;">Sons, Not Slaves — Galatians</div></div><span style="font-size:13px; color:#A63D63;">✎</span></div>
+              <div style="background:#FFFFFF; padding:13px 16px; display:flex; justify-content:space-between; align-items:center;"><div><div style="font-size:10px; font-weight:700; letter-spacing:0.1em; color:#96949B;">EXPECTED LENGTH</div><div style="font-size:13px; color:#454349; margin-top:3px;">≈ 8 Sundays · pastor said “through the fall”</div></div><span style="font-size:13px; color:#A63D63;">✎</span></div>
+              <div style="background:#FFFFFF; padding:13px 16px; display:flex; justify-content:space-between; align-items:center;"><div style="flex:1;"><div style="font-size:10px; font-weight:700; letter-spacing:0.1em; color:#96949B;">PASSAGES</div><div style="display:flex; gap:5px; margin-top:6px; flex-wrap:wrap;"><span style="font-size:10.5px; font-weight:600; color:#8C2F51; background:#F6E3EB; border-radius:99px; padding:3px 10px;">Gal 1–2 ✓ preached</span><span style="font-size:10.5px; font-weight:600; color:#8C2F51; background:#F6E3EB; border-radius:99px; padding:3px 10px;">Gal 3 · next</span><span style="font-size:10.5px; font-weight:600; color:#66646C; background:#F2F1F2; border-radius:99px; padding:3px 10px;">Gal 4–6</span></div></div><span style="font-size:13px; color:#A63D63;">✎</span></div>
+              <div style="background:#FFFFFF; padding:13px 16px; display:flex; justify-content:space-between; align-items:center;"><div><div style="font-size:10px; font-weight:700; letter-spacing:0.1em; color:#96949B;">THEMES</div><div style="font-size:12.5px; color:#454349; margin-top:3px;">justification · adoption · the flesh and the Spirit</div></div><span style="font-size:13px; color:#A63D63;">✎</span></div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:12px;">
+              <button onClick="{{ serConfirm }}" style="flex:1.6; font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#FFFFFF; background:#A63D63; border:none; border-radius:11px; padding:12px 0; cursor:pointer;" style-hover="background:#8C2F51;">Looks right — start the track</button>
+              <button onClick="{{ serReset }}" style="flex:1; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#66646C; background:transparent; border:1px solid #D9D7DC; border-radius:11px; padding:12px 0; cursor:pointer;" style-hover="background:#FAF9FA;">Start over</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{ ser2 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:10px; background:#EAF3ED; border-radius:14px; padding:13px 16px; margin-top:14px; animation:fadeUp .3s ease both;">
+              <div style="width:30px; height:30px; border-radius:50%; background:#FFFFFF; display:flex; align-items:center; justify-content:center; color:#3E7A54; font-size:13px; flex:none;">✓</div>
+              <div style="font-size:12.5px; font-weight:600; color:#2C5A3E;">Sunday track live — it runs beside the term, never instead of it.</div>
+            </div>
+            <div style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); animation:fadeUp .3s ease both .06s;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">SUNDAY · SONS, NOT SLAVES</div>
+                <span style="font-size:9.5px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:2.5px 9px; border-radius:99px;">wk 2 of ≈8</span>
+              </div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:16px; font-weight:600; color:#232227; margin-top:7px;">This week: Galatians 3 — faith and the law</div>
+              <div style="font-size:12px; color:#66646C; line-height:1.55; margin-top:4px;">The passage, its context, and three questions to bring back — you arrive next Sunday primed. A voice note during the sermon lands in the Notebook, tagged to Galatians 3.</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding:0 4px;">
+              <span style="font-size:11px; color:#96949B;">Series running long? <span style="color:#8C2F51; font-weight:600;">Promote it to a term ›</span></span>
+              <button onClick="{{ serClose }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600; color:#66646C; background:transparent; border:1px solid #D9D7DC; border-radius:9px; padding:8px 18px; cursor:pointer;" style-hover="background:#FAF9FA;">Done</button>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ setOn }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Spirit settings" style="position:absolute; inset:0; z-index:58; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 200px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ setClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">SMALL SCREEN, BIG TRUST</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">Settings</div>
+            </div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">TRANSLATION</div>
+            <div style="display:flex; gap:6px; margin-top:9px;">
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; color:#FFFFFF; background:#A63D63; border-radius:99px; padding:6px 14px;">ESV — primary</span>
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; color:#66646C; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:6px 14px;">NBLA — linked pane</span>
+            </div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:10px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">POSTURE — HOW DOCTRINE IS TAUGHT</div>
+            <div style="display:flex; gap:6px; margin-top:9px;">
+              <sc-for list="{{ postRows }}" as="p" hint-placeholder-count="3">
+                <div onClick="{{ p.tap }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 13px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .2s; background: {{ p.bg }}; color: {{ p.col }};">{{ p.lab }}</div>
+              </sc-for>
+            </div>
+            <div style="font-size:11px; color:#96949B; line-height:1.6; margin-top:9px;">“Compare” renders Westminster and the 1689 each at full strength, with the real division named — never a mush of both.</div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:10px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">OWNERSHIP</div>
+            <button onClick="{{ expTap }}" style="width:100%; margin-top:10px; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; border:none; border-radius:11px; padding:12px 0; cursor:pointer; transition:background .3s; background: {{ expBg }}; color: {{ expCol }};">{{ expTxt }}</button>
+            <div style="font-size:10.5px; color:#96949B; margin-top:8px;">Notebook, highlights, questions, term summaries — one file, always works. His words are his.</div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:10px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">CURRICULUM · PAUSE THE TERM</div>
+              <div onClick="{{ pauseTap }}" style="width:44px; height:26px; border-radius:99px; position:relative; cursor:pointer; transition:background .25s; background: {{ pauseBg }};"><span style="position:absolute; top:2px; width:22px; height:22px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 4px rgba(0,0,0,0.2); transition:left .25s; left: {{ pauseX }};"></span></div>
+            </div>
+            <div style="font-size:11.5px; color:#66646C; line-height:1.6; margin-top:8px;">{{ pauseNote }}</div>
+          </div>
+          <div style="background:#232227; border-radius:16px; padding:16px; margin-top:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#DCA8BE;">TERM GENERATION · ONE VISIBLE BATCH</div>
+              <span style="font-size:10px; color:#837F8B;">next: Sep 21</span>
+            </div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#FFFFFF; margin-top:8px;">Preparing Term 3 — The Exile · 42 studies</div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+              <div style="flex:1; height:6px; border-radius:99px; background:#3A3239; overflow:hidden;"><div style="height:100%; width:67%; border-radius:99px; background:#A63D63;"></div></div>
+              <span style="font-size:10.5px; color:#C4C0C9; font-variant-numeric:tabular-nums;">28 of 42</span>
+            </div>
+            <div style="font-size:10.5px; color:#837F8B; line-height:1.6; margin-top:9px;">Written once, when the term is announced — then the daily page just waits for him. Never a nightly shimmer, never a typing indicator.</div>
+          </div>
+        </div>
+      </sc-if>
+
       <sc-if value="{{ stubOn }}" hint-placeholder-val="{{ false }}">
         <div onClick="{{ stubClose }}" style="position:absolute; inset:0; z-index:70; background:rgba(27,21,24,0.45);"></div>
         <div style="position:absolute; left:0; right:0; bottom:0; z-index:71; background:#FFFFFF; border-radius:28px 28px 0 0; padding:24px 24px 38px; animation:sheetUp .35s cubic-bezier(.3,.9,.3,1) both;">
@@ -1637,8 +1961,12 @@ class Component extends DCLogic {
     actList: false, actSel: -1, actFil: 'all', foodDay: 0, fh: false, rep: false, calFor: null, calFrom: null, calTo: null, foodR: [1, 8], actR: [1, 8], bcSel: null, bcRng: 12, bcSi: 99,
     habC: true, habM: false, habS: true, habJ: false, supD: false, supMg: false,
     metric: 'w', si: 11, sel: 'Waist', cmp: 50,
-    spSel: -1, spBar: 'act', spRead: false, spLeg: false, legRow: -1, spMode: 'read', spDayR: false, qSaved: false, paper: false, posture: 0, spAcc: {}, spDis: {}, spNoteK: 'Question', spLinkK: 'Parallels', spMsg: '', stub: null, srcSel: -1, termOn: false, covOn: false, t2Open: false, uniOn: false };
-  componentWillUnmount() { clearInterval(this._iv); }
+    spSel: -1, spBar: 'act', spRead: false, spLeg: false, legRow: -1, spMode: 'read', spDayR: false, qSaved: false, paper: false, posture: 0, spAcc: {}, spDis: {}, spNoteK: 'Question', spLinkK: 'Parallels', spMsg: '', stub: null, srcSel: -1, termOn: false, covOn: false, t2Open: false, uniOn: false,
+    rdTheme: 'light', rdSize: 2, rdSerif: true, rdJust: false, typeOn: false, rdCh: 4, biOn: false,
+    audOn: false, audPlay: false, audV: 0, audSpd: 0, tipV: -1, tipStage: 1,
+    nbOn: false, nbFil: 'All', nbCat: null, nbView: 'all', memOn: false, memIdx: 0, memRev: false, memGotN: 0,
+    serOn: false, serStep: 0, setOn: false, expSt: 0, pauseOn: false };
+  componentWillUnmount() { clearInterval(this._iv); clearInterval(this._audIv); }
   _startCount() {
     if (this._running) return;
     this._running = true;
@@ -1762,424 +2090,4 @@ class Component extends DCLogic {
     out.calApplyOp = ok ? '1' : '0.4';
     out.calApply = () => { if (!ok) return; const r = [s.calFrom, s.calTo]; this.setState(s.calFor === 'food' ? { foodR: r, calFor: null } : { actR: r, calFor: null }); };
     const cells = [];
-    for (let i = 0; i < 6; i++) cells.push({ d: '', bg: 'transparent', col: 'transparent', pe: 'none', r: '0', tap: () => {} });
-    for (let d = 1; d <= 31; d++) {
-      const future = d > 8, isF = d === s.calFrom, isT = d === s.calTo;
-      const inR = s.calTo && d > s.calFrom && d < s.calTo;
-      cells.push({
-        d: '' + d,
-        bg: (isF || isT) ? '#A63D63' : (inR ? '#F6E3EB' : 'transparent'),
-        col: future ? '#C9C7CD' : ((isF || isT) ? '#FFFFFF' : (inR ? '#8C2F51' : '#232227')),
-        pe: future ? 'none' : 'auto',
-        r: (isF && isT) || (isF && !s.calTo) ? '99px' : (isF ? '99px 0 0 99px' : (isT ? '0 99px 99px 0' : (inR ? '0' : '99px'))),
-        tap: () => {
-          if (!s.calFrom || s.calTo) this.setState({ calFrom: d, calTo: null });
-          else if (d >= s.calFrom) this.setState({ calTo: d });
-          else this.setState({ calFrom: d, calTo: null });
-        }
-      });
-    }
-    out.calCells = cells;
-    return out;
-  }
-  _bc(s) {
-    const out = {
-      bcOn: !!s.bcSel, bcClose: () => this.setState({ bcSel: null }),
-      bcFat: () => this.setState({ bcSel: 'fat' }), bcMus: () => this.setState({ bcSel: 'mus' }), bcBmr: () => this.setState({ bcSel: 'bmr' }),
-      bcCur: () => this.setState({ bcSel: s.metric })
-    };
-    if (!s.bcSel) return out;
-    const M = {
-      fat: { n: 'Body fat', u: '%', f: (v) => v.toFixed(1), downGood: true,
-        v: [19.8, 19.7, 19.5, 19.6, 19.3, 19.1, 19.0, 18.8, 18.7, 18.6, 18.5, 18.4],
-        note: 'Estimated by bioimpedance, so single readings wobble — the trend is what counts. Down 1.4 points in 12 weeks while muscle held steady: the deficit is coming out of fat, not lean mass. Morning weigh-ins, after the bathroom and before coffee, keep the readings comparable.' },
-      mus: { n: 'Muscle mass', u: 'kg', f: (v) => v.toFixed(1), downGood: false,
-        v: [37.3, 37.4, 37.5, 37.5, 37.7, 37.8, 37.9, 38.0, 38.0, 38.1, 38.2, 38.2],
-        note: 'Up 0.9 kg across the block — protein over 170 g plus progressive kettlebell volume is doing exactly what it should in a deficit. Flat or dipping weeks after hard sessions are water shifts, not lost muscle; judge it month to month.' },
-      bmr: { n: 'BMR', u: 'kcal / day', f: (v) => Math.round(v).toLocaleString('en-US'), downGood: false, int: true, foot: 'Recalculated each weigh-in · feeds the daily calorie goal',
-        v: [1808, 1810, 1814, 1818, 1818, 1824, 1828, 1831, 1834, 1838, 1842, 1846],
-        note: 'Your resting burn, recalculated from each weigh-in. It has climbed 38 kcal as muscle came on — and it feeds the 2,400 kcal daily goal, so as BMR rises the goal quietly rises with it. Losing weight without BMR falling is the whole game.' },
-      w: { n: 'Weight', u: 'kg', f: (v) => v.toFixed(1), downGood: true, kick: 'BODY · TRENDS', foot: 'Morning weigh-ins · same scale, same time',
-        v: [86.2, 86.0, 85.6, 85.8, 85.1, 84.9, 84.4, 84.6, 84.0, 83.8, 83.5, 83.4],
-        note: 'Down 2.8 kg in 12 weeks — about 0.25 kg a week, the band where fat goes and strength stays. The weekly wobble is water and glycogen; the slope is the truth. Weigh in every morning and let the average do the judging.' },
-      v: { n: 'Volume', u: 'kg / week', f: (v) => Math.round(v).toLocaleString('en-US'), downGood: false, int: true, kick: 'TRAIN · VOLUME', lk: 'WEEKS', foot: 'Tonnage = sets × reps × load, summed per week',
-        v: [9800, 10400, 10100, 11200, 10800, 11600, 11900, 11400, 12100, 11800, 12300, 12480],
-        note: 'Weekly tonnage is up 27% since May without a missed week. Rising volume on falling bodyweight is the strongest signal in this app — strength is being built, not just preserved. Two flat weeks in a row is the cue to nudge load or reps.' },
-      k: { n: 'Calories', u: 'kcal / day', f: (v) => Math.round(v).toLocaleString('en-US'), downGood: true, int: true, kick: 'FOOD · CALORIES', lk: 'WEEKLY AVERAGES', foot: 'Daily average per week · goal 2,400',
-        v: [2380, 2340, 2410, 2290, 2350, 2300, 2320, 2280, 2330, 2290, 2310, 2310],
-        note: 'Averaging 2,310 a day against the 2,400 goal — a small, steady deficit with a ±120 band and no binge-and-starve swings. Boring on purpose: this pattern produced the weight trend, so protect it rather than chase bigger cuts.' }
-    };
-    const m = M[s.bcSel];
-    const nW = s.bcRng, v = m.v.slice(-nW);
-    const wk = ['May 18', 'May 25', 'Jun 1', 'Jun 8', 'Jun 15', 'Jun 22', 'Jun 29', 'Jul 6', 'Jul 13', 'Jul 20', 'Jul 27', 'Aug 8'].slice(-nW);
-    const mn = Math.min.apply(null, v), mx = Math.max.apply(null, v), rng = (mx - mn) || 1;
-    const xy = v.map((x, i) => [6 + i * (347.6 / (v.length - 1)), 14 + (1 - (x - mn) / rng) * 108]);
-    const pts = xy.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
-    const d = v[v.length - 1] - v[0], good = m.downGood ? d <= 0 : d >= 0;
-    const df = m.int ? Math.round(Math.abs(d)).toLocaleString('en-US') : Math.abs(d).toFixed(1);
-    out.bcName = m.n; out.bcUnit = m.u; out.bcVal = m.f(v[v.length - 1]); out.bcNote = m.note;
-    out.bcDelta = (d >= 0 ? '+' : '−') + df + ' · ' + nW + ' wk';
-    out.bcKick = m.kick || 'BODY · SMART SCALE'; out.bcListKick = m.lk || 'WEIGH-INS';
-    out.bcFoot = m.foot || 'Bioimpedance estimate · trend beats any single reading';
-    out.bcStartLab = wk[0].toUpperCase(); out.bcRngLab = nW + ' weeks';
-    const rc = (n) => nW === n ? ['#A63D63', '#FFFFFF'] : ['#FFFFFF', '#66646C'];
-    const [b4, c4] = rc(4), [b8, c8] = rc(8), [b12, c12] = rc(12);
-    out.bc4Bg = b4; out.bc4Col = c4; out.bc8Bg = b8; out.bc8Col = c8; out.bc12Bg = b12; out.bc12Col = c12;
-    out.bcR4 = () => this.setState({ bcRng: 4, bcSi: 99 }); out.bcR8 = () => this.setState({ bcRng: 8, bcSi: 99 }); out.bcR12 = () => this.setState({ bcRng: 12, bcSi: 99 });
-    const si = Math.max(0, Math.min(v.length - 1, s.bcSi));
-    const us = s.bcSel === 'fat' ? '%' : ' ' + m.u.split(' ')[0];
-    out.bcTX = xy[si][0].toFixed(1); out.bcTY = xy[si][1].toFixed(1);
-    out.bcTtL = Math.max(2, Math.min(258, xy[si][0] - 50)) + 'px';
-    out.bcTtT = (xy[si][1] - 38).toFixed(1) + 'px';
-    out.bcTtTxt = m.f(v[si]) + us + ' · ' + wk[si].toUpperCase();
-    const step = 347.6 / (v.length - 1);
-    const bScrub = (e) => { const ox = e.nativeEvent.offsetX; this.setState({ bcSi: Math.max(0, Math.min(v.length - 1, Math.round((ox - 6) / step))) }); };
-    out.bcScrubDown = (e) => { if (e.target.setPointerCapture) { try { e.target.setPointerCapture(e.pointerId); } catch (x) {} } bScrub(e); };
-    out.bcScrubMove = (e) => { if (e.buttons > 0) bScrub(e); };
-    out.bcDeltaCol = good ? '#5E9B72' : '#D9A23E';
-    out.bcLine = pts; out.bcArea = '6,128 ' + pts + ' 353.6,128';
-    out.bcDots = xy.map(p => ({ x: p[0].toFixed(1), y: p[1].toFixed(1) }));
-    out.bcLoLab = m.f(mn); out.bcHiLab = m.f(mx);
-    out.bcRows = v.map((x, i) => i).slice(-6).reverse().map(i => {
-      const dd = i === 0 ? 0 : v[i] - v[i - 1];
-      const lab = m.int ? (dd >= 0 ? '+' : '−') + Math.round(Math.abs(dd)).toLocaleString('en-US') : (dd >= 0 ? '+' : '−') + Math.abs(dd).toFixed(1);
-      return { lab: wk[i], v: m.f(v[i]), d: dd === 0 ? '—' : lab, dc: dd === 0 ? '#96949B' : ((m.downGood ? dd < 0 : dd > 0) ? '#5E9B72' : '#D9A23E') };
-    });
-    return out;
-  }
-  _acts(s) {
-    const CLR = { kb: ['#F6E3EB', '#8C2F51'], cir: ['#F0EEF2', '#66646C'], out: ['#EAF3ED', '#3E7A54'] };
-    const ICO = {
-      kb: 'M9 8V6.5a3 3 0 0 1 6 0V8M7.5 8h9c2 2.2 3 4.6 3 7a7.5 7.5 0 0 1-15 0c0-2.4 1-4.8 3-7Z',
-      cir: 'M10 2.5h4M12 5.5a8 8 0 1 0 0.01 0ZM12 9.5v4.5',
-      trail: 'M3 18L9 8l4 5.5 3-4L21 18Z',
-      walk: 'M12 3.5a1.9 1.9 0 1 1-0.01 0M13 8.5l-3 5 4 3V21M10 13.5l-3 2.5M14 16.5l4 2.5'
-    };
-    const ZC = ['#E7E5E9', '#DCA8BE', '#C97D9C', '#A63D63', '#8C2F51'];
-    const RAMP = ['#DCA8BE', '#A63D63', '#C97D9C', '#8C2F51', '#E795B4'];
-    const seg = (n, sub, t, d) => ({ n, s: sub, t, d, dc: d[0] === '−' ? '#5E9B72' : (d[0] === '+' ? '#D9A23E' : '#96949B') });
-    const blocksOf = (ws) => ws.map((w, i) => ({ w: w + '%', c: RAMP[i % RAMP.length] }));
-    const alt = (n, wa, wb) => Array.from({ length: n }, (_, i) => ({ w: (i % 2 ? wb : wa) + '%', c: i % 2 ? '#4A3540' : '#A63D63' }));
-    const A = [
-      { t: 'kb', day: 8, ic: 'kb', name: 'KB Session B', sub: 'Today · 7:12 AM · kettlebell', stat: '42:16', statLab: '8,140 kg',
-        kick: 'TODAY · 7:12 AM · MIRRORED FROM WATCH', hero: '42:16', aHr: 142, xHr: 168,
-        stats: [['TOTAL TIME','42:16'],['VOLUME','8,140 kg'],['CALORIES','486'],['AVG HR','142 bpm'],['MAX HR','168 bpm'],['PRS','1']],
-        segs: [seg('Two-hand swing','5 × 10 · 24 kg','6:48','−0:22 vs last'), seg('Clean & press','5 × 5 · 28 kg · PR','9:04','new weight'), seg('Goblet squat','4 × 8 · 24 kg','7:36','−0:08 vs last'), seg('Turkish get-up','3 × 2 · 16 kg','11:12','+0:15 vs last'), seg('Cooldown','stretch + carry','5:40','—')],
-        blocks: blocksOf([16, 21, 18, 27, 13]),
-        hr: [98,112,126,138,131,146,152,144,158,150,139,148,161,155,142,150,163,168,151,138,124,110], zones: [8,26,44,20,2] },
-      { t: 'out', day: 6, ic: 'trail', name: 'Sunrise Ridge', sub: 'Wed · 6:48 AM · trail run', stat: '4.2 km', statLab: '+186 m',
-        kick: 'WED AUG 6 · 6:48 AM · APPLE WATCH · GPS', loc: 'SUNRISE RIDGE LOOP', aHr: 148, xHr: 172, distLab: '4.2 KM',
-        stats: [['DISTANCE','4.2 km'],['ELEV GAIN','+186 m'],['MOVING TIME','26:04'],['STEPS','5,120'],['CALORIES','388'],['AVG HR','148 bpm']],
-        route: 'M46 210 C90 186 78 150 122 138 C166 126 178 158 216 146 C258 132 250 92 300 84 C330 79 348 96 356 66', sx: 46, sy: 210, ex: 356, ey: 66,
-        splits: [{k:'1', p:'5:48', w:'94%'},{k:'2', p:'6:32', w:'82%'},{k:'3', p:'6:04', w:'89%'},{k:'4', p:'5:41', w:'96%'},{k:'4.2', p:'6:20', w:'85%'}],
-        elev: [1832,1840,1848,1859,1866,1872,1880,1893,1902,1913,1918,1910,1898,1886,1874,1868,1859,1850,1846,1840,1836,1832],
-        hr: [102,118,132,141,148,155,150,144,152,158,163,168,172,166,158,150,155,148,140,132,120,108], zones: [4,18,42,31,5] },
-      { t: 'cir', day: 5, ic: 'cir', name: 'EMOM 20', sub: 'Tue · 6:02 PM · circuit', stat: '20:00', statLab: '20 rounds',
-        kick: 'TUE AUG 5 · 6:02 PM · MIRRORED FROM WATCH', hero: '20:00', aHr: 158, xHr: 176,
-        stats: [['TOTAL TIME','20:00'],['ROUNDS','20 of 20'],['CALORIES','214'],['AVG WORK',':26 /min'],['AVG HR','158 bpm'],['MAX HR','176 bpm']],
-        segs: [seg('Odd minutes — swings','12 reps · 24 kg · 10 rounds',':26 avg','fastest :22'), seg('Even minutes — cleans','8 reps · 2×16 kg · 10 rounds',':31 avg','slowest :38'), seg('Rounds unbroken','no minutes missed','20 of 20','—')],
-        blocks: alt(20, 5, 5),
-        hr: [96,120,138,150,158,151,162,154,165,157,167,159,168,160,170,162,171,163,166,152,134,116], zones: [3,12,34,40,11] },
-      { t: 'out', day: 4, ic: 'walk', name: 'Afternoon Walk', sub: 'Mon · 1:49 PM · walk', stat: '2.3 km', statLab: '3,822 steps',
-        kick: 'MON AUG 4 · 1:49 PM · APPLE WATCH · GPS', loc: 'RIVERSIDE PATH', aHr: 110, xHr: 134, distLab: '2.3 KM',
-        stats: [['DISTANCE','2.3 km'],['ELEV GAIN','+48 m'],['MOVING TIME','46:52'],['STEPS','3,822'],['CALORIES','232'],['AVG HR','110 bpm']],
-        route: 'M40 190 C110 176 150 196 210 178 C260 164 300 176 352 148', sx: 40, sy: 190, ex: 352, ey: 148,
-        splits: [{k:'1', p:'19:42', w:'88%'},{k:'2', p:'20:31', w:'84%'},{k:'2.3', p:'21:08', w:'80%'}],
-        elev: [1828,1832,1836,1841,1846,1852,1856,1860,1857,1852,1848,1844,1840,1837,1834,1832,1830,1829,1828,1827,1826,1826],
-        hr: [88,96,102,108,112,106,110,114,118,109,105,112,116,120,113,108,104,110,107,102,96,92], zones: [46,44,10,0,0] },
-      { t: 'kb', day: 2, ic: 'kb', name: 'KB Block A', sub: 'Sat Aug 2 · 7:31 AM · kettlebell', stat: '38:44', statLab: '7,260 kg',
-        kick: 'SAT AUG 2 · 7:31 AM · MIRRORED FROM WATCH', hero: '38:44', aHr: 139, xHr: 164,
-        stats: [['TOTAL TIME','38:44'],['VOLUME','7,260 kg'],['CALORIES','442'],['AVG HR','139 bpm'],['MAX HR','164 bpm'],['PRS','0']],
-        segs: [seg('Snatch','5 × 6 · 20 kg','7:12','−0:10 vs last'), seg('Bent-over row','4 × 8 · 24 kg','8:04','—'), seg('Reverse lunge','4 × 6 · 2×16 kg','7:48','+0:12 vs last'), seg('Farmer carry','4 × 40 m · 2×24 kg','6:32','−0:05 vs last'), seg('Mobility','hips + t-spine','6:08','—')],
-        blocks: blocksOf([18, 21, 20, 17, 16]),
-        hr: [95,108,122,134,140,133,145,151,143,155,148,137,146,158,152,140,148,160,154,141,126,108], zones: [10,28,42,18,2] },
-      { t: 'cir', day: 1, ic: 'cir', name: 'Tabata Squats', sub: 'Fri Aug 1 · 5:44 PM · circuit', stat: '4:00', statLab: '8 rounds',
-        kick: 'FRI AUG 1 · 5:44 PM · MIRRORED FROM WATCH', hero: '4:00', aHr: 156, xHr: 178,
-        stats: [['TOTAL TIME','4:00'],['ROUNDS','8 of 8'],['CALORIES','96'],['TOTAL REPS','86'],['AVG HR','156 bpm'],['MAX HR','178 bpm']],
-        segs: [seg('Work — goblet squat','20 s × 8 · 20 kg','9–12 reps','86 total'), seg('Rest','10 s × 8','—','—')],
-        blocks: alt(16, 8.3, 4.2),
-        hr: [94,128,152,164,158,170,162,174,166,176,168,178,161,146,124,104], zones: [5,10,22,38,25] }
-    ];
-    const chart = (a, w, h, p) => { const mn = Math.min(...a), mx = Math.max(...a), r = (mx - mn) || 1; return a.map((v, i) => ((i / (a.length - 1)) * w).toFixed(1) + ',' + (p + (1 - (v - mn) / r) * (h - 2 * p)).toFixed(1)).join(' '); };
-    const fil = s.actFil;
-    const idxs = A.map((a, i) => i).filter(i => (A[i].day >= s.actR[0] && A[i].day <= s.actR[1]) && (fil === 'all' || (fil === 'gym' ? A[i].t !== 'out' : A[i].t === 'out')));
-    const chip = (k) => s.actFil === k ? ['#232227', '#FFFFFF'] : ['#FFFFFF', '#66646C'];
-    const [cAB, cAC] = chip('all'), [cGB, cGC] = chip('gym'), [cOB, cOC] = chip('out');
-    const sel = s.actSel >= 0 ? A[s.actSel] : null;
-    const out = {
-      actListOn: s.actList, actDetOn: !!sel,
-      actOpen: () => this.setState({ actList: true }),
-      actClose: () => this.setState({ actList: false, actSel: -1 }),
-      actBack: () => this.setState({ actSel: -1 }),
-      actCount: idxs.length + ' of ' + A.length,
-      actRangeLab: 'Aug ' + s.actR[0] + ' – ' + s.actR[1],
-      fAllBg: cAB, fAllCol: cAC, fGymBg: cGB, fGymCol: cGC, fOutBg: cOB, fOutCol: cOC,
-      filAll: () => this.setState({ actFil: 'all' }), filGym: () => this.setState({ actFil: 'gym' }), filOut: () => this.setState({ actFil: 'out' }),
-      actItems: idxs.map(i => { const a = A[i]; return { name: a.name, sub: a.sub, stat: a.stat, statLab: a.statLab, bg: CLR[a.t][0], col: CLR[a.t][1], icon: ICO[a.ic], open: () => this.setState({ actSel: i }) }; }),
-      avGps: false, avStr: false
-    };
-    if (sel) {
-      out.avGps = sel.t === 'out'; out.avStr = sel.t !== 'out';
-      out.avName = sel.name; out.avKick = sel.kick; out.avHero = sel.hero || '';
-      out.avLoc = sel.loc || ''; out.avRoute = sel.route || 'M0 0'; out.avSX = sel.sx || 0; out.avSY = sel.sy || 0; out.avEX = sel.ex || 0; out.avEY = sel.ey || 0;
-      out.avDistLab = sel.distLab || '';
-      out.avStats = sel.stats.map(x => ({ l: x[0], v: x[1] }));
-      out.avSegs = sel.segs || []; out.avBlocks = sel.blocks || []; out.avSplits = sel.splits || [];
-      const hp = chart(sel.hr, 360, 110, 8);
-      out.avHrLine = hp; out.avHrPoly = '0,110 ' + hp + ' 360,110';
-      out.avAvgHr = sel.aHr + ' bpm'; out.avMaxHr = sel.xHr + ' bpm';
-      if (sel.elev) { const ep = chart(sel.elev, 360, 110, 8); out.avElevPoly = '0,110 ' + ep + ' 360,110'; out.avElevLine = ep; out.avElevHi = Math.max(...sel.elev).toLocaleString('en-US') + ' m'; out.avElevLo = Math.min(...sel.elev).toLocaleString('en-US') + ' m'; }
-      out.avZones = sel.zones.map((p, i) => ({ z: 'Z' + (i + 1), p: p + '%', w: Math.min(100, p * 2.2) + '%', c: ZC[i] }));
-    }
-    return out;
-  }
-  _spirit(s) {
-    const CATS = { 'God': '#D9A23E', 'Promise & Covenant': '#4C7DBF', 'Command': '#3E7A54', 'Sin & Consequence': '#B4533F', 'Christ': '#7B5EA7', 'Context': '#4E7C8A' };
-    const CN = Object.keys(CATS), SHORT = ['God', 'Promise', 'Command', 'Sin', 'Christ', 'Context'];
-    const V = [
-      { t: 'And the people of Israel again did what was evil in the sight of the LORD after Ehud died.', acc: 'Sin & Consequence' },
-      { t: 'And the LORD sold them into the hand of Jabin king of Canaan, who reigned in Hazor. The commander of his army was Sisera, who lived in Harosheth-hagoyim.', sug: 'Sin & Consequence', xr: 'Judg 2:14 · 3:8 · 10:7 — the refrain: “sold”' },
-      { t: 'Then the people of Israel cried out to the LORD for help, for he had 900 chariots of iron and he oppressed the people of Israel cruelly for twenty years.', sug: 'Context' },
-      { t: 'Now Deborah, a prophetess, the wife of Lappidoth, was judging Israel at that time.' },
-      { t: 'She used to sit under the palm of Deborah between Ramah and Bethel in the hill country of Ephraim, and the people of Israel came up to her for judgment.' },
-      { t: 'She sent and summoned Barak the son of Abinoam from Kedesh-naphtali and said to him, “Has not the LORD, the God of Israel, commanded you, ‘Go, gather your men at Mount Tabor, taking 10,000 from the people of Naphtali and the people of Zebulun?’”', acc: 'Command' },
-      { t: '“And I will draw out Sisera, the general of Jabin’s army, to meet you by the river Kishon with his chariots and his troops, and I will give him into your hand.”', sug: 'Promise & Covenant' },
-      { t: 'Barak said to her, “If you will go with me, I will go, but if you will not go with me, I will not go.”', note: 'Unbelief — or dependence on the word through the prophetess? Heb 11:32 still lists him.' },
-      { t: 'And she said, “I will surely go with you. Nevertheless, the road on which you are going will not lead to your glory, for the LORD will sell Sisera into the hand of a woman.” Then Deborah arose and went with Barak to Kedesh.' }
-    ];
-    const acc = (i) => V[i].acc || s.spAcc[i];
-    const stop = (fn) => (e) => { if (e && e.stopPropagation) e.stopPropagation(); fn(); };
-    const spVerses = V.map((v, i) => {
-      const a = acc(i), sug = (v.sug && !s.spAcc[i] && !s.spDis[i]) ? v.sug : null, on = s.spSel === i;
-      return {
-        n: i + 1, t: v.t,
-        tap: () => this.setState({ spSel: on ? -1 : i, spBar: 'act' }),
-        bg: on ? '#F6E3EB' : (a ? CATS[a] + '1F' : 'transparent'),
-        sh: on ? 'inset 0 0 0 1.5px #A63D63' : 'none',
-        bl: a ? '3px solid ' + CATS[a] : (sug ? '3px dashed ' + CATS[sug] + 'AA' : '3px solid transparent'),
-        hasTag: !!a, tag: a || '', tagCol: a ? CATS[a] : '#96949B',
-        hasSugg: !!sug, suggLab: sug || '', suggCol: sug ? CATS[sug] : '#96949B',
-        sAcc: stop(() => this.setState(st => ({ spAcc: Object.assign({}, st.spAcc, { [i]: v.sug }) }))),
-        sDis: stop(() => this.setState(st => ({ spDis: Object.assign({}, st.spDis, { [i]: 1 }) }))),
-        hasNote: !!v.note, note: v.note || '', hasXr: !!v.xr, xr: v.xr || ''
-      };
-    });
-    const pend = V.filter((v, i) => v.sug && !s.spAcc[i] && !s.spDis[i]).length;
-    const accN = 2 + Object.keys(s.spAcc).length;
-    const kindChip = (k, cur, set) => ({ lab: k, bg: k === cur ? '#232227' : '#FFFFFF', col: k === cur ? '#FFFFFF' : '#66646C', tap: () => set(k) });
-    const RD = [3,2,1,2,1,1,3,1,0,1,1,2,1,1,0,0,1,2,3,2,1,1,0,1,1,0,0,1,0,1,0,0,0,1,0,1,0,0,1,3,2,3,3,3,2,2,2,2,1,1,1,1,1,2,1,2,1,1,1,2,1,1,1,1,1,2];
-    const BK = ['Gen','Exo','Lev','Num','Deu','Jos','Jdg','Rut','1Sa','2Sa','1Ki','2Ki','1Ch','2Ch','Ezr','Neh','Est','Job','Psa','Pro','Ecc','Sng','Isa','Jer','Lam','Ezk','Dan','Hos','Jol','Amo','Oba','Jon','Mic','Nah','Hab','Zep','Hag','Zec','Mal','Mat','Mrk','Luk','Jhn','Act','Rom','1Co','2Co','Gal','Eph','Php','Col','1Th','2Th','1Ti','2Ti','Tit','Phm','Heb','Jas','1Pe','2Pe','1Jo','2Jo','3Jo','Jud','Rev'];
-    const RAMP = ['#EDEBEE', '#E6BFCF', '#C97D9C', '#A63D63'];
-    const cell = (i) => i === 6 ? '#232227' : RAMP[RD[i]];
-    const STUB = {
-      nb: ['Passage Notebook', ['Notes by kind — Observation · Question · Connection · Conviction · Doctrine', 'Open questions that resurface when you return to the passage', 'One search across Scripture, notes, highlights and sources']],
-      mem: ['Memory — review due (3)', ['One verse a week, filed by occasion: assurance · suffering · doubt · sovereignty', 'Rehearsal, not flashcards: “which verse do you reach for, and why?”', 'Rom 8:1 · Ps 46:1 · WSC Q.1 due today']],
-      lib: ['Source library — 18 sources', ['Calvin · Matthew Henry · the confessions and catechisms · Spurgeon', 'Every quotation in a teaching taps through to its real source text', 'Public domain · stored on device']],
-      vw: ['This week\u2019s verse · Assurance', ['Psalm 46:1 — \u201cGod is our refuge and strength, a very present help in trouble.\u201d', 'Filed by occasion, not reference: when suffering asks whether God can be good, this is the verse you reach for', 'Review due with Rom 8:1 and WSC Q.1 · two minutes, spoken aloud']],
-      ask: ['Ask — anchored to the passage', ['Opt-in and never initiating — ask from any verse; the exchange is stored on that passage, searchable forever', 'Every answer cites a source you can tap through to your library', 'Try it now: open the reader, select a verse, tap Ask']],
-      sun: ['Sunday · sermon follow-along', ['Learned from you: speak it, photograph the slides, or paste a transcript', 'This week deepens Galatians 3 so you arrive next Sunday primed', 'Sermon voice notes land in the Passage Notebook, tagged to the text']]
-    };
-    const SRC = [
-      ['Matthew Henry · on Judges 4', 'Commentary, 1706 · condensed · public domain', 'Barak insisted much upon Deborah\u2019s presence — he would sooner venture with the prophetess at hand than lean on the bare word already given. A brave man, yet the honour of the day is carried off by a woman; the rebuke is gentle, and Hebrews 11 names him among the faithful still.'],
-      ['Westminster Confession · XIV.ii', 'Of Saving Faith, 1646 · public domain', 'By this faith, a Christian believeth to be true whatsoever is revealed in the Word — yielding obedience to the commands, trembling at the threatenings, and embracing the promises of God for this life, and that which is to come.']
-    ];
-    const stubD = s.stub ? STUB[s.stub] : null, srcD = s.srcSel >= 0 ? SRC[s.srcSel] : null;
-    const mode = (k) => s.spMode === k ? ['#232227', '#FFFFFF'] : ['#FFFFFF', '#66646C'];
-    const [mrB, mrC] = mode('read'), [msB, msC] = mode('study');
-    return {
-      spStreakLab: '39 of 66 books', postLab: ['My tradition', 'Compare', 'Text only'][s.posture],
-      postTap: () => this.setState(st => ({ posture: (st.posture + 1) % 3 })),
-      spReadOpen: () => this.setState({ spRead: true }), spReadClose: () => this.setState({ spRead: false, spSel: -1 }),
-      spReadOn: s.spRead,
-      qBtnTxt: s.qSaved ? '✓ In your notebook — resurfaces at Judges 4' : 'Save to open questions',
-      qBtnBg: s.qSaved ? '#EAF3ED' : '#A63D63', qBtnCol: s.qSaved ? '#3E7A54' : '#FFFFFF',
-      qSaveTap: () => this.setState(st => ({ qSaved: !st.qSaved })),
-      paperTxt: s.paper ? '✓ Counted — on paper' : 'Read on paper', paperBd: s.paper ? '#BFDCC9' : '#E4E2E6',
-      paperBg: s.paper ? '#EAF3ED' : '#FFFFFF', paperCol: s.paper ? '#3E7A54' : '#232227',
-      paperTap: () => this.setState(st => ({ paper: !st.paper })),
-      memDueLab: '3 due today', nbOpenLab: '4 open questions',
-      covMini: RD.map((r, i) => ({ c: cell(i) })),
-      covFull: RD.map((r, i) => ({ ab: BK[i], c: cell(i), lc: (i === 6 || r >= 2) ? '#FFFFFF' : '#96949B' })),
-      spMemOpen: () => this.setState({ stub: 'mem' }), spNbOpen: () => this.setState({ stub: 'nb' }),
-      spLibOpen: () => this.setState({ stub: 'lib' }), sunTap: () => this.setState({ stub: 'sun' }),
-      spPlanOpen: () => this.setState({ termOn: true }), termClose: () => this.setState({ termOn: false }),
-      spCovOpen: () => this.setState({ covOn: true }), covClose: () => this.setState({ covOn: false }),
-      termOn: s.termOn, covOn: s.covOn, uniOn: s.uniOn,
-      uniOpen: () => this.setState({ uniOn: true }), uniClose: () => this.setState({ uniOn: false }),
-      vwTap: () => this.setState({ stub: 'vw' }), askTap: () => this.setState({ stub: 'ask' }),
-      stubOn: !!s.stub, stubTitle: stubD ? stubD[0] : '', stubRows: stubD ? stubD[1].map(x => ({ x })) : [],
-      stubClose: () => this.setState({ stub: null }),
-      srcOpen1: () => this.setState({ srcSel: 0 }), srcOpen2: () => this.setState({ srcSel: 1 }),
-      srcOn: !!srcD, srcTitle: srcD ? srcD[0] : '', srcMeta: srcD ? srcD[1] : '', srcBody: srcD ? srcD[2] : '',
-      srcClose: () => this.setState({ srcSel: -1 }),
-      t2Open: s.t2Open, t2Chev: s.t2Open ? '⌄' : '›', t2Tap: () => this.setState(st => ({ t2Open: !st.t2Open })),
-      spLegOn: s.spLeg, spLegOpen: () => this.setState({ spLeg: true }), spLegClose: () => this.setState({ spLeg: false, legRow: -1 }),
-      mdRBg: mrB, mdRCol: mrC, mdSBg: msB, mdSCol: msC,
-      spModeR: () => this.setState({ spMode: 'read' }), spModeS: () => this.setState({ spMode: 'study' }),
-      spVerses,
-      suggLine: pend > 0 ? pend + ' suggested marks to review — outlined until you accept them · ' + accN + ' accepted' : 'All of today\u2019s suggestions reviewed · ' + accN + ' marks on this chapter',
-      dayTxt: s.spDayR ? '✓ Judges 4–5 read · week 5, day 4' : 'Mark today\u2019s reading read',
-      dayBg: s.spDayR ? '#EAF3ED' : '#A63D63', dayCol: s.spDayR ? '#3E7A54' : '#FFFFFF',
-      spDayTap: () => this.setState(st => ({ spDayR: !st.spDayR })),
-      spBarOn: s.spSel >= 0 && s.spRead, spSelN: s.spSel + 1,
-      spSelClear: () => this.setState({ spSel: -1, spBar: 'act' }),
-      barAct: s.spBar === 'act', barHl: s.spBar === 'hl', barNote: s.spBar === 'note', barLink: s.spBar === 'link',
-      barAsk: s.spBar === 'ask', barWord: s.spBar === 'word', barDone: s.spBar === 'done', barDoneMsg: s.spMsg,
-      spHlMode: () => this.setState({ spBar: 'hl' }), spNoteMode: () => this.setState({ spBar: 'note' }),
-      spLinkMode: () => this.setState({ spBar: 'link' }), spAskMode: () => this.setState({ spBar: 'ask' }),
-      spWsOpen: () => this.setState({ spBar: 'word' }),
-      hlOpts: CN.map((n, i) => ({ lab: SHORT[i], dot: CATS[n], bg: CATS[n] + '26',
-        tap: () => this.setState(st => ({ spAcc: Object.assign({}, st.spAcc, { [st.spSel]: n }), spBar: 'done', spMsg: 'Marked ' + n + ' — Judges 4:' + (st.spSel + 1) })) })),
-      nkOpts: ['Observation', 'Question', 'Connection', 'Conviction', 'Doctrine'].map(k => kindChip(k, s.spNoteK, (v) => this.setState({ spNoteK: v }))),
-      nkLab: s.spNoteK,
-      spNoteSave: () => this.setState({ spBar: 'done', spMsg: 'Saved — a ' + s.spNoteK + ' on Judges 4:' + (s.spSel + 1) + (s.spNoteK === 'Question' ? ' · added to Open Questions' : '') }),
-      lkOpts: ['Fulfills', 'Parallels', 'Tension'].map(k => kindChip(k, s.spLinkK, (v) => this.setState({ spLinkK: v }))),
-      spLinkSave: () => this.setState({ spBar: 'done', spMsg: 'Linked ⇄ Judg 2:14 · ' + s.spLinkK + ' — yours, kept forever' }),
-      legRows: CN.map((n, i) => ({
-        lab: n, dot: CATS[n], bg: CATS[n] + '26', count: [214, 186, 203, 241, 158, 167][i] + '',
-        refs: ['Ex 34:6 · Ps 46:1 · Judg 4:14 — most recently: “does not the LORD go out before you?”',
-          'Gen 12:2 · Judg 4:7 · 2 Cor 1:20 — most recently: Sisera given into your hand',
-          'Deut 6:5 · Judg 4:6 · Jn 15:12 — most recently: “go, gather your men at Mount Tabor”',
-          'Judg 2:14 · Judg 4:1 · Rom 1:24 — most recently: Israel again did what was evil',
-          'Gen 3:15 · Judg 2:16 · Heb 11:32 — the judges as shadows of the true Deliverer',
-          'Judg 4:3 — iron chariots · Judg 4:5 — the palm as a courtroom · Judg 4:11 — the Kenites'][i],
-        open: s.legRow === i, tap: () => this.setState(st => ({ legRow: st.legRow === i ? -1 : i }))
-      }))
-    };
-  }
-  renderVals() {
-    const s = this.state;
-    if (s.armed && s.e === 0) this._startCount();
-    const fmt = (v) => Math.round(v).toLocaleString('en-US');
-    const total = s.it1 + s.it2;
-    const eaten = 1840 + (s.conf === 2 ? total : 0);
-    const eEff = s.armed ? s.e : 0;
-    const rem = 2400 - eaten;
-    const D = {
-      w: { v: [86.2,86.0,85.6,85.8,85.1,84.9,84.4,84.6,84.0,83.8,83.5,83.4], d: '−2.8 kg · 12 wk' },
-      v: { v: [9800,10400,10100,11200,10800,11600,11900,11400,12100,11800,12300,12480], d: '+27% · 12 wk' },
-      k: { v: [2380,2340,2410,2290,2350,2300,2320,2280,2330,2290,2310,2310], d: 'steady · ±120' }
-    };
-    const M = {
-      Neck:[39.5,'−0.5','88%','92%','100%'], Chest:[104.5,'+0.5','90%','94%','100%'], Arm:[38.5,'+0.6','86%','93%','100%'],
-      Waist:[88.0,'−2.5','100%','92%','82%'], Hips:[99.0,'−1.0','100%','95%','88%'], Thigh:[61.5,'+0.8','88%','94%','100%'], Calf:[39.0,'+0.2','92%','96%','100%']
-    };
-    const cur = D[s.metric], mn = Math.min(...cur.v), mx = Math.max(...cur.v);
-    const xy = cur.v.map((v,i)=>[6+i*31.6, 14+(1-(v-mn)/(mx-mn))*108]);
-    const pts = xy.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
-    const wk = ['MAY 18','MAY 25','JUN 1','JUN 8','JUN 15','JUN 22','JUN 29','JUL 6','JUL 13','JUL 20','JUL 27','AUG 8'];
-    const si = Math.max(0, Math.min(11, s.si));
-    const fv = { w: x => x.toFixed(1) + ' kg', v: x => fmt(x) + ' kg', k: x => fmt(x) + ' kcal' }[s.metric];
-    const scrub = (e) => { const ox = e.nativeEvent.offsetX; this.setState({ si: Math.max(0, Math.min(11, Math.round((ox - 6) / 31.6))) }); };
-    const PRS = [
-      ['Apple Watch', 'Not connected', 'Pair', '#FAF9FA', '#A63D63', '#FFFFFF', '#96949B', 'off'],
-      ['Apple Watch', 'Searching nearby…', '…', '#FAF9FA', '#FFFFFF', '#66646C', '#96949B', '—'],
-      ["Mike's Watch Ultra", 'Connected · syncing hourly', 'Unpair', '#F0F7F1', '#FFFFFF', '#66646C', '#5E9B72', 'ON']
-    ];
-    const PR = PRS[s.pair];
-    const m = M[s.sel];
-    const btn = (k) => s.metric===k ? ['#A63D63','#FFFFFF'] : ['#FFFFFF','#66646C'];
-    const [mwBg,mwCol]=btn('w'), [mvBg,mvCol]=btn('v'), [mkBg,mkCol]=btn('k');
-    const selF = (n) => () => this.setState({ sel: n });
-    const tc = (i) => s.idx === i ? '#A63D63' : '#96949B';
-    const tap = (i) => () => this.setState({ idx: i });
-    const hab = (v) => v ? '#A63D63' : '#E7E5E9';
-    return {
-      lockY: s.locked ? '0%' : '-104%', lockO: s.locked ? '1' : '0', lockPE: s.locked ? 'auto' : 'none',
-      d1: s.pins >= 1 ? '#A63D63' : '#FFFFFF', d2: s.pins >= 2 ? '#A63D63' : '#FFFFFF',
-      d3: s.pins >= 3 ? '#A63D63' : '#FFFFFF', d4: s.pins >= 4 ? '#A63D63' : '#FFFFFF',
-      pinTap: () => {
-        if (!s.locked) return;
-        const n = Math.min(4, s.pins + 1);
-        this.setState({ pins: n });
-        if (n === 4) { setTimeout(() => this.setState({ locked: false }), 280); setTimeout(() => this.setState({ armed: true }), 780); }
-      },
-      pinDel: () => this.setState(st => ({ pins: Math.max(0, st.pins - 1) })),
-      trackX: (-(s.idx * 440)) + 'px',
-      tc0: tc(0), tc1: tc(1), tc2: tc(2), tc3: tc(3), tc4: tc(4),
-      t0: tap(0), t1: tap(1), t2: tap(2), t3: tap(3), t4: tap(4),
-      kcal: fmt(s.flip ? Math.abs(rem) : eaten * (s.conf === 2 ? 1 : eEff)),
-      kcalLab: s.flip ? (rem >= 0 ? 'kcal to go' : 'kcal over') : 'kcal in',
-      flipK: () => this.setState(st => ({ flip: !st.flip })),
-      arcOff: 339.3 * (1 - Math.min(eaten / 2400, 1) * (s.conf === 2 ? 1 : (eEff || 0.0001))),
-      wP: s.armed ? (s.conf === 2 ? '100%' : '78.9%') : '0%',
-      wC: s.armed ? (s.conf === 2 ? '89%' : '70%') : '0%',
-      wF: s.armed ? (s.conf === 2 ? '95%' : '72.5%') : '0%',
-      pVal: s.conf === 2 ? '181 / 180 g' : '142 / 180 g',
-      cVal: s.conf === 2 ? '214 / 240 g' : '168 / 240 g',
-      fVal: s.conf === 2 ? '76 / 80 g' : '58 / 80 g',
-      chatHint: s.stage === 0, chatLog: s.stage === 1, srcTag: s.src,
-      it1: s.it1, it2: s.it2, total,
-      editing: s.editing, notEditing: !s.editing,
-      confPend: s.conf === 1, confDone: s.conf === 2, confRej: s.conf === 3, noDinner: s.conf !== 2,
-      confirmTxt: s.editing ? 'Save edits' : 'Confirm', editTxt: s.editing ? 'Cancel' : 'Edit',
-      confirmTap: () => this.setState({ conf: 2, editing: false }),
-      editTap: () => this.setState(st => ({ editing: !st.editing })),
-      rejectTap: () => this.setState({ conf: 3, editing: false }),
-      i1m: () => this.setState(st => ({ it1: Math.max(40, st.it1 - 20) })), i1p: () => this.setState(st => ({ it1: Math.min(600, st.it1 + 20) })),
-      i2m: () => this.setState(st => ({ it2: Math.max(40, st.it2 - 20) })), i2p: () => this.setState(st => ({ it2: Math.min(600, st.it2 + 20) })),
-      afterTxt: rem >= 0 ? 'Dinner logged. ' + fmt(eaten) + ' in — ' + fmt(rem) + ' under goal. Surgical.' : 'Dinner logged. ' + fmt(-rem) + ' over goal. Worth it, probably.',
-      foodTotal: fmt(eaten),
-      micOn: s.mic > 0, micListen: s.mic === 1, micFull: s.mic === 9,
-      micTap: () => {
-        if (s.conf === 2) { this.setState({ mic: 9 }); return; }
-        this.setState({ mic: 1 }); this._openLog('via voice');
-      },
-      camOn: s.cam,
-      camTap: () => {
-        if (s.conf === 2) { this.setState({ mic: 9 }); return; }
-        this.setState({ cam: true }); this._openLog('from photo');
-      },
-      overlayClose: () => this.setState({ mic: 0, cam: false }),
-      trailOn: s.trail, trailOpen: () => this.setState({ trail: true, paused: false }),
-      trailClose: () => this.setState({ trail: false }),
-      pauseTxt: s.paused ? 'Resume' : 'Pause', pauseTap: () => this.setState(st => ({ paused: !st.paused })),
-      recIdle: s.rec === 0, recLive: s.rec === 1, recDone: s.rec === 2,
-      recBg: s.rec === 1 ? '#F6E3EB' : '#FAF9FA', recIcon: s.rec === 1 ? '#A63D63' : '#66646C',
-      recTap: () => {
-        if (s.rec === 0) { this.setState({ rec: 1 }); setTimeout(() => this.setState({ rec: 2 }), 1800); }
-        else if (s.rec === 2) this.setState({ rec: 0 });
-      },
-      habC: hab(s.habC), togC: () => this.setState(st => ({ habC: !st.habC })),
-      habM: hab(s.habM), togM: () => this.setState(st => ({ habM: !st.habM })),
-      habS: hab(s.habS), togS: () => this.setState(st => ({ habS: !st.habS })),
-      habJ: hab(s.habJ), togJ: () => this.setState(st => ({ habJ: !st.habJ })),
-      supDt: s.supD ? '✓ just now' : '○ due', supDc: s.supD ? '#5E9B72' : '#D9A23E', togD: () => this.setState(st => ({ supD: !st.supD })),
-      supMt: s.supMg ? '✓ just now' : '○ tonight', supMc: s.supMg ? '#5E9B72' : '#96949B', togMg: () => this.setState(st => ({ supMg: !st.supMg })),
-      t5: tap(5), tc5: tc(5), t6: tap(6), tc6: tc(6), t7: tap(7), tc7: tc(7),
-      dockChatBg: s.idx === 1 ? '#A63D63' : '#F6E3EB',
-      dockChatIc: s.idx === 1 ? '#FFFFFF' : '#8C2F51',
-      liveOn: s.live, liveOpen: () => this.setState({ live: true }), liveEnd: () => this.setState({ live: false }),
-      routOn: s.rout, routOpen: () => this.setState({ rout: true }), routClose: () => this.setState({ rout: false }),
-      setN: s.setN, setInc: () => this.setState(st => ({ setN: Math.min(5, st.setN + 1) })), setDec: () => this.setState(st => ({ setN: Math.max(1, st.setN - 1) })),
-      pairTitle: PR[0], pairSub: PR[1], pairBtn: PR[2], pairBg: PR[3], pairBtnBg: PR[4], pairBtnCol: PR[5], featCol: PR[6], featTxt: PR[7],
-      watchFace: s.pair === 2 ? '#A63D63' : '#454349',
-      pairTap: () => { if (s.pair === 0) { this.setState({ pair: 1 }); setTimeout(() => this.setState({ pair: 2 }), 1400); } else if (s.pair === 2) this.setState({ pair: 0 }); },
-      ...this._tapeVals(s),
-      ...this._acts(s),
-      ...this._food(s, eaten, fmt),
-      ...this._hist(s, eaten, fmt),
-      ...this._cal(s),
-      ...this._bc(s),
-      ...this._spirit(s),
-      repOn: s.rep, repOpen: () => this.setState({ rep: true }), repClose: () => this.setState({ rep: false }),
-      pts, apts: '6,128 ' + pts + ' 353.6,128',
-      dots: xy.map(p => ({ x: +p[0].toFixed(1), y: +p[1].toFixed(1) })),
-      ttPX: xy[si][0].toFixed(1), ttPY: xy[si][1].toFixed(1),
-      ttL: Math.max(2, Math.min(272, xy[si][0] - 44)) + 'px',
-      ttT: (xy[si][1] - 38).toFixed(1) + 'px',
-      ttTxt: fv(cur.v[si]) + ' · ' + wk[si],
-      scrubDown: (e) => { if (e.target.setPointerCapture) { try { e.target.setPointerCapture(e.pointerId); } catch (x) {} } scrub(e); },
-      scrubMove: (e) => { if (e.buttons > 0) scrub(e); },
-      dTxt: cur.d, mwBg, mwCol, mvBg, mvCol, mkBg, mkCol,
-      setMW: () => this.setState({ metric: 'w' }), setMV: () => this.setState({ metric: 'v' }), setMK: () => this.setState({ metric: 'k' }),
-      mName: s.sel.toUpperCase(), mVal: m[0].toFixed(1), mDelta: m[1] + ' cm', mH1: m[2], mH2: m[3], mH3: m[4],
-      selNeck: selF('Neck'), selChest: selF('Chest'), selArm: selF('Arm'), selWaist: selF('Waist'), selHips: selF('Hips'), selThigh: selF('Thigh'), selCalf: selF('Calf'),
-      cmpW: s.cmp + '%', cmpSet: (e) => this.setState({ cmp: e.target.value }),
-      recovOff: 251.3 * (1 - 0.81 * (eEff || 0))
-    };
-  }
-}
-</script>
-</body>
-</html>
+    for (let i = 0; i < 6; i++) c

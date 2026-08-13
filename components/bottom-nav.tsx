@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  PitayaMarkIcon,
+  JournalIcon,
+  SpiritIcon,
   FoodIcon,
   SettingsIcon,
   TodayIcon,
@@ -14,10 +15,10 @@ import {
 // (docs/design/pitaya-app.dc.html). The chat/mic/camera dock floats above
 // this bar as its own pill (components/voice-input.tsx), per the design.
 const tabs = [
-  { label: "Spirit", href: "/spirit", Icon: PitayaMarkIcon },
+  { label: "Spirit", href: "/spirit", Icon: SpiritIcon },
   { label: "Food", href: "/health/food", Icon: FoodIcon },
   { label: "Today", href: "/dashboard", Icon: TodayIcon },
-  { label: "Journal", href: "/journal", Icon: PitayaMarkIcon },
+  { label: "Journal", href: "/journal", Icon: JournalIcon },
   { label: "Settings", href: "/settings", Icon: SettingsIcon },
 ];
 
