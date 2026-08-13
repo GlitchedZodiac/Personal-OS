@@ -5,14 +5,47 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-13 (SPIRIT self-paced: generation pipeline ran
-— all 42 Judges studies written; completion-based progression; free
-Bible navigator; motion pass; streak/double-portion)
-**Current phase:** Spirit is a self-paced university (2026-08-13c) on
-top of the spine (a) + round-2 port (b). Next Spirit blocks: next-term
-syllabus authoring, Track 2 free-license text, Strong's word study,
-Library screen, NBLA pane (license pending), Bible-navigator design
-slice for round 3. Health modules unchanged and live.
+**Last updated:** 2026-08-13 (SPIRIT living curriculum: variable-length
+units 3–30, Year 1 authored — T2–T8, 113 studies queued — import
+pipeline, curriculum-lane kickoff prompt)
+**Current phase:** Spirit is a self-paced university with a YEAR of
+curriculum loaded (2026-08-13d). A dedicated CURRICULUM LANE extends it
+to 3 years — kickoff: docs/spirit-curriculum-kickoff.md; living plan:
+docs/spirit-curriculum.json; import: prisma/import-curriculum.mjs
+(protects active/completed terms). Next blocks: Track 2 free-license
+text, Strong's word study, Library screen, NBLA pane, Bible-navigator
+design slice for round 3. Health modules unchanged and live.
+
+## 2026-08-13d — THE LIVING CURRICULUM (his ask: "alive and fed constantly")
+
+His framing accepted whole: the syllabus is the ENFORCEMENT SPINE; the
+church track, Bible-in-a-year, free reading, journey, memorization are
+ancillary. Terms are mixed-modality (history · theology · doctrine ·
+evangelism · faith · hope), 3–30 studies, revisiting books is a feature.
+Cost model he asked for: curriculum AUTHORING happens in Claude chats
+(zero OpenAI tokens); only per-term study generation spends (~$1–2,
+visible batch).
+
+- **Engine:** syllabus rows are UNITS with `days` (1–6 each; term total
+  3–30). lib/bible-refs: SyllabusUnit/unitDays/syllabusTarget; the
+  generator writes "exactly N days" per unit, topical/history units
+  still anchor every day to a Scripture reading; progress targets sum
+  the units (Judges' day-less rows default 6 → still 42).
+- **Year 1 AUTHORED and imported** (docs/spirit-curriculum.json →
+  prisma/import-curriculum.mjs, dry-run then applied): T2 The Exile
+  (24) · T3 Justification (6-day doctrine short) · T4 Mark (24) · T5
+  Giving a Reason (5-day witness) · T6 Romans (30 — the cap, Rom 9–11
+  flagged hard) · T7 The First Five Centuries (18, history with the
+  Bible open) · T8 Hope — the Last Things (6). 113 studies queued
+  behind Judges; each generates as its visible batch when its turn
+  comes.
+- **Importer safety:** upserts by orderIndex, refuses to touch
+  active/completed terms, validates the 3–30 cap and 1–6 unit days.
+- **Curriculum lane:** docs/spirit-curriculum-kickoff.md is the paste-
+  ready prompt for Michael's dedicated planning chat — interview-first,
+  candidate pool for Years 2–3, exact JSON contract, the living-plan
+  rule (re-plan unstared terms ~twice a year; his end-of-term open
+  questions bend the future).
 **Branch in flight:** `claude/phase1-modernization` (pushed; prod deploys
 via `vercel deploy --prod`; merge awaits Michael) · `claude/watch-app`
 (watch lane, local worktree).

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { refParts } from "@/lib/bible-refs";
+import { refParts, syllabusTarget } from "@/lib/bible-refs";
 import { DEFAULT_TIME_ZONE, getDateStringInTimeZone } from "@/lib/timezone";
 
 // GET — the Spirit home + the current study in one call. SELF-PACED:
@@ -123,7 +123,7 @@ export async function GET() {
       progress: {
         done: doneIds.size,
         total: allDays.length,
-        target: term.weeks * 6,
+        target: syllabusTarget(term.syllabus, term.weeks),
         generated: Boolean(term.generatedAt),
         completedToday,
         doublePortions,

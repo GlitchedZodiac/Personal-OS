@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { openai, COACH_MODEL } from "@/lib/openai";
 import { recordAIUsage } from "@/lib/ai-usage";
 import { getPassage } from "@/lib/esv";
-import { BOOKS } from "@/lib/bible-refs";
+import { BOOKS, syllabusTarget, unitDays } from "@/lib/bible-refs";
 
 // The term batch — when a term is announced its studies are written
 // ONCE, as a visible batch he watches, never a nightly shimmer. One
@@ -94,6 +94,10 @@ export async function GET() {
   try {
     const term = await prisma.term.findFirst({ where: { status: "active" } });
     if (!term) return NextResponse.json({ term: null });
+    const rows = (Array.isArray(term.syllabus) ? term.syllabus : []) as {
+      week: number;
+      days?: number;
+    }[];
     const [days, completions] = await Promise.all([
       prisma.devotionalDay.findMany({
         where: { termId: term.id },
@@ -115,9 +119,10 @@ export async function GET() {
         week: i + 1,
         have: byWeek.get(i + 1)?.have ?? 0,
         done: byWeek.get(i + 1)?.done ?? 0,
-        target: 6,
+        target: unitDays(rows.find((r) => r.week === i + 1)),
       })),
       total: days.length,
+      target: syllabusTarget(term.syllabus, term.weeks),
       completed: days.filter((d) => doneIds.has(d.id)).length,
     });
   } catch (error) {
@@ -139,6 +144,7 @@ export async function POST(request: NextRequest) {
       week: number;
       label: string;
       ref: string;
+      days?: number;
       hard?: boolean;
     }[];
     const row = syllabus.find((r) => r.week === week);
@@ -148,9 +154,10 @@ export async function POST(request: NextRequest) {
       where: { termId: term.id, weekIndex: week },
       select: { dayIndex: true },
     });
+    const nDays = unitDays(row);
     const have = new Set(existing.map((d) => d.dayIndex));
-    if (have.size >= 6) {
-      return NextResponse.json({ created: 0, skipped: 6, week });
+    if (have.size >= nDays) {
+      return NextResponse.json({ created: 0, skipped: nDays, week });
     }
 
     const [sources, specimen] = await Promise.all([
@@ -186,7 +193,7 @@ HARD RULES:
 - Never quote any commentary, confession, or author unless that text appears in THE LIBRARY below; cite it via citations[] with its exact key. If the library has nothing relevant, write in your own words and leave citations empty. NEVER invent or paraphrase-as-quote.
 - Scripture: reference freely by ref, but do NOT reproduce verse text — the app fetches the ESV text itself from the pullRef you give.
 - oneMoreBody is a dated, factual church-history vignette. No invented quotations, no legends stated as fact.
-- The six days must walk the week's assigned chapters in order and cover them completely; day 6 may re-read the whole span as a synthesis day.
+- The unit's days must walk its assigned text/theme in order and cover it completely; the final day may synthesize. Topical or history units still anchor EVERY day to a Scripture reading (readingRef) — church history is taught with the Bible open.
 - suggested[]: 2-4 per day, each a single verse INSIDE that day's reading, category exactly one of: God · Promise & Covenant · Command · Sin & Consequence · Christ · Context.
 - estMinutes: honest total (reading + study), typically 10-15.
 - Hard texts are read whole and faced squarely — never sanitized, never skipped.
@@ -200,9 +207,9 @@ ${specimenBlock}`,
           role: "user",
           content: `Term ${term.orderIndex}: "${term.title}" — ${term.rationale}
 
-Write week ${week} of ${term.weeks}: "${row.label}" · assigned text: ${row.ref}${row.hard ? " · THIS IS THE HARD-TEXT WEEK — the commitment is to read it whole, in context, with the confessions at hand." : ""}
+Write unit ${week} of ${term.weeks}: "${row.label}" · assigned text/theme: ${row.ref}${row.hard ? " · THIS IS THE HARD-TEXT UNIT — the commitment is to read it whole, in context, with the confessions at hand." : ""}
 
-Produce exactly 6 days (dayIndex 1-6).`,
+Produce exactly ${nDays} days (dayIndex 1-${nDays}).`,
         },
       ],
       max_completion_tokens: 9000,
@@ -244,7 +251,7 @@ Produce exactly 6 days (dayIndex 1-6).`,
 
     for (const d of parsed.days) {
       const dayIndex = Math.round(d.dayIndex);
-      if (dayIndex < 1 || dayIndex > 6 || have.has(dayIndex)) continue;
+      if (dayIndex < 1 || dayIndex > nDays || have.has(dayIndex)) continue;
 
       // The pull verse's TEXT comes from the ESV API — retrieval, never
       // model recall. If the fetch fails the card simply doesn't render.
@@ -301,7 +308,7 @@ Produce exactly 6 days (dayIndex 1-6).`,
 
     // Stamp the term when every week is full.
     const total = await prisma.devotionalDay.count({ where: { termId: term.id } });
-    if (total >= term.weeks * 6 && !term.generatedAt) {
+    if (total >= syllabusTarget(term.syllabus, term.weeks) && !term.generatedAt) {
       await prisma.term.update({
         where: { id: term.id },
         data: { generatedAt: new Date() },

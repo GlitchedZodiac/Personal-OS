@@ -17,7 +17,7 @@ interface TermData {
     hardNote?: string | null;
     secondNote?: string | null;
     weeks: number;
-    syllabus: { week: number; label: string; ref: string; hard?: boolean }[];
+    syllabus: { week: number; label: string; ref: string; days?: number; hard?: boolean }[];
   } | null;
   day: { weekIndex: number } | null;
   progress: { done: number; total: number; target: number } | null;
@@ -28,6 +28,7 @@ interface TermData {
 interface GenStatus {
   weeks: { week: number; have: number; done: number; target: number }[];
   total: number;
+  target: number;
   completed: number;
   term: { weeks: number; generatedAt: string | null } | null;
 }
@@ -53,7 +54,7 @@ export default function SpiritTermPage() {
   }, []);
   useEffect(load, [load]);
 
-  const target = (data?.term?.weeks ?? 7) * 6;
+  const target = gen?.target ?? data?.progress?.target ?? (data?.term?.weeks ?? 7) * 6;
   const missing = gen ? gen.weeks.filter((w) => w.have < w.target) : [];
   const needsWriting = gen !== null && gen.total < target;
 
@@ -242,7 +243,7 @@ export default function SpiritTermPage() {
                       ? `${info.done}/${info.have}`
                       : now
                         ? "now"
-                        : `wk ${row.week}`}
+                        : `${row.days ?? info?.have ?? 6}d`}
                 </span>
               )}
             </div>

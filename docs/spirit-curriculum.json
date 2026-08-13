@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "authoredBy": "main-lane Claude, 2026-08-13 — Year 1 after The Judges; the curriculum lane extends this to three years",
+  "principles": [
+    "Announced, not chosen — the order is set for him; the pace is his",
+    "Mixed modality: narrative, doctrine, gospel, practice, epistle, history, hope — not book-by-book",
+    "Terms run 3 to 30 studies, never longer; units inside a term are 3-6 days",
+    "Hard texts are read whole, flagged ahead, never skipped",
+    "History is taught with the Bible open — every study anchors to a reading",
+    "Revisiting a book is a feature: deeper pass, new lens"
+  ],
+  "terms": [
+    {
+      "orderIndex": 2,
+      "title": "The Exile",
+      "kick": "HISTORY & PROPHETS",
+      "rationale": "Judges ended with no king in Israel. The exile is what happened centuries later when the kings came and failed too — the covenant curses falling exactly as written, and God keeping covenant anyway, in a foreign land. From national amnesia to national catastrophe to a remnant walking home. This is the Old Testament's hinge, and most readers skip it.",
+      "hardNote": null,
+      "secondNote": null,
+      "units": [
+        { "label": "The slow collapse — Manasseh to the fall", "ref": "2 Kings 21–25", "days": 6 },
+        { "label": "Jeremiah — the prophet who watched it happen", "ref": "Jeremiah 1–2; 29; 31", "days": 6 },
+        { "label": "Daniel — faithful in Babylon", "ref": "Daniel 1–6", "days": 6 },
+        { "label": "Coming home — Ezra, Nehemiah, Haggai", "ref": "Ezra 1–6; Nehemiah 1–2; 4; 6; Haggai 1–2", "days": 6 }
+      ]
+    },
+    {
+      "orderIndex": 3,
+      "title": "Justification",
+      "kick": "DOCTRINE · THE HINGE",
+      "rationale": "Two terms of narrative failure — the judges' cycles, the exile's verdict — leave one question standing: how is anyone ever right with God? Six days on the hinge of the Reformation. Short on purpose: one doctrine, held up to the light until it catches.",
+      "hardNote": null,
+      "secondNote": null,
+      "units": [
+        { "label": "The verdict — God counts the ungodly righteous", "ref": "Romans 3:21–31; Genesis 15; Romans 4:1–8", "days": 3 },
+        { "label": "The exchange — Christ our righteousness", "ref": "2 Corinthians 5:11–21; Philippians 3:1–11; Galatians 2:15–21", "days": 3 }
+      ]
+    },
+    {
+      "orderIndex": 4,
+      "title": "The Gospel of Mark",
+      "kick": "GOSPEL · AT A RUN",
+      "rationale": "After the doctrine of justification, watch the Justifier walk. Mark is Peter's memories at a sprint — 'immediately' more than forty times — the shortest gospel and the least polished, which is exactly its authority. The kingdom arrives, is misunderstood, and goes to a cross on purpose.",
+      "hardNote": null,
+      "secondNote": null,
+      "units": [
+        { "label": "The kingdom arrives in a hurry", "ref": "Mark 1–4", "days": 6 },
+        { "label": "Who then is this? — power and misunderstanding", "ref": "Mark 5–8", "days": 6 },
+        { "label": "The road down — discipleship toward Jerusalem", "ref": "Mark 9–12", "days": 6 },
+        { "label": "The Passion according to Peter", "ref": "Mark 13–16", "days": 6 }
+      ]
+    },
+    {
+      "orderIndex": 5,
+      "title": "Giving a Reason",
+      "kick": "WITNESS · PRACTICE",
+      "rationale": "Study that never leaves the room goes stale. Five days on witness — not technique, and not a personality transplant: hope, given with gentleness and respect, by people who were asked. Watch Jesus with one woman, Paul with the philosophers and with a king, and then find your own two minutes.",
+      "hardNote": null,
+      "secondNote": null,
+      "units": [
+        { "label": "Always ready — hope with gentleness", "ref": "1 Peter 3:8–18; John 4:1–30; Acts 17:16–34; Acts 26; Luke 24:44–49", "days": 5 }
+      ]
+    },
+    {
+      "orderIndex": 6,
+      "title": "Romans",
+      "kick": "EPISTLE · THE CATHEDRAL",
+      "rationale": "The year's deep one, at the cap on purpose: thirty studies, no more. Paul's gospel laid out whole — indictment, gift, union, the Spirit, Israel, and a life poured out in response. You have read Romans before; this pass is slower, with the confessions at hand and your own open questions waiting in the margins.",
+      "hardNote": "Unit four sits in Romans 9–11 — election, hardening, and the mercy of God. It will be read whole, in order, without flinching and without softening. The confessions are at hand and the tone is Paul's own: not a puzzle to win, a doxology to reach.",
+      "secondNote": "You have walked Romans devotionally before. This is the 300-level pass — slower, unit by unit, with the doctrine load-bearing.",
+      "units": [
+        { "label": "No one righteous — the indictment", "ref": "Romans 1–3", "days": 6 },
+        { "label": "Reckoned — Abraham's children by faith", "ref": "Romans 4–5", "days": 6 },
+        { "label": "United — dead to sin, alive in the Spirit", "ref": "Romans 6–8", "days": 6 },
+        { "label": "The mystery — Israel and the mercy of God", "ref": "Romans 9–11", "days": 6, "hard": true },
+        { "label": "Living sacrifices — the gospel embodied", "ref": "Romans 12–16", "days": 6 }
+      ]
+    },
+    {
+      "orderIndex": 7,
+      "title": "The First Five Centuries",
+      "kick": "CHURCH HISTORY · 100–500",
+      "rationale": "The faith did not skip from Acts to your church. Martyrs held it, councils defined it, Augustine defended it — the vocabulary of orthodoxy was forged in fire and argument. History taught with the Bible open: every day anchors to the texts the church was dying for and defining.",
+      "hardNote": null,
+      "secondNote": null,
+      "units": [
+        { "label": "Blood and testimony — the martyr church", "ref": "Acts 6–8; Revelation 2–3", "days": 6 },
+        { "label": "Nicaea — the Son, very God of very God", "ref": "John 1; Colossians 1; Hebrews 1; Philippians 2", "days": 6 },
+        { "label": "Augustine — grace against the current", "ref": "Psalm 51; John 6:22–71; Ephesians 2; Romans 5", "days": 6 }
+      ]
+    },
+    {
+      "orderIndex": 8,
+      "title": "Hope — the Last Things",
+      "kick": "DOCTRINE · FORWARD",
+      "rationale": "End the year facing forward. Death, resurrection, return, renewal — hope as doctrine, not as mood. Six days standing where Paul stood: if Christ is not raised, nothing here was worth a single morning; since he is, everything was.",
+      "hardNote": null,
+      "secondNote": null,
+      "units": [
+        { "label": "What we await", "ref": "1 Corinthians 15; 1 Thessalonians 4:13–5:11; Revelation 21–22", "days": 6 }
+      ]
+    }
+  ]
+}

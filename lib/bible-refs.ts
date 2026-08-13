@@ -50,6 +50,29 @@ export function refParts(ref: number) {
   };
 }
 
+// A term's syllabus rows are UNITS of variable length — a doctrine
+// short can be 3 days, a book walk 30. Rows may carry `days`; rows
+// without it (the original Judges seed) default to 6. The term's
+// study target is the sum.
+export interface SyllabusUnit {
+  week: number;
+  label: string;
+  ref: string;
+  days?: number;
+  hard?: boolean;
+}
+
+export function unitDays(row: { days?: number } | undefined | null) {
+  const d = row?.days;
+  return Number.isInteger(d) && (d as number) >= 1 && (d as number) <= 30 ? (d as number) : 6;
+}
+
+export function syllabusTarget(syllabus: unknown, weeks: number) {
+  const rows = Array.isArray(syllabus) ? (syllabus as SyllabusUnit[]) : [];
+  if (!rows.length) return weeks * 6;
+  return rows.reduce((sum, r) => sum + unitDays(r), 0);
+}
+
 /** "Judges 4:14" from a canonical int; ranges collapse sensibly. */
 export function formatRef(start: number, end = start): string {
   const a = refParts(start);
