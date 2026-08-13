@@ -1075,6 +1075,149 @@ model UserExercise {
   @@map("user_exercises")
 }
 
+// ── Spirit: the curriculum spine ─────────────────────────────────────
+// Verse refs are canonical integers book*1e6 + chapter*1e3 + verse
+// (Judges 4:14 = 7004014), matching the ESV API's own encoding — notes
+// and highlights survive translation switches (docs/spirit-journal-plan).
+
+model Term {
+  id         String   @id @default(uuid())
+  orderIndex Int // 1-based across the whole curriculum
+  title      String // "The Judges"
+  kick       String // "OT NARRATIVE"
+  rationale  String // "why this term, why now"
+  hardNote   String? // hard-sayings statement when the term contains one
+  secondNote String? // second-reading note when revisiting a book
+  weeks      Int
+  syllabus   Json // [{week, label, ref, hard?: true}]
+  status     String   @default("upcoming") // upcoming | active | completed
+  startedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  days DevotionalDay[]
+
+  @@map("spirit_terms")
+}
+
+model DevotionalDay {
+  id           String   @id @default(uuid())
+  termId       String
+  term         Term     @relation(fields: [termId], references: [id])
+  weekIndex    Int // 1-based
+  dayIndex     Int // 1-based within the week
+  title        String
+  body         String // the teaching
+  pullRef      String? // "Judges 4:14"
+  pullText     String?
+  contextBlock String // THE WORLD BEHIND THE TEXT
+  doctrine     String // THE DOCTRINE
+  practice     String // THE PRACTICE
+  question     String // closing question
+  oneMoreTitle String?
+  oneMoreBody  String?
+  readingRef   String // "Judges 4-5"
+  readingLabel String // "Judges 4–5 · Deborah & Barak"
+  estMinutes   Int      @default(12)
+  citations    Json? // [{label, sourceKey, locator}]
+  suggested    Json? // [{refInt, category}] — pre-marked highlights
+  generatedAt  DateTime @default(now())
+
+  @@unique([termId, weekIndex, dayIndex])
+  @@map("spirit_days")
+}
+
+model ReadingLog {
+  id       String   @id @default(uuid())
+  refStart Int
+  refEnd   Int
+  label    String // "Judges 4–5"
+  medium   String   @default("app") // app | paper
+  track    String   @default("term") // term | track2 | free
+  dayId    String? // DevotionalDay satisfied by this reading
+  readAt   DateTime @default(now())
+
+  @@index([refStart])
+  @@map("spirit_reading_log")
+}
+
+model Highlight {
+  id        String   @id @default(uuid())
+  refStart  Int
+  refEnd    Int
+  category  String // God | Promise & Covenant | Command | Sin & Consequence | Christ | Context
+  origin    String   @default("user") // user | accepted (from a suggestion)
+  createdAt DateTime @default(now())
+
+  @@index([refStart])
+  @@map("spirit_highlights")
+}
+
+model SpiritNote {
+  id         String    @id @default(uuid())
+  refStart   Int
+  refEnd     Int
+  kind       String // observation | question | connection | conviction | doctrine
+  body       String
+  spoken     Boolean   @default(false)
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([refStart])
+  @@map("spirit_notes")
+}
+
+model VerseLink {
+  id        String   @id @default(uuid())
+  fromStart Int
+  fromEnd   Int
+  toStart   Int
+  toEnd     Int
+  reason    String // fulfills | parallels | tension
+  why       String?
+  createdAt DateTime @default(now())
+
+  @@index([fromStart])
+  @@map("spirit_verse_links")
+}
+
+model StudyThread {
+  id        String   @id @default(uuid())
+  refStart  Int
+  refEnd    Int
+  messages  Json // [{role, content, citations?}]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([refStart])
+  @@map("spirit_study_threads")
+}
+
+model SourceDoc {
+  key       String   @id // "henry-judges-4", "wcf-14-2"
+  title     String // "Matthew Henry · on Judges 4"
+  meta      String // "Commentary, 1706 · condensed · public domain"
+  body      String
+  createdAt DateTime @default(now())
+
+  @@map("spirit_sources")
+}
+
+// ESV passage cache — LRU with pinning, NEVER a full-canon store
+// (Crossway's license forbids a substantially complete copy; term
+// passages pin for the term, the rest evicts).
+model EsvPassage {
+  queryKey     String   @id // normalized query, e.g. "judges 4"
+  canonical    String
+  html         String
+  verseCount   Int
+  audioUrl     String?
+  pinned       Boolean  @default(false)
+  fetchedAt    DateTime @default(now())
+  lastAccessAt DateTime @default(now())
+
+  @@map("esv_passages")
+}
+
 model IntegrationSecret {
   name      String   @id // e.g. "openai_admin_key"
   value     String
