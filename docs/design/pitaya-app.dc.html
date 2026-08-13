@@ -29,7 +29,7 @@
   <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="440px" height="956px" hint-size="440px,956px">
     <div style="height:956px; position:relative; background:#F2F1F2; overflow:hidden; font-family:'Instrument Sans',sans-serif;">
 
-      <div style="display:flex; width:2640px; height:100%; transform: translateX({{ trackX }}); transition:transform .42s cubic-bezier(.32,.86,.3,1);">
+      <div style="display:flex; width:3520px; height:100%; transform: translateX({{ trackX }}); transition:transform .42s cubic-bezier(.32,.86,.3,1);">
 
         <div style="width:440px; height:100%; overflow-y:auto; flex:none; box-sizing:border-box; padding:74px 22px 200px;">
           <div style="display:flex; justify-content:space-between; align-items:flex-end; animation:rise .5s ease both;">
@@ -537,6 +537,145 @@
           </div>
         </div>
 
+        <div data-screen-label="Spirit home" style="width:440px; height:100%; overflow-y:auto; flex:none; box-sizing:border-box; padding:74px 22px 200px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+            <div>
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">SAT · AUGUST 8</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:30px; font-weight:700; color:#232227; letter-spacing:-0.02em; margin-top:2px;">Spirit</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 12px; border-radius:99px;"><svg width="9" height="9" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63"></rect></svg> {{ spStreakLab }}</div>
+          </div>
+
+          <div onClick="{{ vwTap }}" style="display:flex; align-items:center; gap:11px; background:#F6E3EB; border-radius:14px; padding:12px 14px; margin-top:16px; cursor:pointer;" style-hover="background:#F0D3E0;">
+            <svg width="10" height="10" viewBox="0 0 10 10" style="flex:none;"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63"></rect></svg>
+            <div style="flex:1;">
+              <div style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#8C2F51;">THIS WEEK'S VERSE · ASSURANCE</div>
+              <div style="font-size:12.5px; color:#232227; font-style:italic; margin-top:3px;">“God is our refuge and strength…” — Psalm 46:1</div>
+            </div>
+            <span style="font-size:15px; color:#8C2F51;">›</span>
+          </div>
+
+          <div style="background:#232227; border-radius:20px; padding:20px; margin-top:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#DCA8BE;">THE UNIVERSITY · TERM 2 · WK 5 OF 7</div>
+              <div onClick="{{ postTap }}" style="display:flex; align-items:center; gap:5px; font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:600; color:#DCA8BE; background:#3A3239; padding:4px 10px; border-radius:99px; cursor:pointer;" style-hover="background:#4A3540;">{{ postLab }} ⇄</div>
+            </div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:21px; font-weight:700; color:#FFFFFF; letter-spacing:-0.01em; line-height:1.3; margin-top:9px;">The general who asked for company</div>
+            <div style="font-size:12px; color:#C9C7CD; line-height:1.6; margin-top:5px;">Today's teaching &amp; reading · Judges 4–5 · ≈ 12 min · written before you woke.</div>
+            <div style="display:flex; gap:10px; margin-top:14px;">
+              <button onClick="{{ uniOpen }}" style="flex:1.6; font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#FFFFFF; background:#A63D63; border:none; border-radius:10px; padding:11px 0; cursor:pointer;" style-hover="background:#8C2F51;">Open today's study</button>
+              <button onClick="{{ spPlanOpen }}" style="flex:1; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#F2F1F2; background:transparent; border:1px solid #4A4550; border-radius:10px; padding:11px 0; cursor:pointer;" style-hover="background:#3A3239;">Syllabus</button>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+            <div onClick="{{ spReadOpen }}" style="background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2.5 2.5 0 0 1 2.5-2.5H19a1 1 0 0 1 1 1V17"></path><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20v4.5H6.5A2.5 2.5 0 0 1 4 19.5Z"></path></svg>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:8px;">Open the Bible</div>
+              <div style="font-size:11px; color:#66646C; margin-top:2px;">free reading · pick up anywhere</div>
+            </div>
+            <div onClick="{{ spNbOpen }}" style="background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:8px;">Notebook</div>
+              <div style="font-size:11px; color:#66646C; margin-top:2px;">{{ nbOpenLab }} · 34 notes</div>
+            </div>
+            <div onClick="{{ askTap }}" style="background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.6L3 21l1.9-5.6A8.5 8.5 0 1 1 21 11.5Z"></path><path d="M9.6 9.5a2.4 2.4 0 0 1 4.7.8c0 1.6-2.3 2-2.3 3.2M12 16.8h.01"></path></svg>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:8px;">Ask anything</div>
+              <div style="font-size:11px; color:#66646C; margin-top:2px;">anchored · always cited</div>
+            </div>
+            <div onClick="{{ spMemOpen }}" style="background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3.5 3.5 0 0 0-3.4 4.4A3.5 3.5 0 0 0 7 14a3.5 3.5 0 0 0 5 4.9A3.5 3.5 0 0 0 17 14a3.5 3.5 0 0 0-1.6-6.6A3.5 3.5 0 0 0 12 3Z"></path></svg>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:8px;">Memory</div>
+              <div style="font-size:11px; color:#66646C; margin-top:2px;">{{ memDueLab }} · 2 minutes</div>
+            </div>
+          </div>
+
+
+          <div onClick="{{ sunTap }}" style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">SUNDAY · SERMON FOLLOW-ALONG</div>
+              <span style="font-size:9.5px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:2.5px 9px; border-radius:99px;">series · wk 2</span>
+            </div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:16px; font-weight:600; color:#232227; margin-top:7px;">Galatians 3 — faith and the law</div>
+            <div style="font-size:12px; color:#66646C; line-height:1.55; margin-top:4px;">The passage, its context, and three questions to bring back — you arrive next Sunday primed. Runs beside the term, never instead of it.</div>
+          </div>
+
+          <div style="background:#FFFFFF; border-radius:14px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden;">
+            <div onClick="{{ t2Tap }}" style="display:flex; justify-content:space-between; align-items:center; padding:13px 16px; cursor:pointer;" style-hover="background:#FAF9FA;">
+              <span style="font-size:12px; color:#454349;"><span style="font-weight:700; color:#96949B; font-size:10.5px; letter-spacing:0.1em;">TRACK 2</span> · Genesis 12–15</span>
+              <span style="font-size:11px; color:#96949B;">12 min · {{ t2Chev }}</span>
+            </div>
+            <sc-if value="{{ t2Open }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 16px 13px; animation:fadeUp .25s ease both;">
+                <div style="height:5px; border-radius:99px; background:#F2F1F2; overflow:hidden;"><div style="height:100%; width:16%; border-radius:99px; background:#C97D9C;"></div></div>
+                <div style="font-size:11px; color:#96949B; margin-top:7px; line-height:1.5;">The whole Bible in a year, quietly, in the background. It never competes with the term — and it never counts against you.</div>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="display:flex; gap:12px; margin-top:12px;">
+            <div onClick="{{ spMemOpen }}" style="flex:1; background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+              <div style="font-size:10.5px; letter-spacing:0.14em; font-weight:600; color:#96949B;">MEMORY</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#232227; margin-top:6px;">{{ memDueLab }}</div>
+              <div style="font-size:11.5px; color:#66646C; margin-top:2px;">Rom 8 · Ps 46 · WSC Q.1</div>
+            </div>
+            <div onClick="{{ spNbOpen }}" style="flex:1; background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+              <div style="font-size:10.5px; letter-spacing:0.14em; font-weight:600; color:#96949B;">NOTEBOOK</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#232227; margin-top:6px;">{{ nbOpenLab }}</div>
+              <div style="font-size:11.5px; color:#66646C; margin-top:2px;">34 notes · 12 verse links</div>
+            </div>
+          </div>
+
+          <div onClick="{{ spCovOpen }}" style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">THE TRANSCRIPT · LIFETIME</div>
+              <div style="font-size:11px; font-weight:600; color:#8C2F51;">39 of 66 books</div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(22, 1fr); gap:3px; margin-top:12px;">
+              <sc-for list="{{ covMini }}" as="c" hint-placeholder-count="66"><div style="height:11px; border-radius:2.5px; background: {{ c.c }};"></div></sc-for>
+            </div>
+            <div style="font-size:10.5px; color:#96949B; margin-top:10px;">Judges in progress · darker = read more often · open the map →</div>
+          </div>
+
+          <div style="display:flex; gap:12px; margin-top:12px;">
+            <div onClick="{{ spPlanOpen }}" style="flex:1; background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+              <div style="font-size:10.5px; letter-spacing:0.14em; font-weight:600; color:#96949B;">THE TERM</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:6px;">Syllabus · wk 5 of 7</div>
+              <div style="font-size:11px; color:#66646C; margin-top:2px;">Why this term · next: Gideon</div>
+            </div>
+            <div onClick="{{ spLibOpen }}" style="flex:1; background:#FFFFFF; border-radius:16px; padding:14px 16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); cursor:pointer;" style-hover="background:#FAF9FA;">
+              <div style="font-size:10.5px; letter-spacing:0.14em; font-weight:600; color:#96949B;">LIBRARY</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:6px;">18 sources</div>
+              <div style="font-size:11px; color:#66646C; margin-top:2px;">Calvin · Henry · the confessions</div>
+            </div>
+          </div>
+        </div>
+
+        <div data-screen-label="Journal — coming soon" style="width:440px; height:100%; overflow-y:auto; flex:none; box-sizing:border-box; padding:74px 22px 200px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+            <div>
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">THE ARCHIVE OF YOUR DAYS</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:30px; font-weight:700; color:#232227; letter-spacing:-0.02em; margin-top:2px;">Journal</div>
+            </div>
+            <div style="font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 12px; border-radius:99px;">coming soon</div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:20px; padding:32px 24px; margin-top:18px; box-shadow:0 2px 12px rgba(35,34,39,0.06); text-align:center;">
+            <div style="width:68px; height:68px; border-radius:50%; background:#F6E3EB; display:flex; align-items:center; justify-content:center; margin:0 auto;">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 6.2 17.8 10.8 8.3 20.3 2.5 21.5 3.7 15.7 13.2 6.2Z"></path><path d="M13.2 6.2l1.8-1.8a2.05 2.05 0 0 1 2.9 0l1.7 1.7a2.05 2.05 0 0 1 0 2.9l-1.8 1.8"></path><path d="M10.6 13.4 8.9 15.1"></path></svg>
+            </div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; margin-top:16px;">The notebook is being bound.</div>
+            <div style="font-size:13px; color:#66646C; line-height:1.65; margin-top:8px;">Photos, voice, and text in one archive — tagged, searchable, “on this day,” and every entry linkable to the passage you were reading.</div>
+          </div>
+          <div style="display:grid; gap:1px; background:#E4E2E6; border:1px solid #E4E2E6; border-radius:14px; overflow:hidden; margin-top:12px;">
+            <div style="background:#FFFFFF; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;"><span style="font-size:12.5px; color:#454349;">Photo, voice &amp; text entries</span><span style="font-size:10px; font-weight:600; color:#96949B; background:#F2F1F2; padding:2px 8px; border-radius:99px;">soon</span></div>
+            <div style="background:#FFFFFF; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;"><span style="font-size:12.5px; color:#454349;">Tags &amp; one search across everything</span><span style="font-size:10px; font-weight:600; color:#96949B; background:#F2F1F2; padding:2px 8px; border-radius:99px;">soon</span></div>
+            <div style="background:#FFFFFF; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;"><span style="font-size:12.5px; color:#454349;">“On this day” lookbacks</span><span style="font-size:10px; font-weight:600; color:#96949B; background:#F2F1F2; padding:2px 8px; border-radius:99px;">soon</span></div>
+            <div style="background:#FFFFFF; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;"><span style="font-size:12.5px; color:#454349;">Entries linked to passages</span><span style="font-size:10px; font-weight:600; color:#96949B; background:#F2F1F2; padding:2px 8px; border-radius:99px;">soon</span></div>
+          </div>
+          <div style="text-align:center; font-size:11px; color:#96949B; margin-top:14px; line-height:1.6;">Until then, Tonight's Page keeps living in Today —<br>and prayer, if recorded, lives here as a tag. No verdicts, ever.</div>
+        </div>
+
       </div>
 
       <div style="position:absolute; bottom:104px; left:50%; transform:translateX(-50%); z-index:45; display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.92); backdrop-filter:blur(16px); border:1px solid #E4E2E6; border-radius:99px; padding:7px; box-shadow:0 10px 30px rgba(35,34,39,0.16);">
@@ -552,9 +691,9 @@
       </div>
 
       <div style="position:absolute; bottom:0; left:0; right:0; z-index:40; background:rgba(255,255,255,0.94); backdrop-filter:blur(20px); border-top:1px solid #E4E2E6; padding:10px 8px 30px; display:flex;">
-        <div onClick="{{ t4 }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; color: {{ tc4 }}; transition:color .25s;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5.5" r="2.5"></circle><path d="M8 21v-5l-1.5-4A2 2 0 0 1 8.4 9.5h7.2a2 2 0 0 1 1.9 2.5L16 16v5"></path></svg>
-          <span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:600;">Body</span>
+        <div onClick="{{ t6 }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; color: {{ tc6 }}; transition:color .25s;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2.5 2.5 0 0 1 2.5-2.5H19a1 1 0 0 1 1 1V17"></path><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20v4.5H6.5A2.5 2.5 0 0 1 4 19.5Z"></path><path d="M12 5.8v5.4M9.6 8h4.8"></path></svg>
+          <span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:600;">Spirit</span>
         </div>
         <div onClick="{{ t2 }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; color: {{ tc2 }}; transition:color .25s;">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 11h16a8 8 0 0 1-16 0Z"></path><path d="M9 7c0-1.5 1-1.5 1-3M14 7c0-1.5 1-1.5 1-3"></path></svg>
@@ -564,9 +703,9 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"></circle></svg>
           <span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:600;">Today</span>
         </div>
-        <div onClick="{{ t3 }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; color: {{ tc3 }}; transition:color .25s;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 8V6.5a3 3 0 0 1 6 0V8"></path><path d="M7.5 8h9c2 2.2 3 4.6 3 7a7.5 7.5 0 0 1-15 0c0-2.4 1-4.8 3-7Z"></path></svg>
-          <span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:600;">Train</span>
+        <div onClick="{{ t7 }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; color: {{ tc7 }}; transition:color .25s;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 6.2 17.8 10.8 8.3 20.3 2.5 21.5 3.7 15.7 13.2 6.2Z"></path><path d="M13.2 6.2l1.8-1.8a2.05 2.05 0 0 1 2.9 0l1.7 1.7a2.05 2.05 0 0 1 0 2.9l-1.8 1.8"></path><path d="M10.6 13.4 8.9 15.1"></path></svg>
+          <span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:600;">Journal</span>
         </div>
         <div onClick="{{ t5 }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; color: {{ tc5 }}; transition:color .25s;">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1"></path></svg>
@@ -1112,6 +1251,353 @@
         </div>
       </sc-if>
 
+      <sc-if value="{{ spReadOn }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Reader — Judges 4" style="position:absolute; inset:0; z-index:60; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 220px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ spReadClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">TERM 2 · THE JUDGES · WEEK 5</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">Judges 4</div>
+            </div>
+            <div onClick="{{ spLegOpen }}" style="display:flex; align-items:center; gap:6px; font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:7px 13px; border-radius:99px; cursor:pointer; flex:none;" style-hover="background:#F0D3E0;"><span style="display:flex; gap:2.5px;"><span style="width:7px; height:7px; border-radius:50%; background:#5E9B72;"></span><span style="width:7px; height:7px; border-radius:50%; background:#B08035;"></span><span style="width:7px; height:7px; border-radius:50%; background:#A63D63;"></span></span>Legend</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+            <button onClick="{{ spModeR }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 14px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ mdRBg }}; color: {{ mdRCol }};">Reading</button>
+            <button onClick="{{ spModeS }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; padding:6px 14px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .25s; background: {{ mdSBg }}; color: {{ mdSCol }};">Study</button>
+            <div style="flex:1;"></div>
+            <span style="font-size:11px; color:#96949B;">tap a verse to work on it</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; background:#FFFFFF; border:1.5px dashed #DCA8BE; border-radius:12px; padding:9px 13px; margin-top:12px;">
+            <span style="width:15px; height:15px; border-radius:5px; border:1.5px dashed #A63D63; flex:none; box-sizing:border-box;"></span>
+            <span style="flex:1; font-size:11.5px; color:#454349; line-height:1.45;">{{ suggLine }}</span>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:16px 14px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <sc-for list="{{ spVerses }}" as="v" hint-placeholder-count="9">
+              <div onClick="{{ v.tap }}" style="padding:7px 9px 7px 11px; border-radius:9px; cursor:pointer; transition:background .2s, box-shadow .2s; background: {{ v.bg }}; box-shadow: {{ v.sh }}; border-left: {{ v.bl }};">
+                <div style="font-size:14.5px; color:#232227; line-height:1.75;"><span style="font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:6px;">{{ v.n }}</span>{{ v.t }}</div>
+                <sc-if value="{{ v.hasTag }}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:600; margin-top:4px; padding:2px 8px; border-radius:99px; background:#FFFFFF; color: {{ v.tagCol }};"><span style="width:6px; height:6px; border-radius:50%; background: {{ v.tagCol }};"></span>{{ v.tag }}</div></sc-if>
+                <sc-if value="{{ v.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#8C2F51; margin-top:4px;">✎ {{ v.note }}</div></sc-if>
+                <sc-if value="{{ v.hasXr }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#66646C; margin-top:4px;"><span style="font-weight:700; color:#8C2F51;">⇄ TSK</span> {{ v.xr }}</div></sc-if>
+                <sc-if value="{{ v.hasSugg }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:7px; margin-top:6px;"><span style="display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:600; padding:2.5px 9px; border-radius:99px; border:1.5px dashed {{ v.suggCol }}; color: {{ v.suggCol }}; background:#FFFFFF;"><span style="width:6px; height:6px; border-radius:50%; border:1.5px solid {{ v.suggCol }}; box-sizing:border-box;"></span>Suggested · {{ v.suggLab }}</span><span onClick="{{ v.sAcc }}" style="width:23px; height:23px; border-radius:50%; background:#EAF3ED; color:#3E7A54; display:inline-flex; align-items:center; justify-content:center; font-size:11px; cursor:pointer; transition:transform .15s;" style-hover="transform:scale(1.15);">✓</span><span onClick="{{ v.sDis }}" style="width:23px; height:23px; border-radius:50%; background:#F2F1F2; color:#96949B; display:inline-flex; align-items:center; justify-content:center; font-size:10px; cursor:pointer; transition:transform .15s;" style-hover="transform:scale(1.15);">✕</span></div></sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <button onClick="{{ spDayTap }}" style="width:100%; margin-top:14px; font-family:'Familjen Grotesk',sans-serif; font-size:13.5px; font-weight:600; border:none; border-radius:12px; padding:13px 0; cursor:pointer; transition:background .3s; background: {{ dayBg }}; color: {{ dayCol }};">{{ dayTxt }}</button>
+          <div style="text-align:center; font-size:10.5px; color:#96949B; margin-top:12px; line-height:1.6;">ESV text via Crossway API · cross-references from the Treasury of Scripture Knowledge<br>offline once loaded · long-press a word for word study</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ spBarOn }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; left:0; right:0; bottom:0; z-index:62; background:#FFFFFF; border-radius:24px 24px 0 0; padding:16px 20px 34px; box-shadow:0 -12px 40px rgba(35,34,39,0.18); animation:sheetUp .3s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:10.5px; letter-spacing:0.14em; font-weight:700; color:#8C2F51;">JUDGES 4:{{ spSelN }} SELECTED</span>
+            <div onClick="{{ spSelClear }}" style="width:26px; height:26px; border-radius:50%; background:#F2F1F2; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px; color:#66646C;">✕</div>
+          </div>
+          <sc-if value="{{ barAct }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; gap:6px; margin-top:14px;">
+              <div onClick="{{ spHlMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background:#FAF9FA;" style-hover="background:#F6E3EB;"><div style="display:flex; justify-content:center; gap:2.5px;"><span style="width:9px; height:9px; border-radius:50%; background:#5E9B72;"></span><span style="width:9px; height:9px; border-radius:50%; background:#A63D63;"></span></div><div style="font-size:10px; font-weight:600; color:#232227; margin-top:5px;">Highlight</div></div>
+              <div onClick="{{ spNoteMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background:#FAF9FA;" style-hover="background:#F6E3EB;"><div style="font-size:14px; line-height:11px; color:#8C2F51;">✎</div><div style="font-size:10px; font-weight:600; color:#232227; margin-top:5px;">Note</div></div>
+              <div onClick="{{ spLinkMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background:#FAF9FA;" style-hover="background:#F6E3EB;"><div style="font-size:13px; line-height:11px; color:#8C2F51;">⇄</div><div style="font-size:10px; font-weight:600; color:#232227; margin-top:5px;">Link</div></div>
+              <div onClick="{{ spWsOpen }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background:#FAF9FA;" style-hover="background:#F6E3EB;"><div style="font-size:12px; line-height:11px; font-weight:700; color:#8C2F51;">אב</div><div style="font-size:10px; font-weight:600; color:#232227; margin-top:5px;">Word</div></div>
+              <div onClick="{{ spAskMode }}" style="flex:1; text-align:center; padding:10px 0 8px; border-radius:12px; cursor:pointer; background:#FAF9FA;" style-hover="background:#F6E3EB;"><div style="font-size:13px; line-height:11px; color:#8C2F51;">?</div><div style="font-size:10px; font-weight:600; color:#232227; margin-top:5px;">Ask</div></div>
+            </div>
+            <div style="font-size:10px; color:#96949B; margin-top:10px;">Memorize &amp; copy live under ⋯ · highlights, notes and links cost zero AI</div>
+          </sc-if>
+          <sc-if value="{{ barHl }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:11px; color:#66646C; margin-top:12px;">Colors mean something — pick the meaning, not the shade.</div>
+            <div style="display:flex; gap:5px; margin-top:10px;">
+              <sc-for list="{{ hlOpts }}" as="h" hint-placeholder-count="6">
+                <div onClick="{{ h.tap }}" style="flex:1; text-align:center; cursor:pointer;"><div style="height:34px; border-radius:10px; border:1.5px solid {{ h.dot }}; background: {{ h.bg }};" style-hover="transform:scale(1.05);"></div><div style="font-size:8.5px; font-weight:600; color:#66646C; margin-top:4px; line-height:1.2;">{{ h.lab }}</div></div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ barNote }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:11px; margin-top:13px;">
+              <div style="width:42px; height:42px; border-radius:50%; background:#A63D63; display:flex; align-items:center; justify-content:center; flex:none; box-shadow:0 0 0 5px #F6E3EB;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"></path></svg></div>
+              <div style="flex:1;">
+                <div style="font-size:11px; font-weight:600; color:#232227;">Spoken · 0:14 · transcribed</div>
+                <div style="display:flex; gap:2.5px; align-items:flex-end; height:13px; margin-top:5px;"><span style="width:3px; height:5px; border-radius:2px; background:#DCA8BE;"></span><span style="width:3px; height:10px; border-radius:2px; background:#A63D63;"></span><span style="width:3px; height:7px; border-radius:2px; background:#C97D9C;"></span><span style="width:3px; height:12px; border-radius:2px; background:#A63D63;"></span><span style="width:3px; height:6px; border-radius:2px; background:#DCA8BE;"></span><span style="width:3px; height:11px; border-radius:2px; background:#8C2F51;"></span><span style="width:3px; height:8px; border-radius:2px; background:#C97D9C;"></span><span style="width:3px; height:4px; border-radius:2px; background:#DCA8BE;"></span></div>
+              </div>
+              <span style="font-size:10px; color:#96949B;">typing is the fallback</span>
+            </div>
+            <div style="border:1.5px dashed #D9D7DC; border-radius:12px; padding:11px 13px; margin-top:10px; font-size:13px; color:#454349; line-height:1.55; font-style:italic;">“Barak's condition — unbelief, or dependence on the word through the prophetess? Hebrews eleven still lists him.”</div>
+            <div style="display:flex; align-items:center; gap:6px; margin-top:11px; flex-wrap:wrap;">
+              <span style="font-size:10.5px; color:#96949B; flex:none;">Sounds like a</span>
+              <sc-for list="{{ nkOpts }}" as="k" hint-placeholder-count="5">
+                <div onClick="{{ k.tap }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:10.5px; font-weight:600; padding:5px 11px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .2s; background: {{ k.bg }}; color: {{ k.col }};">{{ k.lab }}</div>
+              </sc-for>
+            </div>
+            <button onClick="{{ spNoteSave }}" style="width:100%; margin-top:11px; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#FFFFFF; background:#A63D63; border:none; border-radius:10px; padding:11px 0; cursor:pointer;" style-hover="background:#8C2F51;">Save as {{ nkLab }} note</button>
+          </sc-if>
+          <sc-if value="{{ barLink }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#232227;">Judg 4:{{ spSelN }}</span>
+              <span style="color:#A63D63; font-weight:700;">⇄</span>
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#232227;">Judg 2:14</span>
+              <span style="font-size:10.5px; color:#96949B;">same verb — “sold”</span>
+            </div>
+            <div style="font-size:11px; color:#66646C; margin-top:10px;">Why are these connected? The reason is the link.</div>
+            <div style="display:flex; gap:5px; margin-top:8px;">
+              <sc-for list="{{ lkOpts }}" as="k" hint-placeholder-count="4">
+                <div onClick="{{ k.tap }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:10.5px; font-weight:600; padding:5px 11px; border-radius:99px; border:1px solid #E4E2E6; cursor:pointer; transition:background .2s; background: {{ k.bg }}; color: {{ k.col }};">{{ k.lab }}</div>
+              </sc-for>
+            </div>
+            <button onClick="{{ spLinkSave }}" style="width:100%; margin-top:12px; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#FFFFFF; background:#A63D63; border:none; border-radius:10px; padding:11px 0; cursor:pointer;" style-hover="background:#8C2F51;">Save link</button>
+          </sc-if>
+          <sc-if value="{{ barAsk }}" hint-placeholder-val="{{ false }}">
+            <div style="align-self:flex-end; background:#A63D63; color:#FFFFFF; border-radius:14px 14px 4px 14px; padding:9px 12px; font-size:13px; line-height:1.5; margin-top:12px;">Why does Deborah say the honor will go to a woman?</div>
+            <div style="background:#FAF9FA; border:1px solid #E4E2E6; border-radius:14px 14px 14px 4px; padding:10px 12px; font-size:13px; color:#232227; line-height:1.55; margin-top:8px;">Barak asked for the prophetess's presence rather than resting on the promise of v.7 — so the LORD assigns the glory of Sisera's fall to Jael. Henry reads it as gentle rebuke, not disqualification.<div style="display:inline-flex; margin-top:7px; font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:600; color:#8C2F51; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:99px; padding:3px 9px;">Henry on Judg 4 ›</div></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+              <span style="font-size:10.5px; color:#96949B;">Stored on Judges 4:{{ spSelN }} — searchable forever</span>
+              <button onClick="{{ spSelClear }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600; color:#8C2F51; background:#F6E3EB; border:none; border-radius:8px; padding:7px 14px; cursor:pointer;" style-hover="background:#F0D3E0;">Done</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{ barWord }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:baseline; gap:9px; margin-top:13px;">
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227;">sold</span>
+              <span style="font-size:14px; color:#8C2F51;">מָכַר</span>
+              <span style="font-size:11.5px; color:#66646C; font-style:italic;">mākar · verb</span>
+              <span style="flex:1;"></span>
+              <span style="font-size:10px; color:#96949B;">80× in the OT</span>
+            </div>
+            <div style="font-size:12.5px; color:#454349; line-height:1.6; margin-top:7px;">To sell, hand over — of goods, of persons, and of God giving His people into the hand of their enemies in judgment.</div>
+            <div style="display:grid; gap:1px; background:#E4E2E6; border:1px solid #E4E2E6; border-radius:11px; overflow:hidden; margin-top:10px;">
+              <div style="background:#FFFFFF; padding:8px 12px; display:flex; justify-content:space-between;"><span style="font-size:11.5px; color:#454349;">Judg 2:14 — “he sold them into the hand of their enemies”</span><span style="font-size:10px; color:#8C2F51; font-weight:600;">the refrain</span></div>
+              <div style="background:#FFFFFF; padding:8px 12px; display:flex; justify-content:space-between;"><span style="font-size:11.5px; color:#454349;">Judg 3:8 · 10:7 — the cycle repeats</span><span style="font-size:10px; color:#96949B;">open ›</span></div>
+              <div style="background:#FFFFFF; padding:8px 12px; display:flex; justify-content:space-between;"><span style="font-size:11.5px; color:#454349;">Gen 37:28 — Joseph, sold for twenty shekels</span><span style="font-size:10px; color:#96949B;">open ›</span></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+              <span style="flex:1; font-size:10.5px; color:#96949B; line-height:1.5;">The pattern: the LORD sells His people to their enemies — and raises a deliverer to buy them back.</span>
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:10.5px; font-weight:600; color:#8C2F51; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:4px 11px; cursor:pointer; flex:none;" style-hover="background:#F6E3EB;">Open in Logos ›</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{ barDone }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:10px; margin-top:14px; animation:fadeUp .3s ease both;">
+              <div style="width:34px; height:34px; border-radius:50%; background:#EAF3ED; display:flex; align-items:center; justify-content:center; color:#3E7A54; font-size:15px; flex:none;">✓</div>
+              <div style="flex:1; font-size:13px; font-weight:600; color:#232227;">{{ barDoneMsg }}</div>
+              <button onClick="{{ spSelClear }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600; color:#66646C; background:transparent; border:1px solid #E4E2E6; border-radius:8px; padding:7px 14px; cursor:pointer;" style-hover="background:#FAF9FA;">Close</button>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ spLegOn }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ spLegClose }}" style="position:absolute; inset:0; z-index:65; background:rgba(27,21,24,0.45);"></div>
+        <div data-screen-label="Highlight legend" style="position:absolute; left:0; right:0; bottom:0; z-index:66; background:#FFFFFF; border-radius:28px 28px 0 0; padding:24px 24px 40px; animation:sheetUp .35s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="width:40px; height:4px; border-radius:99px; background:#E4E2E6; margin:0 auto 18px;"></div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227;">Your legend</div>
+          <div style="font-size:12px; color:#66646C; margin-top:4px;">Each color carries a meaning you assigned — so it can be queried, not just admired.</div>
+          <div style="display:grid; gap:1px; background:#E4E2E6; border:1px solid #E4E2E6; border-radius:14px; overflow:hidden; margin-top:14px;">
+            <sc-for list="{{ legRows }}" as="l" hint-placeholder-count="6">
+              <div onClick="{{ l.tap }}" style="background:#FFFFFF; padding:11px 14px; cursor:pointer;" style-hover="background:#FAF9FA;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="width:16px; height:16px; border-radius:5px; border:1.5px solid {{ l.dot }}; background: {{ l.bg }}; flex:none;"></span>
+                  <span style="flex:1; font-size:13px; font-weight:600; color:#232227;">{{ l.lab }}</span>
+                  <span style="font-size:11px; color:#96949B; font-variant-numeric:tabular-nums;">{{ l.count }}</span>
+                  <span style="font-size:14px; color:#C9C7CD;">›</span>
+                </div>
+                <sc-if value="{{ l.open }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:11.5px; color:#66646C; margin:8px 0 2px 26px; line-height:1.6; animation:fadeUp .25s ease both;">{{ l.refs }}</div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:14px;">
+            <button style="flex:1; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#232227; background:transparent; border:1px solid #D9D7DC; border-radius:10px; padding:10px 0; cursor:pointer;" style-hover="background:#FAF9FA;">Edit meanings</button>
+            <button onClick="{{ spLegClose }}" style="flex:1; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#FFFFFF; background:#A63D63; border:none; border-radius:10px; padding:10px 0; cursor:pointer;" style-hover="background:#8C2F51;">Done</button>
+          </div>
+          <div style="font-size:10.5px; color:#96949B; margin-top:12px; text-align:center;">Ask anytime: “every promise I've marked in the Psalms.”</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ uniOn }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Today's study" style="position:absolute; inset:0; z-index:56; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 200px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ uniClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">TERM 2 · THE JUDGES · WK 5 · DAY 4</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">Today's study</div>
+            </div>
+            <span style="font-size:11px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 11px; border-radius:99px; flex:none;">≈ 12 min</span>
+          </div>
+
+          <div style="background:#FFFFFF; border-radius:20px; padding:20px; margin-top:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">TODAY'S TEACHING · WRITTEN BEFORE YOU WOKE</div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:22px; font-weight:700; color:#232227; letter-spacing:-0.01em; line-height:1.25; margin-top:10px;">The general who asked for company</div>
+            <div style="font-size:13.5px; color:#454349; line-height:1.7; margin-top:10px;">Deborah does not volunteer a battle plan — she relays a command Barak has already received. He will go, but only if she goes. The prophecy that follows is not punishment so much as reassignment: the glory he hedged on goes to a woman with a tent peg.</div>
+            <div onClick="{{ spReadOpen }}" style="background:#F6E3EB; border-radius:12px; padding:14px; margin-top:12px; cursor:pointer;" style-hover="background:#F0D3E0;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:10px; letter-spacing:0.14em; font-weight:700; color:#8C2F51;">JUDGES 4 : 14</span>
+                <span style="font-size:9.5px; font-weight:600; color:#8C2F51; background:#FFFFFF; padding:2px 8px; border-radius:99px;">ESV</span>
+              </div>
+              <div style="font-size:13.5px; color:#232227; line-height:1.7; margin-top:8px; font-style:italic;">“Up! For this is the day in which the LORD has given Sisera into your hand. Does not the LORD go out before you?”</div>
+              <div style="font-size:10.5px; font-weight:600; color:#8C2F51; margin-top:8px;">the hinge of the chapter · open the reader →</div>
+            </div>
+            <div style="background:#4E7C8A14; border-left:3px solid #4E7C8A; border-radius:0 12px 12px 0; padding:12px 14px; margin-top:14px;">
+              <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#4E7C8A;">THE WORLD BEHIND THE TEXT</div>
+              <div style="font-size:13px; color:#454349; line-height:1.65; margin-top:5px;">Nine hundred chariots of iron against highland levies with farm tools — Israel could not hold the valleys, which is why the muster is at Mount Tabor and the battle is won when rain turns the Kishon plain to mud. Hazor, burned under Joshua, has been rebuilt; the palm of Deborah is an open-air courtroom, the way judgment was actually done.</div>
+            </div>
+            <div style="margin-top:12px;">
+              <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">THE DOCTRINE</div>
+              <div style="font-size:13px; color:#454349; line-height:1.65; margin-top:5px;">Faith rests on the word given, not on the messenger kept in view. Barak had the promise of v. 7 and still bargained for the prophetess — yet Hebrews 11 names him among the faithful. Grace remembers faith, not its hedges.</div>
+              <div style="display:flex; gap:6px; margin-top:9px;">
+                <div onClick="{{ srcOpen1 }}" style="display:inline-flex; align-items:center; font-family:'Familjen Grotesk',sans-serif; font-size:10.5px; font-weight:600; color:#8C2F51; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:4px 11px; cursor:pointer;" style-hover="background:#F6E3EB;">Henry · on Judges 4 ›</div>
+                <div onClick="{{ srcOpen2 }}" style="display:inline-flex; align-items:center; font-family:'Familjen Grotesk',sans-serif; font-size:10.5px; font-weight:600; color:#8C2F51; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:4px 11px; cursor:pointer;" style-hover="background:#F6E3EB;">Westminster XIV.ii ›</div>
+              </div>
+            </div>
+            <div style="margin-top:12px;">
+              <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">THE PRACTICE</div>
+              <div style="font-size:13px; color:#454349; line-height:1.65; margin-top:5px;">Name one obedience you have made conditional on company — a person who must come along before you will move. Bring it to v. 14 this week.</div>
+            </div>
+            <div style="border:1.5px dashed #E9CFDC; border-radius:12px; padding:13px 14px; margin-top:14px;">
+              <div style="font-size:13.5px; font-weight:600; color:#232227; line-height:1.5;">Where have I made obedience conditional on company God never promised?</div>
+              <button onClick="{{ qSaveTap }}" style="margin-top:10px; font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600; border:none; border-radius:9px; padding:9px 16px; cursor:pointer; transition:background .3s; background: {{ qBtnBg }}; color: {{ qBtnCol }};">{{ qBtnTxt }}</button>
+            </div>
+            <div style="font-size:10px; color:#96949B; margin-top:12px; line-height:1.5;">Every quotation retrieved from a stored source — never recalled, never invented. Generated once, kept forever.</div>
+          </div>
+
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">TODAY'S READING · THE ASSIGNMENT</div>
+              <span style="font-size:11px; color:#96949B;">≈ 12 min</span>
+            </div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:17px; font-weight:600; color:#232227; margin-top:7px;">Judges 4–5 · Deborah &amp; Barak</div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+              <div style="flex:1; height:7px; border-radius:99px; background:#F2F1F2; overflow:hidden;"><div style="height:100%; border-radius:99px; background:#A63D63; width:43%; transition:width .8s cubic-bezier(.22,.9,.3,1);"></div></div>
+              <span style="font-size:11px; color:#66646C; font-variant-numeric:tabular-nums;">week 5 · day 4</span>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:13px;">
+              <button onClick="{{ spReadOpen }}" style="flex:1.5; font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#FFFFFF; background:#A63D63; border:none; border-radius:10px; padding:11px 0; cursor:pointer;" style-hover="background:#8C2F51;">Open reader</button>
+              <button onClick="{{ paperTap }}" style="flex:1.4; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; border-radius:10px; padding:11px 0; cursor:pointer; transition:background .3s; border:1px solid {{ paperBd }}; background: {{ paperBg }}; color: {{ paperCol }};">{{ paperTxt }}</button>
+            </div>
+            <div style="font-size:10.5px; color:#96949B; margin-top:9px;">Read the paper RSB instead? One tap — the map stays honest.</div>
+          </div>
+
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:#96949B;">ONE MORE THING</div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#232227; margin-top:7px;">Worms, 1521</div>
+            <div style="font-size:12.5px; color:#454349; line-height:1.65; margin-top:5px;">Asked to recant everything, Luther asked instead to be shown his error from Scripture — conscience captive to the Word of God. Within days Frederick the Wise had him “kidnapped” to the Wartburg, where he began translating the New Testament.</div>
+            <div style="font-size:10px; color:#96949B; margin-top:8px;">your serendipity — the curriculum stays sequenced · closes the day</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ termOn }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Term — syllabus" style="position:absolute; inset:0; z-index:58; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 200px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ termClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">TERM 2 · OT NARRATIVE · ANNOUNCED, NOT CHOSEN</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">The Judges</div>
+            </div>
+            <span style="font-size:11px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 11px; border-radius:99px; flex:none;">wk 5 of 7</span>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:18px; margin-top:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">WHY THIS TERM, WHY NOW</div>
+            <div style="font-size:13.5px; color:#454349; line-height:1.75; margin-top:8px;">Two terms in the epistles and the catechism; this one returns to narrative. Judges is where covenant theology meets national amnesia — a people formed by promise, forgetting it one generation at a time. After a spring in Ephesians on the church being built, a term on what a people becomes when there is no king.</div>
+          </div>
+          <div style="background:#F6E3EB; border-radius:14px; padding:13px 16px; margin-top:12px;">
+            <div style="font-size:10px; letter-spacing:0.14em; font-weight:700; color:#8C2F51;">SECOND READING</div>
+            <div style="font-size:12.5px; color:#454349; line-height:1.6; margin-top:5px;">You read Judges devotionally in 2023 and left two questions open in chapters 6 and 21. Weeks 4 and 7 go deeper exactly there — this is the 300-level pass.</div>
+          </div>
+          <div style="background:#232227; border-radius:16px; padding:16px 18px; margin-top:12px;">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#DCA8BE;">THE HARD-SAYINGS COMMITMENT</div>
+            <div style="font-size:13px; color:#F2F1F2; line-height:1.7; margin-top:7px;">This curriculum does not skip the difficult texts. Week 7 sits in Judges 19–21 — the Levite's concubine and the near-death of a tribe. It will be read whole, in context, with the confessions at hand.</div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:6px 0; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 16px 6px;">
+              <span style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">THE SYLLABUS</span>
+              <span style="font-size:10px; color:#96949B;">visible · not editable</span>
+            </div>
+            <div style="padding:9px 16px; display:flex; align-items:center; gap:10px;"><span style="width:20px; font-size:10.5px; font-weight:700; color:#5E9B72;">✓</span><span style="flex:1; font-size:12.5px; color:#96949B;">No king — the generation after Joshua · ch 1–2</span><span style="font-size:10px; color:#C9C7CD;">wk 1</span></div>
+            <div style="padding:9px 16px; display:flex; align-items:center; gap:10px;"><span style="width:20px; font-size:10.5px; font-weight:700; color:#5E9B72;">✓</span><span style="flex:1; font-size:12.5px; color:#96949B;">Othniel, Ehud, Shamgar · ch 3</span><span style="font-size:10px; color:#C9C7CD;">wk 2</span></div>
+            <div style="padding:9px 16px; display:flex; align-items:center; gap:10px;"><span style="width:20px; font-size:10.5px; font-weight:700; color:#5E9B72;">✓</span><span style="flex:1; font-size:12.5px; color:#96949B;">Sold and delivered — the shape of the cycle</span><span style="font-size:10px; color:#C9C7CD;">wk 3</span></div>
+            <div style="padding:9px 16px; display:flex; align-items:center; gap:10px;"><span style="width:20px; font-size:10.5px; font-weight:700; color:#5E9B72;">✓</span><span style="flex:1; font-size:12.5px; color:#96949B;">Ruth — the interlude of loyalty</span><span style="font-size:10px; color:#C9C7CD;">wk 4</span></div>
+            <div style="padding:10px 16px; display:flex; align-items:center; gap:10px; background:#F6E3EB;"><span style="width:20px;"><svg width="9" height="9" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63"></rect></svg></span><span style="flex:1; font-size:12.5px; font-weight:600; color:#232227;">Deborah &amp; Barak · ch 4–5</span><span style="font-size:10px; font-weight:700; color:#8C2F51;">now</span></div>
+            <div style="padding:9px 16px; display:flex; align-items:center; gap:10px;"><span style="width:20px; font-size:10.5px; color:#C9C7CD;">·</span><span style="flex:1; font-size:12.5px; color:#454349;">Gideon to Abimelech · ch 6–9</span><span style="font-size:10px; color:#C9C7CD;">wk 6</span></div>
+            <div style="padding:9px 16px 13px; display:flex; align-items:center; gap:10px;"><span style="width:20px; font-size:10.5px; color:#C9C7CD;">·</span><span style="flex:1; font-size:12.5px; color:#454349;">When there is no king · ch 17–21</span><span style="display:inline-flex; font-size:8.5px; font-weight:700; letter-spacing:0.08em; color:#B4533F; border:1px solid #B4533F55; border-radius:99px; padding:2px 7px;">HARD TEXT</span></div>
+          </div>
+          <div style="margin-top:14px;">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B; padding:0 2px;">THE YEAR AT A GLANCE</div>
+            <div style="display:flex; gap:8px; margin-top:9px; overflow-x:auto; padding-bottom:4px;">
+              <div style="flex:none; background:#FFFFFF; border-radius:12px; padding:10px 14px; box-shadow:0 2px 8px rgba(35,34,39,0.05);"><div style="font-size:9.5px; font-weight:700; color:#5E9B72;">T1 ✓</div><div style="font-size:12px; font-weight:600; color:#96949B; margin-top:2px;">Ephesians</div></div>
+              <div style="flex:none; background:#232227; border-radius:12px; padding:10px 14px;"><div style="font-size:9.5px; font-weight:700; color:#DCA8BE;">T2 · NOW</div><div style="font-size:12px; font-weight:600; color:#FFFFFF; margin-top:2px;">The Judges</div></div>
+              <div style="flex:none; background:#FFFFFF; border-radius:12px; padding:10px 14px; box-shadow:0 2px 8px rgba(35,34,39,0.05);"><div style="font-size:9.5px; font-weight:700; color:#96949B;">T3</div><div style="font-size:12px; font-weight:600; color:#232227; margin-top:2px;">The Exile</div></div>
+              <div style="flex:none; background:#FFFFFF; border-radius:12px; padding:10px 14px; box-shadow:0 2px 8px rgba(35,34,39,0.05);"><div style="font-size:9.5px; font-weight:700; color:#96949B;">T4</div><div style="font-size:12px; font-weight:600; color:#232227; margin-top:2px;">Romans, again</div></div>
+              <div style="flex:none; background:#FFFFFF; border-radius:12px; padding:10px 14px; box-shadow:0 2px 8px rgba(35,34,39,0.05);"><div style="font-size:9.5px; font-weight:700; color:#96949B;">T5</div><div style="font-size:12px; font-weight:600; color:#232227; margin-top:2px;">Church history</div></div>
+            </div>
+            <div style="font-size:10.5px; color:#96949B; margin-top:10px; text-align:center; line-height:1.6;">Planned a year ahead · balanced rotation: narrative → epistle → doctrine → gospel → prophets<br>When a term is announced its 42 studies generate once, as a visible batch — never a nightly shimmer.</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ covOn }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Transcript" style="position:absolute; inset:0; z-index:58; background:#F2F1F2; overflow-y:auto; box-sizing:border-box; padding:74px 22px 200px; animation:pushIn .38s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div onClick="{{ covClose }}" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#FAF9FA;"><span style="font-size:18px; color:#232227; line-height:1; margin-top:-2px;">‹</span></div>
+            <div style="flex:1;">
+              <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">EVERY BOOK · EVERY TERM · LIFETIME</div>
+              <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">Transcript</div>
+            </div>
+            <span style="font-size:11px; font-weight:600; color:#8C2F51; background:#F6E3EB; padding:5px 11px; border-radius:99px; flex:none;">39 of 66</span>
+          </div>
+          <div style="background:#FFFFFF; border-radius:18px; padding:16px; margin-top:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:grid; grid-template-columns:repeat(6, 1fr); gap:5px;">
+              <sc-for list="{{ covFull }}" as="b" hint-placeholder-count="66">
+                <div style="height:34px; border-radius:7px; display:flex; align-items:center; justify-content:center; background: {{ b.c }};"><span style="font-size:9px; font-weight:700; color: {{ b.lc }};">{{ b.ab }}</span></div>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:12px; margin-top:14px; flex-wrap:wrap;">
+              <span style="display:inline-flex; align-items:center; gap:5px; font-size:10px; color:#66646C;"><span style="width:10px; height:10px; border-radius:3px; background:#EDEBEE;"></span>not yet</span>
+              <span style="display:inline-flex; align-items:center; gap:5px; font-size:10px; color:#66646C;"><span style="width:10px; height:10px; border-radius:3px; background:#E6BFCF;"></span>once</span>
+              <span style="display:inline-flex; align-items:center; gap:5px; font-size:10px; color:#66646C;"><span style="width:10px; height:10px; border-radius:3px; background:#C97D9C;"></span>twice</span>
+              <span style="display:inline-flex; align-items:center; gap:5px; font-size:10px; color:#66646C;"><span style="width:10px; height:10px; border-radius:3px; background:#A63D63;"></span>3+</span>
+              <span style="display:inline-flex; align-items:center; gap:5px; font-size:10px; color:#66646C;"><span style="width:10px; height:10px; border-radius:3px; background:#232227;"></span>this term</span>
+            </div>
+            <div style="font-size:10.5px; color:#96949B; margin-top:10px;">“Not yet” is a shelf, not a debt — coverage is celebrated here, never owed.</div>
+          </div>
+          <div style="background:#FFFFFF; border-radius:16px; padding:6px 0; margin-top:12px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B; padding:10px 16px 4px;">TERMS COMPLETED</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 16px;"><span style="font-size:12.5px; color:#454349;">T1 · Ephesians — a people being built</span><span style="font-size:10.5px; color:#96949B;">spring '26 ✓</span></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 16px;"><span style="font-size:12.5px; color:#454349;">The Gospel of John <span style="font-size:10px; color:#96949B;">· on paper, RSB</span></span><span style="font-size:10.5px; color:#96949B;">2025 ✓</span></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 16px 13px;"><span style="font-size:12.5px; color:#454349;">Romans — first pass, 3 questions open</span><span style="font-size:10.5px; color:#96949B;">2024 ✓</span></div>
+          </div>
+          <div style="font-size:10.5px; color:#96949B; margin-top:12px; text-align:center; line-height:1.6;">Read on paper? One tap on the day's reading counts it —<br>the record accepts the physical Bible, or it lies.</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ stubOn }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stubClose }}" style="position:absolute; inset:0; z-index:70; background:rgba(27,21,24,0.45);"></div>
+        <div style="position:absolute; left:0; right:0; bottom:0; z-index:71; background:#FFFFFF; border-radius:28px 28px 0 0; padding:24px 24px 38px; animation:sheetUp .35s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="width:40px; height:4px; border-radius:99px; background:#E4E2E6; margin:0 auto 18px;"></div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227;">{{ stubTitle }}</div>
+          <div style="display:grid; gap:1px; background:#E4E2E6; border:1px solid #E4E2E6; border-radius:14px; overflow:hidden; margin-top:14px;">
+            <sc-for list="{{ stubRows }}" as="r" hint-placeholder-count="3">
+              <div style="background:#FFFFFF; padding:12px 14px; display:flex; gap:10px; align-items:flex-start;"><svg width="8" height="8" viewBox="0 0 10 10" style="flex:none; margin-top:4px;"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63"></rect></svg><span style="font-size:12.5px; color:#454349; line-height:1.55;">{{ r.x }}</span></div>
+            </sc-for>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px;">
+            <span style="font-size:10.5px; color:#96949B;">Designed · being bound in the next pass</span>
+            <button onClick="{{ stubClose }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#FFFFFF; background:#A63D63; border:none; border-radius:10px; padding:9px 22px; cursor:pointer;" style-hover="background:#8C2F51;">Close</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ srcOn }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ srcClose }}" style="position:absolute; inset:0; z-index:72; background:rgba(27,21,24,0.45);"></div>
+        <div data-screen-label="Source reader" style="position:absolute; left:0; right:0; bottom:0; z-index:73; background:#FFFFFF; border-radius:28px 28px 0 0; padding:24px 24px 38px; animation:sheetUp .35s cubic-bezier(.3,.9,.3,1) both;">
+          <div style="width:40px; height:4px; border-radius:99px; background:#E4E2E6; margin:0 auto 18px;"></div>
+          <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#8C2F51;">FROM YOUR LIBRARY · THE REAL SOURCE</div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#232227; margin-top:6px;">{{ srcTitle }}</div>
+          <div style="font-size:11px; color:#96949B; margin-top:3px;">{{ srcMeta }}</div>
+          <div style="background:#FAF9FA; border-radius:14px; padding:16px; margin-top:14px; font-size:13.5px; color:#454349; line-height:1.8; font-style:italic;">{{ srcBody }}</div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px;">
+            <span style="font-family:'Familjen Grotesk',sans-serif; font-size:11px; font-weight:600; color:#8C2F51; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:5px 12px; cursor:pointer;" style-hover="background:#F6E3EB;">Open the full source ›</span>
+            <button onClick="{{ srcClose }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#66646C; background:transparent; border:1px solid #E4E2E6; border-radius:10px; padding:8px 20px; cursor:pointer;" style-hover="background:#FAF9FA;">Close</button>
+          </div>
+        </div>
+      </sc-if>
+
       <div style="position:absolute; inset:0; z-index:90; background:#F2F1F2; display:flex; flex-direction:column; align-items:center; justify-content:center; transform:translateY({{ lockY }}); opacity: {{ lockO }}; pointer-events: {{ lockPE }}; transition:transform .6s cubic-bezier(.55,0,.2,1), opacity .45s ease .1s;">
         <svg width="76" height="76" viewBox="0 0 48 48"><rect width="48" height="48" rx="13" fill="#A63D63"></rect><circle cx="24" cy="26" r="12.5" fill="#FFFFFF"></circle><circle cx="20" cy="23" r="1.4" fill="#A63D63"></circle><circle cx="27" cy="27" r="1.4" fill="#A63D63"></circle><circle cx="22" cy="30" r="1.4" fill="#A63D63"></circle><circle cx="28" cy="21.5" r="1.4" fill="#A63D63"></circle><path d="M28 12 Q31 8 36 9 Q34 14 30 14.5 Z" fill="#FFFFFF" opacity="0.9"></path><path d="M18 13 Q14 10 10.5 12 Q13 16 17 15.5 Z" fill="#FFFFFF" opacity="0.7"></path></svg>
         <div style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:0.34em; color:#232227; margin-top:16px;">PITAYA</div>
@@ -1140,7 +1626,7 @@
 
     </div>
   </x-import>
-  <div style="margin-top:20px; font-size:12px; color:#8B8D90; text-align:center; line-height:1.6;">Pitaya · day build · any four taps unlock<br>mic → voice log → confirmation card in Chat · camera → photo log · Train → View activities → tap any workout<br>Food → ‹ › steps days · History opens the range view · Today → Sunday Report row opens Week 31</div>
+  <div style="margin-top:20px; font-size:12px; color:#8B8D90; text-align:center; line-height:1.6;">Pitaya · day build · any four taps unlock · Body &amp; Train now live behind the Today widgets<br>Spirit → tap verses in the reader (highlight · note · link · word study · ask) · Plans · Coverage map · Memory deck · Notebook · Library<br>mic → voice log → confirmation in Chat · Food → ‹ › steps days · Today → Sunday Report</div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script>
@@ -1150,7 +1636,8 @@ class Component extends DCLogic {
     mic: 0, cam: false, trail: false, paused: false, rec: 0, pair: 0, live: false, rout: false, setN: 3, tape: -1, tapeVals: null,
     actList: false, actSel: -1, actFil: 'all', foodDay: 0, fh: false, rep: false, calFor: null, calFrom: null, calTo: null, foodR: [1, 8], actR: [1, 8], bcSel: null, bcRng: 12, bcSi: 99,
     habC: true, habM: false, habS: true, habJ: false, supD: false, supMg: false,
-    metric: 'w', si: 11, sel: 'Waist', cmp: 50 };
+    metric: 'w', si: 11, sel: 'Waist', cmp: 50,
+    spSel: -1, spBar: 'act', spRead: false, spLeg: false, legRow: -1, spMode: 'read', spDayR: false, qSaved: false, paper: false, posture: 0, spAcc: {}, spDis: {}, spNoteK: 'Question', spLinkK: 'Parallels', spMsg: '', stub: null, srcSel: -1, termOn: false, covOn: false, t2Open: false, uniOn: false };
   componentWillUnmount() { clearInterval(this._iv); }
   _startCount() {
     if (this._running) return;
@@ -1446,6 +1933,120 @@ class Component extends DCLogic {
     }
     return out;
   }
+  _spirit(s) {
+    const CATS = { 'God': '#D9A23E', 'Promise & Covenant': '#4C7DBF', 'Command': '#3E7A54', 'Sin & Consequence': '#B4533F', 'Christ': '#7B5EA7', 'Context': '#4E7C8A' };
+    const CN = Object.keys(CATS), SHORT = ['God', 'Promise', 'Command', 'Sin', 'Christ', 'Context'];
+    const V = [
+      { t: 'And the people of Israel again did what was evil in the sight of the LORD after Ehud died.', acc: 'Sin & Consequence' },
+      { t: 'And the LORD sold them into the hand of Jabin king of Canaan, who reigned in Hazor. The commander of his army was Sisera, who lived in Harosheth-hagoyim.', sug: 'Sin & Consequence', xr: 'Judg 2:14 · 3:8 · 10:7 — the refrain: “sold”' },
+      { t: 'Then the people of Israel cried out to the LORD for help, for he had 900 chariots of iron and he oppressed the people of Israel cruelly for twenty years.', sug: 'Context' },
+      { t: 'Now Deborah, a prophetess, the wife of Lappidoth, was judging Israel at that time.' },
+      { t: 'She used to sit under the palm of Deborah between Ramah and Bethel in the hill country of Ephraim, and the people of Israel came up to her for judgment.' },
+      { t: 'She sent and summoned Barak the son of Abinoam from Kedesh-naphtali and said to him, “Has not the LORD, the God of Israel, commanded you, ‘Go, gather your men at Mount Tabor, taking 10,000 from the people of Naphtali and the people of Zebulun?’”', acc: 'Command' },
+      { t: '“And I will draw out Sisera, the general of Jabin’s army, to meet you by the river Kishon with his chariots and his troops, and I will give him into your hand.”', sug: 'Promise & Covenant' },
+      { t: 'Barak said to her, “If you will go with me, I will go, but if you will not go with me, I will not go.”', note: 'Unbelief — or dependence on the word through the prophetess? Heb 11:32 still lists him.' },
+      { t: 'And she said, “I will surely go with you. Nevertheless, the road on which you are going will not lead to your glory, for the LORD will sell Sisera into the hand of a woman.” Then Deborah arose and went with Barak to Kedesh.' }
+    ];
+    const acc = (i) => V[i].acc || s.spAcc[i];
+    const stop = (fn) => (e) => { if (e && e.stopPropagation) e.stopPropagation(); fn(); };
+    const spVerses = V.map((v, i) => {
+      const a = acc(i), sug = (v.sug && !s.spAcc[i] && !s.spDis[i]) ? v.sug : null, on = s.spSel === i;
+      return {
+        n: i + 1, t: v.t,
+        tap: () => this.setState({ spSel: on ? -1 : i, spBar: 'act' }),
+        bg: on ? '#F6E3EB' : (a ? CATS[a] + '1F' : 'transparent'),
+        sh: on ? 'inset 0 0 0 1.5px #A63D63' : 'none',
+        bl: a ? '3px solid ' + CATS[a] : (sug ? '3px dashed ' + CATS[sug] + 'AA' : '3px solid transparent'),
+        hasTag: !!a, tag: a || '', tagCol: a ? CATS[a] : '#96949B',
+        hasSugg: !!sug, suggLab: sug || '', suggCol: sug ? CATS[sug] : '#96949B',
+        sAcc: stop(() => this.setState(st => ({ spAcc: Object.assign({}, st.spAcc, { [i]: v.sug }) }))),
+        sDis: stop(() => this.setState(st => ({ spDis: Object.assign({}, st.spDis, { [i]: 1 }) }))),
+        hasNote: !!v.note, note: v.note || '', hasXr: !!v.xr, xr: v.xr || ''
+      };
+    });
+    const pend = V.filter((v, i) => v.sug && !s.spAcc[i] && !s.spDis[i]).length;
+    const accN = 2 + Object.keys(s.spAcc).length;
+    const kindChip = (k, cur, set) => ({ lab: k, bg: k === cur ? '#232227' : '#FFFFFF', col: k === cur ? '#FFFFFF' : '#66646C', tap: () => set(k) });
+    const RD = [3,2,1,2,1,1,3,1,0,1,1,2,1,1,0,0,1,2,3,2,1,1,0,1,1,0,0,1,0,1,0,0,0,1,0,1,0,0,1,3,2,3,3,3,2,2,2,2,1,1,1,1,1,2,1,2,1,1,1,2,1,1,1,1,1,2];
+    const BK = ['Gen','Exo','Lev','Num','Deu','Jos','Jdg','Rut','1Sa','2Sa','1Ki','2Ki','1Ch','2Ch','Ezr','Neh','Est','Job','Psa','Pro','Ecc','Sng','Isa','Jer','Lam','Ezk','Dan','Hos','Jol','Amo','Oba','Jon','Mic','Nah','Hab','Zep','Hag','Zec','Mal','Mat','Mrk','Luk','Jhn','Act','Rom','1Co','2Co','Gal','Eph','Php','Col','1Th','2Th','1Ti','2Ti','Tit','Phm','Heb','Jas','1Pe','2Pe','1Jo','2Jo','3Jo','Jud','Rev'];
+    const RAMP = ['#EDEBEE', '#E6BFCF', '#C97D9C', '#A63D63'];
+    const cell = (i) => i === 6 ? '#232227' : RAMP[RD[i]];
+    const STUB = {
+      nb: ['Passage Notebook', ['Notes by kind — Observation · Question · Connection · Conviction · Doctrine', 'Open questions that resurface when you return to the passage', 'One search across Scripture, notes, highlights and sources']],
+      mem: ['Memory — review due (3)', ['One verse a week, filed by occasion: assurance · suffering · doubt · sovereignty', 'Rehearsal, not flashcards: “which verse do you reach for, and why?”', 'Rom 8:1 · Ps 46:1 · WSC Q.1 due today']],
+      lib: ['Source library — 18 sources', ['Calvin · Matthew Henry · the confessions and catechisms · Spurgeon', 'Every quotation in a teaching taps through to its real source text', 'Public domain · stored on device']],
+      vw: ['This week\u2019s verse · Assurance', ['Psalm 46:1 — \u201cGod is our refuge and strength, a very present help in trouble.\u201d', 'Filed by occasion, not reference: when suffering asks whether God can be good, this is the verse you reach for', 'Review due with Rom 8:1 and WSC Q.1 · two minutes, spoken aloud']],
+      ask: ['Ask — anchored to the passage', ['Opt-in and never initiating — ask from any verse; the exchange is stored on that passage, searchable forever', 'Every answer cites a source you can tap through to your library', 'Try it now: open the reader, select a verse, tap Ask']],
+      sun: ['Sunday · sermon follow-along', ['Learned from you: speak it, photograph the slides, or paste a transcript', 'This week deepens Galatians 3 so you arrive next Sunday primed', 'Sermon voice notes land in the Passage Notebook, tagged to the text']]
+    };
+    const SRC = [
+      ['Matthew Henry · on Judges 4', 'Commentary, 1706 · condensed · public domain', 'Barak insisted much upon Deborah\u2019s presence — he would sooner venture with the prophetess at hand than lean on the bare word already given. A brave man, yet the honour of the day is carried off by a woman; the rebuke is gentle, and Hebrews 11 names him among the faithful still.'],
+      ['Westminster Confession · XIV.ii', 'Of Saving Faith, 1646 · public domain', 'By this faith, a Christian believeth to be true whatsoever is revealed in the Word — yielding obedience to the commands, trembling at the threatenings, and embracing the promises of God for this life, and that which is to come.']
+    ];
+    const stubD = s.stub ? STUB[s.stub] : null, srcD = s.srcSel >= 0 ? SRC[s.srcSel] : null;
+    const mode = (k) => s.spMode === k ? ['#232227', '#FFFFFF'] : ['#FFFFFF', '#66646C'];
+    const [mrB, mrC] = mode('read'), [msB, msC] = mode('study');
+    return {
+      spStreakLab: '39 of 66 books', postLab: ['My tradition', 'Compare', 'Text only'][s.posture],
+      postTap: () => this.setState(st => ({ posture: (st.posture + 1) % 3 })),
+      spReadOpen: () => this.setState({ spRead: true }), spReadClose: () => this.setState({ spRead: false, spSel: -1 }),
+      spReadOn: s.spRead,
+      qBtnTxt: s.qSaved ? '✓ In your notebook — resurfaces at Judges 4' : 'Save to open questions',
+      qBtnBg: s.qSaved ? '#EAF3ED' : '#A63D63', qBtnCol: s.qSaved ? '#3E7A54' : '#FFFFFF',
+      qSaveTap: () => this.setState(st => ({ qSaved: !st.qSaved })),
+      paperTxt: s.paper ? '✓ Counted — on paper' : 'Read on paper', paperBd: s.paper ? '#BFDCC9' : '#E4E2E6',
+      paperBg: s.paper ? '#EAF3ED' : '#FFFFFF', paperCol: s.paper ? '#3E7A54' : '#232227',
+      paperTap: () => this.setState(st => ({ paper: !st.paper })),
+      memDueLab: '3 due today', nbOpenLab: '4 open questions',
+      covMini: RD.map((r, i) => ({ c: cell(i) })),
+      covFull: RD.map((r, i) => ({ ab: BK[i], c: cell(i), lc: (i === 6 || r >= 2) ? '#FFFFFF' : '#96949B' })),
+      spMemOpen: () => this.setState({ stub: 'mem' }), spNbOpen: () => this.setState({ stub: 'nb' }),
+      spLibOpen: () => this.setState({ stub: 'lib' }), sunTap: () => this.setState({ stub: 'sun' }),
+      spPlanOpen: () => this.setState({ termOn: true }), termClose: () => this.setState({ termOn: false }),
+      spCovOpen: () => this.setState({ covOn: true }), covClose: () => this.setState({ covOn: false }),
+      termOn: s.termOn, covOn: s.covOn, uniOn: s.uniOn,
+      uniOpen: () => this.setState({ uniOn: true }), uniClose: () => this.setState({ uniOn: false }),
+      vwTap: () => this.setState({ stub: 'vw' }), askTap: () => this.setState({ stub: 'ask' }),
+      stubOn: !!s.stub, stubTitle: stubD ? stubD[0] : '', stubRows: stubD ? stubD[1].map(x => ({ x })) : [],
+      stubClose: () => this.setState({ stub: null }),
+      srcOpen1: () => this.setState({ srcSel: 0 }), srcOpen2: () => this.setState({ srcSel: 1 }),
+      srcOn: !!srcD, srcTitle: srcD ? srcD[0] : '', srcMeta: srcD ? srcD[1] : '', srcBody: srcD ? srcD[2] : '',
+      srcClose: () => this.setState({ srcSel: -1 }),
+      t2Open: s.t2Open, t2Chev: s.t2Open ? '⌄' : '›', t2Tap: () => this.setState(st => ({ t2Open: !st.t2Open })),
+      spLegOn: s.spLeg, spLegOpen: () => this.setState({ spLeg: true }), spLegClose: () => this.setState({ spLeg: false, legRow: -1 }),
+      mdRBg: mrB, mdRCol: mrC, mdSBg: msB, mdSCol: msC,
+      spModeR: () => this.setState({ spMode: 'read' }), spModeS: () => this.setState({ spMode: 'study' }),
+      spVerses,
+      suggLine: pend > 0 ? pend + ' suggested marks to review — outlined until you accept them · ' + accN + ' accepted' : 'All of today\u2019s suggestions reviewed · ' + accN + ' marks on this chapter',
+      dayTxt: s.spDayR ? '✓ Judges 4–5 read · week 5, day 4' : 'Mark today\u2019s reading read',
+      dayBg: s.spDayR ? '#EAF3ED' : '#A63D63', dayCol: s.spDayR ? '#3E7A54' : '#FFFFFF',
+      spDayTap: () => this.setState(st => ({ spDayR: !st.spDayR })),
+      spBarOn: s.spSel >= 0 && s.spRead, spSelN: s.spSel + 1,
+      spSelClear: () => this.setState({ spSel: -1, spBar: 'act' }),
+      barAct: s.spBar === 'act', barHl: s.spBar === 'hl', barNote: s.spBar === 'note', barLink: s.spBar === 'link',
+      barAsk: s.spBar === 'ask', barWord: s.spBar === 'word', barDone: s.spBar === 'done', barDoneMsg: s.spMsg,
+      spHlMode: () => this.setState({ spBar: 'hl' }), spNoteMode: () => this.setState({ spBar: 'note' }),
+      spLinkMode: () => this.setState({ spBar: 'link' }), spAskMode: () => this.setState({ spBar: 'ask' }),
+      spWsOpen: () => this.setState({ spBar: 'word' }),
+      hlOpts: CN.map((n, i) => ({ lab: SHORT[i], dot: CATS[n], bg: CATS[n] + '26',
+        tap: () => this.setState(st => ({ spAcc: Object.assign({}, st.spAcc, { [st.spSel]: n }), spBar: 'done', spMsg: 'Marked ' + n + ' — Judges 4:' + (st.spSel + 1) })) })),
+      nkOpts: ['Observation', 'Question', 'Connection', 'Conviction', 'Doctrine'].map(k => kindChip(k, s.spNoteK, (v) => this.setState({ spNoteK: v }))),
+      nkLab: s.spNoteK,
+      spNoteSave: () => this.setState({ spBar: 'done', spMsg: 'Saved — a ' + s.spNoteK + ' on Judges 4:' + (s.spSel + 1) + (s.spNoteK === 'Question' ? ' · added to Open Questions' : '') }),
+      lkOpts: ['Fulfills', 'Parallels', 'Tension'].map(k => kindChip(k, s.spLinkK, (v) => this.setState({ spLinkK: v }))),
+      spLinkSave: () => this.setState({ spBar: 'done', spMsg: 'Linked ⇄ Judg 2:14 · ' + s.spLinkK + ' — yours, kept forever' }),
+      legRows: CN.map((n, i) => ({
+        lab: n, dot: CATS[n], bg: CATS[n] + '26', count: [214, 186, 203, 241, 158, 167][i] + '',
+        refs: ['Ex 34:6 · Ps 46:1 · Judg 4:14 — most recently: “does not the LORD go out before you?”',
+          'Gen 12:2 · Judg 4:7 · 2 Cor 1:20 — most recently: Sisera given into your hand',
+          'Deut 6:5 · Judg 4:6 · Jn 15:12 — most recently: “go, gather your men at Mount Tabor”',
+          'Judg 2:14 · Judg 4:1 · Rom 1:24 — most recently: Israel again did what was evil',
+          'Gen 3:15 · Judg 2:16 · Heb 11:32 — the judges as shadows of the true Deliverer',
+          'Judg 4:3 — iron chariots · Judg 4:5 — the palm as a courtroom · Judg 4:11 — the Kenites'][i],
+        open: s.legRow === i, tap: () => this.setState(st => ({ legRow: st.legRow === i ? -1 : i }))
+      }))
+    };
+  }
   renderVals() {
     const s = this.state;
     if (s.armed && s.e === 0) this._startCount();
@@ -1545,7 +2146,7 @@ class Component extends DCLogic {
       habJ: hab(s.habJ), togJ: () => this.setState(st => ({ habJ: !st.habJ })),
       supDt: s.supD ? '✓ just now' : '○ due', supDc: s.supD ? '#5E9B72' : '#D9A23E', togD: () => this.setState(st => ({ supD: !st.supD })),
       supMt: s.supMg ? '✓ just now' : '○ tonight', supMc: s.supMg ? '#5E9B72' : '#96949B', togMg: () => this.setState(st => ({ supMg: !st.supMg })),
-      t5: tap(5), tc5: tc(5),
+      t5: tap(5), tc5: tc(5), t6: tap(6), tc6: tc(6), t7: tap(7), tc7: tc(7),
       dockChatBg: s.idx === 1 ? '#A63D63' : '#F6E3EB',
       dockChatIc: s.idx === 1 ? '#FFFFFF' : '#8C2F51',
       liveOn: s.live, liveOpen: () => this.setState({ live: true }), liveEnd: () => this.setState({ live: false }),
@@ -1560,6 +2161,7 @@ class Component extends DCLogic {
       ...this._hist(s, eaten, fmt),
       ...this._cal(s),
       ...this._bc(s),
+      ...this._spirit(s),
       repOn: s.rep, repOpen: () => this.setState({ rep: true }), repClose: () => this.setState({ rep: false }),
       pts, apts: '6,128 ' + pts + ' 353.6,128',
       dots: xy.map(p => ({ x: +p[0].toFixed(1), y: +p[1].toFixed(1) })),
