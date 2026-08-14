@@ -21,14 +21,33 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Pitaya reads heart rate and calories to show live workout metrics.</string>
+	<string>Pitaya reads heart rate, calories, and steps to show live workout metrics and sync your training.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Pitaya saves workouts you record on the watch to Apple Health.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Pitaya records your route and distance during outdoor walks, runs, and hikes.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Pitaya reads elevation from the barometer during outdoor workouts.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>FamiljenGrotesk-Regular.ttf</string>
+		<string>FamiljenGrotesk-Medium.ttf</string>
+		<string>FamiljenGrotesk-SemiBold.ttf</string>
+		<string>FamiljenGrotesk-Bold.ttf</string>
+		<string>InstrumentSans-Regular.ttf</string>
+		<string>InstrumentSans-Medium.ttf</string>
+		<string>InstrumentSans-SemiBold.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>WKApplication</key>
 	<true/>
 	<key>WKBackgroundModes</key>
 	<array>
 		<string>workout-processing</string>
+		<string>location</string>
 	</array>
 	<key>WKWatchOnly</key>
 	<true/>

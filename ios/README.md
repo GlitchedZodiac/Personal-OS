@@ -66,12 +66,17 @@ SIMCTL_CHILD_PITAYA_SMOKE_AUTORUN=1 \
 - `PITAYA_SMOKE_AUTORUN=1` — record + log 2 sets + finish + sync
 - `PITAYA_SMOKE_HOLD=1` — start a session, log one set, stay on the logger
 
-## Design
+## Design (THE PORT GATE applies)
 
-Visuals come from Michael's Claude-design project (`Pitaya Watch.dc.html`,
-project `a44e3da0-…`). All tokens live in `Shared/Theme.swift`; the design's
-Familjen Grotesk / Instrument Sans faces are not bundled yet — `Theme.display`
-/ `Theme.text` route to the system face until the font files are added.
+Visuals come from Michael's Claude-design project (`docs/design/
+pitaya-watch.dc.html`). All tokens live in `Shared/Theme.swift`.
+**Fonts are bundled**: Familjen Grotesk (display/numerals) + Instrument Sans
+(text) in `WatchApp/Fonts/`, registered via UIAppFonts, routed through
+`Theme.display/text/numeric`. **Glyphs are extracted verbatim** from the
+design's SVGs into `WatchApp/Views/PitayaGlyphs.swift` (kettlebell, trail,
+walk figure, heart, check, end ✕, pause, water drop, play, lap flag) — SF
+Symbols are allowed only on undesigned elements (currently: the chevron,
+the repeat-set arrow, the queued-sync badge).
 
 ## What works today / what's next
 
@@ -79,7 +84,15 @@ Working end-to-end (proven against prod): PIN pairing (+ wrong-PIN error
 path), Keychain persistence, token refresh path, home, live HR/kcal/zone
 metrics, kettlebell set logging (crown weight, reps, PR haptic + banner),
 controls (end/pause/water-lock/repeat), summary with stats + PR celebration,
-offline queue → sync, walk/run/hike/other freeform recording.
+offline queue → sync, walk/run freeform recording.
+
+PRs are **server-truth** (docs/watch-contract.md): baselines from
+`GET /api/mobile/prs` (disk-cached for offline cold-starts, in
+`Shared/PRBaselines.swift` + `PRBaselineCache`), live-set haptics evaluated
+locally, and the sync response's `prs[]` replaces the local estimate on the
+summary once the server confirms. Smoke-driven workouts sync under
+externalSource `watch_smoke` (never `app_watch`) so cleanup can never touch
+real rows.
 
 Not built yet (design exists, awaiting contracts or next sessions): sequences
 (EMOM/Tabata/complexes), rest timer, GPS route capture, sleep/recovery

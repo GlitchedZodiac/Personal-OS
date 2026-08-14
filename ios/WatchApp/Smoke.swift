@@ -30,6 +30,53 @@ enum Smoke {
             }
         }
 
+        // Any smoke-driven workout syncs under its own externalSource so
+        // test rows are unmistakable and cleanup can never touch real data.
+        if env["PITAYA_SMOKE_HOLD"] == "1" || env["PITAYA_SMOKE_AUTORUN"] == "1" {
+            model.externalSourceOverride = "watch_smoke"
+        }
+
+        // Visual-verification aid: a local 3-round circuit with prescribed
+        // weights (the backend can't build circuits yet — rounds field filed).
+        if env["PITAYA_SMOKE_SAMPLE_CIRCUIT"] == "1" {
+            model.debugInjectSequence(SequenceDef(
+                id: "smoke-circuit",
+                name: "Armor Builder (sample)",
+                kind: "circuit",
+                restSecondsDefault: 15,
+                durationMinutes: nil,
+                rounds: 3,
+                steps: [
+                    SequenceStep(exercise: "kb-swing", exerciseName: "Kettlebell Swing",
+                                 reps: 15, seconds: nil, weightKg: 20, restSeconds: nil),
+                    SequenceStep(exercise: "kb-goblet-squat", exerciseName: "Goblet Squat",
+                                 reps: 10, seconds: nil, weightKg: 20, restSeconds: nil),
+                    SequenceStep(exercise: "kb-clean-and-press", exerciseName: "Clean and Press",
+                                 reps: 5, seconds: nil, weightKg: 16, restSeconds: nil),
+                ],
+                updatedAt: Date()
+            ))
+            log("sample circuit injected")
+        }
+
+        // WALK variant: an outdoor session with the real recorder + GPS, held
+        // open for N seconds while a route is fed in (simctl location), then
+        // finished and saved — proves the whole route pipeline to prod.
+        if let seconds = env["PITAYA_SMOKE_WALK"].flatMap(Int.init), model.phase == .home {
+            model.externalSourceOverride = "watch_smoke"
+            log("walk: starting outdoor session for \(seconds)s…")
+            await model.startWorkout(.walk)
+            try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+            let route = model.recorder.route
+            log("walk: fixes=\(route.coordinates.count) gpsDistance=\(Int(route.distanceMeters))m")
+            log("walk: finishing…")
+            await model.finishWorkout(.walk)
+            log("walk: finished — summary dist=\(model.summary?.distanceMeters ?? -1)")
+            await model.saveWorkout()
+            log("walk: saved — syncState=\(String(describing: model.syncState))")
+            return
+        }
+
         // HOLD variant: start a kettlebell session, log one set, and stay on
         // the live set-logger screen (for visual verification runs).
         if env["PITAYA_SMOKE_HOLD"] == "1", model.phase == .home {
@@ -43,8 +90,15 @@ enum Smoke {
 
         guard env["PITAYA_SMOKE_AUTORUN"] == "1", model.phase == .home else { return }
 
-        log("autorun: starting kettlebell workout (recorder off — no HK sheet)…")
-        await model.startWorkout(.kettlebell, useRecorder: false)
+        // Bootstrap no longer blocks on the network; smoke needs real
+        // baselines before evaluating PRs, so refresh explicitly.
+        await model.refreshHistory()
+
+        // RECORDER=1: use the real HealthKit recorder (works when the sim
+        // install already granted HK) so stream capture gets smoked too.
+        let useRecorder = env["PITAYA_SMOKE_RECORDER"] == "1"
+        log("autorun: starting kettlebell workout (recorder \(useRecorder ? "ON" : "off"))…")
+        await model.startWorkout(.kettlebell, useRecorder: useRecorder)
 
         // Below-baseline set (no PR expected on real history), then a heavy
         // single designed to beat any stored swing weight PR.
@@ -61,12 +115,16 @@ enum Smoke {
         model.logSet()
         log("set 2: swing 48kg×5 pr=\(model.loggedSets.last?.isWeightPR ?? false)")
 
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        // With the recorder on, linger so several HR samples accumulate.
+        try? await Task.sleep(nanoseconds: useRecorder ? 15_000_000_000 : 3_000_000_000)
         await model.finishWorkout(.kettlebell)
+        log("finished — reviewing (unsaved), now saving…")
+        await model.saveWorkout()
 
         let prs = model.summary?.prs ?? []
-        log("finished — sets=\(model.summary?.setCount ?? 0) volume=\(model.summary?.totalVolumeKg ?? 0) prs=\(prs.map { "\($0.exerciseId)/\($0.kind)=\($0.value)" }.joined(separator: ","))")
-        log("syncState=\(String(describing: model.syncState))")
+        let source = model.syncState == .synced ? "SERVER-CONFIRMED" : "local-estimate"
+        log("finished — sets=\(model.summary?.setCount ?? 0) volume=\(model.summary?.totalVolumeKg ?? 0) prs(\(source))=\(prs.map { "\($0.exerciseId)/\($0.kind)=\($0.value)" }.joined(separator: ","))")
+        log("syncState=\(String(describing: model.syncState)) baselineExercises=\(model.prExerciseCount)")
         #endif
     }
 

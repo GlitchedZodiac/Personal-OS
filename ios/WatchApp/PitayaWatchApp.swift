@@ -32,9 +32,19 @@ struct RootView: View {
             case .pairedIntro:
                 PairedView()
             case .home:
-                HomeView()
+                HomeGridView()
+            case .workoutList:
+                WorkoutListView()
+            case .kettlebellSpace:
+                KettlebellSpaceView()
+            case .sequences:
+                SequencesListView()
+            case .sequenceDetail(let sequence):
+                SequenceDetailView(sequence: sequence)
             case .live(let kind):
                 LiveWorkoutView(kind: kind)
+            case .liveSequence(let sequence):
+                SequenceLiveView(sequence: sequence)
             case .summary:
                 SummaryView()
             }

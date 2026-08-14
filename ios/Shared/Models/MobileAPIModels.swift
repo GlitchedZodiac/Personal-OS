@@ -166,9 +166,13 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
     public let description: String?
     public let caloriesBurned: Double?
     public let distanceMeters: Double?
+    public let stepCount: Int?
     public let avgHeartRateBpm: Int?
     public let maxHeartRateBpm: Int?
+    public let elevationGainM: Double?
     public let exercises: [ExerciseEntry]?
+    public let metricsData: WorkoutMetricsData?
+    public let routeData: WorkoutRouteData?
     public let source: String
     public let syncStatus: String
     public let deviceType: String?
@@ -183,9 +187,13 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         description: String? = nil,
         caloriesBurned: Double? = nil,
         distanceMeters: Double? = nil,
+        stepCount: Int? = nil,
         avgHeartRateBpm: Int? = nil,
         maxHeartRateBpm: Int? = nil,
+        elevationGainM: Double? = nil,
         exercises: [ExerciseEntry]? = nil,
+        metricsData: WorkoutMetricsData? = nil,
+        routeData: WorkoutRouteData? = nil,
         source: String = "mobile",
         syncStatus: String = "synced",
         deviceType: String? = "apple_watch"
@@ -199,9 +207,13 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         self.description = description
         self.caloriesBurned = caloriesBurned
         self.distanceMeters = distanceMeters
+        self.stepCount = stepCount
         self.avgHeartRateBpm = avgHeartRateBpm
         self.maxHeartRateBpm = maxHeartRateBpm
+        self.elevationGainM = elevationGainM
         self.exercises = exercises
+        self.metricsData = metricsData
+        self.routeData = routeData
         self.source = source
         self.syncStatus = syncStatus
         self.deviceType = deviceType
@@ -213,10 +225,153 @@ public struct WorkoutSyncRequest: Codable, Sendable {
     public init(items: [WorkoutSyncItem]) { self.items = items }
 }
 
+/// One new PR as detected server-side (lib/prs.ts NewPR shape).
+public struct NewPRPayload: Codable, Hashable, Sendable {
+    public let exercise: String
+    public let exerciseName: String
+    public let kind: String // "weight" | "volume"
+    public let value: Double
+    public let unit: String
+    public let previousValue: Double?
+}
+
+/// Per-item PR results in the sync response.
+public struct SyncPRResult: Codable, Hashable, Sendable {
+    public let externalId: String?
+    public let newPRs: [NewPRPayload]
+}
+
 public struct WorkoutSyncResponse: Codable, Hashable, Sendable {
     public let created: Int
     public let updated: Int
     public let total: Int
+    /// Server-side PR detection per synced item (2026-08-09 contract);
+    /// optional so an older server never breaks decode.
+    public let prs: [SyncPRResult]?
+}
+
+// MARK: - Personal records (GET /api/mobile/prs)
+
+/// A personal_records row — same payload as /api/health/prs.
+public struct PersonalRecordRow: Codable, Hashable, Sendable {
+    public let exercise: String // canonical id
+    public let exerciseName: String
+    public let kind: String // "weight" | "volume"
+    public let value: Double
+    public let unit: String
+    public let previousValue: Double?
+    public let achievedAt: Date
+}
+
+public struct PRListResponse: Codable, Sendable {
+    public let records: [PersonalRecordRow]
+    public let recent: [PersonalRecordRow]
+}
+
+// MARK: - Sequences (GET /api/mobile/sequences — read-only on the wrist)
+
+public struct SequenceStep: Codable, Hashable, Sendable {
+    public let exercise: String // canonical id
+    public let exerciseName: String
+    public let reps: Int?
+    public let seconds: Int?
+    public let weightKg: Double?
+    public let restSeconds: Int?
+
+    public init(
+        exercise: String, exerciseName: String, reps: Int?, seconds: Int?,
+        weightKg: Double?, restSeconds: Int?
+    ) {
+        self.exercise = exercise
+        self.exerciseName = exerciseName
+        self.reps = reps
+        self.seconds = seconds
+        self.weightKg = weightKg
+        self.restSeconds = restSeconds
+    }
+}
+
+public struct SequenceDef: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    public let name: String
+    public let kind: String // "straight" | "emom" | "tabata" | "circuit"
+    public let restSecondsDefault: Int?
+    public let durationMinutes: Int?
+    /// Round count for circuit kind — decodes nil until the main lane ships
+    /// the field (filed 2026-08-10); the runner falls back to 3.
+    public let rounds: Int?
+    public let steps: [SequenceStep]
+    public let updatedAt: Date
+
+    public init(
+        id: String, name: String, kind: String, restSecondsDefault: Int?,
+        durationMinutes: Int?, rounds: Int?, steps: [SequenceStep], updatedAt: Date
+    ) {
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.restSecondsDefault = restSecondsDefault
+        self.durationMinutes = durationMinutes
+        self.rounds = rounds
+        self.steps = steps
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct SequenceListResponse: Codable, Sendable {
+    public let sequences: [SequenceDef]
+}
+
+/// Extra run metadata carried in workout_logs.metricsData. Raw streams go
+/// up unprocessed — the SERVER runs the same downsample/zones/load math as
+/// the Strava import (streams contract, 2026-08-11); never pre-compute
+/// zones on-wrist.
+public struct WorkoutMetricsData: Codable, Hashable, Sendable {
+    public let sequenceId: String?
+    public let sequenceName: String?
+    public let roundsCompleted: Int?
+    /// Total working seconds per step index (circuit runs: start→Done deltas
+    /// summed across rounds) — Michael's "track how long each move takes".
+    public let stepSeconds: [Int]?
+    /// Raw HR samples (bpm) at HealthKit's natural cadence (~1/5 s).
+    public let hrStream: [Int]?
+    /// Elapsed seconds from session start, parallel to hrStream.
+    public let timeStream: [Int]?
+    /// Relative altitude (m) parallel to timeStream — outdoor sessions only.
+    public let altitudeStream: [Double]?
+
+    public init(
+        sequenceId: String? = nil, sequenceName: String? = nil,
+        roundsCompleted: Int? = nil, stepSeconds: [Int]? = nil,
+        hrStream: [Int]? = nil, timeStream: [Int]? = nil,
+        altitudeStream: [Double]? = nil
+    ) {
+        self.sequenceId = sequenceId
+        self.sequenceName = sequenceName
+        self.roundsCompleted = roundsCompleted
+        self.stepSeconds = stepSeconds
+        self.hrStream = hrStream
+        self.timeStream = timeStream
+        self.altitudeStream = altitudeStream
+    }
+
+    public var isEmpty: Bool {
+        sequenceId == nil && stepSeconds == nil && hrStream == nil
+    }
+}
+
+// MARK: - Custom exercises (GET /api/mobile/exercises)
+
+public struct CustomExerciseRow: Codable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let category: String?
+    public let aliases: [String]?
+}
+
+public struct CustomExerciseListResponse: Codable, Sendable {
+    public let exercises: [CustomExerciseRow]
+    public let updatedAt: Date?
 }
 
 // MARK: - Daily health snapshot
@@ -229,6 +384,9 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
     public let activeEnergyKcal: Double?
     public let walkingRunningDistanceMeters: Double?
     public let source: String
+    /// Extras riding until dedicated columns ship (announced 2026-08-11):
+    /// sleepMinutes, hrvMs, weightKg.
+    public let rawData: [String: Double]?
 
     public init(
         localDate: String,
@@ -237,7 +395,8 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
         restingHeartRateBpm: Int? = nil,
         activeEnergyKcal: Double? = nil,
         walkingRunningDistanceMeters: Double? = nil,
-        source: String = "apple_health"
+        source: String = "apple_health",
+        rawData: [String: Double]? = nil
     ) {
         self.localDate = localDate
         self.timeZone = timeZone
@@ -246,6 +405,7 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
         self.activeEnergyKcal = activeEnergyKcal
         self.walkingRunningDistanceMeters = walkingRunningDistanceMeters
         self.source = source
+        self.rawData = rawData
     }
 }
 

@@ -1,97 +1,220 @@
-// Home — pick a workout. Design screen 04, trimmed to what's real today:
-// no Sequences row (no backend contract yet) and no Today's-Plan card (plan
-// data isn't in the mobile surface); both slot back in when their data lands.
+// Workout list — design screen 05: Sequences row (live now that
+// /api/mobile/sequences shipped) + Kettlebell / Trail Run / Walk with the
+// design's own glyphs and real-history subtitles.
 
 #if os(watchOS)
 import SwiftUI
 
-struct HomeView: View {
+struct WorkoutListView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 5) {
-                Text("Workouts")
-                    .font(Theme.display(17))
-                    .foregroundStyle(Theme.textBright)
-                    .padding(.horizontal, 4)
-
-                ForEach(WorkoutKind.allCases) { kind in
-                    workoutRow(kind)
+                HStack(spacing: 6) {
+                    BackChevron { model.backToHome() }
+                    Text("Workouts")
+                        .font(Theme.display(16))
+                        .foregroundStyle(Theme.textBright)
                 }
+                .padding(.horizontal, 4)
 
-                footer
+                row(title: "Kettlebell", subtitle: kettlebellSubtitle) {
+                    PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 15)
+                } action: {
+                    model.openKettlebellSpace()
+                }
+                row(kind: .run, title: "Trail Run", subtitle: runSubtitle) {
+                    PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 15)
+                }
+                row(kind: .walk, title: "Walk", subtitle: "open goal") {
+                    WalkGlyph(color: Theme.accent, size: 15)
+                }
+                row(kind: .treadmill, title: "Treadmill", subtitle: "indoor · distance & HR") {
+                    WalkGlyph(color: Theme.accent, size: 15)
+                }
+                row(kind: .hike, title: "Hike", subtitle: "elevation & heart rate") {
+                    PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 15)
+                }
             }
             .padding(.horizontal, 2)
         }
     }
 
-    private func workoutRow(_ kind: WorkoutKind) -> some View {
-        Button {
+    private func row(
+        kind: WorkoutKind, title: String, subtitle: String,
+        @ViewBuilder glyph: () -> some View
+    ) -> some View {
+        row(title: title, subtitle: subtitle, glyph: glyph) {
             Task { await model.startWorkout(kind) }
-        } label: {
+        }
+    }
+
+    private func row(
+        title: String, subtitle: String,
+        @ViewBuilder glyph: () -> some View,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
             HStack(spacing: 8) {
                 ZStack {
                     Circle().fill(Theme.accentDim)
-                    Image(systemName: kind.systemImage)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
+                    glyph()
                 }
-                .frame(width: 26, height: 26)
+                .frame(width: 31, height: 31)
 
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(kind.title)
-                        .font(Theme.text(12, weight: .semibold))
+                    Text(title)
+                        .font(Theme.text(13, weight: .semibold))
                         .foregroundStyle(Theme.textBright)
-                    Text(subtitle(for: kind))
-                        .font(Theme.text(8.5))
+                    Text(subtitle)
+                        .font(Theme.text(9))
                         .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.textMuted)
             }
             .padding(.horizontal, 9)
-            .padding(.vertical, 8)
+            .padding(.vertical, 9)
             .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         }
         .buttonStyle(.plain)
     }
 
-    private var footer: some View {
-        HStack {
-            if case .queued(let count) = model.syncState {
-                Label("\(count) queued", systemImage: "arrow.triangle.2.circlepath")
-                    .font(Theme.text(8))
-                    .foregroundStyle(Theme.textMuted)
-            }
-            Spacer()
-            Button("Unpair") {
-                Task { await model.unpair() }
-            }
-            .buttonStyle(.plain)
-            .font(Theme.text(8))
-            .foregroundStyle(Theme.textFaint)
+    private var kettlebellSubtitle: String {
+        let routines = model.sequences.count
+        if routines > 0 {
+            return "\(routines) \(routines == 1 ? "routine" : "routines") · free sets"
         }
-        .padding(.horizontal, 6)
-        .padding(.top, 5)
+        if let last = model.lastKettlebell {
+            let f = RelativeDateTimeFormatter()
+            f.unitsStyle = .short
+            return "last · " + f.localizedString(for: last, relativeTo: Date())
+        }
+        return "routines · free sets · PRs"
     }
 
-    private func subtitle(for kind: WorkoutKind) -> String {
-        switch kind {
-        case .kettlebell:
-            if let last = model.lastKettlebell {
-                let f = RelativeDateTimeFormatter()
-                f.unitsStyle = .short
-                return "last · " + f.localizedString(for: last, relativeTo: Date())
-            }
-            return "sets · crown weight · PRs"
-        case .walk: return "open goal"
-        case .run: return "pace & heart rate"
-        case .hike: return "elevation & heart rate"
-        case .other: return "time & calories"
+    private var runSubtitle: String {
+        if let run = model.lastRun {
+            let f = DateFormatter()
+            f.dateFormat = "EEE"
+            return String(format: "%.1f km · %@", run.km, f.string(from: run.at))
         }
+        return "GPS coming · HR live"
+    }
+}
+
+// MARK: - Kettlebell space (Michael's 2026-08-10 IA: routines are the main
+// object; free sets are the freestyle corner)
+
+struct KettlebellSpaceView: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    BackChevron { model.backToWorkoutList() }
+                    Text("Kettlebell")
+                        .font(Theme.display(16))
+                        .foregroundStyle(Theme.textBright)
+                }
+                .padding(.horizontal, 4)
+
+                spaceRow(
+                    title: "Routines",
+                    subtitle: model.sequences.isEmpty
+                        ? "build one in Pitaya chat"
+                        : "\(model.sequences.count) saved · EMOM · circuits"
+                ) {
+                    SequenceGridGlyph(color: Theme.accent, size: 14)
+                } action: {
+                    if !model.sequences.isEmpty { model.openSequences() }
+                }
+
+                spaceRow(title: "Free sets", subtitle: "crown weight · tap reps · PRs") {
+                    PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 15)
+                } action: {
+                    Task { await model.startWorkout(.kettlebell) }
+                }
+            }
+            .padding(.horizontal, 2)
+        }
+    }
+
+    private func spaceRow(
+        title: String, subtitle: String,
+        @ViewBuilder glyph: () -> some View,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle().fill(Theme.accentDim)
+                    glyph()
+                }
+                .frame(width: 31, height: 31)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title)
+                        .font(Theme.text(13, weight: .semibold))
+                        .foregroundStyle(Theme.textBright)
+                    Text(subtitle)
+                        .font(Theme.text(9))
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.textMuted)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 10)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The design's sequences glyph — three offset rounded tiles.
+struct SequenceGridGlyph: View {
+    var color: Color
+    var size: CGFloat = 13
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 24
+            for (x, y) in Glyphs.sequenceRects {
+                let rect = CGRect(x: x * u, y: y * u, width: 7 * u, height: 6 * u)
+                context.stroke(
+                    Path(roundedRect: rect, cornerRadius: 1.5 * u),
+                    with: .color(color),
+                    style: StrokeStyle(lineWidth: 2 * u, lineCap: .round)
+                )
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// Back affordance used across pushed screens (design's ‹ mark).
+struct BackChevron: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.textMuted)
+                .frame(width: 22, height: 22)
+                .background(Theme.card, in: Circle())
+        }
+        .buttonStyle(.plain)
     }
 }
 #endif

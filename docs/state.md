@@ -5,11 +5,35 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-14c (TRAIN NUMBERS + CHAT FEEL + WATCH AUDIT)
-**Current phase:** Michael's 08-14 review pass. Train's numbers now read
-honestly, chat got its speed/motion/filters, the mic has a real live state,
-and the watch app has a written audit + design prompt (routines on the
-wrist is the unbuilt centrepiece).
+**Last updated:** 2026-08-14d (BRANCHES CONSOLIDATED — main now carries
+both lanes: web through the 08-14 review pass, watch through GPS routes)
+**Current phase:** `main` is the single source of truth again. It had sat at
+2026-08-09 (PR #6) while production shipped from the CLI and the watch lane
+lived only on `claude/watch-app` — which is why a main-lane session read a
+stale `ios/` and mis-audited the watch. Both lanes are merged here now.
+**Branch in flight:** `claude/phase1-modernization` (web) ·
+`claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch —
+**must merge `main` back in**, it is 21 commits behind).
+
+## 2026-08-14d — BRANCH CONSOLIDATION (main = both lanes)
+
+`main` was 32 commits behind live production and had never seen the watch
+lane at all. Fixed by fast-forwarding `main` to the web lane (34 commits,
+zero conflicts) and merging `claude/watch-app` into it (14 commits; the only
+conflicts were this file and `deferred-items.md`, resolved by keeping both
+lanes' entries).
+
+Facts that made it safe: all 18 migrations were ALREADY applied to the live
+database (dev and prod share one Supabase instance), so no schema work was
+involved; and Vercel is NOT git-connected (`.vercel/project.json` carries no
+repo link), so moving `main` cannot trigger a deploy. Production ships by
+`vercel --prod` from a working directory — commit c949043 at 23:54:25 and
+the prod deployment at 23:54:32, seven seconds apart.
+
+Consequence worth keeping: **`ios/**` on `main` is now the real watch tree**
+(6,227 lines), not the pre-routines snapshot. The watch lane must merge
+`main` back before its next session.
+
 
 ## 2026-08-14c — HIS REVIEW PASS (numbers, chat feel, watch audit)
 
@@ -1077,6 +1101,194 @@ elevation-series data exists (PORT GATE: no fake data).
 
 Watch lane: sequences deferred item marked resolved — wrist routines UI
 can start against `GET /api/mobile/sequences`.
+
+## 2026-08-12a — [watch] GPS ROUTES (Phase 3.5) + the iOS app icon
+
+The Strava-replacement capture piece, proven end-to-end in the simulator
+against prod with a scripted Salento track:
+
+- **RouteTracker** (CoreLocation, best-for-navigation, .fitness): accuracy
+  gate at 50 m, sub-metre jitter ignored, fixes feed BOTH
+  HKWorkoutRouteBuilder (route lands in Apple Health) and our own buffer.
+  Started only for outdoor kinds; background location declared.
+- **Wire format reuses the app's existing map contract** — routeData
+  `{summaryPolyline, points[], source}`. The polyline is the same
+  precision-5 encoding Strava imports use, so watch routes render on the
+  ALREADY-BUILT activity map with zero main-lane work. Encoder verified
+  against Google's canonical reference string AND round-tripped through
+  the app's own lib/polyline.ts decoder (exact). Raw points ride at 1/5 s
+  for future server-side splits.
+- **Elevation gain** from the barometer (positive deltas, 0.5 m noise
+  floor) → the existing `elevationGainM` column ("+186 m" on TRAILS);
+  altitudeStream still ships raw. GPS distance fills in only when
+  HealthKit has none — HK stays authoritative.
+- **Trail live page (design 12) ported**: mint blinking GPS pill
+  (SEARCHING → GPS → NO GPS), the map box with the design's three contour
+  curves verbatim + the live track drawn from real fixes (aspect-corrected
+  for latitude, hollow start dot, filled head), distance hero, ELEV M ·
+  /KM pace · BPM. Outdoor sessions get it as their second page.
+- **THREE bugs caught by self-smoke, all crash-class**: (1)
+  allowsBackgroundLocationUpdates threw because CoreLocation validates
+  UIBackgroundModes even on watchOS — declared it AND made the setter
+  conditional so a missing key can never crash mid-walk; (2) a live route
+  insert racing finishWorkout() deadlocked the save — sensors now stop
+  BEFORE the session ends, and finishRoute has a 6 s deadline so Apple
+  Health can never cost a workout; (3) `lastT = Int.min` in the
+  downsampler overflowed on the first point (Michael's crash report
+  pinpointed the line) — now an Optional.
+- Smoke: 27 fixes → polyline decoded back to 27 points inside the
+  simulated track, HK workout saved, server enrichment intact, row swept.
+- **iOS app icon shipped** — the home screen placeholder is gone; the
+  dragonfruit is flattened opaque (iOS rejects alpha) at 1024².
+
+## 2026-08-11g — [watch] iOS COMPANION SHIPPED to Michael's iPhone
+
+The thin companion per the kickoff directive — built, sim-verified
+end-to-end, Release-installed to his iPhone 17 Pro Max via devicectl:
+
+- **WKWebView shell**: prod web IS the UI; persistent cookie store (PIN
+  login survives), light-first chrome (no black safe-area bands), bounce
+  off, external links open Safari, back/forward gestures on.
+- **Durable mic/camera**: native usage descriptions + WKPermissionDecision
+  .grant for the personal-os-plum origin ONLY — the every-launch
+  getUserMedia prompt dies (his standing complaint).
+- **HealthKit → /api/mobile/health/daily**: reads bodyMass, sleepAnalysis,
+  HRV SDNN, restingHeartRate, stepCount, activeEnergy, distance; posts
+  today (+ yesterday once per launch) and re-posts on HKObserverQuery
+  background delivery (hourly). sleepMinutes/hrvMs/weightKg ride in
+  rawData until the announced columns ship. PROVEN in sim: grant sheet →
+  Connected → row landed on prod (zeros from the empty sim store —
+  today/yesterday get overwritten by his real phone's upsert).
+- **Native pairing** (PIN pad, same bearer flow as the watch, separate
+  Keychain service) + minimal Companion settings sheet reachable by SHAKE
+  or pitaya://settings (URL scheme registered): Health status/sync-now,
+  push status, unpair.
+- **APNs groundwork**: full token flow wired (UNUserNotificationCenter →
+  register → POST /api/mobile/push/register when it exists) — but NO
+  aps-environment entitlement on the free personal team (it would break
+  provisioning like the Sign-In-with-Apple incident); settings shows
+  "needs Apple Developer Program". The $99 decision now gates reminders.
+- Shared refactor: SVG parser + DragonfruitLogo moved to
+  Shared/PitayaVector.swift (both targets); fixed a nested-ObservableObject
+  render bug (health manager changes now forward to the model).
+
+## 2026-08-11f — [watch] Raw streams adopted; treadmill/hike; customs ready
+
+Adopted the 2026-08-11 streams contract end-to-end, proven against prod:
+the recorder appends HR samples at HealthKit's natural cadence
+(hrStream/timeStream, ~1/5 s) plus barometric altitudeStream on outdoor
+sessions (CMAltimeter; NSMotionUsageDescription added) and a session
+stepCount query at finish — all raw, server enriches (smoke row came back
+with SERVER-computed timeInZones + loadScore from 3 samples at t=2/7/13 s).
+Also: Treadmill (treadmill_walk, indoor) and Hike rows in the picker;
+GET /api/mobile/exercises merged into the catalog/normalizer with a disk
+cache and a MY MOVES picker section (endpoint live but empty — lights up
+when the AI mints the first custom); home-grid content +12% per Michael
+(icons 30 pt, titles 13 pt, boxes unchanged). HealthKit will re-prompt
+once on the wrist (new steps read). Release pushed OTA to his watch.
+
+## 2026-08-10a — [watch] Routines-first: circuits, weights editor, countdown
+
+Michael's direction crystallized on-wrist: routines are the center (his
+Lebe Stark walkthrough → MVP spec in deferred-items for the main lane).
+Watch side shipped and sim-verified end-to-end (Release built; OTA install
+pending — watch was out of network reach, likely on his walk):
+
+- **Circuit runner** (kind != emom): tap-driven Done per step, ROUND r OF R
+  + STEP s OF n, big reps + move + weight, live HR, mint REST countdown
+  between rounds (skippable, haptic at zero — design 14's job), End-early
+  counts tap-counted completions exactly. **Per-step working seconds**
+  captured start→Done and synced as metricsData.stepSeconds.
+- **Pre-start weights editor** on routine detail ("TODAY'S WEIGHTS"):
+  crown-dial sheet per exercise, real bell denominations (4 kg jumps,
+  4–64), overrides persist per routine, entries log ACTUAL weights → PRs.
+  EMOM labels show weight when set.
+- **Kettlebell space IA**: Workouts → Kettlebell → Routines + Free sets
+  (routines count live from the API). Sequences list renamed Routines.
+- **3-2-1 countdown** with tick haptics + start haptic before every
+  freeform/routine start (his ask — nothing starts on the tap itself).
+- **Type +12% globally** (one-line Theme typeScale — second size pass) and
+  bigger touch targets (rows 31pt circles, controls 50pt, tiles 88pt, PIN
+  keys 31pt).
+- DEBUG sample-circuit seam (injection survives refreshes) lets the runner
+  be driven in sim before the backend can build circuits; circuit detail
+  labels say STEP n (not MINUTE n).
+- rounds: Int? decodes now (nil-safe until main lane ships the field).
+
+## 2026-08-09h — [watch] ON MICHAEL'S WRIST + feedback batch shipped same-day
+
+Pitaya reached the physical watch (Series 8, watchOS 26.6). Debug install
+went through Xcode with Michael present (blockers en route, all solved:
+watch invisible to the Mac until same-Wi-Fi + first Xcode contact unlocked
+the hidden Developer Mode toggle; a stray Sign-In-with-Apple capability
+from "+ Capability" exploration broke personal-team provisioning — removed;
+team HDR67SL3JG captured into project.yml). His feedback from the first
+wrist session, shipped within the hour and REinstalled over the air via
+devicectl as a Release build (commit 6fedc4c):
+
+- **Sequences/EMOM live on the wrist** — /api/mobile/sequences shipped
+  mid-session (main lane's Train stage); list/detail/runner ported from
+  design 06/07/09; his real "20-Min EMOM" runs with ring countdown, round
+  haptics, auto-finish; runs sync with metricsData.sequenceId. Sim-verified
+  through real taps end-to-end.
+- **New Home ported** (design 04 tile grid, dragonfruit logo extracted
+  verbatim from pitaya-icons.tsx; Sleep/Journal honest "soon" tiles).
+- **Save/Discard review** replaces auto-save (his ask; discard confirmed
+  destructive-style); **idle nudge** after 8 quiet minutes (no sets, HR<95):
+  haptic + Keep going / End overlay (his ask).
+- **Perf**: the 5–10 s black screens were Debug+debugger overhead plus a
+  bootstrap that blocked on two cold Vercel calls — now cached-baselines-
+  first with background refresh, and the wrist runs Release.
+- Sizes bumped ~10% for the 45 mm ("a little small" feedback — iterate).
+- Smoke rows now sync as externalSource watch_smoke; his 2 real app_watch
+  wrist workouts were correctly untouched by cleanup; PR table backfilled
+  clean after the smoke (7 records, unchanged).
+- Watch streak on home deferred (needs a mobile endpoint — new ask below).
+
+## 2026-08-09g — [watch] Server-truth PRs adopted, PORT GATE parity, runbook
+
+Post-worktree-split session in the new lane home. Both new backend
+contracts adopted and proven against prod; the watch now matches the design
+per THE PORT GATE; everything short of Michael-present device signing is
+done (runbook: docs/watch-device-runbook.md).
+
+- **Server-truth PRs** (contract § ownership): baselines now come from
+  `GET /api/mobile/prs` (verified identical to the local engine's view — 7
+  records matched exactly), disk-cached (`PRBaselineCache`) so offline
+  cold-starts still know the bests; the top-100 history rebuild is deleted.
+  Sync response `prs: [{externalId,newPRs}]` decodes and REPLACES the local
+  estimate on the summary (server wins on drift); live-set haptics stay
+  local for offline instantness. Smoke proof: paired fresh → server
+  detection wrote swing 48 kg (prev 20) + volume 240 to personal_records →
+  summary showed the server-confirmed banners → then FULL RESTORE (rows
+  deleted, `/api/health/prs/backfill` re-run, `/api/mobile/prs` diffed
+  byte-identical to the pre-smoke snapshot).
+- **PORT GATE parity**: `WatchApp/Views/PitayaGlyphs.swift` — a tiny SVG
+  path renderer + every glyph EXTRACTED verbatim from pitaya-watch.dc.html
+  (kettlebell = the app design's Train icon, trail mountain, walk figure,
+  filled heart, check, end ✕, pause bars, water drop, play, lap flag).
+  dumbbell.fill and all other SF substitutions on designed surfaces are
+  gone (SF remains only on undesigned elements: chevron, repeat-set arrow,
+  queue badge — listed in ios/README). Home is the design's row list
+  (Kettlebell / Trail Run / Walk) with real-history subtitles ("1.9 km ·
+  Wed" from his actual last run). Fonts BUNDLED: Familjen Grotesk +
+  Instrument Sans (7 static TTFs, OFL, PostScript names verified) via
+  UIAppFonts + the Theme seam — visible in the new screenshots.
+- **Smoke hygiene hardened after an incident** (owned in the report to
+  Michael): a cleanup sweep keyed on externalSource `app_watch` deleted an
+  empty test row (07:28 this morning, strength, 0 sets, no description)
+  that was NOT this lane's — almost certainly Michael's own morning
+  simulator test (his 12:28Z device session was found and KEPT). His PR
+  table was unaffected (backfill-verified). Fix shipped: smoke workouts now
+  sync as externalSource `watch_smoke`, never `app_watch`, and session
+  cleanup lists-then-deletes only rows attributable to the running session.
+  Also: keychain resets during smoke un-paired his sim app — he'll re-pair
+  on next open (fresh welcome screen left, new build installed).
+- Sequences/rest-timer/sleep: WAITING on the Train-stage API per contract.
+- Both targets build green; sim left at welcome on the new build.
+
+Next: the device session (Michael present) — runbook has signing, Developer
+Mode, install, HK prompts, and the 8-point real-hardware validation table.
 
 ## 2026-08-09e — [watch] Pitaya watch app: core loop live in simulator
 

@@ -15,11 +15,11 @@ struct WelcomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
-            PitayaMark(size: 22)
+            DragonfruitLogo(size: 44)
             Text("Pitaya")
-                .font(Theme.display(22))
+                .font(Theme.display(23))
                 .foregroundStyle(Theme.textBright)
-                .padding(.top, 10)
+                .padding(.top, 9)
             Text("Your training,\non your wrist.")
                 .font(Theme.text(11))
                 .foregroundStyle(Theme.textSecondary)
@@ -109,7 +109,7 @@ struct PinPadView: View {
                     isSubmit ? (submitReady ? Theme.textBright : Theme.textMuted) : Theme.textPrimary
                 )
                 .frame(maxWidth: .infinity)
-                .frame(height: 27)
+                .frame(height: 31)
                 .background(
                     isSubmit ? (submitReady ? Theme.accentDeep : Theme.card) : Theme.card,
                     in: RoundedRectangle(cornerRadius: 9)
@@ -143,9 +143,10 @@ struct PairedView: View {
         VStack(spacing: 0) {
             ZStack {
                 Circle().stroke(Theme.mint, lineWidth: 2)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.mint)
+                PitayaGlyph(
+                    paths: Glyphs.check, style: .stroke(width: 3),
+                    color: Theme.mint, size: 16
+                )
             }
             .frame(width: 36, height: 36)
 
@@ -181,9 +182,10 @@ struct PairedView: View {
 
     private func checkRow(_ text: String) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(Theme.mint)
+            PitayaGlyph(
+                paths: Glyphs.check, style: .stroke(width: 3),
+                color: Theme.mint, size: 9
+            )
             Text(text)
                 .font(Theme.text(10))
                 .foregroundStyle(Theme.textPrimary)

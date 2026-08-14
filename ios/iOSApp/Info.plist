@@ -18,12 +18,27 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>net.blacksheepglobal.pitaya</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>pitaya</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Pitaya uses the camera for meal photos and label scans.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Pitaya reads your workouts and daily activity to sync training history to your dashboard.</string>
+	<string>Pitaya reads your weight, sleep, heart data, and activity from Apple Health to sync your dashboard automatically.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Pitaya saves workouts you record to Apple Health.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Pitaya uses the microphone for voice logging — granted once here, never asked again.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

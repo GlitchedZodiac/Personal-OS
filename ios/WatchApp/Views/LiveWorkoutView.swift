@@ -17,7 +17,13 @@ struct LiveWorkoutView: View {
             if kind == .kettlebell {
                 SetLoggerPage().tag(1)
             }
-            ControlsPage(recorder: model.recorder, kind: kind).tag(kind == .kettlebell ? 2 : 1)
+            if kind.isOutdoor {
+                // Design 12 — the GPS/route face for outdoor sessions.
+                TrailPage(recorder: model.recorder, route: model.recorder.route, kind: kind)
+                    .tag(1)
+            }
+            ControlsPage(recorder: model.recorder, kind: kind, isSequence: false)
+                .tag(kind == .kettlebell || kind.isOutdoor ? 2 : 1)
         }
         .tabViewStyle(.verticalPage)
         .onAppear {
@@ -30,6 +36,14 @@ struct LiveWorkoutView: View {
                     .padding(.bottom, 2)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+        }
+        .overlay {
+            if model.idleNudgeActive {
+                IdleNudgeOverlay(onEnd: { Task { await model.finishWorkout(kind) } })
+            }
+        }
+        .overlay {
+            CountdownOverlay()
         }
         .animation(.spring(duration: 0.35), value: model.prFlash != nil)
     }
@@ -59,17 +73,17 @@ struct MetricsPage: View {
             }
 
             Text(Fmt.clock(recorder.elapsed))
-                .font(Theme.numeric(38))
+                .font(Theme.numeric(42))
                 .foregroundStyle(Theme.textBright)
                 .padding(.top, 2)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                BeatingHeart(size: 14)
+                BeatingHeart(size: 16)
                 Text(recorder.heartRate.map { String(Int($0)) } ?? "––")
-                    .font(Theme.numeric(26))
+                    .font(Theme.numeric(29))
                     .foregroundStyle(Theme.textBright)
                 Text("BPM")
-                    .font(Theme.text(8, weight: .semibold))
+                    .font(Theme.text(9, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
             }
             .padding(.top, 4)
@@ -112,28 +126,42 @@ struct ControlsPage: View {
     @EnvironmentObject private var model: AppModel
     @ObservedObject var recorder: WorkoutRecorder
     let kind: WorkoutKind
+    var isSequence: Bool = false
 
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                controlButton(
-                    "End", icon: "xmark", iconColor: Theme.danger, bg: Theme.dangerDim
-                ) {
-                    Task { await model.finishWorkout(kind) }
+                controlButton("End", bg: Theme.dangerDim, glyph: {
+                    PitayaGlyph(
+                        paths: Glyphs.endX, style: .stroke(width: 2.6),
+                        color: Theme.danger, size: 15
+                    )
+                }) {
+                    Task {
+                        if isSequence {
+                            await model.endSequenceEarly()
+                        } else {
+                            await model.finishWorkout(kind)
+                        }
+                    }
                 }
                 pauseResume
             }
             HStack(spacing: 8) {
-                controlButton(
-                    "Lock", icon: "drop.fill", iconColor: Theme.water, bg: Theme.waterDim
-                ) {
+                controlButton("Lock", bg: Theme.waterDim, glyph: {
+                    PitayaGlyph(paths: Glyphs.drop, style: .fill, color: Theme.water, size: 15)
+                }) {
                     WKInterfaceDevice.current().enableWaterLock()
                 }
-                if kind == .kettlebell {
-                    controlButton(
-                        "Repeat set", icon: "arrow.counterclockwise",
-                        iconColor: Theme.accent, bg: Theme.accentDim
-                    ) {
+                if kind == .kettlebell && !isSequence {
+                    // The design's 4th control is a Lap flag; kettlebell has
+                    // no laps, so this slot repeats the last set (deviation
+                    // surfaced in state.md; glyph is undesigned → SF).
+                    controlButton("Repeat set", bg: Theme.accentDim, glyph: {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Theme.accent)
+                    }) {
                         model.repeatLastSet()
                     }
                 } else {
@@ -146,29 +174,29 @@ struct ControlsPage: View {
 
     private var pauseResume: some View {
         let paused = recorder.phase == .paused
-        return controlButton(
-            paused ? "Resume" : "Pause",
-            icon: paused ? "play.fill" : "pause.fill",
-            iconColor: Theme.textPrimary,
-            bg: Theme.elementDim
-        ) {
+        return controlButton(paused ? "Resume" : "Pause", bg: Theme.elementDim, glyph: {
+            if paused {
+                PlayGlyph(color: Theme.textPrimary, size: 15)
+            } else {
+                PauseGlyph(color: Theme.textPrimary, size: 15)
+            }
+        }) {
             paused ? recorder.resume() : recorder.pause()
         }
     }
 
     private func controlButton(
-        _ label: String, icon: String, iconColor: Color, bg: Color,
+        _ label: String, bg: Color,
+        @ViewBuilder glyph: @escaping () -> some View,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             VStack(spacing: 4) {
                 ZStack {
                     Circle().fill(bg)
-                    Image(systemName: icon)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(iconColor)
+                    glyph()
                 }
-                .frame(width: 44, height: 44)
+                .frame(width: 50, height: 50)
                 Text(label)
                     .font(Theme.text(8.5, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
