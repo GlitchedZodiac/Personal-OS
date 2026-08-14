@@ -440,6 +440,79 @@ main {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
 
+/* ————— Chat motion (2026-08-14) —————
+   The thread had no entrance motion at all: bubbles appeared instantly and
+   the "thinking" state was a literal "…". These give the conversation the
+   sense of arriving rather than blinking into place. */
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.msg-in {
+  animation: msg-in 0.26s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.typing-dot {
+  animation: typing-dot 1.1s ease-in-out infinite;
+}
+
+/* Streaming caret — a soft block that trails the last token so the reply
+   reads as still being written. */
+@keyframes stream-caret {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.stream-caret {
+  animation: stream-caret 1s ease-in-out infinite;
+}
+
+/* ————— Microphone live state —————
+   Recording used to be one maroon swap on a maroon button. This is the
+   unmistakable version: a breathing halo behind the button that a real
+   audio-level ring rides on top of. */
+@keyframes mic-halo {
+  0% {
+    box-shadow: 0 0 0 0 rgba(166, 61, 99, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 16px rgba(166, 61, 99, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(166, 61, 99, 0);
+  }
+}
+
+.mic-halo {
+  animation: mic-halo 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -447,6 +520,16 @@ main {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* The typing indicator and mic halo carry MEANING, not decoration — if
+     they freeze, the user can't tell the app is listening or thinking. Keep
+     them running (gently) even under reduced motion. */
+  .typing-dot,
+  .stream-caret,
+  .mic-halo {
+    animation-duration: 1.4s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 

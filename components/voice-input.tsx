@@ -1086,22 +1086,29 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
           </button>
 
           <div className="relative flex items-center justify-center">
-            {/* Audio level ring — pulses with actual mic input */}
+            {/* Listening state. The old version swapped bg-primary for
+                #8C2F51 — two near-identical maroons — behind a 20%-opacity
+                ring, so "is it actually listening?" was a real question.
+                Now: a breathing halo (constant, reads at a glance) with the
+                real audio-level ring riding on top of it. */}
             {isRecording && (
               <div
-                className="absolute rounded-full bg-primary/20 transition-transform duration-100"
+                className="pointer-events-none absolute rounded-full bg-[#DC74A0]/40"
                 style={{
-                  width: `${58 + audioLevel * 44}px`,
-                  height: `${58 + audioLevel * 44}px`,
-                  opacity: 0.3 + audioLevel * 0.5,
+                  width: `${60 + audioLevel * 46}px`,
+                  height: `${60 + audioLevel * 46}px`,
+                  opacity: 0.45 + audioLevel * 0.45,
+                  transition: "width 90ms linear, height 90ms linear",
                 }}
               />
             )}
             <button
               type="button"
+              aria-label={isRecording ? "Stop recording" : "Start voice input"}
+              aria-pressed={isRecording}
               className={cn(
                 "relative z-10 flex h-[54px] w-[54px] items-center justify-center rounded-full transition-all duration-200 hover:scale-105",
-                isRecording ? "bg-[#8C2F51] animate-pulse" : "bg-primary",
+                isRecording ? "mic-halo bg-[#8C2F51] ring-2 ring-white" : "bg-primary",
                 (isProcessing || isTranscribing || isAnalyzingPhoto) && "opacity-60"
               )}
               onClick={isRecording ? stopRecording : startRecording}
@@ -1132,9 +1139,25 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
         </div>
 
         {isRecording && (
-          <p className="text-center text-xs text-red-400 mt-3 animate-pulse font-medium">
-            Listening... Tap to stop
-          </p>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            {/* Level bars, not a pulsing label: silence reads as flat, so a
+                dead mic is visible instead of merely suspected. */}
+            <span className="flex items-end gap-[2.5px]" aria-hidden>
+              {[0.6, 1, 0.8, 0.45].map((scale, i) => (
+                <span
+                  key={i}
+                  className="w-[3px] rounded-full bg-[#A63D63]"
+                  style={{
+                    height: `${4 + audioLevel * 13 * scale}px`,
+                    transition: "height 80ms linear",
+                  }}
+                />
+              ))}
+            </span>
+            <p className="text-xs font-semibold text-[#8C2F51]">
+              Listening — tap to stop
+            </p>
+          </div>
         )}
         {isTranscribing && (
           <p className="text-center text-xs text-muted-foreground mt-3">

@@ -8,6 +8,7 @@ import {
   getWeekStartDateString,
 } from "@/lib/timezone";
 import { sessionVolumeKg } from "@/lib/prs";
+import { volumeTrendPct } from "@/lib/format-training";
 import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
 
@@ -73,7 +74,13 @@ export async function GET(request: NextRequest) {
           distanceMeters: true,
         },
       }),
-      prisma.personalRecord.findFirst({ orderBy: { achievedAt: "desc" } }),
+      // Heaviest-ever ("weight") records are the banner's subject: they mean
+      // the same thing on every movement. Session-tonnage ("volume") records
+      // only surface when there's no recent weight PR to show.
+      prisma.personalRecord.findFirst({
+        where: { kind: "weight" },
+        orderBy: { achievedAt: "desc" },
+      }),
       prisma.workoutLog.findFirst({
         where: { distanceMeters: { gt: 0 } },
         orderBy: { startedAt: "desc" },
@@ -147,9 +154,9 @@ export async function GET(request: NextRequest) {
       label: `W${isoWeek(weekStart)}`,
       volumeKg,
     }));
-    const first = weeklyVolume.find((b) => b.volumeKg > 0)?.volumeKg ?? 0;
-    const last = weeklyVolume[weeklyVolume.length - 1]?.volumeKg ?? 0;
-    const pctChange = first > 0 ? Math.round(((last - first) / first) * 100) : null;
+    // Week over week, not week-vs-first-ever: comparing the only bucket with
+    // work in it to itself printed a confident "+0%".
+    const pctChange = volumeTrendPct(weeklyVolume);
 
     // Today's session rows, PR-flagged via records that point at this workout.
     let session: {

@@ -92,10 +92,36 @@ export async function POST(request: NextRequest) {
   const now = new Date();
   const todayStr = getDateStringInTimeZone(now, timeZone);
 
+  // Everything below used to run as four SEQUENTIAL round-trips to the
+  // Supabase pooler before the first byte could leave — dead air the user
+  // reads as "the chat is slow". Settings and history are independent, so
+  // they go together; the user-message insert doesn't gate the model at all,
+  // so it starts here and is only awaited before the assistant row is
+  // written (which is seconds later, so createdAt ordering still holds).
+  const [settingsRow, historyRows] = await Promise.all([
+    prisma.userSettings
+      .findUnique({ where: { id: "default" }, select: { data: true } })
+      .catch(() => null),
+    prisma.chatMessage.findMany({
+      orderBy: { createdAt: "desc" },
+      take: HISTORY_LIMIT,
+    }),
+  ]);
+
+  const userRowWrite = prisma.chatMessage
+    .create({
+      data: {
+        role: "user",
+        content: message,
+        meta: { source, ...(thumbs.length > 0 ? { thumbs } : {}) },
+      },
+    })
+    .catch((error) => {
+      console.error("Chat user-message write failed:", error);
+      return null;
+    });
+
   // Settings drive reply language (bilingual EN/ES requirement).
-  const settingsRow = await prisma.userSettings
-    .findUnique({ where: { id: "default" }, select: { data: true } })
-    .catch(() => null);
   const aiLanguage =
     ((settingsRow?.data as { aiLanguage?: string } | null)?.aiLanguage ?? "english") ===
     "spanish"
@@ -108,10 +134,6 @@ export async function POST(request: NextRequest) {
 
   // Thread history (persisted rolling chat). Proposals compress to one line
   // so the model knows what happened without re-parsing card payloads.
-  const historyRows = await prisma.chatMessage.findMany({
-    orderBy: { createdAt: "desc" },
-    take: HISTORY_LIMIT,
-  });
   const history = historyRows.reverse().map((m) => {
     if (m.role === "proposal") {
       const meta = (m.meta ?? {}) as { kind?: string; status?: string };
@@ -124,14 +146,6 @@ export async function POST(request: NextRequest) {
       role: m.role === "user" ? ("user" as const) : ("assistant" as const),
       content: m.content,
     };
-  });
-
-  await prisma.chatMessage.create({
-    data: {
-      role: "user",
-      content: message,
-      meta: { source, ...(thumbs.length > 0 ? { thumbs } : {}) },
-    },
   });
 
   // Responses API multimodal shape: one user item, text part + image parts.
@@ -148,6 +162,11 @@ export async function POST(request: NextRequest) {
       const send = (payload: object) => controller.enqueue(encoder.encode(sse(payload)));
       let totalIn = 0;
       let totalOut = 0;
+
+      // First byte immediately: defeats intermediary buffering and lets the
+      // client swap its spinner for a live typing indicator before the model
+      // has produced anything.
+      send({ type: "open" });
 
       try {
         // Responses API input list — grows with each loop turn.
@@ -220,6 +239,9 @@ export async function POST(request: NextRequest) {
                   ),
                 };
               }
+              // Same ordering guard as the assistant row — a proposal must
+              // not land ahead of the message that prompted it.
+              await userRowWrite;
               const saved = await prisma.chatMessage.create({
                 data: {
                   role: "proposal",
@@ -291,6 +313,8 @@ export async function POST(request: NextRequest) {
         }
 
         if (finalText) {
+          // The user's row must land first or the thread reloads out of order.
+          await userRowWrite;
           await prisma.chatMessage.create({
             data: { role: "assistant", content: finalText },
           });

@@ -11,6 +11,7 @@ import {
   unlockRunnerAudio,
 } from "@/components/emom-runner";
 import type { SequenceStep } from "@/lib/sequences";
+import { tonnageLabel } from "@/lib/format-training";
 
 // Pitaya Train — full port of the design's Train screen (docs/design/
 // pitaya-app.dc.html, screen 3) plus its Live-workout and Routines sheets
@@ -93,6 +94,30 @@ const BAR_COLORS = [
 ];
 
 const fmt = (n: number) => n.toLocaleString("en-US");
+
+// PR copy that says what actually happened. "weight" records are the heaviest
+// bell ever moved on a movement — the only PR kind that means the same thing
+// for every exercise. "volume" records are session tonnage, so they get their
+// own wording instead of borrowing the heaviest-bell headline.
+function prHeadline(pr: NonNullable<TrainData["latestPR"]>) {
+  return pr.kind === "weight"
+    ? `${pr.exerciseName} — ${fmt(pr.value)} kg`
+    : `${pr.exerciseName} — ${tonnageLabel(pr.value)} in a session`;
+}
+
+function prSubline(pr: NonNullable<TrainData["latestPR"]>) {
+  if (pr.previousValue == null) {
+    return pr.kind === "weight"
+      ? "First time on record at this bell."
+      : "First session on record at this tonnage.";
+  }
+  const delta = pr.value - pr.previousValue;
+  return pr.kind === "weight"
+    ? `Beat your old ${fmt(pr.previousValue)} kg by ${fmt(
+        Math.round(delta * 10) / 10
+      )} kg.`
+    : `Beat your old best by ${tonnageLabel(delta)}.`;
+}
 
 function stepSummary(steps: SequenceStep[], durationMinutes?: number | null) {
   const names = steps
@@ -402,7 +427,7 @@ export default function TrainPage() {
           </h1>
         </div>
         <span className="rounded-full bg-accent px-3 py-[5px] text-xs font-semibold tabular-nums text-[#8C2F51]">
-          {fmt(data?.weekVolumeKg ?? 0)} kg
+          {tonnageLabel(data?.weekVolumeKg ?? 0)} lifted
         </span>
       </div>
 
@@ -495,7 +520,7 @@ export default function TrainPage() {
                 fill="#FFFFFF"
               />
             </svg>
-            NEW PR ·{" "}
+            {data.latestPR.kind === "weight" ? "HEAVIEST EVER" : "BEST SESSION"} ·{" "}
             {data.latestPR.isToday
               ? "TODAY"
               : new Date(data.latestPR.achievedAt)
@@ -506,11 +531,10 @@ export default function TrainPage() {
             className="mt-1.5 text-[22px] font-bold text-white"
             style={{ fontFamily: "var(--font-display)" }}
           >
-            {data.latestPR.exerciseName} — {fmt(data.latestPR.value)}{" "}
-            {data.latestPR.unit === "kg-reps" ? "kg total" : "kg"}
+            {prHeadline(data.latestPR)}
           </div>
           <div className="mt-[3px] text-xs text-[#F0D3E0]">
-            Yesterday&apos;s you lifted less.
+            {prSubline(data.latestPR)}
           </div>
         </div>
       )}
@@ -576,12 +600,14 @@ export default function TrainPage() {
             VOLUME · 8 WEEKS
           </p>
           {data?.pctChange != null && (
-            <p
-              className="text-[11px] font-semibold"
-              style={{ color: data.pctChange >= 0 ? "#5E9B72" : "#B54B4B" }}
-            >
-              {data.pctChange >= 0 ? "+" : ""}
-              {data.pctChange}%
+            <p className="text-[11px] font-semibold text-muted-foreground">
+              <span
+                style={{ color: data.pctChange >= 0 ? "#5E9B72" : "#B54B4B" }}
+              >
+                {data.pctChange >= 0 ? "+" : ""}
+                {data.pctChange}%
+              </span>{" "}
+              vs last week
             </p>
           )}
         </div>
@@ -603,6 +629,11 @@ export default function TrainPage() {
         </div>
         <div className="mt-1.5 flex justify-between text-[9.5px] text-muted-foreground">
           <span>{data?.weeklyVolume[0]?.label ?? ""}</span>
+          {/* The bars are unlabelled otherwise — the current week's tonnage
+              is what the whole chart is scaled against. */}
+          <span className="tabular-nums">
+            {data ? tonnageLabel(data.weekVolumeKg) : ""}
+          </span>
           <span>{data?.weeklyVolume[7]?.label ?? ""}</span>
         </div>
       </div>

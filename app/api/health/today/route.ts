@@ -60,9 +60,18 @@ export async function GET(request: NextRequest) {
       }),
       prisma.workoutLog.findMany({
         where: { startedAt: { gte: weekStart, lte: dayEnd } },
-        select: { exercises: true },
+        select: { exercises: true, startedAt: true, caloriesBurned: true },
       }),
-      prisma.personalRecord.count({ where: { achievedAt: { gte: weekStart } } }),
+      // Only genuine improvements count. A first-ever log of a movement mints
+      // a baseline row per kind (weight AND volume) — counting those made one
+      // seeded session read as "46 PRs this week".
+      prisma.personalRecord.count({
+        where: {
+          achievedAt: { gte: weekStart },
+          kind: "weight",
+          previousValue: { not: null },
+        },
+      }),
       prisma.bodyMeasurement.findMany({
         where: { weightKg: { not: null } },
         orderBy: { measuredAt: "desc" },
@@ -106,6 +115,19 @@ export async function GET(request: NextRequest) {
       (sum, w) => sum + sessionVolumeKg(w.exercises),
       0
     );
+    const weekSessions = weekWorkouts.length;
+
+    // Exercise burn for TODAY only — the tile's "net vs target" line needs it
+    // (target is an intake goal, so training earns the calories back).
+    const burnedToday = Math.round(
+      weekWorkouts.reduce(
+        (sum, w) =>
+          getDateStringInTimeZone(w.startedAt, timeZone) === todayStr
+            ? sum + (w.caloriesBurned ?? 0)
+            : sum,
+        0
+      )
+    );
 
     const latestWeight = weights[0]?.weightKg ?? null;
     const prevWeight = weights[1]?.weightKg ?? null;
@@ -130,7 +152,15 @@ export async function GET(request: NextRequest) {
         },
         mealsLogged: todayFood.length,
       },
-      train: { weekVolumeKg, weekPRCount },
+      train: {
+        weekVolumeKg,
+        weekPRCount,
+        weekSessions,
+        burnedToday,
+        // Negative = under the intake target once training is earned back
+        // (MyFitnessPal "remaining", signed). Positive = over.
+        netVsTargetKcal: Math.round(eaten) - burnedToday - calorieGoal,
+      },
       weight: {
         latestKg: latestWeight,
         deltaKg:

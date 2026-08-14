@@ -5,7 +5,63 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-14b (DEFERRED-QUEUE SWEEP: Track 2 live on
+**Last updated:** 2026-08-14c (TRAIN NUMBERS + CHAT FEEL + WATCH AUDIT)
+**Current phase:** Michael's 08-14 review pass. Train's numbers now read
+honestly, chat got its speed/motion/filters, the mic has a real live state,
+and the watch app has a written audit + design prompt (routines on the
+wrist is the unbuilt centrepiece).
+
+## 2026-08-14c — HIS REVIEW PASS (numbers, chat feel, watch audit)
+
+Fixed:
+- **"6,190 kg this week" → "6.2 t · 6 sessions"** — tonnage is the right
+  metric, five digits of kilos was the wrong presentation. New
+  `lib/format-training.ts` (`formatTonnage`/`tonnageLabel`) flips to tonnes
+  at 1000 kg; used on the dashboard tile and the Train header pill.
+- **"46 PRs this week" → gone, and the count itself was wrong.** Every
+  first-ever log of a movement mints a baseline row per kind (weight AND
+  volume), and `/api/health/today` counted all of them — 23 movements
+  seeded = "46 PRs". Now counts only `kind:"weight"` rows with a non-null
+  `previousValue` (genuine improvements): live value went 46 → **0**.
+- **The dashboard tile's second line is now his ask:** burn today + calorie
+  balance ("0 burned · 2,000 left"). Deliberately "left", not "under" — at
+  9am with nothing logged, −2000 is an unspent budget, not an earned deficit.
+- **PR banner tells the truth.** Prefers heaviest-ever (`kind:"weight"`)
+  records — the only PR kind that means the same thing on every movement —
+  and the hardcoded "Yesterday's you lifted less." is replaced by the real
+  delta, or "First time on record at this bell." when there's no prior.
+- **The "+0%" volume trend was comparing the only week of data to itself.**
+  `volumeTrendPct` needs two distinct weeks with work or returns null; the
+  label now reads "+12% vs last week", and the chart carries the current
+  week's tonnage on its axis.
+- **Chat latency:** four sequential Supabase round trips before the first
+  byte became one parallel pair, with the user-row insert moved off the
+  critical path (ordering preserved by awaiting it before any later write).
+  Measured: `open` 92–694 ms, first delta ~1.9–2.3 s. The rest is the model —
+  `effort:"low"` is the floor, `"minimal"` is rejected by `gpt-5.6-terra`.
+- **Chat feel:** deltas are rAF-coalesced (was a full list re-render per
+  token) and `scrollIntoView({behavior:"smooth"})` no longer fires per token
+  — smooth for a new message, instant while streaming, and nothing at all
+  when he has scrolled up to read. Added bubble entrance motion, a real
+  three-dot typing indicator, and a streaming caret.
+- **Chat filters:** All / Food / Usuals / Weight / Chat pills with live
+  counts, filtering the same transcript (nothing is hidden permanently).
+- **Mic live state:** breathing halo + real audio-level ring + level bars +
+  an explicit "Listening — tap to stop" strip, on BOTH the dock and the chat
+  composer. Reduced-motion keeps these running — they carry meaning.
+
+Written (no code):
+- `docs/design/pitaya-watch-design-prompt.md` — paste-ready Claude Design
+  prompt covering wrist routines, weight-at-start, now/next confirm, rest
+  timer, settings, on-watch insights, mic states, chat IA.
+- Two `[watch]` entries in `docs/deferred-items.md`: the routines gap and a
+  ranked list of eight audit findings.
+
+Tests: 128/128 (11 new in `tests/format-training.test.ts`). Build green.
+
+---
+
+**Previously:** 2026-08-14b (DEFERRED-QUEUE SWEEP: Track 2 live on
 the BSB, Library screen, church week-advance, reader footnotes/poetry
 sups, progression intelligence, + 12 annotations closed)
 **Current phase:** The queue is swept — docs/deferred-items.md's top

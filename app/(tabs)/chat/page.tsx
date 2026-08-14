@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   getOrCreateMicrophoneStream,
@@ -59,6 +59,43 @@ const KIND_TITLES: Record<string, string> = {
   product: "SAVE TO MY USUALS",
 };
 
+// ————— Quick filters —————
+// The thread is the log book, so it needs a way to be read as one. Each tab
+// is a lens over the SAME transcript (nothing is hidden permanently) and
+// keys off the proposal kinds the model already emits.
+type FilterKey = "all" | "food" | "usuals" | "weight" | "chat";
+
+const FILTERS: { key: FilterKey; label: string; kinds?: string[] }[] = [
+  { key: "all", label: "All" },
+  { key: "food", label: "Food", kinds: ["food", "edit_food"] },
+  { key: "usuals", label: "Usuals", kinds: ["product"] },
+  { key: "weight", label: "Weight", kinds: ["measurement"] },
+  { key: "chat", label: "Chat" },
+];
+
+function matchesFilter(msg: ChatMsg, filter: FilterKey): boolean {
+  if (filter === "all") return true;
+  // "Chat" is the plain conversation — everything that isn't a proposal card.
+  if (filter === "chat") return msg.role !== "proposal";
+  if (msg.role !== "proposal") return false;
+  const kinds = FILTERS.find((f) => f.key === filter)?.kinds ?? [];
+  return kinds.includes(msg.meta?.kind ?? "");
+}
+
+function TypingDots() {
+  return (
+    <span className="inline-flex items-center gap-[3px]">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="typing-dot h-[5px] w-[5px] rounded-full bg-[#A63D63]"
+          style={{ animationDelay: `${i * 0.16}s` }}
+        />
+      ))}
+    </span>
+  );
+}
+
 function fmtTime(iso?: string) {
   return new Date(iso ?? Date.now())
     .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
@@ -91,14 +128,43 @@ export default function ChatPage() {
   const [confirmBusy, setConfirmBusy] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<string | null>(null);
   const [itemScales, setItemScales] = useState<Record<string, number[]>>({});
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [micLevel, setMicLevel] = useState(0);
+
+  // Mirror of toolLine so the hot delta path can check it without closing
+  // over changing state (and without a set-state per token).
+  const toolLineRef = useRef("");
+  useEffect(() => {
+    toolLineRef.current = toolLine;
+  }, [toolLine]);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
-  const scrollDown = useCallback(() => {
+  // Streaming used to call scrollIntoView({behavior:"smooth"}) once PER TOKEN,
+  // so every delta re-targeted an in-flight smooth scroll — the single biggest
+  // source of the "clunky" feel. Now: smooth for a new message, instant while
+  // tokens land, and nothing at all if he has scrolled up to read history.
+  const pinnedRef = useRef(true);
+
+  const isNearBottom = useCallback(() => {
+    const doc = document.documentElement;
+    return doc.scrollHeight - (window.scrollY + window.innerHeight) < 140;
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => {
+      pinnedRef.current = isNearBottom();
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isNearBottom]);
+
+  const scrollDown = useCallback((behavior: ScrollBehavior = "smooth") => {
     requestAnimationFrame(() =>
-      bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+      bottomRef.current?.scrollIntoView({ behavior, block: "end" })
     );
   }, []);
 
@@ -107,12 +173,19 @@ export default function ChatPage() {
       .then((r) => (r.ok ? r.json() : { messages: [] }))
       .then((d) => {
         setMessages(d.messages ?? []);
-        scrollDown();
+        scrollDown("auto");
       })
       .catch(() => {});
   }, [scrollDown]);
 
-  useEffect(scrollDown, [messages, streamText, scrollDown]);
+  // New bubbles get the smooth ride; streaming tokens get an instant nudge.
+  useEffect(() => {
+    if (pinnedRef.current) scrollDown("smooth");
+  }, [messages, scrollDown]);
+
+  useEffect(() => {
+    if (streamText && pinnedRef.current) scrollDown("auto");
+  }, [streamText, scrollDown]);
 
   // Dock hand-off: voice/text spoken anywhere in the app arrives here —
   // as a pending payload when the dock navigated, or live via event when
@@ -166,6 +239,23 @@ export default function ChatPage() {
         let buffer = "";
         let assistantText = "";
 
+        // Deltas arrive faster than the screen refreshes. Painting each one
+        // meant a full list re-render per token; coalescing to one paint per
+        // frame keeps the text flowing without the stutter.
+        let pendingPaint = 0;
+        const paintSoon = () => {
+          if (pendingPaint) return;
+          pendingPaint = requestAnimationFrame(() => {
+            pendingPaint = 0;
+            setStreamText(assistantText);
+          });
+        };
+        const paintNow = () => {
+          if (pendingPaint) cancelAnimationFrame(pendingPaint);
+          pendingPaint = 0;
+          setStreamText(assistantText);
+        };
+
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -192,12 +282,13 @@ export default function ChatPage() {
 
             if (event.type === "delta" && event.text) {
               assistantText += event.text;
-              setStreamText(assistantText);
-              setToolLine("");
+              paintSoon();
+              if (toolLineRef.current) setToolLine("");
             } else if (event.type === "tool") {
               setToolLine("checking your data…");
             } else if (event.type === "proposal" && event.id) {
               if (assistantText) {
+                paintNow();
                 setMessages((prev) => [
                   ...prev,
                   { id: `a-${Date.now()}`, role: "assistant", content: assistantText },
@@ -221,6 +312,7 @@ export default function ChatPage() {
           }
         }
 
+        if (pendingPaint) cancelAnimationFrame(pendingPaint);
         if (assistantText) {
           setMessages((prev) => [
             ...prev,
@@ -284,10 +376,41 @@ export default function ChatPage() {
       const mime = mimes.find((m) => MediaRecorder.isTypeSupported(m)) ?? "audio/webm";
       const rec = new MediaRecorder(stream, { mimeType: mime });
       chunksRef.current = [];
+
+      // Live input level — the chat composer had no listening feedback at all
+      // beyond a colour swap, so there was no way to tell a live mic from a
+      // dead one. Failure here is cosmetic: recording still works.
+      let levelRaf = 0;
+      try {
+        const ctx = new AudioContext();
+        audioCtxRef.current = ctx;
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.6;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        const bins = new Uint8Array(analyser.frequencyBinCount);
+        const tick = () => {
+          analyser.getByteFrequencyData(bins);
+          const avg = bins.reduce((s, v) => s + v, 0) / bins.length;
+          setMicLevel(Math.min(1, avg / 90));
+          levelRaf = requestAnimationFrame(tick);
+        };
+        tick();
+      } catch {
+        // no level meter — the halo still animates
+      }
+      const stopLevels = () => {
+        if (levelRaf) cancelAnimationFrame(levelRaf);
+        audioCtxRef.current?.close().catch(() => {});
+        audioCtxRef.current = null;
+        setMicLevel(0);
+      };
+
       rec.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       rec.onstop = async () => {
+        stopLevels();
         deactivateMicrophoneStream();
         setRecording(false);
         const blob = new Blob(chunksRef.current, { type: mime });
@@ -336,6 +459,11 @@ export default function ChatPage() {
       body: JSON.stringify({ id, status }),
     }).catch(() => {});
   };
+
+  const visibleMessages = useMemo(
+    () => messages.filter((m) => matchesFilter(m, filter)),
+    [messages, filter]
+  );
 
   const scaledItems = (msg: ChatMsg): FoodItem[] => {
     const items = msg.meta?.data?.items ?? [];
@@ -800,7 +928,51 @@ export default function ChatPage() {
         Chat
       </h1>
 
-      <div className="mt-[18px] flex flex-1 flex-col gap-3">
+      {/* Quick filters — read the thread as a food log, a usuals shelf, a
+          weight history, or just the conversation. */}
+      <div className="mt-3.5 -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 lg:mx-0 lg:px-0">
+        {FILTERS.map((f) => {
+          const active = filter === f.key;
+          const count =
+            f.key === "all"
+              ? messages.length
+              : messages.filter((m) => matchesFilter(m, f.key)).length;
+          return (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`shrink-0 rounded-full px-3 py-[6px] text-[12px] font-semibold transition-colors ${
+                active
+                  ? "bg-primary text-white"
+                  : "border border-border bg-card text-secondary-foreground"
+              }`}
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {f.label}
+              {count > 0 && (
+                <span
+                  className={`ml-1.5 tabular-nums ${
+                    active ? "text-white/70" : "text-muted-foreground"
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-[14px] flex flex-1 flex-col gap-3">
+        {filter !== "all" && visibleMessages.length === 0 && (
+          <div className="rounded-[14px] border-[1.5px] border-dashed border-[#D9D7DC] p-3.5 text-center text-[12.5px] text-muted-foreground">
+            Nothing filed under{" "}
+            <span className="font-semibold">
+              {FILTERS.find((f) => f.key === filter)?.label}
+            </span>{" "}
+            yet.
+          </div>
+        )}
         {messages.length === 0 && !busy && (
           <div className="rounded-[14px] border-[1.5px] border-dashed border-[#D9D7DC] p-3.5 text-center text-[12.5px] leading-relaxed text-muted-foreground">
             Say it or type it — &ldquo;log lunch&rdquo;, &ldquo;what&apos;s my
@@ -810,12 +982,12 @@ export default function ChatPage() {
           </div>
         )}
 
-        {messages.map((msg) => {
+        {visibleMessages.map((msg) => {
           if (msg.role === "proposal") return renderProposal(msg);
           if (msg.role === "user") {
             const thumbs = msg.meta?.thumbs ?? [];
             return (
-              <div key={msg.id} className="max-w-[300px] self-end">
+              <div key={msg.id} className="msg-in max-w-[300px] self-end">
                 {thumbs.length > 0 && (
                   <div className="mb-1.5 flex flex-wrap justify-end gap-1.5">
                     {thumbs.map((src, i) => (
@@ -843,25 +1015,70 @@ export default function ChatPage() {
           return (
             <div
               key={msg.id}
-              className="max-w-[310px] self-start whitespace-pre-wrap rounded-[18px] rounded-bl-[5px] border border-border bg-card px-3.5 py-[11px] text-sm leading-relaxed text-foreground"
+              className="msg-in max-w-[310px] self-start whitespace-pre-wrap rounded-[18px] rounded-bl-[5px] border border-border bg-card px-3.5 py-[11px] text-sm leading-relaxed text-foreground"
             >
               {msg.content}
             </div>
           );
         })}
 
-        {streamText && (
-          <div className="max-w-[310px] self-start whitespace-pre-wrap rounded-[18px] rounded-bl-[5px] border border-border bg-card px-3.5 py-[11px] text-sm leading-relaxed text-foreground">
-            {streamText}
-          </div>
-        )}
-        {busy && !streamText && (
-          <div className="self-start px-1 text-[11.5px] italic text-muted-foreground">
-            {toolLine || "…"}
-          </div>
+        {/* Live turn — hidden under a filter that this reply won't match, so
+            the lens stays honest while it's still being written. */}
+        {(filter === "all" || filter === "chat") && (
+          <>
+            {streamText && (
+              <div className="msg-in max-w-[310px] self-start whitespace-pre-wrap rounded-[18px] rounded-bl-[5px] border border-border bg-card px-3.5 py-[11px] text-sm leading-relaxed text-foreground">
+                {streamText}
+                <span className="stream-caret ml-[2px] inline-block h-[13px] w-[2px] translate-y-[2px] rounded-full bg-[#A63D63]" />
+              </div>
+            )}
+            {busy && !streamText && (
+              <div className="msg-in flex max-w-[310px] items-center gap-2 self-start rounded-[18px] rounded-bl-[5px] border border-border bg-card px-3.5 py-[13px]">
+                <TypingDots />
+                {toolLine && (
+                  <span className="text-[11.5px] text-muted-foreground">
+                    {toolLine}
+                  </span>
+                )}
+              </div>
+            )}
+          </>
         )}
         <div ref={bottomRef} />
       </div>
+
+      {/* Listening strip — sits directly above the composer so the state is
+          readable without hunting for a colour change on the button. The
+          bars ride the real input level: silence = flat, speech = moving. */}
+      {(recording || transcribing) && (
+        <div
+          className="msg-in sticky z-10 mx-auto -mb-1 flex items-center gap-2 rounded-full bg-[#A63D63] px-3.5 py-1.5 text-[11.5px] font-semibold text-white shadow-[0_4px_14px_rgba(166,61,99,0.35)]"
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 9.2rem)" }}
+        >
+          {recording ? (
+            <>
+              <span className="flex items-end gap-[2px]" aria-hidden>
+                {[0.55, 1, 0.75].map((scale, i) => (
+                  <span
+                    key={i}
+                    className="w-[2.5px] rounded-full bg-white"
+                    style={{
+                      height: `${4 + micLevel * 11 * scale}px`,
+                      transition: "height 80ms linear",
+                    }}
+                  />
+                ))}
+              </span>
+              Listening — tap the mic to stop
+            </>
+          ) : (
+            <>
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              Writing that down…
+            </>
+          )}
+        </div>
+      )}
 
       {/* Composer */}
       <form
@@ -882,18 +1099,42 @@ export default function ChatPage() {
           className="min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground"
         />
         {/* Mic is always available (mid-draft dictation appends); the send
-            arrow joins it whenever there's text — his "split" ask. */}
-        <button
-          type="button"
-          onClick={() =>
-            recording ? recorderRef.current?.stop() : startVoice()
-          }
-          disabled={busy || transcribing}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors"
-          style={{ background: recording ? "#A63D63" : "#F6E3EB" }}
-        >
-          <MicGlyph color={recording ? "#FFFFFF" : "#8C2F51"} />
-        </button>
+            arrow joins it whenever there's text — his "split" ask.
+            Listening state: breathing halo + a ring that rides the real
+            input level, so a live mic is unmistakable from a dead one. */}
+        <div className="relative flex shrink-0 items-center justify-center">
+          {recording && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute rounded-full bg-[#A63D63]/25"
+              style={{
+                width: `${36 + micLevel * 26}px`,
+                height: `${36 + micLevel * 26}px`,
+                opacity: 0.35 + micLevel * 0.5,
+                transition: "width 90ms linear, height 90ms linear",
+              }}
+            />
+          )}
+          <button
+            type="button"
+            onClick={() =>
+              recording ? recorderRef.current?.stop() : startVoice()
+            }
+            disabled={busy || transcribing}
+            aria-label={recording ? "Stop recording" : "Start voice input"}
+            aria-pressed={recording}
+            className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+              recording ? "mic-halo" : ""
+            }`}
+            style={{ background: recording ? "#A63D63" : "#F6E3EB" }}
+          >
+            {transcribing ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#8C2F51] border-t-transparent" />
+            ) : (
+              <MicGlyph color={recording ? "#FFFFFF" : "#8C2F51"} />
+            )}
+          </button>
+        </div>
         {draft.trim() && (
           <button
             type="submit"

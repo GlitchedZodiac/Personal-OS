@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { SettingsIcon, TrainIcon } from "@/components/pitaya-icons";
+import { formatTonnage, netVsTargetLabel } from "@/lib/format-training";
 import { useDataLoggedListener } from "@/components/use-data-logged";
 import { SheetPortal } from "@/components/sheet-portal";
 import { MacroTargetsSheet } from "@/components/macro-targets-sheet";
@@ -30,7 +31,13 @@ interface TodayData {
     fat: { g: number; goalG: number };
     mealsLogged: number;
   };
-  train: { weekVolumeKg: number; weekPRCount: number };
+  train: {
+    weekVolumeKg: number;
+    weekPRCount: number;
+    weekSessions: number;
+    burnedToday: number;
+    netVsTargetKcal: number;
+  };
   weight: { latestKg: number | null; deltaKg: number | null; spark: number[] };
   journal: {
     exists: boolean;
@@ -448,20 +455,45 @@ export default function TodayPage() {
               TRAIN
             </span>
           </div>
+          {/* Tonnage in tonnes, not five digits of kilos — and the second
+              line answers "am I in deficit today?" instead of counting PR
+              rows (baseline rows made that read "46 PRs this week"). */}
           <p
             className="mt-1.5 text-[15px] font-semibold text-foreground"
             style={{ fontFamily: "var(--font-display)" }}
           >
-            {fmt(data?.train.weekVolumeKg ?? 0)} kg this week
+            <span className="tabular-nums">
+              {formatTonnage(data?.train.weekVolumeKg ?? 0).value}
+            </span>
+            <span className="text-[12px] text-secondary-foreground">
+              {" "}
+              {formatTonnage(data?.train.weekVolumeKg ?? 0).unit}
+            </span>
+            <span className="text-[12px] font-medium text-secondary-foreground">
+              {" · "}
+              {data?.train.weekSessions ?? 0} session
+              {data?.train.weekSessions === 1 ? "" : "s"}
+            </span>
           </p>
           <p className="mt-0.5 text-[11.5px] text-secondary-foreground">
-            {data?.train.weekPRCount ? (
-              <span className="font-semibold text-[#8C2F51]">
-                {data.train.weekPRCount} PR
-                {data.train.weekPRCount === 1 ? "" : "s"} this week
-              </span>
+            {data ? (
+              <>
+                <span className="tabular-nums">{fmt(data.train.burnedToday)}</span>{" "}
+                burned ·{" "}
+                <span
+                  className="font-semibold tabular-nums"
+                  style={{
+                    color:
+                      netVsTargetLabel(data.train.netVsTargetKcal).tone === "over"
+                        ? "#B54B4B"
+                        : "#5E9B72",
+                  }}
+                >
+                  {netVsTargetLabel(data.train.netVsTargetKcal).text}
+                </span>
+              </>
             ) : (
-              "no PRs yet this week"
+              "—"
             )}
           </p>
         </button>
