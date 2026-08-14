@@ -52,15 +52,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Sleep/HRV arrive one of two ways. The companion's v1 mapping nests them
+    // in `rawData` ("until the main lane's columns ship" — those columns
+    // shipped, the companion was never updated), so a real HRV reading was
+    // landing in a JSON blob nothing queries while the dedicated column stayed
+    // null. Top-level always wins; the nested copy is the fallback. Drop this
+    // fallback once the companion promotes the fields.
+    const nested = (
+      body.rawData && typeof body.rawData === "object" ? body.rawData : {}
+    ) as Record<string, unknown>;
+    const field = (key: string) =>
+      body[key] !== undefined && body[key] !== null ? body[key] : nested[key];
+
     const metrics = {
       steps: Math.max(0, int(body.steps) ?? 0),
-      restingHeartRateBpm: int(body.restingHeartRateBpm),
-      activeEnergyKcal: num(body.activeEnergyKcal),
-      walkingRunningDistanceMeters: num(body.walkingRunningDistanceMeters),
-      sleepMinutes: int(body.sleepMinutes),
-      sleepDeepMinutes: int(body.sleepDeepMinutes),
-      sleepRemMinutes: int(body.sleepRemMinutes),
-      hrvMs: num(body.hrvMs),
+      restingHeartRateBpm: int(field("restingHeartRateBpm")),
+      activeEnergyKcal: num(field("activeEnergyKcal")),
+      walkingRunningDistanceMeters: num(field("walkingRunningDistanceMeters")),
+      sleepMinutes: int(field("sleepMinutes")),
+      sleepDeepMinutes: int(field("sleepDeepMinutes")),
+      sleepRemMinutes: int(field("sleepRemMinutes")),
+      hrvMs: num(field("hrvMs")),
       rawData: {
         deviceSessionId: session.id,
         payload: body.rawData ?? null,

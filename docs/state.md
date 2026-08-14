@@ -50,12 +50,34 @@ Fixed:
   an explicit "Listening — tap to stop" strip, on BOTH the dock and the chat
   composer. Reduced-motion keeps these running — they carry meaning.
 
+Also fixed (found while re-auditing):
+- **HRV was being measured and thrown away.** The iOS companion's v1 mapping
+  nests sleep/HRV inside `rawData` "until the main lane's columns ship" —
+  they shipped, the companion was never told. Prod row 2026-08-12 carried
+  `rawData.payload = {"hrvMs": 27.8}` with the `hrvMs` column null.
+  `/api/mobile/health/daily` now promotes nested fields when the top-level
+  ones are absent (top-level always wins). Self-smoked both shapes against
+  the running app; probe rows and the probe device session deleted after.
+
+**CORRECTION — the first watch audit this session was wrong.** It read
+`ios/**` from THIS worktree, which is a stale snapshot (2,640 lines,
+pre-routines). The watch lane's real tree is on `claude/watch-app` (6,227
+lines). Retracted claims — all actually BUILT: routines wired to the wrist,
+pre-flight weight confirm with persisted per-routine overrides, now/next with
+a per-step Done, rest timer, 4 kg crown detents, `HKWorkoutRouteBuilder` GPS,
+a WidgetKit complication, custom glyphs, and the `syncDailyHealth` call site.
+**Never audit `ios/**` from the main-lane checkout** — use
+`git archive claude/watch-app -- ios/`.
+
 Written (no code):
 - `docs/design/pitaya-watch-design-prompt.md` — paste-ready Claude Design
-  prompt covering wrist routines, weight-at-start, now/next confirm, rest
-  timer, settings, on-watch insights, mic states, chat IA.
-- Two `[watch]` entries in `docs/deferred-items.md`: the routines gap and a
-  ranked list of eight audit findings.
+  prompt, CORRECTED against the real branch: settings surface, the
+  complication (currently a static launcher that can never show data),
+  on-watch insights incl. heart-rate recovery, Double Tap + App Intents,
+  `HKWorkoutEvent` structure, mic states, chat IA.
+- Three `[watch]`/`[main]` entries in `docs/deferred-items.md`: the
+  audit-the-right-branch process note, the eight verified gaps, and the
+  companion's nested sleep/HRV handoff.
 
 Tests: 128/128 (11 new in `tests/format-training.test.ts`). Build green.
 
