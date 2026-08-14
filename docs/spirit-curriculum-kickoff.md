@@ -30,20 +30,19 @@ generation tokens.
 - Wants **profound** study: history, theology, doctrine, evangelism,
   faith, hope, and Scripture itself, interleaved — NOT book-by-book.
   Revisiting a book later at a deeper level is a feature.
-- Already completed/queued (Year 1 — do not reuse these order indexes):
-  - T1 The Judges (active) — OT narrative, 42 studies
-  - T2 The Exile — history & prophets, 24
-  - T3 Justification — doctrine short, 6
-  - T4 The Gospel of Mark — 24
-  - T5 Giving a Reason — witness/practice, 5
-  - T6 Romans — epistle deep-dive, 30 (the cap)
-  - T7 The First Five Centuries — church history, 18
-  - T8 Hope — the Last Things — doctrine short, 6
+- The CURRENT PLAN is v3 in `docs/spirit-curriculum.json` — 36 terms /
+  362 studies over three years, already imported. Read it before
+  proposing anything; your job now is REVISION (unstarted terms only)
+  and EXTENSION (orderIndex 37+, or promoting from `reservePool`).
+  Context that shaped v3 lives in its `notes` key (IBCC Cali,
+  dispensational pulpit vs covenantal bookshelf, eschatology as a live
+  burn).
 
 ## Hard rules
 
-1. **Term length: 3 to 30 studies. Never more than 30.** Mix lengths —
-   shorts (3–6) between deep dives are deliberate breathing.
+1. **Term length: 3 to 15 studies. Never more than 15.** Mix lengths —
+   shorts (3–6) between deep dives are deliberate breathing (at least one
+   ≤10-study term in every rolling window of three).
 2. A term is made of **units** of 1–6 days each (a term grows by adding
    units, not by inflating a unit).
 3. **Every day anchors to a Scripture reading** — even church-history
@@ -67,8 +66,8 @@ Ask Michael (a few at a time, not a wall):
   fatherhood/family, money, apologetics…)
 - What is his church preaching, and should the curriculum orbit near
   it or deliberately elsewhere?
-- Does he want a Spanish-language term (e.g., reading a gospel in the
-  NBLA once its license lands)?
+- (Spanish is settled: it lives in the `compare` homework kind, ESV vs
+  NBLA in his Logos — no Spanish-language term, no license dependency.)
 - Depth check on candidates: Genesis/Abraham? Psalms by kind? Isaiah?
   John? Acts? Hebrews? Proverbs/wisdom? Revelation (done sanely)?
 - History appetites: the Reformation? the Puritans? missions history?
@@ -87,11 +86,20 @@ Providence & suffering — Job and Joseph (18–24) · Revelation without
 hysteria (18) · The Puritans (12) · Un evangelio en español (when NBLA
 lands) · Work & vocation (6) · The Attributes of God (12).
 
-## Output format (exact)
+## Output format (exact — v3 wrapper)
 
-Extend this JSON — same shape as Year 1, orderIndex continuing from 9.
+The file is a WRAPPER: `{version, notes, constraints, homeworkKinds,
+generatorRules, terms, reservePool}`. Every unit carries a `homework`
+list (1–3 kind slugs from `homeworkKinds`: sit · read · research ·
+write · compare · ask); a term may carry a `homeworkArc` (a running
+daily assignment). `ask` is gated to orderIndex ≥ 13. Bump `version`
+on every edit.
+
+## Term shape
+
+Extend or revise the JSON — unstarted terms may be reshaped in place; new terms continue from orderIndex 37.
 The build lane imports it with `node prisma/import-curriculum.mjs`
-(validates the 3–30 cap, protects started terms). File in the repo:
+(validates the 3–15 cap and homework kinds, protects started terms; `--replace` exists but is gated on zero started data). File in the repo:
 `docs/spirit-curriculum.json`. If you have repo access, edit that file
 directly and keep `version` bumped; if not, output the complete JSON in
 a code block and Michael hands it to the build lane.
@@ -104,9 +112,10 @@ a code block and Michael hands it to the build lane.
   "rationale": "why this term, why now — announced voice, 60-110 words",
   "hardNote": null,
   "secondNote": null,
+  "homeworkArc": null,
   "units": [
-    { "label": "…", "ref": "Book 1–4", "days": 6 },
-    { "label": "…", "ref": "Book 5–8", "days": 6, "hard": true }
+    { "label": "…", "ref": "Book 1–4", "days": 3, "homework": ["sit", "read"] },
+    { "label": "…", "ref": "Book 5–8", "days": 2, "homework": ["research"], "hard": true }
   ]
 }
 ```

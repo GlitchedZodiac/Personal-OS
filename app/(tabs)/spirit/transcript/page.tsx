@@ -16,7 +16,12 @@ interface TranscriptData {
   }[];
   booksTouched: number;
   booksRead: number;
-  termsCompleted: { title: string; kick: string; startedAt: string | null }[];
+  termsCompleted: {
+    title: string;
+    kick: string;
+    startedAt: string | null;
+    summary?: { studies?: number; openQuestions?: { q: string; at: string }[] } | null;
+  }[];
 }
 
 export default function SpiritTranscriptPage() {
@@ -117,11 +122,21 @@ export default function SpiritTranscriptPage() {
         </p>
         {data?.termsCompleted.length ? (
           data.termsCompleted.map((t) => (
-            <div key={t.title} className="flex items-center justify-between px-4 py-[9px]">
-              <span className="text-[12.5px] text-[#454349]">{t.title}</span>
-              <span className="text-[10.5px] text-muted-foreground">
-                {t.startedAt ? new Date(t.startedAt).getFullYear() : ""} ✓
-              </span>
+            <div key={t.title} className="px-4 py-[9px]">
+              <div className="flex items-center justify-between">
+                <span className="text-[12.5px] text-[#454349]">{t.title}</span>
+                <span className="text-[10.5px] text-muted-foreground">
+                  {t.startedAt ? new Date(t.startedAt).getFullYear() : ""} ✓
+                </span>
+              </div>
+              {t.summary && (
+                <p className="mt-0.5 text-[10.5px] text-muted-foreground">
+                  {t.summary.studies ?? "?"} studies
+                  {t.summary.openQuestions?.length
+                    ? ` · ${t.summary.openQuestions.length} question${t.summary.openQuestions.length === 1 ? "" : "s"} still open`
+                    : " · nothing left open"}
+                </p>
+              )}
             </div>
           ))
         ) : (

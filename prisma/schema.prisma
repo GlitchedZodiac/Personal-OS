@@ -1088,16 +1088,31 @@ model Term {
   rationale   String // "why this term, why now"
   hardNote    String? // hard-sayings statement when the term contains one
   secondNote  String? // second-reading note when revisiting a book
+  homeworkArc String? // term-long running assignment, surfaced daily
   weeks       Int
-  syllabus    Json // [{week, label, ref, hard?: true}]
+  syllabus    Json // [{week, label, ref, days, homework: [kinds], hard?}]
   status      String    @default("upcoming") // upcoming | active | completed
   startedAt   DateTime?
   generatedAt DateTime? // when the visible batch finished writing its studies
+  summary     Json? // term-end snapshot: {done, topCategory, openQuestions[]}
   createdAt   DateTime  @default(now())
 
   days DevotionalDay[]
 
   @@map("spirit_terms")
+}
+
+// Curriculum-wide generator config, synced from
+// docs/spirit-curriculum.json at import time so the study generator
+// reads it server-side (the docs/ tree isn't in the serverless bundle).
+model SpiritCurriculumConfig {
+  id            String   @id @default("main")
+  version       Int
+  homeworkKinds Json // {kind: {label, minutes, description, targetShare, gatedFrom?}}
+  generatorRules Json // string[]
+  updatedAt     DateTime @updatedAt
+
+  @@map("spirit_curriculum_config")
 }
 
 // One row per study HE finished — the term advances by completion,
@@ -1133,6 +1148,7 @@ model DevotionalDay {
   estMinutes   Int      @default(12)
   citations    Json? // [{label, sourceKey, locator}]
   suggested    Json? // [{refInt, category}] — pre-marked highlights
+  homework     Json? // {kind, label, minutes, text} — exactly one per study
   generatedAt  DateTime @default(now())
 
   @@unique([termId, weekIndex, dayIndex])

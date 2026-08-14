@@ -115,6 +115,7 @@ export async function GET() {
         rationale: term.rationale,
         hardNote: term.hardNote,
         secondNote: term.secondNote,
+        homeworkArc: term.homeworkArc,
         weeks: term.weeks,
         syllabus: term.syllabus,
       },

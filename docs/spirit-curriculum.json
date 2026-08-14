@@ -1,104 +1,2795 @@
 {
-  "version": 1,
-  "authoredBy": "main-lane Claude, 2026-08-13 — Year 1 after The Judges; the curriculum lane extends this to three years",
-  "principles": [
-    "Announced, not chosen — the order is set for him; the pace is his",
-    "Mixed modality: narrative, doctrine, gospel, practice, epistle, history, hope — not book-by-book",
-    "Terms run 3 to 30 studies, never longer; units inside a term are 3-6 days",
-    "Hard texts are read whole, flagged ahead, never skipped",
-    "History is taught with the Bible open — every study anchors to a reading",
-    "Revisiting a book is a feature: deeper pass, new lens"
+  "version": 3,
+  "generatedFor": "Spirit / Pitaya — theological university, single student",
+  "notes": "v3 — final. Context correction: Michael's church is IBCC Cali, a daughter church of Grace Community (MacArthur) — his PULPIT is dispensational while his bookshelf (Sproul, Voddie) is covenantal and his first nine years were charismatic. Term 3 rebuilt as a map-not-verdict comparison. Eschatology named as a live burn: his instinct is amil/postmil renewal-not-escape; Year 3 gives it Terms 28, 31, 34. Year 3 (terms 25-36) now fully planned. Retained from v2/v2.1: cap 15, full Year 1 replace, homework schema, no Spanish-language term.",
+  "constraints": {
+    "validatorEnforced": {
+      "termMin": 3,
+      "termMax": 15,
+      "unitDaysMin": 1,
+      "unitDaysMax": 6,
+      "everyDayAnchorsToScripture": true
+    },
+    "authorGuidance": {
+      "breatherEveryThree": "At least one term of 10 studies or fewer in every rolling window of three terms.",
+      "hardSpacing": "Terms whose hard flags mark morally distressing content should not be adjacent. Doctrinally-contested hard flags are exempt. Planning guidance only — do not enforce in the importer."
+    }
+  },
+  "homeworkKinds": {
+    "sit": {
+      "label": "Sit with it",
+      "minutes": "5",
+      "description": "One question carried through the day. No answer required, no writing. The point is that it follows you into the car and the kitchen.",
+      "targetShare": 0.35
+    },
+    "read": {
+      "label": "Read one more",
+      "minutes": "5-10",
+      "description": "A second passage, read whole, with no commentary and no study notes. Usually a cross-reference, the text being quoted, or the passage that complicates today's.",
+      "targetShare": 0.25
+    },
+    "research": {
+      "label": "Find one thing out",
+      "minutes": "10-15",
+      "description": "A custom, a word, a place, a date, a person. Logos and the Reformation Study Bible are the intended tools. Must have a floor: one specific findable thing, never an open-ended rabbit hole.",
+      "targetShare": 0.2
+    },
+    "write": {
+      "label": "Leave a trace",
+      "minutes": "15-20",
+      "description": "A paragraph, a paraphrase in his own words, a list, a letter he never sends. Never longer than a paragraph. Used sparingly so it stays weighty.",
+      "targetShare": 0.1
+    },
+    "compare": {
+      "label": "Two translations",
+      "minutes": "5-10",
+      "description": "The same verse in ESV and NBLA, sometimes NASB or KJV. Note what shifts. This is where the Spanish lives now. Comparison, not immersion.",
+      "targetShare": 0.05
+    },
+    "ask": {
+      "label": "Bring it to someone",
+      "minutes": "10",
+      "gatedFrom": 13,
+      "description": "Bring one question to one person: Kat, his dad, Jonathan, Benjamin, a pastor. Not evangelism, not a witnessing assignment. A question asked out loud to someone who knows him. Year 2 onward only.",
+      "targetShare": 0.05
+    }
+  },
+  "generatorRules": [
+    "Exactly one homework item per study.",
+    "Never exceed 20 minutes.",
+    "Never repeat the same homework kind on two consecutive days within a term.",
+    "Draw only from the kinds listed on that unit.",
+    "REQUIRED: every study opens by naming the previous study's homework in one line before teaching anything. This is the mechanic that keeps a lesson from evaporating. Do not skip it on day 1 of a term; reference the last day of the previous term instead.",
+    "Homework never requires a purchase, a website he does not already have, or leaving the house.",
+    "A 'write' item never asks for more than one paragraph.",
+    "The curriculum is a spiral: when a unit's refs revisit an earlier term's ground, say so naturally in one clause (e.g. 'you mapped this in Term 28'). Callbacks are load-bearing, not decoration."
   ],
   "terms": [
     {
-      "orderIndex": 2,
-      "title": "The Exile",
-      "kick": "HISTORY & PROPHETS",
-      "rationale": "Judges ended with no king in Israel. The exile is what happened centuries later when the kings came and failed too — the covenant curses falling exactly as written, and God keeping covenant anyway, in a foreign land. From national amnesia to national catastrophe to a remnant walking home. This is the Old Testament's hinge, and most readers skip it.",
+      "orderIndex": 1,
+      "title": "Reading the Room",
+      "kick": "METHOD · what question was the writer actually answering?",
+      "rationale": "We start with how to read, because everything after this depends on it. You already believe that a text answers the question its writer was asking, and that forcing it to answer yours is a kind of theft. You have just never studied that conviction on purpose. So we will. Romans 9, where almost everyone helps themselves. Ruth 4, where the man without a name is the point. Matthew quoting Hosea in a way no seminary would allow. Learn the discipline now and it protects the next three years.",
       "hardNote": null,
-      "secondNote": null,
+      "secondNote": "This term encodes the method behind The Grafted. If the group ever restarts, this is its syllabus.",
+      "homeworkArc": "Keep one page. Every time you catch yourself wanting a verse to say something, write the verse down. Do not argue with yourself yet.",
       "units": [
-        { "label": "The slow collapse — Manasseh to the fall", "ref": "2 Kings 21–25", "days": 6 },
-        { "label": "Jeremiah — the prophet who watched it happen", "ref": "Jeremiah 1–2; 29; 31", "days": 6 },
-        { "label": "Daniel — faithful in Babylon", "ref": "Daniel 1–6", "days": 6 },
-        { "label": "Coming home — Ezra, Nehemiah, Haggai", "ref": "Ezra 1–6; Nehemiah 1–2; 4; 6; Haggai 1–2", "days": 6 }
+        {
+          "label": "Somebody wrote to him first",
+          "ref": "1 Corinthians 7:1; 1:10-17",
+          "days": 2,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        },
+        {
+          "label": "Genre is not decoration",
+          "ref": "Psalm 23; Proverbs 22:6; Revelation 1:1-8",
+          "days": 2,
+          "homework": [
+            "compare",
+            "sit"
+          ]
+        },
+        {
+          "label": "The question behind Romans 9",
+          "ref": "Romans 9:1-5; 11:1-14",
+          "days": 2,
+          "homework": [
+            "read",
+            "write"
+          ]
+        },
+        {
+          "label": "History that argues",
+          "ref": "Ruth 4:1-12",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "When the writer quotes",
+          "ref": "Matthew 2:13-18; Hosea 11:1-4",
+          "days": 1,
+          "homework": [
+            "research",
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 2,
+      "title": "Genesis: The Promise Under Everything",
+      "kick": "NARRATIVE · the covenant everything else stands on",
+      "rationale": "You hold covenant theology and you have never studied the covenants. That is the gap we close first. Before Sinai, before David, before the cross, there is a man told to leave his country and a God who walks alone between the pieces of a slaughtered animal. Every argument you want to have later, about Israel, about baptism, about the church, runs back through Genesis 15 and 17. So we go there first and slowly, and we leave the argument for the next term.",
+      "hardNote": "Genesis 22 is read whole. A father, a son, a knife, and no explanation offered until the last moment. It is not softened here.",
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "In the beginning, an arrangement",
+          "ref": "Genesis 1:26-2:3; 2:15-17",
+          "days": 2,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        },
+        {
+          "label": "The first promise, spoken to a snake",
+          "ref": "Genesis 3:8-24",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Waters and a bow",
+          "ref": "Genesis 6:5-22; 8:20-9:17",
+          "days": 2,
+          "homework": [
+            "read",
+            "research"
+          ]
+        },
+        {
+          "label": "Get out of your country",
+          "ref": "Genesis 11:27-12:9",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Cut in half",
+          "ref": "Genesis 15",
+          "days": 2,
+          "homework": [
+            "research",
+            "sit"
+          ]
+        },
+        {
+          "label": "A sign in the flesh",
+          "ref": "Genesis 17",
+          "days": 2,
+          "homework": [
+            "read",
+            "compare"
+          ]
+        },
+        {
+          "label": "The son and the ram",
+          "ref": "Genesis 22:1-19",
+          "days": 1,
+          "hard": true,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The promise keeps walking",
+          "ref": "Genesis 28:10-22; 49:8-12",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        }
       ]
     },
     {
       "orderIndex": 3,
-      "title": "Justification",
-      "kick": "DOCTRINE · THE HINGE",
-      "rationale": "Two terms of narrative failure — the judges' cycles, the exile's verdict — leave one question standing: how is anyone ever right with God? Six days on the hinge of the Reformation. Short on purpose: one doctrine, held up to the light until it catches.",
-      "hardNote": null,
-      "secondNote": null,
+      "title": "Covenant and Dispensation: The Map",
+      "kick": "DOCTRINE · your pulpit holds one, your bookshelf holds the other",
+      "rationale": "You asked for definition, and now I know the actual shape of the question. Your bookshelf is covenantal: Sproul and Voddie. Your pulpit is dispensational: IBCC is a daughter of Grace Community. You sit under one system and read under the other, and you are not yet deep enough in either to say precisely where they part. So this term is a map, not a verdict. Both systems at full strength from their own texts, then the downstream: what each does to Israel, to baptism, to the end of the world. Your instinct can survive definition. Find out.",
+      "hardNote": "The unit called The System in Your Pew reads dispensationalism the way its best men teach it, your own elders among them. No caricature, no Left Behind. If you cannot state their case so they would sign it, you have not finished the unit.",
+      "secondNote": "Two honest cuts, one per side. Aim the Scofield apprehension precisely: the pretribulational rapture SYSTEM is 19th century (Darby, then Scofield 1909), but premillennialism itself is ancient — Justin and Irenaeus held it. And covenant federalism is likewise a post-Reformation systematization; Hosea 6:7, a favorite covenant-of-works proof text, turns on a disputed rendering (like Adam / at Adam) and must not carry weight alone. Precision cuts both directions or it is not precision.",
+      "homeworkArc": "Two columns, one page. Every argument that actually landed on you, from either side. Write it down even when it lands wrong.",
       "units": [
-        { "label": "The verdict — God counts the ungodly righteous", "ref": "Romans 3:21–31; Genesis 15; Romans 4:1–8", "days": 3 },
-        { "label": "The exchange — Christ our righteousness", "ref": "2 Corinthians 5:11–21; Philippians 3:1–11; Galatians 2:15–21", "days": 3 }
+        {
+          "label": "What a covenant actually is",
+          "ref": "Genesis 15:7-21; Jeremiah 34:17-20",
+          "days": 2,
+          "homework": [
+            "research",
+            "sit"
+          ]
+        },
+        {
+          "label": "The covenantal spine",
+          "ref": "Romans 5:12-21; Hosea 6:7; Galatians 3:15-29",
+          "days": 2,
+          "homework": [
+            "read",
+            "write"
+          ]
+        },
+        {
+          "label": "The new covenant, promised out loud",
+          "ref": "Jeremiah 31:31-34; Hebrews 8:6-13",
+          "days": 2,
+          "homework": [
+            "read",
+            "compare"
+          ]
+        },
+        {
+          "label": "The system in your pew",
+          "ref": "Genesis 12:1-7; Ezekiel 37:15-28; Romans 11:25-29",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "read",
+            "write"
+          ]
+        },
+        {
+          "label": "Two birthdays",
+          "ref": "2 Timothy 1:13-14; Jude 3",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "What changes downstream",
+          "ref": "Ephesians 2:11-22; Acts 1:6-8",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        },
+        {
+          "label": "Where Sproul and Voddie part",
+          "ref": "Genesis 17:9-14; Acts 2:38-39; Colossians 2:11-14",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        }
       ]
     },
     {
       "orderIndex": 4,
-      "title": "The Gospel of Mark",
-      "kick": "GOSPEL · AT A RUN",
-      "rationale": "After the doctrine of justification, watch the Justifier walk. Mark is Peter's memories at a sprint — 'immediately' more than forty times — the shortest gospel and the least polished, which is exactly its authority. The kingdom arrives, is misunderstood, and goes to a cross on purpose.",
+      "title": "The One Another Church",
+      "kick": "PRACTICE · the warmth you said your doctrine did not give you",
+      "rationale": "You told me something worth taking seriously: that your charismatic roots loved better than your Reformed convictions do, and that you feel the lack. So we put it here, early, before the long study terms. Not a doctrine of sanctification. Just the commands, read plainly, with nowhere to hide behind precision. Philippians 2 first, because it is the mind of Christ and it goes downward. Then a towel, then John's letter, which will not let you call yourself loving in the abstract.",
       "hardNote": null,
-      "secondNote": null,
+      "secondNote": "Your instinct that they love better is worth taking seriously, and it is not an argument for their doctrine. Both can be true. Hold both.",
+      "homeworkArc": "Once a week, name one person you have privately written off. Do not act yet. Just name them.",
       "units": [
-        { "label": "The kingdom arrives in a hurry", "ref": "Mark 1–4", "days": 6 },
-        { "label": "Who then is this? — power and misunderstanding", "ref": "Mark 5–8", "days": 6 },
-        { "label": "The road down — discipleship toward Jerusalem", "ref": "Mark 9–12", "days": 6 },
-        { "label": "The Passion according to Peter", "ref": "Mark 13–16", "days": 6 }
+        {
+          "label": "The mind that came down",
+          "ref": "Philippians 2:1-11",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        },
+        {
+          "label": "The towel",
+          "ref": "John 13:1-17",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Love that is not a feeling",
+          "ref": "1 John 3:11-24",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Because he first loved us",
+          "ref": "1 John 4:7-21",
+          "days": 1,
+          "homework": [
+            "sit",
+            "compare"
+          ]
+        },
+        {
+          "label": "Genuine, without pretending",
+          "ref": "Romans 12:9-21",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Put on",
+          "ref": "Colossians 3:12-17",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The gifted and the loveless",
+          "ref": "1 Corinthians 13",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
       ]
     },
     {
       "orderIndex": 5,
-      "title": "Giving a Reason",
-      "kick": "WITNESS · PRACTICE",
-      "rationale": "Study that never leaves the room goes stale. Five days on witness — not technique, and not a personality transplant: hope, given with gentleness and respect, by people who were asked. Watch Jesus with one woman, Paul with the philosophers and with a king, and then find your own two minutes.",
-      "hardNote": null,
+      "title": "The Gospel of Mark",
+      "kick": "GOSPEL · who do you say that I am",
+      "rationale": "Mark is the shortest and the fastest and the one that refuses to explain itself. No genealogy, no birth, no infancy. He starts at full speed and he asks one question for sixteen chapters. Everything before Caesarea Philippi builds the question. Everything after it walks toward a cross. And then he ends without an ending, which is either a scribal accident or the most demanding conclusion in the New Testament. We will look at both. Read it as the first readers did, in a hurry, and unsettled.",
+      "hardNote": "The passion narrative is read whole. Gethsemane, the trial, the flogging, the cry of dereliction. No compression.",
       "secondNote": null,
+      "homeworkArc": null,
       "units": [
-        { "label": "Always ready — hope with gentleness", "ref": "1 Peter 3:8–18; John 4:1–30; Acts 17:16–34; Acts 26; Luke 24:44–49", "days": 5 }
+        {
+          "label": "Beginning, no genealogy",
+          "ref": "Mark 1:1-20",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Authority they had not seen",
+          "ref": "Mark 1:21-2:12",
+          "days": 2,
+          "homework": [
+            "sit",
+            "research"
+          ]
+        },
+        {
+          "label": "Who do you say",
+          "ref": "Mark 8:22-9:1",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        },
+        {
+          "label": "The way down",
+          "ref": "Mark 9:30-10:45",
+          "days": 2,
+          "homework": [
+            "read",
+            "sit"
+          ]
+        },
+        {
+          "label": "The temple and the fig tree",
+          "ref": "Mark 11:12-25; 13:1-13",
+          "days": 2,
+          "homework": [
+            "research",
+            "read"
+          ]
+        },
+        {
+          "label": "Betrayed, tried, forsaken",
+          "ref": "Mark 14:32-15:39",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "compare"
+          ]
+        },
+        {
+          "label": "They said nothing to anyone",
+          "ref": "Mark 16:1-8",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        }
       ]
     },
     {
       "orderIndex": 6,
-      "title": "Romans",
-      "kick": "EPISTLE · THE CATHEDRAL",
-      "rationale": "The year's deep one, at the cap on purpose: thirty studies, no more. Paul's gospel laid out whole — indictment, gift, union, the Spirit, Israel, and a life poured out in response. You have read Romans before; this pass is slower, with the confessions at hand and your own open questions waiting in the margins.",
-      "hardNote": "Unit four sits in Romans 9–11 — election, hardening, and the mercy of God. It will be read whole, in order, without flinching and without softening. The confessions are at hand and the tone is Paul's own: not a puzzle to win, a doxology to reach.",
-      "secondNote": "You have walked Romans devotionally before. This is the 300-level pass — slower, unit by unit, with the doctrine load-bearing.",
+      "title": "Justification",
+      "kick": "DOCTRINE SHORT · declared, not made",
+      "rationale": "Six days. You know this doctrine well enough to recite it and that is exactly the risk. So we go slowly through the courtroom language, and then we let James complicate it in the last study, because a doctrine you cannot let anyone press on is not a conviction, it is a reflex. Paul confronting Peter to his face is the middle of the term for a reason. This truth was worth a public fight between apostles. It should cost you something to hold.",
+      "hardNote": null,
+      "secondNote": null,
+      "homeworkArc": null,
       "units": [
-        { "label": "No one righteous — the indictment", "ref": "Romans 1–3", "days": 6 },
-        { "label": "Reckoned — Abraham's children by faith", "ref": "Romans 4–5", "days": 6 },
-        { "label": "United — dead to sin, alive in the Spirit", "ref": "Romans 6–8", "days": 6 },
-        { "label": "The mystery — Israel and the mercy of God", "ref": "Romans 9–11", "days": 6, "hard": true },
-        { "label": "Living sacrifices — the gospel embodied", "ref": "Romans 12–16", "days": 6 }
+        {
+          "label": "The charge",
+          "ref": "Romans 3:9-20",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The verdict",
+          "ref": "Romans 3:21-31",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "Abraham, before the law existed",
+          "ref": "Romans 4:1-25",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "To his face",
+          "ref": "Galatians 2:11-21",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Not my own",
+          "ref": "Philippians 3:1-11",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Faith that works",
+          "ref": "James 2:14-26",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        }
       ]
     },
     {
       "orderIndex": 7,
-      "title": "The First Five Centuries",
-      "kick": "CHURCH HISTORY · 100–500",
-      "rationale": "The faith did not skip from Acts to your church. Martyrs held it, councils defined it, Augustine defended it — the vocabulary of orthodoxy was forged in fire and argument. History taught with the Bible open: every day anchors to the texts the church was dying for and defining.",
-      "hardNote": null,
+      "title": "The Judges",
+      "kick": "NARRATIVE · everyone did what was right in his own eyes",
+      "rationale": "Twelve studies, not forty two. This book does not need length, it needs nerve. Judges is the account of a people who kept being rescued and kept forgetting, told by an author who refuses to editorialize and simply shows you what happened. It gets worse as it goes. By the end there is a dismembered body and a civil war and a line that explains the whole book. We are not skipping those chapters. They are the argument.",
+      "hardNote": "Judges 11 and Judges 19-21 are read whole: a daughter sacrificed on a vow, a concubine given to a mob and cut into twelve pieces, and a tribe nearly erased. These are in your Bible on purpose. They are not sanitized here and they are flagged before you arrive.",
       "secondNote": null,
+      "homeworkArc": "A running list, one line per study: what did Israel lack, and what did they reach for instead.",
       "units": [
-        { "label": "Blood and testimony — the martyr church", "ref": "Acts 6–8; Revelation 2–3", "days": 6 },
-        { "label": "Nicaea — the Son, very God of very God", "ref": "John 1; Colossians 1; Hebrews 1; Philippians 2", "days": 6 },
-        { "label": "Augustine — grace against the current", "ref": "Psalm 51; John 6:22–71; Ephesians 2; Romans 5", "days": 6 }
+        {
+          "label": "The cycle",
+          "ref": "Judges 2:6-23",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Left-handed and unnamed",
+          "ref": "Judges 3:12-31",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "A mother in Israel",
+          "ref": "Judges 4-5",
+          "days": 2,
+          "homework": [
+            "compare",
+            "sit"
+          ]
+        },
+        {
+          "label": "Three hundred",
+          "ref": "Judges 6:1-7:25",
+          "days": 2,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        },
+        {
+          "label": "The king who was not",
+          "ref": "Judges 8:22-9:57",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "A vow he should not have kept",
+          "ref": "Judges 11",
+          "days": 1,
+          "hard": true,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Strength without wisdom",
+          "ref": "Judges 13-16",
+          "days": 2,
+          "homework": [
+            "read",
+            "write"
+          ]
+        },
+        {
+          "label": "A Levite, a concubine, a war",
+          "ref": "Judges 19-21",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        }
       ]
     },
     {
       "orderIndex": 8,
-      "title": "Hope — the Last Things",
-      "kick": "DOCTRINE · FORWARD",
-      "rationale": "End the year facing forward. Death, resurrection, return, renewal — hope as doctrine, not as mood. Six days standing where Paul stood: if Christ is not raised, nothing here was worth a single morning; since he is, everything was.",
+      "title": "Romans 1-8",
+      "kick": "EPISTLE · the argument, first half",
+      "rationale": "Half of Romans, twelve studies, and we stop at chapter 8 on purpose. Chapters 9 to 11 are not an appendix and they are not a treatise on election, and you will read them properly next year with the covenant work behind you. For now: the courtroom, the two men, the death you already died, the war in chapter 7 that Christians have argued about for sixteen centuries, and then the chapter that ends with nothing being able to separate you. Take it slowly. It was written to be read aloud.",
+      "hardNote": null,
+      "secondNote": "Stopping at chapter 8 is deliberate. Romans 9-16 is Term 21, after Reading the Room and Covenant and Dispensation have done their work.",
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "The gospel is not embarrassing",
+          "ref": "Romans 1:1-17",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Suppressed",
+          "ref": "Romans 1:18-32",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "You who judge",
+          "ref": "Romans 2:1-3:8",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "But now",
+          "ref": "Romans 3:21-31",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "Abraham again",
+          "ref": "Romans 4",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Two men",
+          "ref": "Romans 5",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        },
+        {
+          "label": "Dead to it",
+          "ref": "Romans 6",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The wretched man",
+          "ref": "Romans 7",
+          "days": 2,
+          "homework": [
+            "research",
+            "sit"
+          ]
+        },
+        {
+          "label": "No condemnation",
+          "ref": "Romans 8:1-17",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Nothing can separate",
+          "ref": "Romans 8:18-39",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 9,
+      "title": "Giving a Reason",
+      "kick": "WITNESS · and the methods that disagree with each other",
+      "rationale": "Count the room. Sproul, Craig, Lewis, and Huff all reason from evidence toward God. Voddie argues that nobody is neutral and the case starts on Christian ground or it does not start. You are five to one classical and you did not choose that, you absorbed it. Before you pick a method, read the texts underneath both instincts. Then notice that Paul preaches one way in Jerusalem and another in Athens, which is Term 1 arriving to complicate whichever preference you were about to settle into.",
+      "hardNote": null,
+      "secondNote": "Sproul co-wrote Classical Apologetics, subtitled a critique of presuppositional apologetics. Voddie leans on Bahnsen and Van Til. Two men Michael trusts published against each other on this exact question. Say so plainly. Wesley Huff's manuscript work is a third species, evidential rather than philosophical, and it already threads through Term 5 (Mark's longer ending) and Term 11 (canon).",
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "Ready, with gentleness",
+          "ref": "1 Peter 3:13-17",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Athens",
+          "ref": "Acts 17:16-34",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Jerusalem",
+          "ref": "Acts 2:14-41",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The root under both",
+          "ref": "Romans 1:18-25",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Salt and answers",
+          "ref": "Colossians 4:2-6",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "Where your teachers disagree",
+          "ref": "Jude 3; 2 Corinthians 10:3-6",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 10,
+      "title": "The Exile",
+      "kick": "HISTORY & PROPHETS · when the promise looked broken",
+      "rationale": "The single most disorienting event in the Old Testament. The temple burned, the king blinded, the land emptied. Everything God had promised, visibly undone. The prophets are not background here, they are the interpretation. Jeremiah tells them to build houses in Babylon, which is the least comforting comfort in Scripture. Psalm 137 ends the way it ends and we are not cutting the last verse. This term teaches you how to hold a promise while it is being contradicted in front of you.",
+      "hardNote": "2 Kings 25 and Lamentations 1 are read whole, and Psalm 137 includes verse 9. The Bible does not close its eyes to what was done to that city or what the survivors wished on their enemies.",
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "Warned for centuries",
+          "ref": "Deuteronomy 28:47-68; 2 Kings 17:6-23",
+          "days": 2,
+          "homework": [
+            "read",
+            "sit"
+          ]
+        },
+        {
+          "label": "The city falls",
+          "ref": "2 Kings 25:1-21; Lamentations 1",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "research"
+          ]
+        },
+        {
+          "label": "Build houses",
+          "ref": "Jeremiah 29:1-14",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "By the waters",
+          "ref": "Psalm 137",
+          "days": 1,
+          "hard": true,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Glory leaves the building",
+          "ref": "Ezekiel 10:1-22",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Dry bones",
+          "ref": "Ezekiel 37:1-14",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "A furnace and a den",
+          "ref": "Daniel 3; Daniel 6",
+          "days": 2,
+          "homework": [
+            "read",
+            "research"
+          ]
+        },
+        {
+          "label": "Seventy years",
+          "ref": "Daniel 9:1-19",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "The remnant returns, weeping",
+          "ref": "Ezra 3:10-13; Nehemiah 8",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 11,
+      "title": "The First Five Centuries",
+      "kick": "CHURCH HISTORY · with the Bible open the whole time",
+      "rationale": "The church spent four hundred years working out how to say what it already believed, and it cost people their lives to get the wording right. Nicaea was not a committee inventing a doctrine, it was a fight over whether John 1 means what it says. Every study here anchors to the text they were arguing about, including Proverbs 8, which Arius used and which orthodox readers had to answer honestly. History taught this way is not trivia. It is watching people read your Bible under pressure.",
+      "hardNote": "Proverbs 8:22-31 is read whole alongside John 1. It is the text Arius used and it does not become easy just because he lost.",
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "The apostles' students",
+          "ref": "2 Timothy 2:1-2; Acts 20:28-32",
+          "days": 2,
+          "homework": [
+            "research",
+            "read"
+          ]
+        },
+        {
+          "label": "Dying well",
+          "ref": "Revelation 2:8-11",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Which books",
+          "ref": "Luke 1:1-4; 2 Peter 3:14-18",
+          "days": 2,
+          "homework": [
+            "research",
+            "sit"
+          ]
+        },
+        {
+          "label": "Was there a time he was not",
+          "ref": "John 1:1-18; Proverbs 8:22-31",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "compare",
+            "write"
+          ]
+        },
+        {
+          "label": "Against the world",
+          "ref": "Colossians 1:15-23",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Two natures, one person",
+          "ref": "Philippians 2:5-11; Hebrews 2:14-18",
+          "days": 2,
+          "homework": [
+            "read",
+            "research"
+          ]
+        },
+        {
+          "label": "Can a man not sin",
+          "ref": "Romans 7:14-25; Ephesians 2:1-10",
+          "days": 2,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 12,
+      "title": "Hope: The Last Things",
+      "kick": "DOCTRINE SHORT · what you are actually waiting for",
+      "rationale": "Six studies to close the year, and they land here on purpose. You now have the covenant framework, so eschatology can be studied instead of fought about. We stay off the timeline charts entirely. What we do instead is look at the return, the judgment, the body raised, and the city coming down, and then finish with what waiting is supposed to do to a man in the meantime. Titus 2 is the last study because hope that changes nothing about Tuesday is not the hope Paul meant.",
+      "hardNote": "Revelation 20:11-15 and Matthew 25:31-46 are read whole. Judgment is not softened, and the sheep and goats will press on you in a way you should let it.",
+      "secondNote": "Timeline questions are deferred on purpose. Year 3 draws the four maps (Term 28) and walks Revelation with them in hand (Term 31). This term is about the object of hope, not the sequence of it.",
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "He will come the same way",
+          "ref": "Acts 1:9-11; 1 Thessalonians 4:13-18",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The day",
+          "ref": "2 Peter 3:1-13",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The judgment",
+          "ref": "Revelation 20:11-15; Matthew 25:31-46",
+          "days": 1,
+          "hard": true,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "A body raised",
+          "ref": "1 Corinthians 15:35-58",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "New heavens, new earth",
+          "ref": "Revelation 21:1-22:5",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Waiting well",
+          "ref": "Titus 2:11-14; Romans 8:18-25",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 13,
+      "title": "The Psalms by Kind",
+      "kick": "POETRY · the book that teaches you how to pray",
+      "rationale": "You finished a year of doctrine without once studying the prayer book God wrote. That was the largest gap in Year One and we open Year Two by closing it. Psalms are sorted by kind here, not by number, because a lament and a hymn are different instruments and playing one like the other ruins both. The cynic in you is going to find lament surprisingly hospitable. That is not a loophole. It is a licensed vocabulary that Scripture gives you on purpose.",
+      "hardNote": "Psalm 88 ends in darkness with no resolution, and it is read whole without a comforting appendix. The imprecatory psalms, including Psalm 137:7-9 and Psalm 109, are read whole. They are prayers, they are inspired, and they are not sanitized here.",
+      "secondNote": null,
+      "homeworkArc": "Write your own lament, one line a day. Do not resolve it. Do not tidy it. It stays open until the praise unit.",
+      "units": [
+        {
+          "label": "How to read a poem that prays",
+          "ref": "Psalm 1; Psalm 2",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "Lament: the licensed complaint",
+          "ref": "Psalm 13; Psalm 22:1-21",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        },
+        {
+          "label": "Lament without resolution",
+          "ref": "Psalm 88",
+          "days": 1,
+          "hard": true,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Confession",
+          "ref": "Psalm 32; Psalm 51",
+          "days": 2,
+          "homework": [
+            "write",
+            "read"
+          ]
+        },
+        {
+          "label": "Ascent",
+          "ref": "Psalms 120-121; 130-131",
+          "days": 2,
+          "homework": [
+            "research",
+            "sit"
+          ]
+        },
+        {
+          "label": "Imprecation",
+          "ref": "Psalm 69:19-28; Psalm 137:7-9; Psalm 109:1-20",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "ask"
+          ]
+        },
+        {
+          "label": "Praise that has been through something",
+          "ref": "Psalm 34; Psalm 103",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The last word",
+          "ref": "Psalm 145; Psalm 150",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 14,
+      "title": "Prayer: The School of Asking",
+      "kick": "PRACTICE SHORT · the disciples only asked him to teach them one thing",
+      "rationale": "Six studies, placed right after the Psalms while the vocabulary is still fresh. Notice what the disciples never asked for. Not how to preach, not how to heal. Teach us to pray. This term stays practical and short and it does not build a system. Gethsemane is in the middle because the most important prayer ever prayed was not answered the way it was asked, and any theology of prayer that cannot hold that is a theology for people who have not needed one yet.",
       "hardNote": null,
       "secondNote": null,
+      "homeworkArc": "Pray one of the term's passages back, out loud, once a day. Nothing added.",
       "units": [
-        { "label": "What we await", "ref": "1 Corinthians 15; 1 Thessalonians 4:13–5:11; Revelation 21–22", "days": 6 }
+        {
+          "label": "Teach us",
+          "ref": "Luke 11:1-13",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Not like them",
+          "ref": "Matthew 6:5-15",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "In the garden",
+          "ref": "Mark 14:32-42",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Groans",
+          "ref": "Romans 8:26-30",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Anything according to his will",
+          "ref": "1 John 5:13-15; John 15:7",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Persisting",
+          "ref": "Luke 18:1-8; Colossians 4:2",
+          "days": 1,
+          "homework": [
+            "ask"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 15,
+      "title": "The Spirit and the Gifts",
+      "kick": "DOCTRINE · why caution, and why not condemnation",
+      "rationale": "You asked how to be careful here without being contemptuous, and that is the right question, because contempt is the easy version and it is usually pride wearing doctrine. We read 1 Corinthians 12 and 14 whole, including the parts that both camps skip. We look honestly at what the sign gifts were for and whether that purpose still stands. And we end on the test that is not doctrinal at all, which is fruit, because you already suspect the people you disagree with are sometimes bearing more of it than you are.",
+      "hardNote": "1 Corinthians 14 is read entire, including the passages each side habitually truncates. If a verse cuts against your position, it stays in.",
+      "secondNote": "Say this plainly in the term: your sense that they love better is an observation worth keeping and it is not evidence for their doctrine. Do not resolve the tension by discarding either half. Nine of his years happened in charismatic rooms. They are family, not a case study — the term should sound like a man examining his own house, not touring someone else's.",
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "Promised, then poured",
+          "ref": "Joel 2:28-32; Acts 2:1-21",
+          "days": 2,
+          "homework": [
+            "read",
+            "research"
+          ]
+        },
+        {
+          "label": "One body, many gifts",
+          "ref": "1 Corinthians 12",
+          "days": 2,
+          "homework": [
+            "sit",
+            "compare"
+          ]
+        },
+        {
+          "label": "Read the whole chapter",
+          "ref": "1 Corinthians 14",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "write",
+            "sit"
+          ]
+        },
+        {
+          "label": "What signs were for",
+          "ref": "Hebrews 2:1-4; 2 Corinthians 12:11-12",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Sufficiency",
+          "ref": "2 Timothy 3:14-17; Revelation 22:18-19",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The test that is not doctrinal",
+          "ref": "Galatians 5:16-26; 1 John 4:1-6",
+          "days": 2,
+          "homework": [
+            "sit",
+            "ask"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 16,
+      "title": "The Gospel of John: Seven Signs",
+      "kick": "GOSPEL · these are written so that you may believe",
+      "rationale": "Mark asked who this is. John tells you at the start and then spends twenty chapters proving it with seven signs and seven I AM statements, and he says outright in chapter 20 why he selected them. This is the most structured gospel and the most theological, and it is the one to read after a year of doctrine because you will finally see the architecture. Water into wine at the front, a dead man walking out of a tomb at the back, and a purpose statement in between.",
+      "hardNote": null,
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "In the beginning was the Word",
+          "ref": "John 1:1-18",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "Water to wine",
+          "ref": "John 2:1-11",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "The official's son",
+          "ref": "John 4:43-54",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The pool",
+          "ref": "John 5:1-18",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Bread",
+          "ref": "John 6:1-15, 25-59",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        },
+        {
+          "label": "Walking on the sea",
+          "ref": "John 6:16-21",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Mud and sight",
+          "ref": "John 9",
+          "days": 2,
+          "homework": [
+            "sit",
+            "research"
+          ]
+        },
+        {
+          "label": "Lazarus",
+          "ref": "John 11:1-44",
+          "days": 2,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        },
+        {
+          "label": "That you may believe",
+          "ref": "John 20:24-31",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 17,
+      "title": "Providence and Suffering: Joseph and Job",
+      "kick": "NARRATIVE & DOCTRINE · you meant it for evil",
+      "rationale": "Two men, opposite structures. Joseph gets an explanation at the end and gives it himself in one sentence that has carried more suffering people than almost any other. Job never gets one. God answers him with a whirlwind full of questions and no reasons, and Job is satisfied. Put them side by side and you get the actual doctrine of providence, which is not that suffering is explained but that it is governed. Read the friends carefully. They are almost right, and that is the warning.",
+      "hardNote": "Job 1-2 is read whole, including the heavenly scene Job himself is never shown. The friends' speeches are read as written, not corrected in advance. This book does not resolve comfortably and we do not force it to.",
+      "secondNote": "William Lane Craig's Molinism offers a genuinely different account of how God governs a world containing evil, via middle knowledge and libertarian freedom. Michael leans on Craig and calls himself Reformed. On providence these are not compatible. Present Molinism accurately and at its best, do not strawman it, and let him feel that he is choosing rather than inheriting.",
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "The wager you were not shown",
+          "ref": "Job 1-2",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        },
+        {
+          "label": "The friends who were almost right",
+          "ref": "Job 4-5; 8; 11",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "write",
+            "sit"
+          ]
+        },
+        {
+          "label": "I know that my Redeemer lives",
+          "ref": "Job 19",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "Out of the whirlwind",
+          "ref": "Job 38-41",
+          "days": 2,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        },
+        {
+          "label": "I had heard of you",
+          "ref": "Job 42",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The pit and the prison",
+          "ref": "Genesis 37; 39-40",
+          "days": 2,
+          "homework": [
+            "read",
+            "research"
+          ]
+        },
+        {
+          "label": "You meant it for evil",
+          "ref": "Genesis 45:1-15; 50:15-21",
+          "days": 2,
+          "homework": [
+            "write",
+            "ask"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 18,
+      "title": "Proverbs: Wisdom for a Working Man",
+      "kick": "WISDOM · the book written for someone with a job",
+      "rationale": "You run operations. You build systems. You handle money, hire people, manage a calendar, and lose your temper occasionally. Proverbs was written for exactly that man. Eight studies, deliberately practical, and we finish with the unit most people never get: what a proverb is not. A proverb is a probability, not a promise, and treating Proverbs 22:6 as a guarantee has wrecked more parents than almost any other misread. That last study is Term 1 coming back to collect.",
+      "hardNote": null,
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "Fear is where it starts",
+          "ref": "Proverbs 1:1-19; 9:10",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Wisdom in the street",
+          "ref": "Proverbs 8",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Money that comes fast",
+          "ref": "Proverbs 13:11; 22:7; 28:20-22",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        },
+        {
+          "label": "The tongue",
+          "ref": "Proverbs 15:1-4; 18:2, 13, 21; 26:20-22",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Diligence and the sluggard",
+          "ref": "Proverbs 6:6-11; 24:30-34",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "Friends and counsel",
+          "ref": "Proverbs 27:5-6, 17; 11:14",
+          "days": 1,
+          "homework": [
+            "ask"
+          ]
+        },
+        {
+          "label": "The house",
+          "ref": "Proverbs 24:3-4; 31:10-31",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The limits of a proverb",
+          "ref": "Ecclesiastes 8:14; Proverbs 22:6",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 19,
+      "title": "The Reformation",
+      "kick": "CHURCH HISTORY · the argument you inherited",
+      "rationale": "You call yourself Reformed. This is where that word comes from and what it cost. Twelve studies, Bible open the entire time, because the Reformation was fundamentally an argument about texts. But we are not telling it as a hero story. The unit on Zurich is flagged hard, because the Reformers drowned Anabaptists over believer's baptism, which is the position you now hold. Your own tradition has blood in it. Knowing that should make you a more careful man, not a less convinced one.",
+      "hardNote": "The Zurich unit covers the Reformers' persecution and execution of the Radical Reformers over believer's baptism. It is told honestly, including that men you admire signed off on it.",
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "Before Luther",
+          "ref": "Romans 1:16-17",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "The ninety-five",
+          "ref": "Romans 3:21-28",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Here I stand",
+          "ref": "Acts 5:27-32",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Sola Scriptura",
+          "ref": "2 Timothy 3:14-17; Mark 7:1-13",
+          "days": 2,
+          "homework": [
+            "read",
+            "write"
+          ]
+        },
+        {
+          "label": "Zurich and the Radicals",
+          "ref": "Acts 2:38-41; Matthew 28:18-20",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "research"
+          ]
+        },
+        {
+          "label": "Geneva",
+          "ref": "Ephesians 1:3-14",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The English road",
+          "ref": "1 Corinthians 14:6-19",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "Trent answers back",
+          "ref": "Galatians 1:6-10",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "What it cost",
+          "ref": "Hebrews 11:32-40",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "What it did not fix",
+          "ref": "1 Corinthians 1:10-17",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 20,
+      "title": "The Confessions Compared: WCF and 1689",
+      "kick": "DOCTRINE · read the document you say you hold",
+      "rationale": "You describe yourself as conversant with the 1689. This term makes that true and raises the stakes. Westminster is the document R.C. Sproul spent his life teaching. The 1689 is the one you say you hold. The Baptists kept Westminster's wording wherever they could agree, which makes every difference precise and impossible to blur. Chapter seven on covenant, and the baptism chapters, are where they part, and those are exactly where your Term 3 questions landed. Same argument, one level deeper, in documents rather than personalities.",
+      "hardNote": null,
+      "secondNote": null,
+      "homeworkArc": "One paragraph, written at the end: what do you actually confess, in your own words, without quoting either document.",
+      "units": [
+        {
+          "label": "Why a confession at all",
+          "ref": "1 Timothy 6:11-16; Jude 3",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Scripture: where they agree",
+          "ref": "2 Peter 1:16-21",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The decree and the will",
+          "ref": "Ephesians 1:3-14; Acts 2:22-24",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Covenant: chapter seven in both",
+          "ref": "Genesis 17:1-14; Hebrews 8",
+          "days": 2,
+          "homework": [
+            "research",
+            "write"
+          ]
+        },
+        {
+          "label": "Baptism: where they split",
+          "ref": "Acts 8:26-39; Colossians 2:11-14",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Church and magistrate",
+          "ref": "Romans 13:1-7; Acts 5:27-32",
+          "days": 1,
+          "homework": [
+            "ask"
+          ]
+        },
+        {
+          "label": "What you actually confess",
+          "ref": "Psalm 119:33-40",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 21,
+      "title": "Romans 9-16",
+      "kick": "EPISTLE · the half you were not ready for last year",
+      "rationale": "Here is the payoff. You now have Reading the Room, you have the covenants, you have the confessions. So read Romans 9 the way Paul wrote it, which begins with him in anguish and wishing himself cursed for his kinsmen, not with a systematician building a doctrine of election. The election is genuinely there. It is just not the question he set out to answer. Hold both. Then chapters 12 through 16 land, and it turns out the whole argument was going somewhere practical the entire time.",
+      "hardNote": "Romans 9:6-29 is read whole, vessels of wrath included. Do not soften the potter, and do not let the potter erase Paul's grief in verses 1 to 5.",
+      "secondNote": "This is where the Term 1 method meets the hardest passage in Scripture. Note the sharp edge honestly: Sala's audience-and-occasion method, applied consistently to Romans 9, pushes toward a corporate reading of election that sits closer to Craig than to Sproul. Michael should feel that pressure. Do not resolve it for him.",
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "My heart's desire",
+          "ref": "Romans 9:1-5",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Not all Israel is Israel",
+          "ref": "Romans 9:6-29",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "read",
+            "write"
+          ]
+        },
+        {
+          "label": "Why? Because not by faith",
+          "ref": "Romans 9:30-10:21",
+          "days": 2,
+          "homework": [
+            "sit",
+            "compare"
+          ]
+        },
+        {
+          "label": "Has God rejected his people",
+          "ref": "Romans 11:1-24",
+          "days": 2,
+          "homework": [
+            "research",
+            "sit"
+          ]
+        },
+        {
+          "label": "The mystery and the doxology",
+          "ref": "Romans 11:25-36",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Living sacrifice",
+          "ref": "Romans 12",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Governments and neighbors",
+          "ref": "Romans 13",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The weak and the strong",
+          "ref": "Romans 14:1-15:13",
+          "days": 1,
+          "homework": [
+            "ask"
+          ]
+        },
+        {
+          "label": "The names at the end",
+          "ref": "Romans 16",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 22,
+      "title": "Killing the Flesh",
+      "kick": "PRACTICE · mortification, which is not a metaphor",
+      "rationale": "Year One gave you the one another commands. This term goes underneath them to the thing that keeps blocking them, which you named yourself: arrogance, cynicism, the need to be the sharpest man in the room. Scripture does not ask you to manage that. It uses the language of execution. Put to death. Crucified. The eye and the hand. Eight studies, and the tax collector at the back of the temple is near the end because his prayer is seven words long and you already know you cannot pray it honestly on a good day.",
+      "hardNote": "Matthew 5:27-30 is read whole. The hyperbole is real hyperbole and it is also more serious than the word hyperbole makes it sound.",
+      "secondNote": null,
+      "homeworkArc": "Once a week, write down one thing you said that was accurate and unkind. Accuracy is not the defense you keep treating it as.",
+      "units": [
+        {
+          "label": "You died",
+          "ref": "Romans 6:1-14",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Put to death",
+          "ref": "Romans 8:5-14; Colossians 3:1-11",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        },
+        {
+          "label": "The war inside",
+          "ref": "Galatians 5:16-26",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Walking in the light",
+          "ref": "1 John 1:5-2:6",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "The eye and the hand",
+          "ref": "Matthew 5:27-30",
+          "days": 1,
+          "hard": true,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Pride, named",
+          "ref": "Luke 18:9-14; James 4:1-10",
+          "days": 1,
+          "homework": [
+            "ask"
+          ]
+        },
+        {
+          "label": "Not I, but Christ",
+          "ref": "Galatians 2:20; 2 Corinthians 12:7-10",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 23,
+      "title": "Hebrews: Better in Every Way",
+      "kick": "EPISTLE · written to people about to quit",
+      "rationale": "Hebrews only works after the covenant terms, which is why it waited two years. This is a letter to Jewish believers considering going back, and its entire argument is comparative: better than angels, better than Moses, better than Aaron, a better covenant, a better sacrifice, once for all. It is also the letter with the warning passages that have troubled serious Christians for two thousand years, and we are not going to defuse chapter 6 with a footnote. You will sit in it.",
+      "hardNote": "Hebrews 6:1-12 is read whole and left standing. Whatever your view of perseverance, the warning is addressed to the church and it is meant to be felt.",
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "God has spoken",
+          "ref": "Hebrews 1:1-14",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Do not drift",
+          "ref": "Hebrews 2",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Better than Moses, and a rest",
+          "ref": "Hebrews 3-4",
+          "days": 2,
+          "homework": [
+            "read",
+            "compare"
+          ]
+        },
+        {
+          "label": "A priest like Melchizedek",
+          "ref": "Hebrews 5:1-10; 7",
+          "days": 2,
+          "homework": [
+            "research",
+            "sit"
+          ]
+        },
+        {
+          "label": "If they fall away",
+          "ref": "Hebrews 6:1-12",
+          "days": 1,
+          "hard": true,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "A better covenant",
+          "ref": "Hebrews 8-9",
+          "days": 2,
+          "homework": [
+            "write",
+            "read"
+          ]
+        },
+        {
+          "label": "Once for all",
+          "ref": "Hebrews 10:1-25",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "By faith",
+          "ref": "Hebrews 11",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Run",
+          "ref": "Hebrews 12:1-17",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 24,
+      "title": "The Attributes of God",
+      "kick": "DOCTRINE · closing the year on the subject, not the system",
+      "rationale": "Two years of studying about God. This term studies God. Ten days, one attribute at a time, always from a text where he shows it rather than a definition where someone summarizes it. Exodus 34 appears twice on purpose, once under justice and once under mercy, because it is the same sentence and it says both, and you will not be allowed to keep only the half you prefer. We end at Deuteronomy 29:29, on the line between what is hidden and what is given.",
+      "hardNote": "Exodus 34:6-7 is read entire, including the visiting of iniquity to the third and fourth generation. Nahum 1 is read as written. The severity is not edited out to make the mercy easier.",
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "The name",
+          "ref": "Exodus 3:1-15; 34:5-9",
+          "days": 2,
+          "homework": [
+            "research",
+            "compare"
+          ]
+        },
+        {
+          "label": "Holy",
+          "ref": "Isaiah 6:1-8; Revelation 4",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Unchanging",
+          "ref": "Malachi 3:6; James 1:16-18; Numbers 23:19",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Everywhere, and knowing",
+          "ref": "Psalm 139",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Sovereign",
+          "ref": "Daniel 4:28-37; Isaiah 46:8-11",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Just",
+          "ref": "Exodus 34:6-7; Nahum 1:1-8",
+          "days": 1,
+          "hard": true,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Merciful",
+          "ref": "Exodus 34:6-7; Jonah 4",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        },
+        {
+          "label": "Triune",
+          "ref": "Matthew 3:13-17; John 14:15-26",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Incomprehensible, and still speaking",
+          "ref": "Deuteronomy 29:29; Job 26:14",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 25,
+      "title": "Apologetic Methods Compared",
+      "kick": "WITNESS · three schools, one gospel",
+      "rationale": "Year Two ended with God himself. Year Three opens with the argument about how anyone comes to know him. Here is the room you have been standing in without noticing: Sproul, Craig, Lewis, and Huff all reason from evidence toward God. Voddie says nobody is neutral and the case starts on Christian ground or nowhere. Sproul and Bahnsen published against each other on exactly this. Proverbs, remarkably, contains both methods in two consecutive verses. Read the texts under each school, then stand in Athens one more time and pick your opening move — loosely.",
+      "hardNote": null,
+      "secondNote": "Name the literature: Classical Apologetics (Sproul, Gerstner, Lindsley) against Van Til and Bahnsen; Craig's kalam and resurrection case; Huff's manuscript evidentialism; Lewis's moral argument as classical-adjacent. The Proverbs 26:4-5 pair is the presuppositionalists' own two-step — give it to both sides.",
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "Two proverbs, one method war",
+          "ref": "Proverbs 26:4-5",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The classical way",
+          "ref": "Romans 1:18-21; Psalm 19:1-6; Acts 14:15-17",
+          "days": 2,
+          "homework": [
+            "read",
+            "research"
+          ]
+        },
+        {
+          "label": "The evidential way",
+          "ref": "1 Corinthians 15:3-8; Luke 1:1-4; 2 Peter 1:16",
+          "days": 2,
+          "homework": [
+            "research",
+            "write"
+          ]
+        },
+        {
+          "label": "The presuppositional way",
+          "ref": "Proverbs 1:7; Colossians 2:2-8; 1 Corinthians 1:18-2:5",
+          "days": 2,
+          "homework": [
+            "read",
+            "sit"
+          ]
+        },
+        {
+          "label": "Athens, with all three maps",
+          "ref": "Acts 17:16-34",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        },
+        {
+          "label": "Sproul against Van Til: the family fight",
+          "ref": "1 Peter 3:15; 2 Corinthians 10:3-5",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Pick your opening move, hold it loosely",
+          "ref": "Jude 3, 22-23",
+          "days": 1,
+          "homework": [
+            "ask"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 26,
+      "title": "Acts: The Church Breathing",
+      "kick": "NARRATIVE · what the Spirit actually built",
+      "rationale": "You have studied the Spirit and the gifts. Now watch what the Spirit actually built. Acts is the church breathing: three thousand at a sermon, property sold freely and one couple struck down for lying about it, a persecutor blinded into an apostle, a Gentile soldier praying while heaven forces Peter's hand. Watch the council in chapter fifteen especially — the first time the church had to decide what the covenant means for outsiders, a question you have been circling for three terms. They settled it with Scripture, testimony, and a letter.",
+      "hardNote": "Acts 5 and Acts 7 are read whole: a couple struck dead over a lie about money, and a man stoned while praying for his killers. Luke does not soften either, and neither do we.",
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "You will be my witnesses",
+          "ref": "Acts 1:1-11",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Pentecost and the first sermon",
+          "ref": "Acts 2",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The fellowship, and the first crack",
+          "ref": "Acts 2:42-47; 4:32-5:11",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        },
+        {
+          "label": "Stephen",
+          "ref": "Acts 6:8-7:60",
+          "days": 1,
+          "hard": true,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The Damascus road",
+          "ref": "Acts 9:1-31",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Cornelius: the wall falls",
+          "ref": "Acts 10",
+          "days": 2,
+          "homework": [
+            "read",
+            "compare"
+          ]
+        },
+        {
+          "label": "The council",
+          "ref": "Acts 15:1-35",
+          "days": 2,
+          "homework": [
+            "research",
+            "write"
+          ]
+        },
+        {
+          "label": "Shipwreck, and Rome",
+          "ref": "Acts 27-28",
+          "days": 2,
+          "homework": [
+            "read",
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 27,
+      "title": "The Sermon on the Mount",
+      "kick": "GOSPEL · the kingdom's ethic, preached to the powerless",
+      "rationale": "The kingdom's ethic, preached on a hillside to people who had no power. You told me you struggle with the idea that this world simply ends. Good — the Sermon assumes it doesn't: the meek inherit the earth, not the clouds. But this is also the hardest text in Scripture for a sharp-tongued, pragmatic man: anger as murder, enemies loved, righteousness done in secret where nobody can be impressed by it. Two houses at the end, one storm. Here your instinct about heaven and earth gets its feet held to the fire.",
+      "hardNote": null,
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "The Beatitudes",
+          "ref": "Matthew 5:1-12",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        },
+        {
+          "label": "Salt, light, and the law fulfilled",
+          "ref": "Matthew 5:13-20",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "But I say to you",
+          "ref": "Matthew 5:21-37",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        },
+        {
+          "label": "Enemies",
+          "ref": "Matthew 5:38-48",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Secret righteousness",
+          "ref": "Matthew 6:1-18",
+          "days": 2,
+          "homework": [
+            "read",
+            "sit"
+          ]
+        },
+        {
+          "label": "Treasure and anxiety",
+          "ref": "Matthew 6:19-34",
+          "days": 2,
+          "homework": [
+            "sit",
+            "compare"
+          ]
+        },
+        {
+          "label": "Judging, asking, the narrow gate",
+          "ref": "Matthew 7:1-14",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Two houses",
+          "ref": "Matthew 7:15-29",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 28,
+      "title": "Four Maps of the Millennium",
+      "kick": "DOCTRINE · eschatology without hysteria",
+      "rationale": "Now the term your last message asked for. Four maps of the end: dispensational premillennial, which your church holds; historic premillennial, which Justin and Irenaeus held; amillennial, which Augustine and Sproul held; postmillennial, which the Puritans dared to hold. Your instinct — renewal rather than escape — has a name and a lineage, and you should know which one before you claim it. We read the Day of the LORD where the language starts, Olivet with the Term One method, the rapture text in its own context, and Revelation twenty under all four maps at once.",
+      "hardNote": "Matthew 24 contains the sentence 'this generation will not pass away,' which is doctrinally hard for every map, including yours. It is read whole and no reading is allowed to skip it. Every map is drawn by its own cartographers at full strength — the one preached from your pulpit especially.",
+      "secondNote": "Keep the target precise: his skepticism of outlandish eschatology was formed in charismatic prophecy culture — date-setting, blood moons, headlines. His church's careful futurist premillennialism is not that and must not be billed for it. Separate the system from the circus.",
+      "homeworkArc": "One page, four columns. As each map is drawn, note the single text it handles best and the single text it handles worst. All four columns must have both by the end.",
+      "units": [
+        {
+          "label": "The Day of the LORD, where the language starts",
+          "ref": "Joel 2:1-11, 28-32; Amos 5:18-20",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Olivet, read the Term One way",
+          "ref": "Matthew 24:1-35",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "research"
+          ]
+        },
+        {
+          "label": "Caught up: what 1 Thessalonians actually says",
+          "ref": "1 Thessalonians 4:13-5:11",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "The thousand years, four readings",
+          "ref": "Revelation 20:1-10",
+          "days": 2,
+          "homework": [
+            "write",
+            "sit"
+          ]
+        },
+        {
+          "label": "Where each map came from",
+          "ref": "2 Timothy 1:13-14",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Israel and the church, one more time",
+          "ref": "Romans 11:25-32; Ephesians 2:11-22",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Renewal, not escape",
+          "ref": "2 Peter 3:3-13; Romans 8:18-25; Matthew 5:5",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 29,
+      "title": "Isaiah: The Servant Songs",
+      "kick": "PROPHETS · the arm of the LORD revealed",
+      "rationale": "After the maps, a face. Isaiah's Servant songs are the deepest well in the prophets: a servant who is Israel, and then somehow more than Israel, who wins by being struck, whose disfigurement heals. Three full days in chapter fifty-three because it will not be rushed. Then Isaiah's own new heavens and new earth, which is where John got the language you will walk in two terms. This is the term where doctrine goes quiet and beauty does the arguing.",
+      "hardNote": null,
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "Here am I, send me",
+          "ref": "Isaiah 6",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Immanuel, and the child",
+          "ref": "Isaiah 7:10-17; 9:1-7",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Behold my servant",
+          "ref": "Isaiah 42:1-9",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "A light to the nations",
+          "ref": "Isaiah 49:1-13",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The sustained tongue, the struck back",
+          "ref": "Isaiah 50:4-11",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The arm revealed",
+          "ref": "Isaiah 52:13-53:12",
+          "days": 3,
+          "homework": [
+            "sit",
+            "read",
+            "write"
+          ]
+        },
+        {
+          "label": "The year of the LORD's favor",
+          "ref": "Isaiah 61:1-4; Luke 4:16-21",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "New heavens, in Isaiah's own mouth",
+          "ref": "Isaiah 65:17-25",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 30,
+      "title": "Ecclesiastes",
+      "kick": "WISDOM SHORT · vapor, and what to do about it",
+      "rationale": "A book for a cynic, announced for the self-described pragmatist. Qoheleth ran your experiment — money, work, pleasure, building projects — with a bigger budget than you will ever have, and filed his report: vapor. Not meaningless; vapor. Real, and ungraspable, and gone by noon. This is the Bible's own answer to the man who distrusts hype, and it is more severe than your cynicism and more hopeful than your pragmatism. Eight days. Eat your bread, drink your wine, fear God. The end of the matter has been heard.",
+      "hardNote": null,
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "Vapor: the thesis",
+          "ref": "Ecclesiastes 1",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The experiment",
+          "ref": "Ecclesiastes 2",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        },
+        {
+          "label": "Eternity in the heart",
+          "ref": "Ecclesiastes 3:1-15",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Oppression, envy, a second pair of hands",
+          "ref": "Ecclesiastes 4",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "God is in heaven, you are on earth",
+          "ref": "Ecclesiastes 5",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Wisdom for a crooked world",
+          "ref": "Ecclesiastes 7:1-14; 8:14-17",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "Bread on the waters, light is sweet",
+          "ref": "Ecclesiastes 9:7-10; 11:1-8",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Remember your Creator",
+          "ref": "Ecclesiastes 11:9-12:14",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 31,
+      "title": "Revelation: The City Comes Down",
+      "kick": "HOPE · the apocalypse, with the maps in hand",
+      "rationale": "You drew the maps three terms ago. Now walk the territory. Revelation, read as what it is — apocalyptic, pastoral, written to seven real churches under a boot — and not as a code to crack. The cycles of judgment are read whole and they are heavy. But keep your eye on the direction of travel at the end, because it settles your question: nobody escapes up and out. The city comes down. The kings carry their glory into it. Heaven comes here, which is what you suspected, said more carefully than you have been saying it.",
+      "hardNote": "The seal, trumpet, and bowl cycles are read as written, and Revelation 14:9-11 with them. The Lamb is also the Judge, and the book does not apologize for it.",
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "What apocalyptic is",
+          "ref": "Revelation 1",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Seven letters",
+          "ref": "Revelation 2-3",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        },
+        {
+          "label": "The throne and the Lamb",
+          "ref": "Revelation 4-5",
+          "days": 2,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        },
+        {
+          "label": "How the cycles work",
+          "ref": "Revelation 6; 8:1-9:21",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        },
+        {
+          "label": "The dragon and the beasts",
+          "ref": "Revelation 12-13",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Babylon falls",
+          "ref": "Revelation 17:1-19:10",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The rider, the millennium, the judgment",
+          "ref": "Revelation 19:11-20:15",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The city comes down",
+          "ref": "Revelation 21:1-22:5",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        },
+        {
+          "label": "Come, Lord Jesus",
+          "ref": "Revelation 22:6-21",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 32,
+      "title": "The Puritans",
+      "kick": "CHURCH HISTORY · your confession had authors",
+      "rationale": "Your confession had authors, and they are this term. The 1689 was written by men worshiping illegally — Kiffin, Knollys, Keach — while Owen and Baxter published a few streets away. Owen's line belongs beside Term Twenty-Two: be killing sin, or it will be killing you. We take their devotion and their failures together, conformity wars and all, because a tradition you cannot criticize is a tradition you do not actually know. Eight days. Take what is gold.",
+      "hardNote": null,
+      "secondNote": "This is family history for him specifically: the 1689 framers were Puritans. Make the line from Term 20's document to these men's lives explicit.",
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "Who they were, what they wanted",
+          "ref": "2 Timothy 2:20-21",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Owen: be killing sin",
+          "ref": "Romans 8:12-13",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Bunyan: the pilgrim in the jail",
+          "ref": "Hebrews 11:13-16",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Baxter: the reformed pastor",
+          "ref": "Acts 20:28",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "The Baptists among them",
+          "ref": "Acts 4:18-20",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "The household at worship",
+          "ref": "Deuteronomy 6:4-9",
+          "days": 1,
+          "homework": [
+            "ask"
+          ]
+        },
+        {
+          "label": "Their failures, told honestly",
+          "ref": "Romans 2:17-24",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "What to keep",
+          "ref": "Philippians 4:8-9",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 33,
+      "title": "1 Corinthians Whole",
+      "kick": "EPISTLE · one church, every problem",
+      "rationale": "One church, every problem you have studied, all at once. Corinth had factions, a lawsuit, a scandal the pagans found embarrassing, chaos at the Supper, and a gifts controversy — and Paul loved them and said so in the first paragraph. This is where Term Fifteen's chapters go back into their context: twelve, thirteen, and fourteen were never three topics, they are one argument, and love is its hinge. It ends on resurrection and a working man's promise: therefore, your labor is not in vain.",
+      "hardNote": "Chapters 5 and 6 are read whole: the incest case, the command to expel, the lawsuit aired in public. Church discipline is in the Bible and it is uncomfortable on purpose.",
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "A mess Paul loved",
+          "ref": "1 Corinthians 1:1-17",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The word of the cross",
+          "ref": "1 Corinthians 1:18-2:16",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Builders and the temple",
+          "ref": "1 Corinthians 3",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The scandal and the lawsuit",
+          "ref": "1 Corinthians 5-6",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        },
+        {
+          "label": "Marriage and singleness",
+          "ref": "1 Corinthians 7",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "Idol meat and the weaker brother",
+          "ref": "1 Corinthians 8-10",
+          "days": 2,
+          "homework": [
+            "read",
+            "write"
+          ]
+        },
+        {
+          "label": "The Supper",
+          "ref": "1 Corinthians 11:17-34",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Gifts in context, love in context",
+          "ref": "1 Corinthians 12-14",
+          "days": 2,
+          "homework": [
+            "read",
+            "ask"
+          ]
+        },
+        {
+          "label": "If Christ is not raised",
+          "ref": "1 Corinthians 15:1-34",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Raised how, and the last word",
+          "ref": "1 Corinthians 15:35-58; 16:13-14",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 34,
+      "title": "The World Renewed: Work and Vocation",
+      "kick": "PRACTICE SHORT · labor that is not in vain",
+      "rationale": "Six days on the promise that closed last term. You run operations, you build systems, you are far from your passport country building a life — which is exactly the exile's assignment from Term Ten: build houses, plant gardens, seek the city's good. Here is your heaven-and-earth instinct in its sane form. You do not build the kingdom up to God; the city comes down. But what is done in the Lord survives the fire and follows you in. Work like that is true. So work like that.",
+      "hardNote": null,
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "Made to work: the garden mandate",
+          "ref": "Genesis 1:26-28; 2:15",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Thorns: work after the fall",
+          "ref": "Genesis 3:17-19; Ecclesiastes 2:18-23",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Whatever you do",
+          "ref": "Colossians 3:22-4:1",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        },
+        {
+          "label": "Build houses, again",
+          "ref": "Jeremiah 29:4-7",
+          "days": 1,
+          "homework": [
+            "ask"
+          ]
+        },
+        {
+          "label": "Quiet ambition",
+          "ref": "1 Thessalonians 4:9-12; 2 Thessalonians 3:6-13",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Not in vain: what survives",
+          "ref": "1 Corinthians 15:58; Revelation 14:13; 21:24-26",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 35,
+      "title": "The Minor Prophets",
+      "kick": "PROPHETS · twelve men, one complaint",
+      "rationale": "Twelve men, one complaint: you have forgotten. Hosea is told to marry the complaint. Jonah embodies it. Habakkuk files it against God himself and receives the line that lit the Reformation: the righteous shall live by faith. The Day of the LORD language you studied in the four maps was minted here. This is the sweep term, a dozen voices in twelve days, and it is heavy in places, because God's grief usually is. Malachi ends it with a sunrise and four hundred years of silence.",
+      "hardNote": "Hosea 1-3 is read whole: God commands a marriage to unfaithfulness to make his own grief visible. Nahum's celebration of Nineveh's fall is read as written.",
+      "secondNote": null,
+      "homeworkArc": null,
+      "units": [
+        {
+          "label": "Hosea: marry her anyway",
+          "ref": "Hosea 1-3",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "read"
+          ]
+        },
+        {
+          "label": "Joel: locusts and the Spirit",
+          "ref": "Joel 1-2",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Amos: let justice roll",
+          "ref": "Amos 5",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Obadiah and Jonah: the brother and the enemy",
+          "ref": "Obadiah; Jonah 3-4",
+          "days": 2,
+          "homework": [
+            "sit",
+            "write"
+          ]
+        },
+        {
+          "label": "Micah: what does the LORD require",
+          "ref": "Micah 6:1-8; 5:2-5",
+          "days": 1,
+          "homework": [
+            "compare"
+          ]
+        },
+        {
+          "label": "Nahum and Habakkuk: the wrath and the wait",
+          "ref": "Nahum 1; Habakkuk 1-2",
+          "days": 2,
+          "hard": true,
+          "homework": [
+            "sit",
+            "research"
+          ]
+        },
+        {
+          "label": "Zephaniah: quieted by his love",
+          "ref": "Zephaniah 1:14-18; 3:14-20",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Haggai and Zechariah: build the house",
+          "ref": "Haggai 1:1-2:9; Zechariah 4",
+          "days": 1,
+          "homework": [
+            "research"
+          ]
+        },
+        {
+          "label": "Malachi: the sun of righteousness, then silence",
+          "ref": "Malachi 3-4",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        }
+      ]
+    },
+    {
+      "orderIndex": 36,
+      "title": "The Church You're Actually In",
+      "kick": "PRACTICE · the pew you actually sit in",
+      "rationale": "The last term of the plan, and it is about the pew you actually sit in. Three years of study have sharpened your convictions — covenantal, credobaptist, Reformed — and you worship, gladly, in a dispensational church, having been raised in the faith by charismatics. Some men resolve that by leaving, some by going quiet, some by getting sharp. This term is the fourth way: real membership, honest triage of what divides and what must not, submission to elders you partly disagree with, and gratitude, by name, for the people you came from. One body. Attain it.",
+      "hardNote": null,
+      "secondNote": "This term is the biographical payoff of the whole plan. Charismatic years, dispensational pulpit, covenantal bookshelf — the curriculum sharpened every difference on purpose, and this term teaches him to hold sharpened convictions with an unsharpened tongue.",
+      "homeworkArc": "By the last day: one letter, one page, never sent or maybe sent — to someone from your charismatic years, thanking them for something specific they gave you.",
+      "units": [
+        {
+          "label": "One body, one baptism",
+          "ref": "Ephesians 4:1-16",
+          "days": 1,
+          "homework": [
+            "read"
+          ]
+        },
+        {
+          "label": "Membership is a real thing",
+          "ref": "1 Corinthians 12:12-27; Hebrews 10:24-25",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Elders you partly disagree with",
+          "ref": "Hebrews 13:7, 17; 1 Thessalonians 5:12-13",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "Doctrinal triage",
+          "ref": "Romans 14:1-15:7; Philippians 3:15-16",
+          "days": 2,
+          "homework": [
+            "write",
+            "ask"
+          ]
+        },
+        {
+          "label": "When to speak up",
+          "ref": "Galatians 2:11-14; Proverbs 27:5-6",
+          "days": 1,
+          "homework": [
+            "sit"
+          ]
+        },
+        {
+          "label": "The people you came from",
+          "ref": "1 Corinthians 1:4-9; Philippians 1:3-11",
+          "days": 1,
+          "homework": [
+            "write"
+          ]
+        },
+        {
+          "label": "Until we all attain",
+          "ref": "Ephesians 4:11-16; John 17:20-23",
+          "days": 1,
+          "homework": [
+            "ask"
+          ]
+        }
       ]
     }
+  ],
+  "reservePool": [
+    "Genesis revisited: Jacob, the limping patriarch (10)",
+    "Missions history: the century of going (10)",
+    "The Gospel of Luke, for the detail-lover (12)",
+    "James: faith with its sleeves rolled up (6)",
+    "Daniel whole: court tales and the visions (10)"
   ]
 }

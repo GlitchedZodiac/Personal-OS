@@ -16,6 +16,7 @@ interface TermData {
     rationale: string;
     hardNote?: string | null;
     secondNote?: string | null;
+    homeworkArc?: string | null;
     weeks: number;
     syllabus: { week: number; label: string; ref: string; days?: number; hard?: boolean }[];
   } | null;
@@ -180,6 +181,15 @@ export default function SpiritTermPage() {
           the plan; two on an eager day is a double portion.
         </p>
       </div>
+
+      {t.homeworkArc && (
+        <div className="mt-3 rounded-[14px] bg-accent px-4 py-[13px]">
+          <p className="text-[10px] font-bold tracking-[0.14em] text-[#8C2F51]">
+            THE TERM'S RUNNING ASSIGNMENT
+          </p>
+          <p className="mt-[5px] text-[12.5px] leading-[1.6] text-[#454349]">{t.homeworkArc}</p>
+        </div>
+      )}
 
       {t.secondNote && (
         <div className="mt-3 rounded-[14px] bg-accent px-4 py-[13px]">

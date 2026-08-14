@@ -5,16 +5,61 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-13 (SPIRIT living curriculum: variable-length
-units 3–30, Year 1 authored — T2–T8, 113 studies queued — import
-pipeline, curriculum-lane kickoff prompt)
-**Current phase:** Spirit is a self-paced university with a YEAR of
-curriculum loaded (2026-08-13d). A dedicated CURRICULUM LANE extends it
-to 3 years — kickoff: docs/spirit-curriculum-kickoff.md; living plan:
-docs/spirit-curriculum.json; import: prisma/import-curriculum.mjs
-(protects active/completed terms). Next blocks: Track 2 free-license
-text, Strong's word study, Library screen, NBLA pane, Bible-navigator
-design slice for round 3. Health modules unchanged and live.
+**Last updated:** 2026-08-14 (SPIRIT curriculum v3: the curriculum
+lane's 36-term/362-study 3-year plan imported via gated full replace;
+HOMEWORK engine live — six kinds, the daily callback, term arcs)
+**Current phase:** Spirit runs the curriculum lane's v3 plan
+(2026-08-14a). Living plan: docs/spirit-curriculum.json (v3 wrapper);
+import: prisma/import-curriculum.mjs (--replace gated on zero started
+data); kickoff for revisions: docs/spirit-curriculum-kickoff.md. Next
+blocks: Track 2 free-license text, Strong's word study, Library screen,
+Bible-navigator + homework design slices for round 3. Health modules
+unchanged and live.
+
+## 2026-08-14a — CURRICULUM v3 + THE HOMEWORK ENGINE (his drop, approved)
+
+Michael's curriculum lane delivered v3 (36 terms · 362 studies · 3
+years · cap 15, longest 13) plus a homework schema. He approved the
+full sequence after confirming the first term shrank (Reading the Room,
+8 studies — was Judges at 42) and greenlit: ESV stays default, NBLA
+pane stays, `ask` kind kept with its Term-13 gate.
+
+- **Full replace, gated:** importer re-verified zero started data at
+  run time (completions/readings/highlights/notes/memory/series/threads
+  all 0), wiped 8 terms + 42 generated studies (~$1.50 sunk, expected),
+  imported 36 terms — T1 "Reading the Room" active. Acceptance counts
+  matched the handoff: 36 / 362.
+- **Importer v3:** reads the `{version…terms}` wrapper, cap 3–15,
+  validates every unit's homework slugs against `homeworkKinds`, syncs
+  homeworkKinds+generatorRules into SpiritCurriculumConfig (the
+  generator reads them from DB — docs/ isn't in the serverless bundle).
+- **Schema:** Term.homeworkArc, Term.summary, DevotionalDay.homework
+  {kind,label,minutes,text}, SpiritCurriculumConfig singleton
+  (migration spirit_homework). Unit homework lists ride in syllabus
+  Json.
+- **Generator, all nine rules:** exactly one homework per study ≤20min
+  drawn only from the unit's kinds; never the same kind back-to-back
+  (validated server-side across unit AND term boundaries); THE CALLBACK
+  — every study's body opens by naming the previous study's homework
+  (unit 1 day 1 reaches into the previous term; the curriculum's first
+  study opens by setting the arc); `ask` stripped below orderIndex 13
+  (gatedFrom in config); no purchases/leaving the house; write ≤ one
+  paragraph; spiral back-references get the full 36-term list;
+  canonical rationales/hardNotes/arcs surfaced verbatim. Style specimen
+  moved to lib/spirit-style-specimen.ts (survives replaces).
+- **UI:** study page gets THE HOMEWORK card (dark, kind label chip +
+  ≤minutes + prompt + the term arc line + "tomorrow's study opens by
+  asking about this"); term page shows THE TERM'S RUNNING ASSIGNMENT;
+  transcript's completed rows show the term-end summary line.
+- **Term-end summary hook BUILT** (didn't exist): completing a term
+  snapshots {studies, topCategory, openQuestions[≤10 w/ refs]} onto
+  Term.summary before the next term takes the lectern.
+- **NBLA unblocked (Step 5):** Spanish lives in the `compare` homework
+  (his Logos, ESV vs NBLA, degrades to KJV); roadmap blocker deleted;
+  reader pane stays built-and-dormant; settings copy reframed. ESV
+  remains the default text everywhere (his call).
+- Kickoff doc realigned to v3 (wrapper format, 3–15, homework schema,
+  revision-not-authoring role, Spanish settled).
 
 ## 2026-08-13d — THE LIVING CURRICULUM (his ask: "alive and fed constantly")
 

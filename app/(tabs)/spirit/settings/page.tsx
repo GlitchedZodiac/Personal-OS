@@ -100,11 +100,15 @@ export default function SpiritSettingsPage() {
             ESV — primary
           </span>
           <button
-            onClick={() => toast("NBLA arrives when the license clears — the linked pane is already built.")}
+            onClick={() =>
+              toast(
+                "ESV stays the default. Spanish lives in the compare homework (ESV vs NBLA in your Logos); the linked pane lights up if an NBLA license ever lands.",
+              )
+            }
             className="rounded-full border border-[#E4E2E6] bg-[#FAF9FA] px-3.5 py-1.5 text-[11.5px] font-semibold text-[#66646C]"
             style={{ fontFamily: "var(--font-display)" }}
           >
-            NBLA — linked pane
+            NBLA — compare &amp; pane
           </button>
         </div>
       </div>

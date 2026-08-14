@@ -15,7 +15,7 @@ export async function GET() {
       prisma.term.findMany({
         where: { status: "completed" },
         orderBy: { orderIndex: "desc" },
-        select: { title: true, kick: true, startedAt: true },
+        select: { title: true, kick: true, startedAt: true, summary: true },
       }),
       prisma.term.findFirst({ where: { status: "active" }, select: { syllabus: true } }),
     ]);

@@ -51,9 +51,38 @@ export async function POST(request: NextRequest) {
 
     const termDone = !next;
     if (termDone && term && term.status === "active") {
+      // The term-end summary — what was covered, marked most, still
+      // open. Files onto the term; feeds the twice-a-year curriculum
+      // revisit. Descriptive, never a verdict.
+      const [byCategory, openQs] = await Promise.all([
+        prisma.highlight.groupBy({
+          by: ["category"],
+          _count: { category: true },
+          orderBy: { _count: { category: "desc" } },
+          take: 1,
+        }),
+        prisma.spiritNote.findMany({
+          where: { kind: "question", resolvedAt: null },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: { body: true, refStart: true },
+        }),
+      ]);
+      const { formatRef } = await import("@/lib/bible-refs");
       await prisma.term.update({
         where: { id: term.id },
-        data: { status: "completed" },
+        data: {
+          status: "completed",
+          summary: {
+            studies: days.length,
+            topCategory: byCategory[0]?.category ?? null,
+            openQuestions: openQs.map((q) => ({
+              q: q.body,
+              at: formatRef(q.refStart),
+            })),
+            completedAt: new Date().toISOString(),
+          },
+        },
       });
       const following = await prisma.term.findFirst({
         where: { status: "upcoming" },

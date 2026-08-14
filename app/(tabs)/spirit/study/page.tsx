@@ -26,6 +26,7 @@ interface DayData {
   readingLabel: string;
   estMinutes: number;
   citations?: { label: string; sourceKey: string }[] | null;
+  homework?: { kind: string; label: string; minutes: number; text: string } | null;
 }
 
 interface CompletionResult {
@@ -45,7 +46,11 @@ interface CompletionResult {
 
 export default function SpiritStudyPage() {
   const router = useRouter();
-  const [term, setTerm] = useState<{ orderIndex: number; title: string } | null>(null);
+  const [term, setTerm] = useState<{
+    orderIndex: number;
+    title: string;
+    homeworkArc?: string | null;
+  } | null>(null);
   const [day, setDay] = useState<DayData | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [readingDone, setReadingDone] = useState(false);
@@ -284,6 +289,32 @@ export default function SpiritStudyPage() {
           Generated once, kept forever.
         </p>
       </div>
+
+      {/* the homework — one item, ≤20 min, carried into the day */}
+      {day.homework?.text && (
+        <div className="mt-3 rounded-[16px] bg-[#232227] p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold tracking-[0.16em] text-[#DCA8BE]">
+              THE HOMEWORK · {(day.homework.label ?? day.homework.kind).toUpperCase()}
+            </p>
+            <span className="rounded-full bg-[#3A3239] px-[9px] py-[2.5px] text-[9.5px] font-semibold tabular-nums text-[#C4C0C9]">
+              ≤ {day.homework.minutes} min
+            </span>
+          </div>
+          <p className="mt-2 text-[13.5px] leading-[1.65] text-[#F2F1F2]">
+            {day.homework.text}
+          </p>
+          {term.homeworkArc && (
+            <p className="mt-2.5 border-t border-[#3A3239] pt-2.5 text-[10.5px] leading-[1.6] text-[#837F8B]">
+              <span className="font-bold tracking-[0.08em] text-[#DCA8BE]">THE ARC · </span>
+              {term.homeworkArc}
+            </p>
+          )}
+          <p className="mt-2 text-[10px] text-[#837F8B]">
+            tomorrow's study opens by asking about this — nothing evaporates
+          </p>
+        </div>
+      )}
 
       {/* the assignment */}
       <div className="mt-3 rounded-[16px] bg-white p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
