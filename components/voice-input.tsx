@@ -438,17 +438,15 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
           body = aiResponse.workout;
           break;
         case "water":
-          // Log water: post one entry per glass
+          // Log water — one batched request, however many glasses
           if (aiResponse.water) {
             const glassCount = aiResponse.water.glasses || 1;
             const mlPerGlass = Math.round(aiResponse.water.amountMl / glassCount);
-            for (let i = 0; i < glassCount; i++) {
-              await fetch("/api/health/water", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ amountMl: mlPerGlass }),
-              });
-            }
+            await fetch("/api/health/water", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ amountMl: mlPerGlass, glasses: glassCount }),
+            });
             toast.success("Water logged!");
             onDataLogged?.();
             setIsProcessing(false);

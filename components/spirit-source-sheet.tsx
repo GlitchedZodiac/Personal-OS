@@ -46,7 +46,14 @@ export function SpiritSourceSheet({
         <div className="mt-3.5 rounded-[14px] bg-[#FAF9FA] p-4 text-[13.5px] italic leading-[1.8] text-[#454349]">
           {doc?.body ?? ""}
         </div>
-        <div className="mt-3.5 flex items-center justify-end">
+        <div className="mt-3.5 flex items-center justify-between">
+          <a
+            href="/spirit/library"
+            className="rounded-full border border-[#E4E2E6] bg-[#FAF9FA] px-3 py-[5px] text-[11px] font-semibold text-[#8C2F51] hover:bg-accent"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Open the library ›
+          </a>
           <button
             onClick={onClose}
             className="rounded-[10px] border border-[#E4E2E6] px-5 py-2 text-[12.5px] font-semibold text-[#66646C] hover:bg-[#FAF9FA]"

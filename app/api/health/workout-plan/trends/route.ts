@@ -90,6 +90,9 @@ export async function GET(request: NextRequest) {
       }
 
       return {
+        // scheduledDate is a date-only round-trip (stored at UTC midnight);
+        // toISOString here is CORRECT — a timezone conversion would shift
+        // it a day for negative-offset zones. Do not "fix" this.
         date: new Date(c.scheduledDate).toISOString().split("T")[0],
         dayLabel: c.dayLabel,
         totalVolume,

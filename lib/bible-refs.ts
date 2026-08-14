@@ -38,6 +38,30 @@ export const CHAPTERS = [
   5, 5, 3, 5, 1, 1, 1, 22,
 ] as const;
 
+// USFM 3-char book ids (the free-Bible APIs' addressing scheme).
+export const BOOK_USFM = [
+  "GEN", "EXO", "LEV", "NUM", "DEU", "JOS", "JDG", "RUT", "1SA", "2SA",
+  "1KI", "2KI", "1CH", "2CH", "EZR", "NEH", "EST", "JOB", "PSA", "PRO",
+  "ECC", "SNG", "ISA", "JER", "LAM", "EZK", "DAN", "HOS", "JOL", "AMO",
+  "OBA", "JON", "MIC", "NAM", "HAB", "ZEP", "HAG", "ZEC", "MAL", "MAT",
+  "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO", "GAL", "EPH", "PHP",
+  "COL", "1TH", "2TH", "1TI", "2TI", "TIT", "PHM", "HEB", "JAS", "1PE",
+  "2PE", "1JN", "2JN", "3JN", "JUD", "REV",
+] as const;
+
+export const TOTAL_CHAPTERS = 1189;
+
+/** Canonical chapter order: position 0..1188 → {book (1-based), chapter}. */
+export function chapterAt(position: number): { book: number; chapter: number } | null {
+  if (position < 0 || position >= TOTAL_CHAPTERS) return null;
+  let p = position;
+  for (let b = 0; b < CHAPTERS.length; b++) {
+    if (p < CHAPTERS[b]) return { book: b + 1, chapter: p + 1 };
+    p -= CHAPTERS[b];
+  }
+  return null;
+}
+
 export function refInt(book: number, chapter: number, verse: number) {
   return book * 1_000_000 + chapter * 1_000 + verse;
 }

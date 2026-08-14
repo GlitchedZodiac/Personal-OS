@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { SheetPortal } from "@/components/sheet-portal";
 
 // Spirit home — round-2 port: gear → settings, this-week's-verse card
 // → Memory, posture chip on the University card, real Notebook/Memory/
@@ -65,22 +64,13 @@ const POSTURE_LABELS: Record<string, string> = {
 };
 const POSTURE_ORDER = ["westminster", "1689", "compare"];
 
-const LIB_STUB: [string, string[]] = [
-  "Source library",
-  [
-    "Calvin · Matthew Henry · the confessions and catechisms · Spurgeon",
-    "Every quotation in a teaching taps through to its real source text",
-    "Public domain · stored in the app",
-  ],
-];
 
 export default function SpiritPage() {
   const router = useRouter();
   const [data, setData] = useState<TodayData | null>(null);
   const [cov, setCov] = useState<TranscriptData | null>(null);
   const [verseSnip, setVerseSnip] = useState<string | null>(null);
-  const [t2Open, setT2Open] = useState(false);
-  const [libOpen, setLibOpen] = useState(false);
+  const [t2, setT2] = useState<{ position: number; total: number; done: boolean; next: { label: string } | null } | null>(null);
   const [posture, setPosture] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,6 +97,10 @@ export default function SpiritPage() {
     fetch("/api/spirit/transcript")
       .then((r) => (r.ok ? r.json() : null))
       .then(setCov)
+      .catch(() => {});
+    fetch("/api/spirit/track2")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setT2)
       .catch(() => {});
   }, []);
 
@@ -311,7 +305,7 @@ export default function SpiritPage() {
           </p>
         </button>
         <button
-          onClick={() => setLibOpen(true)}
+          onClick={() => router.push("/spirit/library")}
           className="tap-scale rounded-[16px] bg-white p-4 text-left shadow-[0_2px_12px_rgba(35,34,39,0.06)] hover:bg-[#FAF9FA]"
         >
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A63D63" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -372,30 +366,33 @@ export default function SpiritPage() {
         </p>
       </button>
 
-      {/* Track 2 */}
-      <div className="mt-3 overflow-hidden rounded-[14px] bg-white shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
-        <button
-          onClick={() => setT2Open((v) => !v)}
-          className="flex w-full items-center justify-between px-4 py-[13px] hover:bg-[#FAF9FA]"
-        >
+      {/* Track 2 — live */}
+      <button
+        onClick={() => router.push("/spirit/track2")}
+        className="tap-scale mt-3 block w-full overflow-hidden rounded-[14px] bg-white text-left shadow-[0_2px_12px_rgba(35,34,39,0.06)] hover:bg-[#FAF9FA]"
+      >
+        <div className="flex items-center justify-between px-4 py-[13px]">
           <span className="text-xs text-[#454349]">
             <span className="text-[10.5px] font-bold tracking-[0.1em] text-muted-foreground">
               TRACK 2
             </span>{" "}
-            · the whole Bible, quietly
+            · {t2 ? (t2.done ? "every chapter, quietly" : `next: ${t2.next?.label}`) : "the whole Bible, quietly"}
           </span>
-          <span className="text-[11px] text-muted-foreground">{t2Open ? "⌄" : "›"}</span>
-        </button>
-        {t2Open && (
-          <div className="px-4 pb-3.5">
-            <p className="text-[11px] leading-[1.5] text-muted-foreground">
-              The background read-through in a free-license text arrives with the generation
-              pipeline. It will never compete with the term — and it will never count against
-              you.
-            </p>
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {t2 ? `${t2.position} of ${t2.total} ›` : "›"}
+          </span>
+        </div>
+        {t2 && t2.position > 0 && (
+          <div className="px-4 pb-3">
+            <div className="h-[5px] overflow-hidden rounded-full bg-[#F2F1F2]">
+              <div
+                className="h-full rounded-full bg-[#C97D9C] transition-all duration-700"
+                style={{ width: `${Math.max(0.5, (t2.position / t2.total) * 100)}%` }}
+              />
+            </div>
           </div>
         )}
-      </div>
+      </button>
 
       {/* Transcript mini-map */}
       {cov && (
@@ -426,40 +423,6 @@ export default function SpiritPage() {
         </button>
       )}
 
-      {/* Library designed-stub sheet */}
-      {libOpen && (
-        <SheetPortal>
-          <div className="fixed inset-0 z-[85] bg-[rgba(27,21,24,0.45)]" onClick={() => setLibOpen(false)} />
-          <div className="fixed inset-x-0 bottom-0 z-[86] rounded-t-[28px] bg-white px-6 pb-9 pt-6 sheet-up">
-            <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-[#E4E2E6]" />
-            <p className="text-[19px] font-bold text-[#232227]" style={{ fontFamily: "var(--font-display)" }}>
-              {LIB_STUB[0]}
-            </p>
-            <div className="mt-3.5 grid gap-px overflow-hidden rounded-[14px] border border-[#E4E2E6] bg-[#E4E2E6]">
-              {LIB_STUB[1].map((row, i) => (
-                <div key={i} className="flex items-start gap-2.5 bg-white px-3.5 py-3">
-                  <svg width="8" height="8" viewBox="0 0 10 10" className="mt-1 flex-none">
-                    <rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63" />
-                  </svg>
-                  <span className="text-[12.5px] leading-[1.55] text-[#454349]">{row}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3.5 flex items-center justify-between">
-              <span className="text-[10.5px] text-muted-foreground">
-                Designed · being bound with the library block
-              </span>
-              <button
-                onClick={() => setLibOpen(false)}
-                className="rounded-[10px] bg-[#A63D63] px-[22px] py-[9px] text-[12.5px] font-semibold text-white hover:bg-[#8C2F51]"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </SheetPortal>
-      )}
     </div>
   );
 }

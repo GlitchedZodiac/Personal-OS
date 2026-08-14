@@ -5,16 +5,76 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-14 (SPIRIT curriculum v3: the curriculum
-lane's 36-term/362-study 3-year plan imported via gated full replace;
-HOMEWORK engine live — six kinds, the daily callback, term arcs)
-**Current phase:** Spirit runs the curriculum lane's v3 plan
-(2026-08-14a). Living plan: docs/spirit-curriculum.json (v3 wrapper);
-import: prisma/import-curriculum.mjs (--replace gated on zero started
-data); kickoff for revisions: docs/spirit-curriculum-kickoff.md. Next
-blocks: Track 2 free-license text, Strong's word study, Library screen,
-Bible-navigator + homework design slices for round 3. Health modules
-unchanged and live.
+**Last updated:** 2026-08-14b (DEFERRED-QUEUE SWEEP: Track 2 live on
+the BSB, Library screen, church week-advance, reader footnotes/poetry
+sups, progression intelligence, + 12 annotations closed)
+**Current phase:** The queue is swept — docs/deferred-items.md's top
+entry is the honest remaining list (Strong's, Journal-needs-design,
+bundles/barcode, circuit parity, Strava adoptions, blocks v2, demo
+keep/kill, TS7-upstream, round-3 design asks). Spirit is complete for
+daily life: v3 curriculum, homework engine, Track 2, Library, free
+Bible, memory, church track. Health: progression intelligence shipped.
+
+## 2026-08-14b — THE DEFERRED-QUEUE SWEEP (his "run all deferred items")
+
+Built:
+- **Track 2 LIVE** — the whole Bible, quietly, in the Berean Standard
+  Bible (public domain CC0; served by bible.helloao.org, keyless —
+  fetched server-side with 30-day revalidate; if that free service ever
+  dies the page says so and nothing else breaks). /spirit/track2:
+  themed chapter reader (headings, poetry, reader typography), one-tap
+  "read → next chapter" advancing SpiritPref.track2Position and logging
+  HONEST transcript coverage (track2 rows count chapters like any
+  reading). Home card shows next chapter + n of 1,189 + progress bar.
+  lib/bible-refs grew BOOK_USFM + TOTAL_CHAPTERS + chapterAt().
+- **Library screen** — /spirit/library over SourceDoc with per-source
+  cited-counts computed from the generated studies' citations; home
+  tile + source-sheet "Open the library ›" wired; the designed-stub
+  sheet retired. Corpus growth stays a curation task (PD only).
+- **Church week-advance** — PATCH /api/spirit/church + "Sunday happened
+  — prep next week" on the live view; walks the announced passages,
+  auto-completes past expectedWeeks.
+- **Reader polish** — poetry verses now carry their crossref sups (on
+  the last line); footnotes finally have UI: [n] sups + a single-tap
+  ESV FOOTNOTE tooltip.
+- **Progression intelligence** (approved roadmap #4, pure math, ZERO
+  AI): lib/progression.ts — raise only after 3 clean runs at the
+  prescription, post-raise hold (Sequence.progression.lastRaiseAt),
+  4 kg bell denominations, deload after 2 abandoned runs, +5 s for
+  timed holds; 6 vitest cases. GET/POST /api/health/progression;
+  earned/deload cards on the Routines screen with "Take the raise";
+  the Sunday report names a pending suggestion in one clause. Missing
+  telemetry never punishes (rounds-less runs count as complete).
+- **Builder mints movements** — unknown names in the web routine
+  builder get a "file it under" category select (API already accepted
+  it).
+- **Water batching** — POST /api/health/water {glasses:n} → createMany;
+  the dock stopped looping the network.
+- **Transcribe streams** — openai.toFile from memory; temp-file path
+  and cleanup deleted.
+- **Strava OAuth state** — /api/strava/auth mints state into an
+  httpOnly cookie; the callback rejects mismatches (CSRF closed).
+- **Service worker v4** — precache list matched to the live IA
+  (stale routes could brick addAll installs — now per-asset
+  allSettled); audited: network-first keeps JS fresh, cache is
+  offline-fallback only.
+- **Env hygiene** — NEXT_PUBLIC_SUPABASE_* confirmed unread, removed
+  from all Vercel envs + .env.example.
+
+Closed by annotation (were already resolved, unrecorded): chat deep
+history (workout_history, task #17) · history drill-downs + body-comp
+panel (task #18) · journal +-library (task #15) · macro slider
+(superseded by his task-19 spec) · stepSeconds history (tasks #5/#18)
+· branch-push access · trends toISOString (kept-as-is with a guard
+comment — converting would shift date-only values). TS7 re-checked:
+typescript-eslint still peers <6.1.0 — blocked upstream.
+
+Deliberately NOT swept (each needs what it needs): Strong's dataset
+(own session), the real Journal (design round 3), bundles/barcode
+(lukewarm + integration care), circuit-runner parity, Strava
+adoptions, routine blocks v2 (his conversation + watch lane), demo
+keep/kill (his call). All in deferred-items' top entry with pickup
+hints.
 
 ## 2026-08-14a — CURRICULUM v3 + THE HOMEWORK ENGINE (his drop, approved)
 

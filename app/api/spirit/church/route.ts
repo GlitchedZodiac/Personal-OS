@@ -122,6 +122,81 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PATCH — a new Sunday happened. Advance the series one week and
+// generate the next follow-along card (his tap, one visible step).
+export async function PATCH() {
+  try {
+    const series = await prisma.churchSeries.findFirst({ where: { status: "active" } });
+    if (!series) return NextResponse.json({ error: "No active series" }, { status: 400 });
+
+    const nextWeek = series.currentWeek + 1;
+    const passages = (Array.isArray(series.passages) ? series.passages : []) as {
+      ref: string;
+      label: string;
+    }[];
+    // The next unpreached passage, if the announcement named one.
+    const preachedCount = nextWeek - 1;
+    const upNext =
+      passages.filter((p) => p.label !== "preached")[preachedCount - (passages.filter((p) => p.label === "preached").length)] ??
+      passages[passages.length - 1] ??
+      null;
+
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You prepare a one-card sermon follow-along for a Reformed layman: the passage's context in 2-3 plain sentences, and exactly three questions he should carry into Sunday's sermon. No flattery, no filler.",
+        },
+        {
+          role: "user",
+          content: `Series: "${series.title}"${series.themes ? ` · themes: ${series.themes}` : ""}. Week ${nextWeek}${series.expectedWeeks ? ` of ≈${series.expectedWeeks}` : ""}.${
+            upNext ? ` This week's passage: ${upNext.ref}.` : " The announcement named no further passages — continue where the series' book naturally goes next and say which passage you chose."
+          }`,
+        },
+      ],
+      max_completion_tokens: 500,
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "week_prep", strict: true, schema: WEEK_SCHEMA as unknown as Record<string, unknown> },
+      },
+    });
+    recordAIUsage({
+      surface: "spirit-church",
+      model: CHAT_MODEL,
+      inputTokens: completion.usage?.prompt_tokens ?? 0,
+      outputTokens: completion.usage?.completion_tokens ?? 0,
+    });
+
+    let week: Record<string, unknown> | null = null;
+    try {
+      week = JSON.parse(completion.choices[0]?.message?.content?.trim() || "null");
+    } catch {
+      week = null;
+    }
+    if (!week) return NextResponse.json({ error: "Couldn't prepare the week" }, { status: 500 });
+
+    const weeks = (Array.isArray(series.weeks) ? series.weeks : []) as Record<string, unknown>[];
+    const updated = await prisma.churchSeries.update({
+      where: { id: series.id },
+      data: {
+        currentWeek: nextWeek,
+        weeks: JSON.parse(
+          JSON.stringify([...weeks, { index: nextWeek, ...week, status: "next" }]),
+        ),
+        ...(series.expectedWeeks && nextWeek > series.expectedWeeks
+          ? { status: "done" }
+          : {}),
+      },
+    });
+    return NextResponse.json({ series: updated });
+  } catch (error) {
+    console.error("Spirit church advance error:", error);
+    return NextResponse.json({ error: "Failed to advance the series" }, { status: 500 });
+  }
+}
+
 // PUT — he confirmed. Create the series and generate the current week's
 // follow-along (passage context + three questions), one visible step.
 export async function PUT(request: NextRequest) {

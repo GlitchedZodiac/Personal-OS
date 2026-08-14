@@ -26,6 +26,17 @@ export async function GET(request: Request) {
     );
   }
 
+  // CSRF check: the state must match the cookie set at /api/strava/auth.
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  const stateCookie = /(?:^|;\s*)strava_oauth_state=([^;]+)/.exec(cookieHeader)?.[1];
+  const state = searchParams.get("state");
+  if (!stateCookie || !state || state !== stateCookie) {
+    console.error("Strava OAuth state mismatch");
+    return NextResponse.redirect(
+      `${appUrl}/settings?strava=error&message=state_mismatch`
+    );
+  }
+
   try {
     // Exchange the authorization code for tokens
     const tokenRes = await fetch("https://www.strava.com/oauth/token", {

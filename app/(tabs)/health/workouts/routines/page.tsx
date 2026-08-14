@@ -22,6 +22,7 @@ interface Routine {
 
 interface DraftStep {
   exerciseName: string;
+  category: string;
   sets: string;
   reps: string;
   seconds: string;
@@ -37,6 +38,7 @@ const KIND_LABELS: Record<string, string> = {
 
 const EMPTY_STEP: DraftStep = {
   exerciseName: "",
+  category: "",
   sets: "5",
   reps: "10",
   seconds: "",
@@ -58,6 +60,16 @@ export default function RoutinesPage() {
   const [exerciseList, setExerciseList] = useState<Pick<ExerciseDef, "id" | "name">[]>(
     EXERCISE_CATALOG
   );
+  const [suggestions, setSuggestions] = useState<
+    {
+      sequenceId: string;
+      sequenceName: string;
+      type: "raise" | "deload";
+      reason: string;
+      changes: { exercise: string; fromKg?: number; toKg?: number; fromSeconds?: number; toSeconds?: number }[];
+    }[]
+  >([]);
+  const [applying, setApplying] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/health/sequences")
@@ -72,7 +84,31 @@ export default function RoutinesPage() {
         }
       })
       .catch(() => {});
+    fetch("/api/health/progression")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => setSuggestions(body?.suggestions ?? []))
+      .catch(() => {});
   }, []);
+
+  const applySuggestion = async (sequenceId: string) => {
+    setApplying(sequenceId);
+    try {
+      const res = await fetch("/api/health/progression", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sequenceId }),
+      });
+      if (res.ok) {
+        toast.success("Raised — it holds until three more clean runs.");
+        setSuggestions((prev) => prev.filter((x) => x.sequenceId !== sequenceId));
+        load();
+      } else {
+        toast.error("Couldn't apply.");
+      }
+    } finally {
+      setApplying(null);
+    }
+  };
 
   useEffect(load, [load]);
 
@@ -94,6 +130,7 @@ export default function RoutinesPage() {
       setSteps(
         routine.steps.map((s) => ({
           exerciseName: s.exerciseName,
+          category: "",
           sets: s.sets ? String(s.sets) : "",
           reps: s.reps ? String(s.reps) : "",
           seconds: s.seconds ? String(s.seconds) : "",
@@ -120,6 +157,7 @@ export default function RoutinesPage() {
           .filter((s) => s.exerciseName.trim())
           .map((s) => ({
             exerciseName: s.exerciseName,
+            category: s.category || undefined,
             sets: s.sets || undefined,
             reps: s.reps || undefined,
             seconds: s.seconds || undefined,
@@ -176,6 +214,72 @@ export default function RoutinesPage() {
 
       {!editing && (
         <>
+          {suggestions.map((sug) => (
+            <div
+              key={sug.sequenceId}
+              className="mt-4 rounded-[16px] p-4"
+              style={{ background: sug.type === "raise" ? "#232227" : "#FFF6EC" }}
+            >
+              <p
+                className="text-[10px] font-bold tracking-[0.14em]"
+                style={{ color: sug.type === "raise" ? "#DCA8BE" : "#B4533F" }}
+              >
+                {sug.type === "raise" ? "PROGRESSION · EARNED" : "PROGRESSION · DELOAD"}
+              </p>
+              <p
+                className="mt-1 text-[14px] font-semibold"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  color: sug.type === "raise" ? "#FFFFFF" : "#232227",
+                }}
+              >
+                {sug.sequenceName}
+              </p>
+              <p
+                className="mt-1 text-[12px] leading-[1.55]"
+                style={{ color: sug.type === "raise" ? "#C9C7CD" : "#66646C" }}
+              >
+                {sug.reason}
+              </p>
+              <p
+                className="mt-1.5 text-[11.5px] tabular-nums"
+                style={{ color: sug.type === "raise" ? "#DCA8BE" : "#8C2F51" }}
+              >
+                {sug.changes
+                  .slice(0, 4)
+                  .map((c) =>
+                    c.toKg !== undefined
+                      ? `${c.exercise} ${c.fromKg}→${c.toKg} kg`
+                      : `${c.exercise} ${c.fromSeconds}→${c.toSeconds} s`,
+                  )
+                  .join(" · ")}
+                {sug.changes.length > 4 ? " · …" : ""}
+              </p>
+              <div className="mt-2.5 flex gap-2">
+                <button
+                  onClick={() => applySuggestion(sug.sequenceId)}
+                  disabled={applying === sug.sequenceId}
+                  className="tap-scale rounded-[9px] bg-[#A63D63] px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {applying === sug.sequenceId ? "…" : sug.type === "raise" ? "Take the raise" : "Deload"}
+                </button>
+                <button
+                  onClick={() =>
+                    setSuggestions((prev) => prev.filter((x) => x.sequenceId !== sug.sequenceId))
+                  }
+                  className="tap-scale rounded-[9px] border px-4 py-2 text-xs font-semibold"
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    borderColor: sug.type === "raise" ? "#4A4550" : "#E4E2E6",
+                    color: sug.type === "raise" ? "#F2F1F2" : "#66646C",
+                  }}
+                >
+                  Not today
+                </button>
+              </div>
+            </div>
+          ))}
           <div className="mt-4 grid gap-px overflow-hidden rounded-[14px] border border-border bg-border">
             {(routines ?? []).map((r) => (
               <div
@@ -313,6 +417,26 @@ export default function RoutinesPage() {
                   placeholder="Two-hand swing"
                   className="mt-2 w-full rounded-[8px] border border-border bg-background px-3 py-2 text-sm font-medium outline-none"
                 />
+                {step.exerciseName.trim().length > 1 &&
+                  !exerciseList.some(
+                    (e) => e.name.toLowerCase() === step.exerciseName.trim().toLowerCase(),
+                  ) && (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">
+                        New movement — file it under
+                      </span>
+                      <select
+                        value={step.category}
+                        onChange={(e) => setStep(i, { category: e.target.value })}
+                        className="rounded-[7px] border border-border bg-background px-2 py-1 text-[11.5px] outline-none"
+                      >
+                        <option value="">pick…</option>
+                        {["kettlebell", "barbell", "dumbbell", "bodyweight", "machine", "cardio", "other"].map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 <div className="mt-2 grid grid-cols-4 gap-2">
                   {(
                     [

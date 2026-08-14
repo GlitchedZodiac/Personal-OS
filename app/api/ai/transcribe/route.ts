@@ -6,9 +6,8 @@ import {
 } from "@/lib/openai";
 import { TRANSCRIBE_PROMPT } from "@/lib/ai-prompts";
 import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
-import fs from "fs";
 import path from "path";
-import os from "os";
+import { toFile } from "openai";
 import {
   enforceDemoAIBudget,
   recordDemoAIFixedCharge,
@@ -18,7 +17,6 @@ import {
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
-  let tempPath: string | null = null;
   try {
     const formData = await request.formData();
     const audioFile = formData.get("audio") as File;
@@ -45,13 +43,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Write audio to a temp file - most reliable way to upload to OpenAI
+    // Stream the upload straight from memory — no temp file on disk.
     const arrayBuffer = await audioFile.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    tempPath = path.join(os.tmpdir(), `whisper-${Date.now()}${ext}`);
-    fs.writeFileSync(tempPath, buffer);
-
-    console.log(`[Transcribe] Wrote temp file: ${tempPath} (${buffer.length} bytes)`);
+    const upload = await toFile(Buffer.from(arrayBuffer), `whisper${ext}`, {
+      type: mimeType,
+    });
 
     const blocked = await enforceDemoAIBudget();
     if (blocked) return blocked;
@@ -61,7 +57,7 @@ export async function POST(request: NextRequest) {
     let transcription;
     try {
       transcription = await openai.audio.transcriptions.create({
-        file: fs.createReadStream(tempPath),
+        file: upload,
         model: TRANSCRIBE_MODEL,
         prompt: TRANSCRIBE_PROMPT,
       });
@@ -71,7 +67,7 @@ export async function POST(request: NextRequest) {
         primaryError instanceof Error ? primaryError.message : primaryError
       );
       transcription = await openai.audio.transcriptions.create({
-        file: fs.createReadStream(tempPath),
+        file: upload,
         model: TRANSCRIBE_FALLBACK_MODEL,
       });
     }
@@ -102,14 +98,5 @@ export async function POST(request: NextRequest) {
       : classifyOpenAIError(error).userMessage;
 
     return NextResponse.json({ error: userMsg }, { status: 500 });
-  } finally {
-    // Clean up temp file
-    if (tempPath) {
-      try {
-        fs.unlinkSync(tempPath);
-      } catch {
-        // ignore cleanup errors
-      }
-    }
   }
 }

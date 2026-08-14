@@ -106,6 +106,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const amountMl = body.amountMl || 250;
 
+    // Batch: {amountMl, glasses: n} writes n rows in one request —
+    // the dock's "3 glasses" no longer loops the network.
+    const glasses = Math.min(24, Math.max(1, Math.round(body.glasses ?? 1)));
+    if (glasses > 1) {
+      await prisma.waterLog.createMany({
+        data: Array.from({ length: glasses }, () => ({
+          amountMl,
+          loggedAt: body.loggedAt ? new Date(body.loggedAt) : undefined,
+        })),
+      });
+      return NextResponse.json({ created: glasses, amountMl });
+    }
+
     const log = await prisma.waterLog.create({
       data: {
         amountMl,

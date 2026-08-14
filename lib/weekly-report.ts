@@ -49,6 +49,7 @@ export interface WeeklyReportData {
     activeMinutes: number;
     kcalBurned: number;
     zonesPct: number[] | null;
+    progression?: string[];
   };
   weight: {
     startKg: number | null;
@@ -178,6 +179,14 @@ export async function generateWeeklyReport(dayInWeek: string, timeZone: string) 
       ? zoneSeconds.map((s) => Math.round((s / zonesTotal) * 100))
       : null;
 
+  let progressionSuggestions: { sequenceName: string; type: string; reason: string }[] = [];
+  try {
+    const { buildProgressionSuggestions } = await import("@/lib/progression-db");
+    progressionSuggestions = await buildProgressionSuggestions();
+  } catch {
+    // progression is decorative here — the report never fails on it
+  }
+
   const stats: Omit<WeeklyReportData, "headline" | "coach" | "writtenAt"> = {
     weekStart,
     weekEnd,
@@ -210,6 +219,10 @@ export async function generateWeeklyReport(dayInWeek: string, timeZone: string) 
       activeMinutes,
       kcalBurned: trainKcal,
       zonesPct,
+      // Pure-math progression status — the coach names it, never auto-applies.
+      progression: progressionSuggestions.map(
+        (p) => `${p.sequenceName}: ${p.type} earned (${p.reason})`,
+      ),
     },
     weight: {
       startKg,
@@ -236,7 +249,7 @@ export async function generateWeeklyReport(dayInWeek: string, timeZone: string) 
         {
           role: "system",
           content:
-            "You are the coach inside Pitaya, a single-user health app (kettlebell training + calorie tracking). Write the Sunday weekly report. Voice: sharp, warm, concrete — a coach who reads the numbers and says what they mean. No markdown. Respond as JSON: {\"headline\": string, \"coach\": string}. headline: max 8 words, verdict-first (e.g. 'On plan. Deficit held, volume up.'). coach: one paragraph, 60-110 words: what drove the week, one thing the numbers warn about, one concrete instruction for next week. Use ONLY the numbers provided; if food logging was sparse, say so plainly. Burned kcal = training burn only.",
+            "You are the coach inside Pitaya, a single-user health app (kettlebell training + calorie tracking). Write the Sunday weekly report. Voice: sharp, warm, concrete — a coach who reads the numbers and says what they mean. No markdown. Respond as JSON: {\"headline\": string, \"coach\": string}. headline: max 8 words, verdict-first (e.g. 'On plan. Deficit held, volume up.'). coach: one paragraph, 60-110 words: what drove the week, one thing the numbers warn about, one concrete instruction for next week. Use ONLY the numbers provided; if food logging was sparse, say so plainly. Burned kcal = training burn only. If training.progression is non-empty, mention it in ONE clause (a raise earned or a deload due) — it is pure math from his runs, phrase it as the plan's suggestion, never a command.",
         },
         { role: "user", content: JSON.stringify(stats) },
       ],

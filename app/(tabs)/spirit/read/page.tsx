@@ -97,8 +97,8 @@ export default function SpiritReaderPage() {
   const [marking, setMarking] = useState(false);
   const [memOccasion, setMemOccasion] = useState("Assurance");
   const [memWhy, setMemWhy] = useState("");
-  // two-stage crossref tooltip: which verse+letter, and its stage
-  const [tip, setTip] = useState<{ refInt: number; letter: string; stage: 1 | 2; text?: string } | null>(null);
+  // two-stage crossref tooltip (footnotes are single-stage): verse+marker+stage
+  const [tip, setTip] = useState<{ refInt: number; letter: string; stage: 1 | 2; text?: string; kind: "cf" | "fn" } | null>(null);
   // audio mini-player
   const [audOn, setAudOn] = useState(false);
   const [audPlaying, setAudPlaying] = useState(false);
@@ -435,7 +435,15 @@ export default function SpiritReaderPage() {
         setQ(first.replace(/:\d+.*$/, ""));
       }
     } else {
-      setTip({ refInt: v.refInt, letter, stage: 1 });
+      setTip({ refInt: v.refInt, letter, stage: 1, kind: "cf" });
+    }
+  };
+
+  const tapFootnote = (v: Verse, marker: string, text: string) => {
+    if (tip && tip.refInt === v.refInt && tip.letter === `fn${marker}`) {
+      setTip(null);
+    } else {
+      setTip({ refInt: v.refInt, letter: `fn${marker}`, stage: 2, text, kind: "fn" });
     }
   };
 
@@ -688,6 +696,46 @@ export default function SpiritReaderPage() {
                             style={{ fontFamily, fontSize: `${fontSize}px`, color: T.ink }}
                           >
                             {line}
+                            {i === v.lines!.length - 1 && (
+                              <>
+                                {v.crossrefs.slice(0, 3).map((c) => (
+                                  <sup
+                                    key={c.letter}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      tapCrossref(v, c.letter, c.ref);
+                                    }}
+                                    className="ml-[3px] cursor-pointer text-[10px] font-bold"
+                                    style={{
+                                      fontFamily: "var(--font-display)",
+                                      color: "#8C2F51",
+                                      textDecoration:
+                                        tipHere?.letter === c.letter ? "underline" : "none",
+                                    }}
+                                  >
+                                    {c.letter}
+                                  </sup>
+                                ))}
+                                {v.footnotes.slice(0, 3).map((f) => (
+                                  <sup
+                                    key={`fn${f.marker}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      tapFootnote(v, f.marker, f.text);
+                                    }}
+                                    className="ml-[3px] cursor-pointer text-[9.5px] font-bold"
+                                    style={{
+                                      fontFamily: "var(--font-display)",
+                                      color: T.faint,
+                                      textDecoration:
+                                        tipHere?.letter === `fn${f.marker}` ? "underline" : "none",
+                                    }}
+                                  >
+                                    [{f.marker}]
+                                  </sup>
+                                ))}
+                              </>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -727,10 +775,47 @@ export default function SpiritReaderPage() {
                           {c.letter}
                         </sup>
                       ))}
+                      {v.footnotes.slice(0, 3).map((f) => (
+                        <sup
+                          key={`fn${f.marker}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            tapFootnote(v, f.marker, f.text);
+                          }}
+                          className="ml-[3px] cursor-pointer text-[9.5px] font-bold"
+                          style={{
+                            color: T.faint,
+                            textDecoration:
+                              tipHere?.letter === `fn${f.marker}` ? "underline" : "none",
+                          }}
+                        >
+                          [{f.marker}]
+                        </sup>
+                      ))}
                     </div>
                   )}
                   {/* two-stage crossref tooltip */}
-                  {tipHere && (
+                  {tipHere && tipHere.kind === "fn" && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTip(null);
+                      }}
+                      className="mt-[7px] max-w-[340px] cursor-pointer rounded-[11px] border px-3 py-[9px]"
+                      style={{ background: T.chip, borderColor: T.rule }}
+                    >
+                      <div className="text-[8.5px] font-bold tracking-[0.1em]" style={{ color: T.faint }}>
+                        ESV FOOTNOTE
+                      </div>
+                      <div
+                        className="mt-[3px] text-[12.5px] italic leading-[1.65]"
+                        style={{ fontFamily: "var(--font-serif)", color: T.sub }}
+                      >
+                        {tipHere.text}
+                      </div>
+                    </div>
+                  )}
+                  {tipHere && tipHere.kind === "cf" && (
                     <div
                       onClick={(e) => {
                         e.stopPropagation();

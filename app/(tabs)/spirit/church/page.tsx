@@ -165,6 +165,22 @@ export default function SpiritChurchPage() {
     if (next !== null) setProposal({ ...proposal, [field]: next });
   };
 
+  const advanceWeek = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/spirit/church", { method: "PATCH" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Couldn't prepare the week");
+      setSeries(body.series);
+      toast.success("Next week's card is ready.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't prepare the week");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const week = series?.weeks?.find?.((w) => w.index === series.currentWeek) ?? series?.weeks?.[0];
 
   return (
@@ -451,6 +467,14 @@ export default function SpiritChurchPage() {
               You arrive next Sunday primed.
             </p>
           </div>
+          <button
+            onClick={advanceWeek}
+            disabled={busy}
+            className="tap-scale mt-3 w-full rounded-[11px] bg-[#232227] py-3 text-[12.5px] font-semibold text-white transition-colors hover:bg-[#38343C] disabled:opacity-60"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            {busy ? "Preparing…" : "Sunday happened — prep next week"}
+          </button>
           <div className="mt-3 flex items-center justify-between px-1">
             <span className="text-[11px] text-muted-foreground">
               Series running long?{" "}

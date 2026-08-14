@@ -1,26 +1,30 @@
-// Service Worker for Pitaya PWA — v3 (Pitaya routes; legacy pages sunset)
-const CACHE_NAME = "pitaya-v3";
+// Service Worker for Pitaya PWA — v4 (current IA: Today/Chat/Food/
+// Spirit/Journal/Settings; audited 2026-08-14: network-first keeps JS
+// fresh, cache is offline-fallback only)
+const CACHE_NAME = "pitaya-v4";
 const OFFLINE_URL = "/dashboard";
 
-// Assets to cache on install
+// Assets to cache on install — every URL must resolve or install fails,
+// so precache is added per-asset, tolerating individual misses.
 const PRECACHE_ASSETS = [
   "/dashboard",
   "/chat",
-  "/health/workouts",
-  "/health/body",
   "/health/food",
+  "/spirit",
+  "/journal",
   "/settings",
   "/manifest.json",
   "/icon-192.png",
   "/icon-512.png",
 ];
 
-// Install event - cache core assets
+// Install event - cache core assets (individually, so one bad route
+// can't brick the whole install)
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS);
-    })
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.allSettled(PRECACHE_ASSETS.map((url) => cache.add(url)))
+    )
   );
   self.skipWaiting();
 });
