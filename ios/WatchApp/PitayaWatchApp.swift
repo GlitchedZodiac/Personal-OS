@@ -55,6 +55,8 @@ struct RootView: View {
                 VoiceWeightConfirmView()
             case .voiceFood:
                 VoiceFoodConfirmView()
+            case .ready:
+                ReadyView(readiness: model.readiness)
             }
         }
         .overlay {

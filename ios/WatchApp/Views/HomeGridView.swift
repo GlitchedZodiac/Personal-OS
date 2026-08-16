@@ -72,8 +72,10 @@ struct HomeGridView: View {
         }
     }
 
-    /// "Friday · 4 of 5 this week" — trained days of elapsed days (the
-    /// mock's math: ticks show the week, the line scores it).
+    /// "Friday · 4 of 5 this week · ◆ ready" — trained days of elapsed days
+    /// (the mock's math), plus the §07 verdict diamond when HealthKit has a
+    /// morning read. Tap opens the Ready screen; the verdict never edits
+    /// weights, rest, or the due routine.
     private var subline: some View {
         var calendar = Calendar.current
         calendar.firstWeekday = 2
@@ -84,11 +86,16 @@ struct HomeGridView: View {
         let f = DateFormatter()
         f.dateFormat = "EEEE"
 
-        return Text("\(f.string(from: Date())) · \(trained) of \(today) this week")
-            .font(Theme.text(6))
-            .foregroundStyle(Theme.textMuted)
-            .padding(.horizontal, Theme.px(6))
-            .padding(.top, Theme.px(2))
+        return HStack(spacing: Theme.px(4)) {
+            Text("\(f.string(from: Date())) · \(trained) of \(today) this week")
+                .foregroundStyle(Theme.textMuted)
+            VerdictChip(readiness: model.readiness) { model.openReady() }
+        }
+        .font(Theme.text(6))
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .padding(.horizontal, Theme.px(6))
+        .padding(.top, Theme.px(2))
     }
 
     // MARK: - Tiles (118 px, radius 20, icon circle 34)
@@ -230,6 +237,27 @@ struct HomeGridView: View {
         let f = DateFormatter()
         f.dateFormat = "h:mma"
         return f.string(from: date).lowercased()
+    }
+}
+
+/// "· ◆ ready" — observed directly (a nested ObservableObject through the
+/// model wouldn't re-render; the 2026-08-10 lesson).
+private struct VerdictChip: View {
+    @ObservedObject var readiness: Readiness
+    let open: () -> Void
+
+    var body: some View {
+        if let verdict = readiness.verdict {
+            Button(action: open) {
+                HStack(spacing: Theme.px(3)) {
+                    Text("·").foregroundStyle(Theme.textMuted)
+                    PitayaMark(size: Theme.px(6), color: verdict.color)
+                    Text(verdict.headerWord)
+                        .foregroundStyle(verdict.color)
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 }
 #endif

@@ -104,6 +104,33 @@ struct PRBanner: View {
     }
 }
 
+// MARK: - PR seeds (§10 — five diamonds arc out and fade, 0.9 s)
+
+struct PRSeeds: View {
+    @State private var flown = false
+    /// Five directions fanning up-and-out from the banner.
+    private static let angles: [Double] = [-150, -120, -90, -60, -30]
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(Self.angles.enumerated()), id: \.offset) { index, angle in
+                PitayaMark(size: 5, color: Theme.accent)
+                    .offset(
+                        x: flown ? 30 * cos(angle * .pi / 180) : 0,
+                        y: flown ? 30 * sin(angle * .pi / 180) : 0
+                    )
+                    .opacity(flown ? 0 : 1)
+                    .animation(
+                        .easeOut(duration: 0.9).delay(Double(index) * 0.03),
+                        value: flown
+                    )
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear { flown = true }
+    }
+}
+
 // MARK: - Beating heart
 
 struct BeatingHeart: View {

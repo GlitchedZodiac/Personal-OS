@@ -29,6 +29,9 @@ targets:
       - path: iOSApp
       - path: Shared
       - path: iPhone
+    dependencies:
+      - target: PersonalOS PhoneWidgets
+        embed: true
     info:
       path: iOSApp/Info.plist
       properties:
@@ -52,6 +55,9 @@ targets:
       path: iOSApp/PersonalOS.entitlements
       properties:
         com.apple.developer.healthkit: true
+        # §09 2f: the phone widgets read the companion's bearer session.
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)net.blacksheepglobal.pitaya.shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.blacksheepglobal.pitaya
@@ -151,6 +157,39 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.blacksheepglobal.pitaya.watchkitapp.widgets
+        SKIP_INSTALL: YES
+
+  PersonalOS PhoneWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PhoneWidgets
+      - path: Shared
+      - path: WatchApp/Fonts
+        type: folder
+        buildPhase: resources
+    info:
+      path: PhoneWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Pitaya
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        UIAppFonts:
+          - Fonts/FamiljenGrotesk-Regular.ttf
+          - Fonts/FamiljenGrotesk-Medium.ttf
+          - Fonts/FamiljenGrotesk-SemiBold.ttf
+          - Fonts/FamiljenGrotesk-Bold.ttf
+          - Fonts/InstrumentSans-Regular.ttf
+          - Fonts/InstrumentSans-Medium.ttf
+          - Fonts/InstrumentSans-SemiBold.ttf
+    entitlements:
+      path: PhoneWidgets/PitayaPhoneWidgets.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)net.blacksheepglobal.pitaya.shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.blacksheepglobal.pitaya.phonewidgets
         SKIP_INSTALL: YES
 
 schemes:

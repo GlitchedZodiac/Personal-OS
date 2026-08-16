@@ -35,10 +35,11 @@ struct LiveWorkoutView: View {
                 Button {
                     model.dismissPRFlash()
                 } label: {
-                    PRBanner(text: "PR · \(flash.exercise.name) \(Fmt.kg(flash.weightKg)) kg")
+                    PRBanner(text: prCopy(flash))
                 }
                 .buttonStyle(.plain)
                 .handGestureShortcut(.primaryAction)
+                .overlay { PRSeeds() } // §10: five diamonds arc out, 0.9 s
                 .padding(.horizontal, 8)
                 .padding(.bottom, 2)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -52,7 +53,19 @@ struct LiveWorkoutView: View {
         .overlay {
             CountdownOverlay()
         }
-        .animation(.spring(duration: 0.35), value: model.prFlash != nil)
+        // §10: the banner springs up 0.35 s on the design's curve.
+        .animation(
+            .timingCurve(0.34, 1.4, 0.5, 1, duration: 0.35), value: model.prFlash != nil
+        )
+    }
+
+    /// §10 copy: "PR · Swing 32 kg — was 28".
+    private func prCopy(_ flash: LoggedSet) -> String {
+        var copy = "PR · \(flash.exercise.name) \(Fmt.kg(flash.weightKg)) kg"
+        if let previous = flash.previousWeightKg {
+            copy += " — was \(Fmt.kg(previous))"
+        }
+        return copy
     }
 }
 

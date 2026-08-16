@@ -24,6 +24,11 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     @Published public private(set) var distanceMeters: Double?
     /// Live barometric climb for the trail page (finalized into Totals).
     @Published public private(set) var elevationGainLive: Double = 0
+    /// §09 zone-2 accumulator (display-only heuristic zones — the stored
+    /// weekly number stays server-computed from the raw streams).
+    @Published public private(set) var z2Seconds: Int = 0
+    @Published public private(set) var z2AvgBpm: Int?
+    private var z2BpmSum = 0
 
     // Raw streams for the server's zone/load enrichment (streams contract
     // 2026-08-11): appended at HealthKit's natural HR cadence, cleared on
@@ -110,6 +115,9 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         hrStream = []
         timeStream = []
         altitudeStream = []
+        z2Seconds = 0
+        z2BpmSum = 0
+        z2AvgBpm = nil
         latestAltitude = nil
         lastGainAltitude = nil
         elevationGain = 0
@@ -344,6 +352,14 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self, let builder = self.builder else { return }
                 self.elapsed = builder.elapsedTime
+                // §09: count each running second spent in zone 2 (same
+                // display heuristic as the live ZoneBar).
+                if self.phase == .running, !self.frozen,
+                   let hr = self.heartRate, (0.57..<0.64).contains(hr / 190.0) {
+                    self.z2Seconds += 1
+                    self.z2BpmSum += Int(hr)
+                    self.z2AvgBpm = self.z2BpmSum / max(self.z2Seconds, 1)
+                }
             }
         }
     }

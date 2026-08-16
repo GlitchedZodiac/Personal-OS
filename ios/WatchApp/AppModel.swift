@@ -70,6 +70,8 @@ public struct LoggedSet: Identifiable, Hashable {
     public let reps: Int
     public let at: Date
     public let isWeightPR: Bool
+    /// §10 PR banner copy: "PR · Swing 32 kg — was 28".
+    public let previousWeightKg: Double?
 }
 
 // MARK: - Summary
@@ -108,6 +110,7 @@ public final class AppModel: ObservableObject {
         case doubleTapCoach              // §05 1o — once, before first live session
         case voiceWeight                 // §08 2e — "HEARD · WEIGHT" confirm card
         case voiceFood                   // §08 — parsed food confirm card
+        case ready                       // §07 2b — readiness verdict screen
     }
 
     public enum SyncState: Equatable {
@@ -165,6 +168,8 @@ public final class AppModel: ObservableObject {
     // EMOM runner state
     @Published public private(set) var emomRound = 0
     @Published public private(set) var emomSecondsLeft = 60
+    /// §10 minute-boundary wash (#3D1526, 120 ms in / 400 ms out).
+    @Published public private(set) var emomBoundaryWash = false
 
     // Circuit runner state (tap-driven)
     @Published public private(set) var circuitRound = 1
@@ -192,6 +197,8 @@ public final class AppModel: ObservableObject {
     }
 
     public let recorder = WorkoutRecorder()
+    /// §07 — verdict only; reads the watch's own HealthKit, never the plan.
+    let readiness = Readiness()
 
     private let sessionStore: any SessionStore
     private let api: MobileAPIClient
@@ -256,6 +263,7 @@ public final class AppModel: ObservableObject {
                 await self?.refreshHistory()
                 await self?.drainQueue()
             }
+            Task { [weak self] in await self?.readiness.refresh() }
         } else {
             phase = .welcome
         }
@@ -464,6 +472,7 @@ public final class AppModel: ObservableObject {
 
     public func openWorkoutList() { phase = .workoutList }
     public func openSettings() { phase = .settings }
+    public func openReady() { phase = .ready }
     public func openKettlebellSpace() { phase = .kettlebellSpace }
     public func openSequences() { phase = .sequences }
     public func openSequence(_ sequence: SequenceDef) {
@@ -568,7 +577,8 @@ public final class AppModel: ObservableObject {
             weightKg: weightKg,
             reps: reps,
             at: Date(),
-            isWeightPR: result.isWeightPR
+            isWeightPR: result.isWeightPR,
+            previousWeightKg: result.previousWeightKg
         )
         loggedSets.append(set)
         markActivity()
@@ -579,7 +589,9 @@ public final class AppModel: ObservableObject {
             recorder.addMarker(
                 name: "PR · \(set.exercise.name) \(Fmt.kg(set.weightKg)) kg", at: set.at
             )
+            // §10: PR haptic is .success + .directionUp.
             Haptics.key(.success)
+            Haptics.key(.directionUp)
             prFlash = set
             prFlashTask?.cancel()
             prFlashTask = Task { [weak self] in
@@ -750,9 +762,13 @@ public final class AppModel: ObservableObject {
                 guard !Task.isCancelled else { return }
                 left -= 1
                 self?.circuitRestLeft = left
+                // §10: each of the last 3 s pulses the digits + .click.
+                if (1...3).contains(left) { Haptics.minor(.click) }
             }
             if !Task.isCancelled {
-                WKInterfaceDevice.current().play(.notification) // design 14: haptic at zero
+                // §10: :00 → accent GO pop (0.5 s) + .success, then work.
+                Haptics.key(.success)
+                try? await Task.sleep(nanoseconds: 600_000_000)
             }
         }
         circuitRestTask = task
@@ -802,7 +818,16 @@ public final class AppModel: ObservableObject {
                 if round != emomRound {
                     if emomRound != 0 {
                         closeRoundSegment(emomRound, at: Date())
-                        WKInterfaceDevice.current().play(.notification)
+                        // §10 boundary: wash 120 ms in / 400 ms out,
+                        // haptic .start ×2.
+                        emomBoundaryWash = true
+                        Haptics.key(.start)
+                        Task { [weak self] in
+                            try? await Task.sleep(nanoseconds: 120_000_000)
+                            self?.emomBoundaryWash = false
+                            try? await Task.sleep(nanoseconds: 60_000_000)
+                            Haptics.key(.start)
+                        }
                     }
                     emomRound = round
                     markActivity()
