@@ -5,15 +5,43 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-14d (BRANCHES CONSOLIDATED — main now carries
-both lanes: web through the 08-14 review pass, watch through GPS routes)
-**Current phase:** `main` is the single source of truth again. It had sat at
-2026-08-09 (PR #6) while production shipped from the CLI and the watch lane
-lived only on `claude/watch-app` — which is why a main-lane session read a
-stale `ios/` and mis-audited the watch. Both lanes are merged here now.
+**Last updated:** 2026-08-15 (WATCH ROUND 1+2 phone half: sync summary/routine coda + GET /api/mobile/summary)
+**Current phase:** the watch lane is implementing the Round 1+2 design
+handoff on `claude/watch-app`; the main lane shipped its API dependencies
+(below). `main` is the single source of truth as of 08-14d.
 **Branch in flight:** `claude/phase1-modernization` (web) ·
 `claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch —
-**must merge `main` back in**, it is 21 commits behind).
+**must merge `main` FIRST**, it is 56+ commits behind and its docs/ios
+snapshot predates the consolidation).
+
+## 2026-08-15 — WATCH ROUND 1+2: the phone half (API dependencies)
+
+Michael fired the design-handoff implementation prompt to the watch lane.
+Its API-dependencies block is main-lane territory — implemented here so the
+wrist binds to real endpoints instead of stubs:
+
+- **`POST /api/mobile/workouts/sync`** response adds `summary` (streakDays,
+  weight7dAvgKg, weight7dDeltaKg, z2WeeklyMinutes) and `routine` (sequenceId,
+  sequenceName, verdict raise/hold/deload from lib/progression.ts, reason,
+  lastRun stats of the run BEFORE the one just synced). Additive; a summary
+  hiccup can never fail a sync that already persisted.
+- **`GET /api/mobile/summary`** (new, bearer) — the complication's
+  widget-side fetch: the three hero metrics + timeZone, kept deliberately
+  cheap for widget timeline budgets.
+- Shared math in **lib/mobile-summary.ts**; exact field names + semantics in
+  deferred-items (the 2026-08-15 watch← main entry). Spec-vs-names rule: the
+  server renames to match the handoff spec if they differ.
+
+Self-smoke: GET returned live data (streak 7 · 82.5 kg −0.4 · Z2 44 min);
+sync probe against the real Full-Body Kettlebell Circuit returned its actual
+08-11 run as lastRun (18 min · 2,080 kg · 153 kcal · 166 bpm); 401 without a
+bearer. Probe rows + probe device session deleted after.
+
+DEPLOY DEPENDENCY: the watch client talks to PRODUCTION
+(MobileAPIClient.productionBaseURL). These endpoints must reach prod before
+the wrist features light up — `vercel --prod` or the Vercel↔GitHub
+connection Michael chose on 08-14.
+
 
 ## 2026-08-14d — BRANCH CONSOLIDATION (main = both lanes)
 

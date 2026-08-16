@@ -4,6 +4,13 @@ import { requireMobileSession } from "@/lib/mobile-session";
 import { prisma } from "@/lib/prisma";
 import { detectAndRecordPRs, type NewPR } from "@/lib/prs";
 import { buildStreamMetrics } from "@/lib/strava";
+import {
+  buildHeroMetrics,
+  buildRoutineCoda,
+  type HeroMetrics,
+  type RoutineCoda,
+} from "@/lib/mobile-summary";
+import { getUserTimeZone } from "@/lib/server-timezone";
 
 type MobileWorkoutPayload = {
   externalId?: string;
@@ -170,11 +177,46 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Watch Round 1+2 handoff (spec § API dependencies): the response carries
+    // everything the wrist Summary + complication need, so no second round
+    // trip. Additive — created/updated/total/prs are unchanged. Never lets a
+    // summary hiccup fail a sync that already persisted.
+    let summary: HeroMetrics | null = null;
+    let routine: RoutineCoda | null = null;
+    try {
+      const timeZone = await getUserTimeZone(null);
+      // The routine coda belongs to the newest synced run that names a
+      // sequence; its own startedAt is the cutoff so lastRun = the run BEFORE
+      // this one, not itself.
+      const routineRun = items
+        .map((item) => ({
+          sequenceId: (item.metricsData as { sequenceId?: string } | undefined)
+            ?.sequenceId,
+          startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
+        }))
+        .filter(
+          (r): r is { sequenceId: string; startedAt: Date } =>
+            typeof r.sequenceId === "string" && r.sequenceId.length > 0
+        )
+        .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
+
+      [summary, routine] = await Promise.all([
+        buildHeroMetrics(timeZone),
+        routineRun
+          ? buildRoutineCoda(routineRun.sequenceId, routineRun.startedAt)
+          : Promise.resolve(null),
+      ]);
+    } catch (error) {
+      console.warn("Sync summary enrichment failed:", (error as Error)?.message);
+    }
+
     return NextResponse.json({
       created,
       updated,
       total: items.length,
       prs: prResults,
+      summary,
+      routine,
     });
   } catch (error) {
     console.error("Mobile workout sync error:", error);
