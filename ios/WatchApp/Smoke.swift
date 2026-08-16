@@ -108,6 +108,13 @@ enum Smoke {
             return
         }
 
+        // §08 visual check: present the wrist-voice weight confirm card.
+        if let weight = env["PITAYA_SMOKE_VOICE"].flatMap(Double.init), model.phase == .home {
+            model.presentVoiceWeight(weight)
+            log("voice: weight confirm card at \(weight) kg")
+            return
+        }
+
         // HOLD variant: start a kettlebell session, log one set, and stay on
         // the live set-logger screen (for visual verification runs).
         if env["PITAYA_SMOKE_HOLD"] == "1", model.phase == .home {

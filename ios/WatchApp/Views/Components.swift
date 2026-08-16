@@ -10,12 +10,19 @@ struct PitayaCTA: View {
     let title: String
     var icon: String?
     var background: Color = Theme.accentDeep
+    /// §05: this CTA wears the Double Tap gesture — pinch glyph inside the
+    /// label (1m), dimming to 45% after three fires. Exactly one per screen.
+    var primary: Bool = false
     let action: () -> Void
+    @ObservedObject private var coach = DoubleTapCoach.shared
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                if let icon {
+        let button = Button(action: fire) {
+            HStack(spacing: primary ? Theme.px(9) : 5) {
+                if primary {
+                    DoubleTapGlyph(color: Theme.prText, size: Theme.px(17))
+                        .opacity(coach.glyphDimmed ? 0.45 : 1)
+                } else if let icon {
                     Image(systemName: icon).font(.system(size: 10, weight: .bold))
                 }
                 Text(title).font(Theme.display(13, weight: .semibold))
@@ -26,6 +33,17 @@ struct PitayaCTA: View {
             .background(background, in: Capsule())
         }
         .buttonStyle(.plain)
+
+        if primary {
+            button.handGestureShortcut(.primaryAction)
+        } else {
+            button
+        }
+    }
+
+    private func fire() {
+        if primary { coach.recordFire() }
+        action()
     }
 }
 

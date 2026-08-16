@@ -31,10 +31,17 @@ struct LiveWorkoutView: View {
         }
         .overlay(alignment: .bottom) {
             if let flash = model.prFlash {
-                PRBanner(text: "PR · \(flash.exercise.name) \(Fmt.kg(flash.weightKg)) kg")
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 2)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                // §05: while the flash is up, Double Tap dismisses it.
+                Button {
+                    model.dismissPRFlash()
+                } label: {
+                    PRBanner(text: "PR · \(flash.exercise.name) \(Fmt.kg(flash.weightKg)) kg")
+                }
+                .buttonStyle(.plain)
+                .handGestureShortcut(.primaryAction)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 2)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .overlay {
@@ -155,12 +162,10 @@ struct ControlsPage: View {
                 }
                 if kind == .kettlebell && !isSequence {
                     // The design's 4th control is a Lap flag; kettlebell has
-                    // no laps, so this slot repeats the last set (deviation
-                    // surfaced in state.md; glyph is undesigned → SF).
+                    // no laps, so this slot repeats the last set. §12: the
+                    // repeat-set glyph retires the arrow.counterclockwise SF.
                     controlButton("Repeat set", bg: Theme.accentDim, glyph: {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(Theme.accent)
+                        RepeatSetGlyph(color: Theme.accent, size: 15)
                     }) {
                         model.repeatLastSet()
                     }

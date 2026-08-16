@@ -105,6 +105,9 @@ public final class AppModel: ObservableObject {
         case live(WorkoutKind)           // freeform live pages
         case liveSequence(SequenceDef)   // EMOM ring or circuit runner by kind
         case summary
+        case doubleTapCoach              // §05 1o — once, before first live session
+        case voiceWeight                 // §08 2e — "HEARD · WEIGHT" confirm card
+        case voiceFood                   // §08 — parsed food confirm card
     }
 
     public enum SyncState: Equatable {
@@ -147,6 +150,9 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var emomRoundSeconds: [Int] = []
     /// Which EMOM round earned the tape's ◆ (set by the same taps).
     @Published public private(set) var emomPRRound: Int?
+    /// §08 voice-confirm card state (set by the App Intents).
+    @Published public var voiceWeightKg: Double = 0
+    @Published public private(set) var voiceFoodText: String = ""
 
     // Kettlebell live state
     @Published public private(set) var loggedSets: [LoggedSet] = []
@@ -208,6 +214,12 @@ public final class AppModel: ObservableObject {
     /// Last 50 server rows, retained for the §03 local deltas baseline.
     private var recentRows: [MobileWorkoutRow] = []
     private var recoveryTask: Task<Void, Never>?
+    /// §05 1o: the start the coach interrupted, resumed on "Got it".
+    private var pendingCoachAction: (() async -> Void)?
+
+    /// The App Intents (§05/§08) reach the live model through this — the
+    /// watch app runs its intents in-process.
+    public private(set) static weak var shared: AppModel?
 
     public init(
         sessionStore: (any SessionStore)? = nil,
@@ -225,6 +237,7 @@ public final class AppModel: ObservableObject {
         if let cached = customExerciseCache?.load() {
             ExerciseCatalog.setCustom(cached)
         }
+        AppModel.shared = self
     }
 
     // MARK: - Boot & pairing
@@ -375,6 +388,78 @@ public final class AppModel: ObservableObject {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
+    // MARK: - §05 coach + §08 voice entry points
+
+    /// "Got it" on the one-time coach → mark shown, resume the start it
+    /// interrupted.
+    public func finishDoubleTapCoach() {
+        DoubleTapCoach.shared.coachShown = true
+        let pending = pendingCoachAction
+        pendingCoachAction = nil
+        if let pending {
+            Task { await pending() }
+        } else {
+            phase = .home
+        }
+    }
+
+    /// "Log eighty-four point two kilos" → 2e confirm card.
+    public func presentVoiceWeight(_ weightKg: Double) {
+        voiceWeightKg = weightKg
+        phase = .voiceWeight
+    }
+
+    /// "Log two eggs and toast" → food confirm card.
+    public func presentVoiceFood(_ text: String) {
+        voiceFoodText = text
+        phase = .voiceFood
+    }
+
+    /// Log it → offline voice queue (no ingest endpoint on the mobile
+    /// surface yet — filed; the card's "queued until sync" footer is true).
+    public func confirmVoiceLog() {
+        switch phase {
+        case .voiceWeight:
+            VoiceLogQueue.append(VoiceLogEntry(
+                kind: "weight", weightKg: (voiceWeightKg * 10).rounded() / 10,
+                text: nil, at: Date()
+            ))
+        case .voiceFood:
+            VoiceLogQueue.append(VoiceLogEntry(
+                kind: "food", weightKg: nil, text: voiceFoodText, at: Date()
+            ))
+        default:
+            return
+        }
+        Haptics.key(.success)
+        phase = .home
+    }
+
+    public func dismissVoiceLog() { phase = .home }
+
+    /// §05: EMOM Double Tap — "move done early", recording real work seconds
+    /// into stepSeconds[] (sync payload) and the round tape (§03).
+    public func markEmomDone() {
+        guard case .liveSequence(let sequence) = phase, sequence.kind == "emom",
+              emomRound >= 1 else { return }
+        let index = emomRound - 1
+        if emomRoundSeconds.count <= index {
+            emomRoundSeconds.append(
+                contentsOf: Array(repeating: 0, count: index + 1 - emomRoundSeconds.count)
+            )
+        }
+        guard emomRoundSeconds[index] == 0 else { return } // first tap counts
+        let work = max(60 - emomSecondsLeft, 1)
+        emomRoundSeconds[index] = work
+        let stepCount = max(sequence.steps.count, 1)
+        let stepIndex = (emomRound - 1) % stepCount
+        if circuitStepSeconds.indices.contains(stepIndex) {
+            circuitStepSeconds[stepIndex] += work
+        }
+        markActivity()
+        Haptics.minor(.click)
+    }
+
     // MARK: - Navigation
 
     public func openWorkoutList() { phase = .workoutList }
@@ -432,6 +517,13 @@ public final class AppModel: ObservableObject {
     /// `useRecorder: false` is the headless-smoke path (no HealthKit sheet,
     /// no countdown in a simulator run); every user-facing call leaves it true.
     public func startWorkout(_ kind: WorkoutKind, useRecorder: Bool = true) async {
+        // §05 1o: the one-time coach interrupts the first-ever live session
+        // (real sessions only — the headless smoke path skips it).
+        if useRecorder, !DoubleTapCoach.shared.coachShown {
+            pendingCoachAction = { [weak self] in await self?.startWorkout(kind) }
+            phase = .doubleTapCoach
+            return
+        }
         resetLiveState()
         if kind == .kettlebell {
             reps = WatchPrefs.shared.startRepsAt == .lastLogged
@@ -499,6 +591,12 @@ public final class AppModel: ObservableObject {
         }
     }
 
+    /// §05: the PR flash owns the Double Tap while visible — Dismiss.
+    public func dismissPRFlash() {
+        prFlashTask?.cancel()
+        prFlash = nil
+    }
+
     public func repeatLastSet() {
         guard let last = loggedSets.last else { return }
         currentExercise = last.exercise
@@ -553,6 +651,11 @@ public final class AppModel: ObservableObject {
     // MARK: - Sequence (EMOM) flow
 
     public func startSequence(_ sequence: SequenceDef, useRecorder: Bool = true) async {
+        if useRecorder, !DoubleTapCoach.shared.coachShown {
+            pendingCoachAction = { [weak self] in await self?.startSequence(sequence) }
+            phase = .doubleTapCoach
+            return
+        }
         resetLiveState()
         activeSequence = sequence
         persistWeightOverrides(for: sequence)

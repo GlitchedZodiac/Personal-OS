@@ -360,6 +360,17 @@ struct SequenceLiveView: View {
             }
             .padding(.horizontal, 20)
         }
+        .overlay(alignment: .topLeading) {
+            // §05: the EMOM runner has no visible CTA (design 09), but the
+            // Double Tap map says "move done early" — the gesture rides an
+            // invisible control; work seconds land in stepSeconds[] + tape.
+            Button { model.markEmomDone() } label: {
+                Color.clear.frame(width: 1, height: 1)
+            }
+            .buttonStyle(.plain)
+            .handGestureShortcut(.primaryAction)
+            .accessibilityLabel("Move done early")
+        }
     }
 
     private func stepLabel(_ step: SequenceStep) -> String {
@@ -433,7 +444,8 @@ struct CircuitRunnerPage: View {
 
             Spacer(minLength: 2)
 
-            PitayaCTA(title: "Done") {
+            // §05: the circuit step's Done wears the Double Tap.
+            PitayaCTA(title: "Done", primary: true) {
                 Task { await model.advanceCircuitStep(sequence) }
             }
         }
@@ -465,6 +477,8 @@ struct CircuitRunnerPage: View {
                 .font(Theme.text(10, weight: .semibold))
                 .foregroundStyle(Theme.accent)
                 .padding(.top, 4)
+                // §05: on the rest ring, Double Tap skips the rest.
+                .handGestureShortcut(.primaryAction)
             }
         }
     }

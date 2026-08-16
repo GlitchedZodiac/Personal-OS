@@ -49,7 +49,17 @@ struct RootView: View {
                 SequenceLiveView(sequence: sequence)
             case .summary:
                 SummaryView()
+            case .doubleTapCoach:
+                DoubleTapCoachView()
+            case .voiceWeight:
+                VoiceWeightConfirmView()
+            case .voiceFood:
+                VoiceFoodConfirmView()
             }
+        }
+        .overlay {
+            // §05 1m: "Double Tap logged it" — blush pill over any screen.
+            DoubleTapToast()
         }
         .animation(.easeInOut(duration: 0.25), value: model.phase)
     }

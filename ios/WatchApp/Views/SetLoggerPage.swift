@@ -72,7 +72,9 @@ struct SetLoggerPage: View {
 
             Spacer(minLength: 2)
 
-            PitayaCTA(title: "Log set") { model.logSet() }
+            // §05: Log set wears the Double Tap — except while the PR flash
+            // is up, when Dismiss owns the gesture (one primary per screen).
+            PitayaCTA(title: "Log set", primary: model.prFlash == nil) { model.logSet() }
                 .padding(.horizontal, 8)
 
             insightLine

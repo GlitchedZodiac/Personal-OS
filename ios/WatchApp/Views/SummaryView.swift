@@ -37,10 +37,11 @@ struct SummaryView: View {
                         .foregroundStyle(Theme.textMuted)
                         .frame(maxWidth: .infinity)
                         .padding(.top, Theme.px(12))
-                    PitayaCTA(title: "Done") { model.dismissSummary() }
+                    PitayaCTA(title: "Done", primary: true) { model.dismissSummary() }
                         .padding(.top, Theme.px(10))
                 } else {
-                    PitayaCTA(title: "Save workout") {
+                    // §05: on the summary, Double Tap saves.
+                    PitayaCTA(title: "Save workout", primary: true) {
                         Task { await model.saveWorkout() }
                     }
                     .padding(.top, Theme.px(12))
