@@ -274,6 +274,8 @@ struct TrendGlyph: View {
 /// recovery — heart + settling arrow.
 struct RecoveryGlyph: View {
     var color: Color
+    /// 1g recovery card is two-tone: heart #DC74A0, arrow #8FBF9C.
+    var arrowColor: Color?
     var size: CGFloat = 13
 
     var body: some View {
@@ -286,7 +288,7 @@ struct RecoveryGlyph: View {
             context.fill(Path(heart.cgPath), with: .color(color))
             let arrow = svgPath("M19.5 5 v10 M17 12.5 l2.5 2.5 2.5-2.5").applying(scale)
             context.stroke(
-                Path(arrow.cgPath), with: .color(color),
+                Path(arrow.cgPath), with: .color(arrowColor ?? color),
                 style: StrokeStyle(lineWidth: 2.1 * u, lineCap: .round, lineJoin: .round)
             )
         }

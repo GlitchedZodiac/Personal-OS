@@ -75,9 +75,7 @@ struct SetLoggerPage: View {
             PitayaCTA(title: "Log set") { model.logSet() }
                 .padding(.horizontal, 8)
 
-            Text(totalsLine)
-                .font(Theme.text(8))
-                .foregroundStyle(Theme.textMuted)
+            insightLine
                 .padding(.top, 4)
         }
         .padding(.vertical, 2)
@@ -102,11 +100,60 @@ struct SetLoggerPage: View {
         }
     }
 
+    // MARK: - Insight line ("After a set", §03) — one line, never a card,
+    // zero new data: idle "4 kg shy of your best" · on log "set 4 · 3,120 kg
+    // today" · on PR "◆ new best — 32 kg". Dialing a new weight or exercise
+    // returns the line to the idle gap read.
+
+    private enum LineState { case idle, logged, pr }
+
+    private var lineState: LineState {
+        guard let last = model.loggedSets.last,
+              last.exercise.id == model.currentExercise.id,
+              last.weightKg == model.weightKg
+        else { return .idle }
+        return last.isWeightPR ? .pr : .logged
+    }
+
+    @ViewBuilder
+    private var insightLine: some View {
+        HStack(spacing: Theme.px(7)) {
+            switch lineState {
+            case .idle:
+                if let gap = bestGap {
+                    PitayaMark(size: Theme.px(9), color: Theme.accent)
+                    Text("\(Fmt.kg(gap)) kg shy of your best")
+                        .foregroundStyle(Theme.textSecondary)
+                } else {
+                    Text(totalsLine)
+                        .foregroundStyle(Theme.textMuted)
+                }
+            case .logged:
+                Text(totalsLine)
+                    .foregroundStyle(Theme.textSecondary)
+            case .pr:
+                PitayaMark(size: Theme.px(9), color: Theme.accent)
+                Text("new best — \(Fmt.kg(model.weightKg)) kg")
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        }
+        .font(Theme.text(6.75))
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+    }
+
+    /// Positive distance to the weight PR for the dialed exercise.
+    private var bestGap: Double? {
+        guard let best = model.bestWeightKg(for: model.currentExercise.id) else { return nil }
+        let gap = best - model.weightKg
+        return gap > 0 ? gap : nil
+    }
+
     private var totalsLine: String {
         let volume = model.loggedSets.reduce(0.0) { $0 + $1.weightKg * Double($1.reps) }
         guard !model.loggedSets.isEmpty else { return "no sets yet" }
         let count = model.loggedSets.count
-        return "\(count) \(count == 1 ? "set" : "sets") · \(Fmt.grouped(volume)) kg"
+        return "set \(count) · \(Fmt.grouped(volume)) kg today"
     }
 
     private func repButton(_ icon: String, action: @escaping () -> Void) -> some View {

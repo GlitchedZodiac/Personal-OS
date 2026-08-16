@@ -126,6 +126,9 @@ public struct MobileWorkoutRow: Decodable, Hashable, Identifiable, Sendable {
     public let sequenceId: String?
     /// From metricsData — the routine's display name ("EMOM 20 done").
     public let sequenceName: String?
+    /// Server-enriched 5-zone seconds (lib/zones.ts ordering) — present once
+    /// the sync enrichment ran over the row's HR stream; §03 zones card.
+    public let timeInZonesSeconds: [Int]?
 
     enum CodingKeys: String, CodingKey {
         case id, startedAt, endedAt, durationMinutes, workoutType, description
@@ -136,6 +139,11 @@ public struct MobileWorkoutRow: Decodable, Hashable, Identifiable, Sendable {
     private struct RowMetrics: Decodable {
         let sequenceId: String?
         let sequenceName: String?
+        let timeInZones: RowZones?
+
+        struct RowZones: Decodable {
+            let seconds: [Int]?
+        }
     }
 
     public init(from decoder: Decoder) throws {
@@ -157,6 +165,7 @@ public struct MobileWorkoutRow: Decodable, Hashable, Identifiable, Sendable {
         let metrics = (try? c.decodeIfPresent(RowMetrics.self, forKey: .metricsData)) ?? nil
         sequenceId = metrics?.sequenceId
         sequenceName = metrics?.sequenceName
+        timeInZonesSeconds = metrics?.timeInZones?.seconds
     }
 }
 
@@ -312,6 +321,8 @@ public struct SummaryResponse: Codable, Hashable, Sendable {
 }
 
 /// lib/mobile-summary.ts LastRunStats — the run BEFORE the one just synced.
+/// Also constructed locally from cached workout rows so the §03 deltas render
+/// pre-save; the server's coda replaces it after sync (server wins on drift).
 public struct LastRunStats: Codable, Hashable, Sendable {
     public let startedAt: Date
     public let durationMinutes: Int?
@@ -319,6 +330,18 @@ public struct LastRunStats: Codable, Hashable, Sendable {
     public let caloriesBurned: Double?
     public let avgHeartRateBpm: Int?
     public let roundsCompleted: Int?
+
+    public init(
+        startedAt: Date, durationMinutes: Int?, volumeKg: Double,
+        caloriesBurned: Double?, avgHeartRateBpm: Int?, roundsCompleted: Int?
+    ) {
+        self.startedAt = startedAt
+        self.durationMinutes = durationMinutes
+        self.volumeKg = volumeKg
+        self.caloriesBurned = caloriesBurned
+        self.avgHeartRateBpm = avgHeartRateBpm
+        self.roundsCompleted = roundsCompleted
+    }
 }
 
 /// lib/mobile-summary.ts RoutineCoda. Verdict only — the server never

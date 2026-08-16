@@ -77,6 +77,37 @@ enum Smoke {
             return
         }
 
+        // §03 deltas proof: run the sample circuit twice, saving both — the
+        // second summary must carry "· vs <first run>" with per-stat deltas
+        // (volume/time equal ⇒ ghost "="). Ends holding the saved summary.
+        if env["PITAYA_SMOKE_CIRCUIT_TWICE"] == "1", model.phase == .home {
+            model.externalSourceOverride = "watch_smoke"
+            guard let circuit = model.sequences.first(where: { $0.id == "smoke-circuit" }) else {
+                log("circuit-twice: sample circuit missing — set SAMPLE_CIRCUIT=1 too")
+                return
+            }
+            for pass in 1...2 {
+                await model.startSequence(circuit, useRecorder: false)
+                let taps = circuit.steps.count * model.circuitTotalRounds(circuit)
+                for _ in 0..<taps {
+                    let advance = Task { await model.advanceCircuitStep(circuit) }
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    model.skipCircuitRest()
+                    await advance.value
+                }
+                log("circuit-twice pass \(pass): baseline=\(model.lastRunBaseline != nil) vol=\(model.summary?.totalVolumeKg ?? -1)")
+                await model.saveWorkout()
+                log("circuit-twice pass \(pass): saved — syncState=\(String(describing: model.syncState))")
+                if pass == 1 {
+                    model.dismissSummary()
+                    // Let refreshHistory pull the just-synced row back down.
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                }
+            }
+            log("circuit-twice: done — vsBaseline=\(String(describing: model.lastRunBaseline?.startedAt)) — holding summary")
+            return
+        }
+
         // HOLD variant: start a kettlebell session, log one set, and stay on
         // the live set-logger screen (for visual verification runs).
         if env["PITAYA_SMOKE_HOLD"] == "1", model.phase == .home {

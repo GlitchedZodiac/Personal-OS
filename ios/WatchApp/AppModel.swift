@@ -135,6 +135,18 @@ public final class AppModel: ObservableObject {
     /// lane deploys the enriched sync response to prod.
     @Published public private(set) var heroMetrics: HeroMetricsPayload?
     @Published public private(set) var routineCoda: RoutineCodaPayload?
+    /// §03 deltas baseline — local rows instantly, server coda after sync.
+    @Published public private(set) var lastRunBaseline: LastRunStats?
+    /// §03 recovery card — lands ~60 s after the last Done, if HR was live.
+    @Published public private(set) var recoveryCapture: WorkoutRecorder.RecoveryCapture?
+    /// §03 zones card — server-enriched seconds, refetched after Save syncs.
+    @Published public private(set) var summaryZones: [Int]?
+    /// §03 tape — per-round work seconds for EMOM runs (populated by
+    /// early-done taps; without them a full minute isn't "work", so the tape
+    /// stays honest by staying empty).
+    @Published public private(set) var emomRoundSeconds: [Int] = []
+    /// Which EMOM round earned the tape's ◆ (set by the same taps).
+    @Published public private(set) var emomPRRound: Int?
 
     // Kettlebell live state
     @Published public private(set) var loggedSets: [LoggedSet] = []
@@ -193,6 +205,9 @@ public final class AppModel: ObservableObject {
     private var engineTask: Task<Void, Never>?
     private var sequencePausedAccum: TimeInterval = 0
     private var sequencePauseStartedAt: Date?
+    /// Last 50 server rows, retained for the §03 local deltas baseline.
+    private var recentRows: [MobileWorkoutRow] = []
+    private var recoveryTask: Task<Void, Never>?
 
     public init(
         sessionStore: (any SessionStore)? = nil,
@@ -313,6 +328,7 @@ public final class AppModel: ObservableObject {
 
         do {
             let list = try await api.fetchWorkouts(limit: 50)
+            recentRows = list.entries
             historyCount = list.entries.count
             lastKettlebell = list.entries.first {
                 $0.workoutType == "strength" && !$0.exercises.isEmpty
@@ -423,6 +439,8 @@ public final class AppModel: ObservableObject {
         }
         phase = .live(kind)
         guard useRecorder else { return }
+        // A recovery window still watching the previous session yields first.
+        await recorder.abortRecoveryIfNeeded()
         await runCountdown()
         workoutStartedAt = Date()
         do {
@@ -446,6 +464,11 @@ public final class AppModel: ObservableObject {
         markActivity()
     }
 
+    /// Weight-PR gap for the logger's idle line ("4 kg shy of your best").
+    public func bestWeightKg(for exerciseId: String) -> Double? {
+        baselines.best[exerciseId]?.weightKg
+    }
+
     public func logSet() {
         let result = baselines.evaluate(exerciseId: currentExercise.id, weightKg: weightKg)
         let set = LoggedSet(
@@ -460,6 +483,10 @@ public final class AppModel: ObservableObject {
         WatchPrefs.shared.lastLoggedReps = reps
 
         if result.isWeightPR {
+            // §06: the PR lands as a marker in the Health session tape.
+            recorder.addMarker(
+                name: "PR · \(set.exercise.name) \(Fmt.kg(set.weightKg)) kg", at: set.at
+            )
             Haptics.key(.success)
             prFlash = set
             prFlashTask?.cancel()
@@ -481,8 +508,15 @@ public final class AppModel: ObservableObject {
     }
 
     public func finishWorkout(_ kind: WorkoutKind) async {
-        let totals = await recorder.finish()
         let entries = aggregatedEntries()
+        // §03 HRR: kettlebell sessions freeze the numbers at the last Done
+        // and watch the descent for 60 s; outdoor kinds close as before.
+        let totals: WorkoutRecorder.Totals?
+        if kind == .kettlebell {
+            totals = await beginRecoveryOrFinish()
+        } else {
+            totals = await recorder.finish()
+        }
         prepareSummary(
             kind: kind,
             totals: totals,
@@ -493,6 +527,27 @@ public final class AppModel: ObservableObject {
             sequence: nil,
             description: sessionDescription(kind: kind)
         )
+    }
+
+    /// Freeze-now-finish-later (§03): snapshot totals immediately so the
+    /// summary renders, then complete the 60 s recovery capture off-screen.
+    private func beginRecoveryOrFinish() async -> WorkoutRecorder.Totals? {
+        guard let totals = await recorder.beginRecoveryWindow() else {
+            return await recorder.finish()
+        }
+        let sessionToken = workoutStartedAt
+        recoveryTask?.cancel()
+        recoveryTask = Task { [weak self] in
+            let capture = await self?.recorder.completeRecovery()
+            guard let self, !Task.isCancelled else { return }
+            // Only surface it if we're still on this session's summary.
+            if case .summary = self.phase,
+               self.workoutStartedAt == sessionToken,
+               let capture, capture.drop > 0 {
+                self.recoveryCapture = capture
+            }
+        }
+        return totals
     }
 
     // MARK: - Sequence (EMOM) flow
@@ -513,6 +568,8 @@ public final class AppModel: ObservableObject {
         phase = .liveSequence(sequence)
 
         if useRecorder {
+            // A recovery window still watching the previous session yields.
+            await recorder.abortRecoveryIfNeeded()
             await runCountdown()
         }
         workoutStartedAt = Date()
@@ -547,6 +604,11 @@ public final class AppModel: ObservableObject {
         if circuitStepIndex < circuitStepCompletions.count {
             circuitStepCompletions[circuitStepIndex] += 1
             circuitStepSeconds[circuitStepIndex] += Int(Date().timeIntervalSince(circuitStepMark))
+            // §06: each work interval lands as a named Health segment.
+            recorder.addSegment(
+                name: "Round \(circuitRound) · \(sequence.steps[circuitStepIndex].exerciseName.lowercased())",
+                from: circuitStepMark, to: Date()
+            )
         }
 
         if circuitStepIndex + 1 < sequence.steps.count {
@@ -600,6 +662,18 @@ public final class AppModel: ObservableObject {
     private func runEMOMEngine(_ sequence: SequenceDef) async {
         let totalRounds = max(sequence.durationMinutes ?? sequence.steps.count, 1)
         let startedAt = Date()
+        var roundStartedAt = Date()
+
+        // §06: name the round that just closed ("Round 3 · press").
+        func closeRoundSegment(_ round: Int, at date: Date) {
+            guard round >= 1, !sequence.steps.isEmpty else { return }
+            let step = sequence.steps[(round - 1) % sequence.steps.count]
+            recorder.addSegment(
+                name: "Round \(round) · \(step.exerciseName.lowercased())",
+                from: roundStartedAt, to: date
+            )
+            roundStartedAt = date
+        }
 
         while !Task.isCancelled {
             guard case .liveSequence = phase else { return }
@@ -615,6 +689,7 @@ public final class AppModel: ObservableObject {
                 let minuteIndex = Int(elapsed / 60)
 
                 if minuteIndex >= totalRounds {
+                    closeRoundSegment(totalRounds, at: Date())
                     WKInterfaceDevice.current().play(.success)
                     await finishSequence(roundsCompleted: totalRounds)
                     return
@@ -622,7 +697,10 @@ public final class AppModel: ObservableObject {
 
                 let round = minuteIndex + 1
                 if round != emomRound {
-                    if emomRound != 0 { WKInterfaceDevice.current().play(.notification) }
+                    if emomRound != 0 {
+                        closeRoundSegment(emomRound, at: Date())
+                        WKInterfaceDevice.current().play(.notification)
+                    }
                     emomRound = round
                     markActivity()
                 }
@@ -665,8 +743,20 @@ public final class AppModel: ObservableObject {
         circuitRestLeft = nil
         guard let sequence = activeSequence else { return }
 
-        let totals = await recorder.finish()
         let entries = sequenceEntries(sequence: sequence, rounds: roundsCompleted)
+
+        // §06: Health detail carries the routine's name and its PR markers.
+        // (Sequence PRs are only known from the completed entries, so the
+        // marker sits at the session end rather than the exact round.)
+        recorder.sessionTitle = sequence.name
+        for pr in baselines.sessionPRs(entries: entries) where pr.kind == "weight" {
+            recorder.addMarker(
+                name: "PR · \(pr.exerciseName) \(Fmt.kg(pr.value)) kg", at: Date()
+            )
+        }
+
+        // §03 HRR: freeze now, watch the descent for 60 s off-screen.
+        let totals = await beginRecoveryOrFinish()
         let volume = entries.reduce(0.0) { acc, entry in
             guard let sets = entry.sets, let reps = entry.reps, let weight = entry.weightKg
             else { return acc }
@@ -735,6 +825,11 @@ public final class AppModel: ObservableObject {
         let prs = baselines.sessionPRs(entries: entries)
         baselines.absorb(entries: entries)
 
+        // §03 deltas: instant baseline from cached rows (same semantics as
+        // the server's lastRun — the run before this one, same routine);
+        // the sync response's coda replaces it, server winning on drift.
+        lastRunBaseline = sequence.flatMap { localLastRun(sequenceId: $0.id, before: started) }
+
         summary = WorkoutSummary(
             kind: kind,
             durationSeconds: duration,
@@ -796,28 +891,74 @@ public final class AppModel: ObservableObject {
         pendingItem = nil
         try? await queue?.enqueue(item)
         await drainQueue(reconcilePRsFor: item.externalId)
+        await loadSummaryZones(externalId: item.externalId)
+    }
+
+    /// §03 zones card: the sync enrichment stores timeInZones on the row —
+    /// one refetch after Save lights the card (zone math stays server-side
+    /// per the streams contract).
+    private func loadSummaryZones(externalId: String) async {
+        guard summary != nil, syncState == .synced else { return }
+        guard let list = try? await api.fetchWorkouts(limit: 5) else { return }
+        summaryZones = list.entries.first { $0.externalId == externalId }?.timeInZonesSeconds
+    }
+
+    /// "The run before this one, same routine" from the cached history rows.
+    private func localLastRun(sequenceId: String, before: Date) -> LastRunStats? {
+        guard let row = recentRows.first(where: {
+            $0.sequenceId == sequenceId && $0.startedAt < before
+        }) else { return nil }
+        let volume = row.exercises.reduce(0.0) {
+            $0 + Double(($1.sets ?? 0) * ($1.reps ?? 0)) * ($1.weightKg ?? 0)
+        }
+        return LastRunStats(
+            startedAt: row.startedAt,
+            durationMinutes: row.durationMinutes,
+            volumeKg: volume,
+            caloriesBurned: row.caloriesBurned,
+            avgHeartRateBpm: row.avgHeartRateBpm,
+            roundsCompleted: nil
+        )
     }
 
     public func discardWorkout() {
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        Task { await recorder.abortRecoveryIfNeeded() }
         pendingItem = nil
         summary = nil
         loggedSets = []
         activeSequence = nil
         syncState = .idle
+        clearSummaryExtras()
         phase = .home
     }
 
     public func dismissSummary() {
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        Task { await recorder.abortRecoveryIfNeeded() }
         summary = nil
         loggedSets = []
         activeSequence = nil
+        clearSummaryExtras()
         phase = .home
         Task { await refreshHistory() }
+    }
+
+    private func clearSummaryExtras() {
+        lastRunBaseline = nil
+        recoveryCapture = nil
+        summaryZones = nil
+        emomRoundSeconds = []
+        emomPRRound = nil
     }
 
     // MARK: - Idle nudge
 
     private func resetLiveState() {
+        recoveryTask?.cancel()
+        recoveryTask = nil
         loggedSets = []
         summary = nil
         pendingItem = nil
@@ -826,6 +967,7 @@ public final class AppModel: ObservableObject {
         countdown = nil
         circuitRestTask?.cancel()
         circuitRestLeft = nil
+        clearSummaryExtras()
         workoutStartedAt = Date()
         markActivity()
         startIdleWatchdog()
@@ -887,9 +1029,15 @@ public final class AppModel: ObservableObject {
             lastSyncCheckAt = Date()
             reconcileSummaryPRs(from: response, matching: externalId)
             // §02/§03 codas: hero metrics for the wrist surfaces, routine
-            // verdict + last-run for the summary deltas (Wave C consumes).
+            // verdict + last-run for the summary deltas — the server's
+            // lastRun replaces the local baseline (server wins on drift).
             if let metrics = response.summary { heroMetrics = metrics }
-            if let coda = response.routine { routineCoda = coda }
+            if let coda = response.routine {
+                routineCoda = coda
+                if summary != nil, let serverLastRun = coda.lastRun {
+                    lastRunBaseline = serverLastRun
+                }
+            }
             // §02: every sync refreshes the complication timeline.
             WidgetCenter.shared.reloadAllTimelines()
         } catch {
