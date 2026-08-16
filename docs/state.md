@@ -5,15 +5,74 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-14d (BRANCHES CONSOLIDATED — main now carries
-both lanes: web through the 08-14 review pass, watch through GPS routes)
-**Current phase:** `main` is the single source of truth again. It had sat at
-2026-08-09 (PR #6) while production shipped from the CLI and the watch lane
-lived only on `claude/watch-app` — which is why a main-lane session read a
-stale `ios/` and mis-audited the watch. Both lanes are merged here now.
+**Last updated:** 2026-08-15 (watch lane — Round 1+2 design handoff BUILT,
+Waves A–E, on Michael's wrist)
+**Current phase:** the watch is a designed instrument now: Settings + bell
+rack, a real data complication, receipts-vs-last-run summary, Double Tap +
+App Intents, readiness verdict, motion/AOD per spec. Two server deps wait on
+the main lane (deploy `/api/mobile/summary` + sync codas to prod; voice
+ingest endpoint).
 **Branch in flight:** `claude/phase1-modernization` (web) ·
-`claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch —
-**must merge `main` back in**, it is 21 commits behind).
+`claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch — merged
+`main` 2026-08-15, fast-forward, before the R1+2 work).
+
+## 2026-08-15 — WATCH ROUND 1+2 HANDOFF (Waves A–E, all §§ built or flagged)
+
+Extraction contract honored: visuals verbatim from
+`Pitaya Watch Round 1.dc.html` (committed as
+`docs/design/pitaya-watch-round1.dc.html`), behavior from the Watch Handoff
+Spec; unpicked variants not built. Five commits, one per wave
+(aa138f9 → 848875f):
+
+- **§01 Settings + bells (1a)** — 4 groups / 8 rows; bell rack sheet with
+  crown cursor over 4–64 kg detents; every weight dial now detents through
+  owned bells; Unpair moved off Home. `WatchPrefs` persists all eight.
+- **§02+§09 complication (1d/1e/2a)** — the static launcher is gone. The
+  widget extension fetches the bearer API itself (session shared via
+  keychain access group — allowed on the free team; app groups are not),
+  caches last-good, reloads at midnight + after every app sync. Circular
+  streak ◆ · corner Z2 mint gauge · inline "◆ 23d · Block A due"/"trained ✓"
+  · rect DUE TODAY + week ring + hero footer flipping to the trained
+  receipt. `/api/mobile/summary` 404s on prod until the main lane deploys —
+  the week/due slice works today, hero numbers light up on deploy.
+- **§03 summary (1g) + logger line** — deltas vs the last run of the same
+  routine (local rows instantly; server coda replaces on sync), ranked
+  insights max 2 (PR › progression › recovery › zones), 60 s HR-recovery
+  capture (freezes the workout's numbers at the last Done, watches the
+  descent, closes HealthKit at the frozen end), zones card from the row's
+  server-enriched timeInZones post-save. Logger totals line: "4 kg shy of
+  your best" / "set 4 · 3,120 kg today" / "◆ new best — 32 kg".
+- **§05 Double Tap + intents (1m/1o)** — one primary CTA per screen wears
+  the gesture + pinch glyph (3-fire toast, then 45% dim); one-time coach
+  before the first live session; EMOM early-done records real work seconds
+  into stepSeconds[] + the session tape. Five App Intents: Start <routine>,
+  Log a Set, Start a Walk, Log Weight, Log Food (the last two open the §08
+  2e confirm cards → local voice queue, see deferred).
+- **§06 HK events** — circuit Dones + EMOM boundaries land as named
+  segments, PRs as markers, routine name as brand metadata: Apple Health
+  shows the designed session tape.
+- **§07 readiness (2b)** — verdict ONLY (Recovered/Take it easy/Rough
+  night) from the watch's own HealthKit HRV/RHR/sleep vs 30-day baseline;
+  "· ◆ ready" on the Home subline → Ready screen. Never alters the plan;
+  no notifications anywhere (§11 holds).
+- **§09 live surfaces + §10 motion/AOD** — outdoor dist+elev top slots, Z2
+  accumulator card; EMOM boundary wash/springs/.start ×2, rest last-3
+  pulses + GO pop, PR seeds + "— was 28" copy, AOD dimmed twin verbatim.
+  NEW iPhone widget extension (2f): Home small/medium + Lock Screen
+  families over the companion's shared-keychain session.
+- **Flagged, not built** (platform/API constraints, see deferred): watch
+  Smart Stack live tile (no app group for live state on the free team),
+  Live Activity mirror (WKWatchOnly has no real-time phone channel), voice
+  ingest endpoint (no API), Action-button per-screen mirroring (no API —
+  intents are assignable instead).
+
+Self-smoke: circuit-run-twice seam proved the deltas pipeline against prod
+(vs-line + mint/ghost deltas on screen); coach → logger flow tap-driven in
+sim ("◆ 4 kg shy of your best" from live baselines); voice card verbatim at
+84.2 kg; smoke rows swept + PR backfill re-run (53 records). Watch app
+installed OTA to the Series 8 (device provisioning accepted the keychain
+group). iPhone companion build is ready but the phone was locked — install
+pending.
 
 ## 2026-08-14d — BRANCH CONSOLIDATION (main = both lanes)
 
