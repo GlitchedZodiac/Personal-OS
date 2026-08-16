@@ -7,8 +7,11 @@ import SwiftUI
 
 struct SetLoggerPage: View {
     @EnvironmentObject private var model: AppModel
+    @ObservedObject private var prefs = WatchPrefs.shared
     @State private var showPicker = false
-    @State private var crownWeight: Double = 16
+    @State private var crownIndex: Double = 0
+
+    private var detents: [Int] { prefs.dialDetents }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,13 +83,20 @@ struct SetLoggerPage: View {
         .padding(.vertical, 2)
         .focusable(true)
         .digitalCrownRotation(
-            $crownWeight, from: 4, through: 64, by: 4,
+            $crownIndex, from: 0, through: Double(max(detents.count - 1, 0)), by: 1,
             sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true
         )
-        .onChange(of: crownWeight) { _, newValue in
-            model.weightKg = newValue
+        .onChange(of: crownIndex) { _, newValue in
+            let index = max(0, min(detents.count - 1, Int(newValue.rounded())))
+            model.weightKg = Double(detents[index])
         }
-        .onAppear { crownWeight = model.weightKg }
+        .onAppear {
+            let nearest = detents.enumerated().min {
+                abs(Double($0.element) - model.weightKg) < abs(Double($1.element) - model.weightKg)
+            }?.offset ?? 0
+            crownIndex = Double(nearest)
+            model.weightKg = Double(detents[nearest])
+        }
         .sheet(isPresented: $showPicker) {
             ExercisePickerView()
         }

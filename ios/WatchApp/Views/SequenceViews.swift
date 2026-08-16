@@ -236,7 +236,13 @@ struct WeightDialSheet: View {
     @Environment(\.dismiss) private var dismiss
     let exerciseId: String
     let exerciseName: String
-    @State private var crownWeight: Double = 16
+    @State private var crownIndex: Double = 0
+
+    private var detents: [Int] { WatchPrefs.shared.dialDetents }
+    private var crownWeight: Double {
+        let index = max(0, min(detents.count - 1, Int(crownIndex.rounded())))
+        return Double(detents[index])
+    }
 
     var body: some View {
         VStack(spacing: 4) {
@@ -263,13 +269,17 @@ struct WeightDialSheet: View {
         .padding(.horizontal, 10)
         .focusable(true)
         .digitalCrownRotation(
-            // Real bell denominations — 4 kg jumps, 8→64 per Michael (4 kept
-            // for halos/windmill warm-ups).
-            $crownWeight, from: 4, through: 64, by: 4,
+            // Detents run ONLY through owned bells (§01 payoff); the full
+            // 4–64 range applies until the rack is configured.
+            $crownIndex, from: 0, through: Double(max(detents.count - 1, 0)), by: 1,
             sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true
         )
         .onAppear {
-            crownWeight = model.weightOverrides[exerciseId] ?? 16
+            let start = model.weightOverrides[exerciseId] ?? 16
+            let nearest = detents.enumerated().min {
+                abs(Double($0.element) - start) < abs(Double($1.element) - start)
+            }?.offset ?? 0
+            crownIndex = Double(nearest)
         }
     }
 }

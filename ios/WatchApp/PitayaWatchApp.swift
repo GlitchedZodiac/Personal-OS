@@ -33,6 +33,8 @@ struct RootView: View {
                 PairedView()
             case .home:
                 HomeGridView()
+            case .settings:
+                SettingsView()
             case .workoutList:
                 WorkoutListView()
             case .kettlebellSpace:

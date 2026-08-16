@@ -122,11 +122,17 @@ public struct MobileWorkoutRow: Decodable, Hashable, Identifiable, Sendable {
     public let externalId: String?
     public let source: String?
     public let exercises: [ExerciseEntry]
+    /// From metricsData — links a run to its routine (due rotation, deltas).
+    public let sequenceId: String?
 
     enum CodingKeys: String, CodingKey {
         case id, startedAt, endedAt, durationMinutes, workoutType, description
         case caloriesBurned, distanceMeters, avgHeartRateBpm, maxHeartRateBpm
-        case externalSource, externalId, source, exercises
+        case externalSource, externalId, source, exercises, metricsData
+    }
+
+    private struct RowMetrics: Decodable {
+        let sequenceId: String?
     }
 
     public init(from decoder: Decoder) throws {
@@ -145,6 +151,7 @@ public struct MobileWorkoutRow: Decodable, Hashable, Identifiable, Sendable {
         externalId = try c.decodeIfPresent(String.self, forKey: .externalId)
         source = try c.decodeIfPresent(String.self, forKey: .source)
         exercises = (try? c.decodeIfPresent(TolerantExerciseList.self, forKey: .exercises))??.entries ?? []
+        sequenceId = (try? c.decodeIfPresent(RowMetrics.self, forKey: .metricsData))??.sequenceId
     }
 }
 

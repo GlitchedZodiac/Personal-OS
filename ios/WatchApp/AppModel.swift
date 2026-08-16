@@ -96,6 +96,7 @@ public final class AppModel: ObservableObject {
         case pinEntry
         case pairedIntro
         case home              // design 04 — tile grid
+        case settings          // Round 1 §01
         case workoutList       // design 05
         case kettlebellSpace   // Michael's 2026-08-10 IA: routines + free sets
         case sequences         // design 06
@@ -117,6 +118,15 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var lastKettlebell: Date?
     @Published public private(set) var lastRun: (at: Date, km: Double)?
     @Published public private(set) var sequences: [SequenceDef] = []
+    /// Weekday indices (1 = Mon … 7 = Sun) with a trained session this week.
+    @Published public private(set) var trainedWeekdays: Set<Int> = []
+    /// First session logged today, if any (Home's mint "✓ 7:12a").
+    @Published public private(set) var trainedTodayAt: Date?
+    /// Least-recently-run routine — the Home "due · <name>" state (§04).
+    @Published public private(set) var dueRoutine: SequenceDef?
+    /// Offline-queue depth + the last successful sync touch (Settings row).
+    @Published public private(set) var queuedCount = 0
+    @Published public private(set) var lastSyncCheckAt: Date?
     @Published public private(set) var syncState: SyncState = .idle
     @Published public private(set) var summary: WorkoutSummary?
 
@@ -153,7 +163,9 @@ public final class AppModel: ObservableObject {
     @Published public var idleNudgeActive = false
     private var lastActivityAt = Date()
     private var idleWatchdog: Task<Void, Never>?
-    private static let idleThreshold: TimeInterval = 8 * 60
+    private var idleThreshold: TimeInterval {
+        TimeInterval(WatchPrefs.shared.idleNudgeMinutes) * 60
+    }
 
     public let recorder = WorkoutRecorder()
 
@@ -302,6 +314,34 @@ public final class AppModel: ObservableObject {
             }.flatMap { row in
                 row.distanceMeters.map { (row.startedAt, $0 / 1000) }
             }
+
+            // §04 week ticks + due rotation, computed from local history.
+            var calendar = Calendar.current
+            calendar.firstWeekday = 2 // weeks start Monday
+            let now = Date()
+            var weekdays = Set<Int>()
+            var todayAt: Date?
+            var lastRunBySequence: [String: Date] = [:]
+            for row in list.entries {
+                if calendar.isDate(row.startedAt, equalTo: now, toGranularity: .weekOfYear) {
+                    let weekday = calendar.component(.weekday, from: row.startedAt)
+                    weekdays.insert(weekday == 1 ? 7 : weekday - 1)
+                }
+                if calendar.isDateInToday(row.startedAt) {
+                    todayAt = min(todayAt ?? row.startedAt, row.startedAt)
+                }
+                if let sequenceId = row.sequenceId {
+                    let prior = lastRunBySequence[sequenceId] ?? .distantPast
+                    lastRunBySequence[sequenceId] = max(prior, row.startedAt)
+                }
+            }
+            trainedWeekdays = weekdays
+            trainedTodayAt = todayAt
+            dueRoutine = sequences.min { a, b in
+                (lastRunBySequence[a.id] ?? .distantPast)
+                    < (lastRunBySequence[b.id] ?? .distantPast)
+            }
+            lastSyncCheckAt = Date()
         } catch {
             // Offline — home facts stay stale, nothing breaks.
         }
@@ -310,6 +350,7 @@ public final class AppModel: ObservableObject {
     // MARK: - Navigation
 
     public func openWorkoutList() { phase = .workoutList }
+    public func openSettings() { phase = .settings }
     public func openKettlebellSpace() { phase = .kettlebellSpace }
     public func openSequences() { phase = .sequences }
     public func openSequence(_ sequence: SequenceDef) {
@@ -364,6 +405,10 @@ public final class AppModel: ObservableObject {
     /// no countdown in a simulator run); every user-facing call leaves it true.
     public func startWorkout(_ kind: WorkoutKind, useRecorder: Bool = true) async {
         resetLiveState()
+        if kind == .kettlebell {
+            reps = WatchPrefs.shared.startRepsAt == .lastLogged
+                ? WatchPrefs.shared.lastLoggedReps : 10
+        }
         phase = .live(kind)
         guard useRecorder else { return }
         await runCountdown()
@@ -400,9 +445,10 @@ public final class AppModel: ObservableObject {
         )
         loggedSets.append(set)
         markActivity()
+        WatchPrefs.shared.lastLoggedReps = reps
 
         if result.isWeightPR {
-            WKInterfaceDevice.current().play(.success)
+            Haptics.key(.success)
             prFlash = set
             prFlashTask?.cancel()
             prFlashTask = Task { [weak self] in
@@ -410,7 +456,7 @@ public final class AppModel: ObservableObject {
                 if !Task.isCancelled { self?.prFlash = nil }
             }
         } else {
-            WKInterfaceDevice.current().play(.click)
+            Haptics.minor(.click)
         }
     }
 
@@ -514,7 +560,8 @@ public final class AppModel: ObservableObject {
 
     private func runCircuitRest(_ sequence: SequenceDef) async {
         let restSeconds = sequence.steps[circuitStepIndex].restSeconds
-            ?? sequence.restSecondsDefault ?? 60
+            ?? sequence.restSecondsDefault
+            ?? WatchPrefs.shared.restFallbackSeconds
         guard restSeconds > 0 else { return }
 
         circuitRestTask?.cancel()
@@ -796,9 +843,10 @@ public final class AppModel: ObservableObject {
                     self.markActivity()
                 }
                 if !self.idleNudgeActive,
-                   Date().timeIntervalSince(self.lastActivityAt) > Self.idleThreshold {
+                   self.idleThreshold > 0,
+                   Date().timeIntervalSince(self.lastActivityAt) > self.idleThreshold {
                     self.idleNudgeActive = true
-                    WKInterfaceDevice.current().play(.notification)
+                    Haptics.key(.notification)
                 }
             }
         }
@@ -815,6 +863,7 @@ public final class AppModel: ObservableObject {
     public func drainQueue(reconcilePRsFor externalId: String? = nil) async {
         guard let queue else { return }
         let pending = await queue.load()
+        queuedCount = pending.count
         guard !pending.isEmpty else { return }
 
         syncState = .syncing
@@ -822,9 +871,12 @@ public final class AppModel: ObservableObject {
             let response = try await api.syncWorkouts(pending)
             try? await queue.removeSynced(pending)
             syncState = .synced
+            queuedCount = 0
+            lastSyncCheckAt = Date()
             reconcileSummaryPRs(from: response, matching: externalId)
         } catch {
             syncState = .queued(pending.count)
+            queuedCount = pending.count
         }
     }
 

@@ -11,6 +11,8 @@ public enum Theme {
     public static let accent = Color(hex: 0xDC74A0)
     /// Deep pitaya — primary action buttons (Pair, Start).
     public static let accentDeep = Color(hex: 0xA63D63)
+    /// Deepest raspberry (Round 1 palette).
+    public static let raspberryDeep = Color(hex: 0x8C2F51)
     /// Dim pink wash — icon circles on cards.
     public static let accentDim = Color(hex: 0x2A1420)
     /// Stronger pink wash — featured cards (today's plan, PR banner).
@@ -48,15 +50,29 @@ public enum Theme {
     /// Water-lock blue.
     public static let water = Color(hex: 0x7FA6C9)
     public static let waterDim = Color(hex: 0x14212B)
+    /// Spirit lavender (provisional, Round 1 §04).
+    public static let spirit = Color(hex: 0xB7A3E3)
+    public static let spiritDim = Color(hex: 0x241E2E)
+    /// Journal green tile circle (design home).
+    public static let journalDim = Color(hex: 0x1E2A22)
 
     // ── Type ──────────────────────────────────────────────────────────
     // Familjen Grotesk (display/numerals) + Instrument Sans (text), bundled
     // in WatchApp/Fonts and registered via UIAppFonts. PostScript names
     // verified from the TTF name tables.
     //
-    // typeScale: every font in the app runs through it. Raised to 1.12 on
-    // Michael's second "a little bigger" pass (2026-08-10, 45 mm wrist).
-    private static let typeScale: CGFloat = 1.12
+    // typeScale: every font in the app runs through it. 1.125 = the exact
+    // 41 mm design canvas (176 pt) → 45 mm wrist (198 pt) ratio, unifying
+    // Michael's "bigger" passes with the Round 1 extraction contract: a
+    // design value of Npx maps to N/2 pt through these functions and lands
+    // at N × 0.5625 pt on screen.
+    private static let typeScale: CGFloat = 1.125
+
+    /// Geometry mapping for Round 1 screens: design px → on-screen pt at the
+    /// same proportional scale the fonts use.
+    public static func px(_ designPx: CGFloat) -> CGFloat {
+        designPx * 0.5625
+    }
     private static func familjen(_ weight: Font.Weight) -> String {
         switch weight {
         case .bold, .heavy, .black: return "FamiljenGrotesk-Bold"
