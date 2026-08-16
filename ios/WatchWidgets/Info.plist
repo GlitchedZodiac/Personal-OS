@@ -25,5 +25,15 @@
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.widgetkit-extension</string>
 	</dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fonts/FamiljenGrotesk-Regular.ttf</string>
+		<string>Fonts/FamiljenGrotesk-Medium.ttf</string>
+		<string>Fonts/FamiljenGrotesk-SemiBold.ttf</string>
+		<string>Fonts/FamiljenGrotesk-Bold.ttf</string>
+		<string>Fonts/InstrumentSans-Regular.ttf</string>
+		<string>Fonts/InstrumentSans-Medium.ttf</string>
+		<string>Fonts/InstrumentSans-SemiBold.ttf</string>
+	</array>
 </dict>
 </plist>

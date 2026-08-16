@@ -7,15 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0028C1690C38674F05C27913 /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
 		05317DBD031E73DDAE8151C6 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
 		09DE6BDE7477E9EAD65961D0 /* PersonalOS WatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 93B03235195B45C26E62AD2A /* PersonalOS WatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0B73A4EC13599FACFA029DF5 /* SequenceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */; };
 		119C8051CB463E710DA49416 /* HomeGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D569AE319D0679E013CC7F3 /* HomeGridView.swift */; };
+		176A47C2FF42310442B7263C /* MobileAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977A9107D8035E968679A59C /* MobileAPIModels.swift */; };
 		192FB618D1D7D216B916DBA0 /* CompanionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE4FCE8EC35856A1AC60D762 /* CompanionViews.swift */; };
 		1AD7225F8119DEE334552638 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
 		1E57C0B28724B24673F91B65 /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
 		1F4F7858F490CDE118F92780 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 779544B3E1F855E1019BE07F /* Components.swift */; };
 		2035454F5CAFE23ABBAABAC1 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 5266E99A5C09DF8C1D834F88 /* Fonts */; };
+		230BF255E4339DEC5F3FAB0D /* CustomExerciseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */; };
 		267048DC6977B56F65B7C242 /* WorkoutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAD62BC2C3D39E29DAEB3A3 /* WorkoutRecorder.swift */; };
 		2DF1CA1D50939C507B4D10F3 /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
 		310B0256403A7D299CD83E0B /* CustomExerciseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */; };
@@ -25,10 +28,13 @@
 		3C4D117DD1598B40D7AAC1FA /* WebShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B38DC7F103BB0BBB78466C /* WebShellView.swift */; };
 		3CEB3D4F1FB7CF28281BD4C4 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
 		3D27EC707EF2442F6A321307 /* InstrumentSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 006CA2CFCE38709ABB5C790F /* InstrumentSans-Medium.ttf */; };
+		45FD93D779577606636ECF4E /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 5266E99A5C09DF8C1D834F88 /* Fonts */; };
 		480F47558B0D592A5ADB0746 /* CompanionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF0284F25AF6DA96F5873EB /* CompanionModel.swift */; };
 		5427D9F48D8059CB0AC1580D /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
 		55E9EAB4707D71D7514C4CF6 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
 		6207641BFC15B4427525659D /* TrailPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE040138C592BFC1248B7D1 /* TrailPage.swift */; };
+		646CAD349C342835D2C5E56B /* PitayaVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2020045D700AEC8774E254 /* PitayaVector.swift */; };
+		665833E7E355F33B286A7079 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
 		6822B4817B7FDAF08422AA13 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8043C8384A872FA3669DFF35 /* SettingsView.swift */; };
 		6EF00415B4AD3B33E2B6C717 /* Smoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAABEEDD8A9DD0E43F18673C /* Smoke.swift */; };
 		6FFE9221290D2657D9C64588 /* PersonalOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2BE5E7DEF13CBB8EFDE90AC /* PersonalOSApp.swift */; };
@@ -41,6 +47,9 @@
 		836DABC6857606F8BB040B10 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0960EA68534280B484B235 /* AppModel.swift */; };
 		83FB94B008C61E0037CDB980 /* MobileAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977A9107D8035E968679A59C /* MobileAPIModels.swift */; };
 		86CDB2DEBE59EC1C1E425730 /* LiveWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90514349C02B2B967189761C /* LiveWorkoutView.swift */; };
+		887885D4C181081A988247E7 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B00C978153160C55EFA8A /* Theme.swift */; };
+		8E8B8A2D8D74B604DE3CDD08 /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
+		911A530B51CDC76F8D2CBF7E /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
 		9768A01B73B3B14BDBB8D6C2 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C296B6BB79F59CD32FB649 /* HomeView.swift */; };
 		9890184C4B9B3D1073B8B4D7 /* PairingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA94BE4FFDB0509B29D5AF96 /* PairingViews.swift */; };
 		9BA75CC94705B686D9DCC46E /* FamiljenGrotesk-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 662A6D243528AE6967F5E3EA /* FamiljenGrotesk-Regular.ttf */; };
@@ -57,7 +66,9 @@
 		D1667DF004D2B8CCD9737C26 /* MobileAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977A9107D8035E968679A59C /* MobileAPIModels.swift */; };
 		D6E5E44C068FD03F5D914953 /* PitayaWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D67C6689A274F536320D83D /* PitayaWidgets.swift */; };
 		E055B584F27FDA5F0F34016F /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
+		E06EFC014ED687F2AFB317AF /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
 		E1112713A4A1BFAF3893AB61 /* BellRackSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A369B79979560A206B14E9 /* BellRackSheet.swift */; };
+		E9FECD01D5CAB3831E763075 /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */; };
 		F00FF746AAAD6C758063B052 /* FamiljenGrotesk-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C877F517D2C66C9CB8017AB8 /* FamiljenGrotesk-Bold.ttf */; };
 		F6905EC6F5599D66A96803A0 /* FamiljenGrotesk-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4E3A0588ED582B61CC96FCD3 /* FamiljenGrotesk-SemiBold.ttf */; };
 		F7AC3277CC304EB90CFA8B16 /* PitayaVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2020045D700AEC8774E254 /* PitayaVector.swift */; };
@@ -126,6 +137,7 @@
 		9D67C6689A274F536320D83D /* PitayaWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaWidgets.swift; sourceTree = "<group>"; };
 		ACE040138C592BFC1248B7D1 /* TrailPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailPage.swift; sourceTree = "<group>"; };
 		ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineWorkoutQueue.swift; sourceTree = "<group>"; };
+		BA4739C9C1BE068652A2633F /* PitayaWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PitayaWidgets.entitlements; sourceTree = "<group>"; };
 		BAB5F2EC88271FD5EC8C556E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		BC2020045D700AEC8774E254 /* PitayaVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaVector.swift; sourceTree = "<group>"; };
 		BE7B00C978153160C55EFA8A /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -243,6 +255,7 @@
 			isa = PBXGroup;
 			children = (
 				534A2F0033D20D620F9394D7 /* Info.plist */,
+				BA4739C9C1BE068652A2633F /* PitayaWidgets.entitlements */,
 				9D67C6689A274F536320D83D /* PitayaWidgets.swift */,
 			);
 			path = WatchWidgets;
@@ -316,6 +329,7 @@
 			buildConfigurationList = E78FF2C1EF46C2A0445B3BEA /* Build configuration list for PBXNativeTarget "PersonalOS WatchWidgets" */;
 			buildPhases = (
 				59ED907DDBB7B53EBE3021BA /* Sources */,
+				A9FB734EA0DF05597DC2B801 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -417,6 +431,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A9FB734EA0DF05597DC2B801 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				45FD93D779577606636ECF4E /* Fonts in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -446,7 +468,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				230BF255E4339DEC5F3FAB0D /* CustomExerciseCache.swift in Sources */,
+				665833E7E355F33B286A7079 /* ExerciseCatalog.swift in Sources */,
+				911A530B51CDC76F8D2CBF7E /* MobileAPIClient.swift in Sources */,
+				176A47C2FF42310442B7263C /* MobileAPIModels.swift in Sources */,
+				0028C1690C38674F05C27913 /* OfflineWorkoutQueue.swift in Sources */,
+				8E8B8A2D8D74B604DE3CDD08 /* PRBaselines.swift in Sources */,
+				646CAD349C342835D2C5E56B /* PitayaVector.swift in Sources */,
 				D6E5E44C068FD03F5D914953 /* PitayaWidgets.swift in Sources */,
+				E9FECD01D5CAB3831E763075 /* RouteModels.swift in Sources */,
+				E06EFC014ED687F2AFB317AF /* SessionStore.swift in Sources */,
+				887885D4C181081A988247E7 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -567,6 +599,7 @@
 		3A73747AD8327740D5DBCC03 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WatchWidgets/PitayaWidgets.entitlements;
 				INFOPLIST_FILE = WatchWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -704,6 +737,7 @@
 		FDC294456342407C6E3F0CC9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WatchWidgets/PitayaWidgets.entitlements;
 				INFOPLIST_FILE = WatchWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

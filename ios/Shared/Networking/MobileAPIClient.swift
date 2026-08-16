@@ -117,6 +117,18 @@ public actor MobileAPIClient {
         )
     }
 
+    /// Complication hero metrics (GET /api/mobile/summary — Round 1+2 §02).
+    /// Cheap by design: just the three hero numbers + date context, called
+    /// from the widget extension's timeline refresh.
+    public func fetchSummary() async throws -> SummaryResponse {
+        try await send(
+            path: "/api/mobile/summary",
+            query: [URLQueryItem(name: "tz", value: TimeZone.current.identifier)],
+            method: "GET",
+            body: Optional<Int>.none, authorized: true
+        )
+    }
+
     /// Server-truth PR baselines (bearer mirror of /api/health/prs).
     public func fetchPRs() async throws -> PRListResponse {
         try await send(

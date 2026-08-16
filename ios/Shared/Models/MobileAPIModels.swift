@@ -124,6 +124,8 @@ public struct MobileWorkoutRow: Decodable, Hashable, Identifiable, Sendable {
     public let exercises: [ExerciseEntry]
     /// From metricsData — links a run to its routine (due rotation, deltas).
     public let sequenceId: String?
+    /// From metricsData — the routine's display name ("EMOM 20 done").
+    public let sequenceName: String?
 
     enum CodingKeys: String, CodingKey {
         case id, startedAt, endedAt, durationMinutes, workoutType, description
@@ -133,6 +135,7 @@ public struct MobileWorkoutRow: Decodable, Hashable, Identifiable, Sendable {
 
     private struct RowMetrics: Decodable {
         let sequenceId: String?
+        let sequenceName: String?
     }
 
     public init(from decoder: Decoder) throws {
@@ -151,7 +154,9 @@ public struct MobileWorkoutRow: Decodable, Hashable, Identifiable, Sendable {
         externalId = try c.decodeIfPresent(String.self, forKey: .externalId)
         source = try c.decodeIfPresent(String.self, forKey: .source)
         exercises = (try? c.decodeIfPresent(TolerantExerciseList.self, forKey: .exercises))??.entries ?? []
-        sequenceId = (try? c.decodeIfPresent(RowMetrics.self, forKey: .metricsData))??.sequenceId
+        let metrics = (try? c.decodeIfPresent(RowMetrics.self, forKey: .metricsData)) ?? nil
+        sequenceId = metrics?.sequenceId
+        sequenceName = metrics?.sequenceName
     }
 }
 
@@ -255,6 +260,76 @@ public struct WorkoutSyncResponse: Codable, Hashable, Sendable {
     /// Server-side PR detection per synced item (2026-08-09 contract);
     /// optional so an older server never breaks decode.
     public let prs: [SyncPRResult]?
+    /// Hero metrics coda (Round 1+2 §02 contract, lib/mobile-summary.ts) —
+    /// optional until prod redeploys with the endpoint.
+    public let summary: HeroMetricsPayload?
+    /// Post-run verdict + previous-run stats for the routine just synced
+    /// (§03 deltas + §07 progression); null on freeform runs.
+    public let routine: RoutineCodaPayload?
+}
+
+// MARK: - Hero metrics + routine coda (Round 1+2 handoff §02/§03/§07)
+
+/// lib/mobile-summary.ts HeroMetrics — field names are the contract
+/// (streakDays, weight7dAvgKg, weight7dDeltaKg, z2WeeklyMinutes); renames go
+/// through deferred-items, never adapted watch-side.
+public struct HeroMetricsPayload: Codable, Hashable, Sendable {
+    /// Consecutive local days with any food log (the Today screen streak —
+    /// NOT a training streak).
+    public let streakDays: Int
+    /// Mean of the last 7 days of weight logs; null with no data.
+    public let weight7dAvgKg: Double?
+    /// vs the 7 days before that window; null until both windows have data.
+    public let weight7dDeltaKg: Double?
+    /// Zone-2 minutes summed over the current Mon-start week.
+    public let z2WeeklyMinutes: Int
+
+    public init(
+        streakDays: Int, weight7dAvgKg: Double?, weight7dDeltaKg: Double?,
+        z2WeeklyMinutes: Int
+    ) {
+        self.streakDays = streakDays
+        self.weight7dAvgKg = weight7dAvgKg
+        self.weight7dDeltaKg = weight7dDeltaKg
+        self.z2WeeklyMinutes = z2WeeklyMinutes
+    }
+}
+
+/// GET /api/mobile/summary — {timeZone, ...HeroMetrics} spread flat.
+public struct SummaryResponse: Codable, Hashable, Sendable {
+    public let timeZone: String
+    public let streakDays: Int
+    public let weight7dAvgKg: Double?
+    public let weight7dDeltaKg: Double?
+    public let z2WeeklyMinutes: Int
+
+    public var metrics: HeroMetricsPayload {
+        HeroMetricsPayload(
+            streakDays: streakDays, weight7dAvgKg: weight7dAvgKg,
+            weight7dDeltaKg: weight7dDeltaKg, z2WeeklyMinutes: z2WeeklyMinutes
+        )
+    }
+}
+
+/// lib/mobile-summary.ts LastRunStats — the run BEFORE the one just synced.
+public struct LastRunStats: Codable, Hashable, Sendable {
+    public let startedAt: Date
+    public let durationMinutes: Int?
+    public let volumeKg: Double
+    public let caloriesBurned: Double?
+    public let avgHeartRateBpm: Int?
+    public let roundsCompleted: Int?
+}
+
+/// lib/mobile-summary.ts RoutineCoda. Verdict only — the server never
+/// mutates the routine; "take the raise" stays an explicit user action.
+public struct RoutineCodaPayload: Codable, Hashable, Sendable {
+    public let sequenceId: String
+    public let sequenceName: String?
+    /// "raise" | "hold" | "deload"
+    public let verdict: String
+    public let reason: String?
+    public let lastRun: LastRunStats?
 }
 
 // MARK: - Personal records (GET /api/mobile/prs)

@@ -9,6 +9,7 @@ import Foundation
 import HealthKit
 import SwiftUI
 import WatchKit
+import WidgetKit
 
 // MARK: - Workout kinds
 
@@ -129,6 +130,11 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var lastSyncCheckAt: Date?
     @Published public private(set) var syncState: SyncState = .idle
     @Published public private(set) var summary: WorkoutSummary?
+    /// Sync-response codas (Round 1+2 §02/§03): hero metrics + the routine
+    /// verdict/last-run for the session just saved. Optional until the main
+    /// lane deploys the enriched sync response to prod.
+    @Published public private(set) var heroMetrics: HeroMetricsPayload?
+    @Published public private(set) var routineCoda: RoutineCodaPayload?
 
     // Kettlebell live state
     @Published public private(set) var loggedSets: [LoggedSet] = []
@@ -192,7 +198,10 @@ public final class AppModel: ObservableObject {
         sessionStore: (any SessionStore)? = nil,
         baseURL: URL = MobileAPIClient.productionBaseURL
     ) {
-        let store = sessionStore ?? KeychainSessionStore()
+        // Shared access group so the widget extension reads the same bearer
+        // session (§02 widget-side fetch); existing ungrouped sessions are
+        // migrated on first load.
+        let store = sessionStore ?? KeychainSessionStore(accessGroup: PitayaKeychain.sharedGroup)
         self.sessionStore = store
         self.api = MobileAPIClient(baseURL: baseURL, sessionStore: store)
         self.queue = try? OfflineWorkoutQueue()
@@ -345,6 +354,9 @@ public final class AppModel: ObservableObject {
         } catch {
             // Offline — home facts stay stale, nothing breaks.
         }
+
+        // Fresh history changes the complication's due/trained state too.
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     // MARK: - Navigation
@@ -874,6 +886,12 @@ public final class AppModel: ObservableObject {
             queuedCount = 0
             lastSyncCheckAt = Date()
             reconcileSummaryPRs(from: response, matching: externalId)
+            // §02/§03 codas: hero metrics for the wrist surfaces, routine
+            // verdict + last-run for the summary deltas (Wave C consumes).
+            if let metrics = response.summary { heroMetrics = metrics }
+            if let coda = response.routine { routineCoda = coda }
+            // §02: every sync refreshes the complication timeline.
+            WidgetCenter.shared.reloadAllTimelines()
         } catch {
             syncState = .queued(pending.count)
             queuedCount = pending.count

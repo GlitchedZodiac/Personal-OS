@@ -45,6 +45,16 @@ public protocol SessionStore: Sendable {
 
 // MARK: - Keychain
 
+/// Shared keychain constants. Free personal teams allow keychain sharing
+/// (unlike app groups / APNs), so the watch app and its widget extension
+/// read the same bearer session through one access group.
+public enum PitayaKeychain {
+    /// Runtime group string = team-id prefix + group name. The team id is
+    /// pinned in project.yml (DEVELOPMENT_TEAM: HDR67SL3JG); entitlements
+    /// carry the same group as $(AppIdentifierPrefix)…shared.
+    public static let sharedGroup = "HDR67SL3JG.net.blacksheepglobal.pitaya.shared"
+}
+
 public actor KeychainSessionStore: SessionStore {
     public enum KeychainError: Error {
         case unexpectedStatus(OSStatus)
@@ -52,26 +62,46 @@ public actor KeychainSessionStore: SessionStore {
 
     private let service: String
     private let account = "mobile-session"
+    /// When set, items live in this keychain access group (app ↔ widget).
+    /// nil keeps the app's default group (iOS companion path).
+    private let accessGroup: String?
 
-    public init(service: String = "net.blacksheepglobal.pitaya.session") {
+    public init(
+        service: String = "net.blacksheepglobal.pitaya.session",
+        accessGroup: String? = nil
+    ) {
         self.service = service
+        self.accessGroup = accessGroup
     }
 
-    private var baseQuery: [String: Any] {
-        [
+    private func query(group: String?) -> [String: Any] {
+        var q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
+        if let group { q[kSecAttrAccessGroup as String] = group }
+        return q
     }
 
     public func load() -> StoredSession? {
-        var query = baseQuery
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        if let session = copyItem(group: accessGroup) { return session }
+        // Migration: sessions saved before keychain sharing live in the
+        // app's default group — invisible to the widget. Move them over so
+        // Michael's existing pairing survives without a re-pair.
+        guard accessGroup != nil, let legacy = copyItem(group: nil) else { return nil }
+        SecItemDelete(query(group: nil) as CFDictionary)
+        try? save(legacy)
+        return legacy
+    }
+
+    private func copyItem(group: String?) -> StoredSession? {
+        var q = query(group: group)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
 
         var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        let status = SecItemCopyMatching(q as CFDictionary, &item)
         guard status == errSecSuccess, let data = item as? Data else { return nil }
         return try? PitayaJSON.decoder().decode(StoredSession.self, from: data)
     }
@@ -79,7 +109,7 @@ public actor KeychainSessionStore: SessionStore {
     public func save(_ session: StoredSession) throws {
         let data = try PitayaJSON.encoder().encode(session)
 
-        var update = baseQuery
+        var update = query(group: accessGroup)
         let attributes: [String: Any] = [kSecValueData as String: data]
         let updateStatus = SecItemUpdate(update as CFDictionary, attributes as CFDictionary)
         if updateStatus == errSecSuccess { return }
@@ -97,7 +127,11 @@ public actor KeychainSessionStore: SessionStore {
     }
 
     public func clear() {
-        SecItemDelete(baseQuery as CFDictionary)
+        // No group restriction: wipes shared and legacy copies alike.
+        SecItemDelete(query(group: nil) as CFDictionary)
+        if accessGroup != nil {
+            SecItemDelete(query(group: accessGroup) as CFDictionary)
+        }
     }
 }
 
