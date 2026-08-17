@@ -169,6 +169,11 @@ recording, and keep it as a routine when it earned it.
 - **Prompt: THE FREESTYLE FLOW** — ask one question if no description
   came; attach via exercises mode; measure claim-vs-recording in one
   sentence; offer create_routine ONCE, never push.
+- **Wrist handoff READY (14g):** `GET /api/mobile/zones` (bearer) serves
+  his zone tops (122/152/167/182) so the watch binds, never hardcodes;
+  paste-ready kickoff at docs/watch-freestyle-kickoff.md (merge main
+  first; take the placeholder fourth tile; HKWorkoutSession recorder;
+  ≤200-pt downsampled streams; no structure UI on the wrist).
 
 ## 2026-08-14b — THE DEFERRED-QUEUE SWEEP (his "run all deferred items")
 
