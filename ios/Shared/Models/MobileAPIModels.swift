@@ -481,6 +481,19 @@ public struct CustomExerciseListResponse: Codable, Sendable {
 
 // MARK: - Daily health snapshot
 
+/// One HealthKit body-mass reading. The server dedups against existing
+/// weigh-ins by near-twin rule (±10 min, ±0.3 kg) and writes the survivors
+/// to body_measurements — so sending every sample is safe and correct.
+public struct WeightSamplePayload: Codable, Hashable, Sendable {
+    public let measuredAt: Date
+    public let weightKg: Double
+
+    public init(measuredAt: Date, weightKg: Double) {
+        self.measuredAt = measuredAt
+        self.weightKg = weightKg
+    }
+}
+
 public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
     public let localDate: String
     public let timeZone: String
@@ -488,9 +501,20 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
     public let restingHeartRateBpm: Int?
     public let activeEnergyKcal: Double?
     public let walkingRunningDistanceMeters: Double?
+    /// Promoted to top level 2026-08-17 — these columns shipped long ago,
+    /// and the server only reads the nested copies as a legacy fallback
+    /// (which it can now drop).
+    public let sleepMinutes: Int?
+    public let sleepDeepMinutes: Int?
+    public let sleepRemMinutes: Int?
+    public let hrvMs: Double?
+    /// Body mass never belonged in the snapshot: the server routes these to
+    /// body_measurements, and it reads ONLY the top-level key — the old
+    /// rawData.weightKg was silently dropped on every sync.
+    public let weightSamples: [WeightSamplePayload]?
     public let source: String
-    /// Extras riding until dedicated columns ship (announced 2026-08-11):
-    /// sleepMinutes, hrvMs, weightKg.
+    /// Anything without a column of its own. No longer carries the promoted
+    /// fields above.
     public let rawData: [String: Double]?
 
     public init(
@@ -500,6 +524,11 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
         restingHeartRateBpm: Int? = nil,
         activeEnergyKcal: Double? = nil,
         walkingRunningDistanceMeters: Double? = nil,
+        sleepMinutes: Int? = nil,
+        sleepDeepMinutes: Int? = nil,
+        sleepRemMinutes: Int? = nil,
+        hrvMs: Double? = nil,
+        weightSamples: [WeightSamplePayload]? = nil,
         source: String = "apple_health",
         rawData: [String: Double]? = nil
     ) {
@@ -509,6 +538,11 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
         self.restingHeartRateBpm = restingHeartRateBpm
         self.activeEnergyKcal = activeEnergyKcal
         self.walkingRunningDistanceMeters = walkingRunningDistanceMeters
+        self.sleepMinutes = sleepMinutes
+        self.sleepDeepMinutes = sleepDeepMinutes
+        self.sleepRemMinutes = sleepRemMinutes
+        self.hrvMs = hrvMs
+        self.weightSamples = weightSamples
         self.source = source
         self.rawData = rawData
     }

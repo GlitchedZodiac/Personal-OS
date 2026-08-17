@@ -6,12 +6,20 @@ import SwiftUI
 @main
 struct PitayaWatchApp: App {
     @StateObject private var model = AppModel()
+    /// Owns the scheduled background wake (queue drain + complication).
+    @WKApplicationDelegateAdaptor(PitayaAppDelegate.self) private var delegate
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(model)
                 .task { await model.bootstrap() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Re-arm on the way out — a wrist-drop is the moment a queued
+            // session most needs someone to come back for it.
+            if phase == .background { PitayaBackgroundRefresh.schedule() }
         }
     }
 }

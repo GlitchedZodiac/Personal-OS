@@ -1142,6 +1142,14 @@ public final class AppModel: ObservableObject {
 
     // MARK: - Sync
 
+    /// Scheduled background wake: push the queue, refresh the face. Kept
+    /// deliberately light — the widget runs its own fetch when its timeline
+    /// reloads, so this never needs the full history refresh.
+    public func backgroundRefresh() async {
+        await drainQueue()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     public func drainQueue(reconcilePRsFor externalId: String? = nil) async {
         guard let queue else { return }
         let pending = await queue.load()

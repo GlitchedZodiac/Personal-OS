@@ -10,6 +10,7 @@
 		000AEB3978A821CC6BC57227 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
 		0028C1690C38674F05C27913 /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
 		0152AC266644EF9569DF142B /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */; };
+		034D889106F844518B56AA92 /* BackgroundRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BCE2ACF93EFE5AC3F1C8A7 /* BackgroundRefresh.swift */; };
 		05317DBD031E73DDAE8151C6 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
 		09DE6BDE7477E9EAD65961D0 /* PersonalOS WatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 93B03235195B45C26E62AD2A /* PersonalOS WatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0B73A4EC13599FACFA029DF5 /* SequenceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */; };
@@ -183,6 +184,7 @@
 		A29139B53372E4565B93E223 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		ACE040138C592BFC1248B7D1 /* TrailPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailPage.swift; sourceTree = "<group>"; };
 		ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineWorkoutQueue.swift; sourceTree = "<group>"; };
+		B9BCE2ACF93EFE5AC3F1C8A7 /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
 		BA4739C9C1BE068652A2633F /* PitayaWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PitayaWidgets.entitlements; sourceTree = "<group>"; };
 		BAB5F2EC88271FD5EC8C556E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		BC2020045D700AEC8774E254 /* PitayaVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaVector.swift; sourceTree = "<group>"; };
@@ -270,6 +272,7 @@
 			children = (
 				4A0960EA68534280B484B235 /* AppModel.swift */,
 				674D825EB1855E75A9381EE7 /* Assets.xcassets */,
+				B9BCE2ACF93EFE5AC3F1C8A7 /* BackgroundRefresh.swift */,
 				DE2EF43C80F46EB6C976F9FD /* DoubleTap.swift */,
 				5266E99A5C09DF8C1D834F88 /* Fonts */,
 				570E4172D82BFC1B6E10D848 /* Info.plist */,
@@ -587,6 +590,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				836DABC6857606F8BB040B10 /* AppModel.swift in Sources */,
+				034D889106F844518B56AA92 /* BackgroundRefresh.swift in Sources */,
 				E1112713A4A1BFAF3893AB61 /* BellRackSheet.swift in Sources */,
 				1F4F7858F490CDE118F92780 /* Components.swift in Sources */,
 				7C1C73B93520F304DF109AAD /* CustomExerciseCache.swift in Sources */,
