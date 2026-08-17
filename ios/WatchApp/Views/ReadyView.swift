@@ -177,7 +177,7 @@ struct ReadyView: View {
                     }
                     .buttonStyle(.plain)
                     Text("Ready")
-                        .font(Theme.display(13))
+                        .font(Theme.wDisplay(13))
                         .foregroundStyle(Theme.textBright)
                 }
 
@@ -186,11 +186,11 @@ struct ReadyView: View {
                         PitayaMark(size: Theme.px(24), color: verdict.color)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(verdict.word)
-                                .font(Theme.display(13))
+                                .font(Theme.wDisplay(13))
                                 .foregroundStyle(verdict.color)
                             if let asOf = readiness.asOf {
                                 Text("as of \(shortTime(asOf))")
-                                    .font(Theme.text(6))
+                                    .font(Theme.wText(6))
                                     .foregroundStyle(Theme.textTertiary)
                             }
                         }
@@ -212,7 +212,7 @@ struct ReadyView: View {
                 .padding(.top, Theme.px(16))
 
                 Text("A verdict, never a coach —\nyour plan is untouched.")
-                    .font(Theme.text(6))
+                    .font(Theme.wText(6))
                     .foregroundStyle(Theme.textFaint)
                     .lineSpacing(2)
                     .padding(.top, Theme.px(14))
@@ -228,16 +228,16 @@ struct ReadyView: View {
     ) -> some View {
         HStack {
             Text(label)
-                .font(Theme.text(7))
+                .font(Theme.wText(7))
                 .foregroundStyle(Theme.textSecondary)
             Spacer(minLength: 0)
             HStack(spacing: 4) {
                 Text(value ?? "––")
-                    .font(Theme.text(7.5, weight: .semibold))
+                    .font(Theme.wText(7.5, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
                 if let delta {
                     Text(delta)
-                        .font(Theme.text(5.5))
+                        .font(Theme.wText(5.5))
                         .foregroundStyle(deltaColor)
                 }
             }

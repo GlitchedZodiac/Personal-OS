@@ -33,7 +33,7 @@ struct SummaryView: View {
 
                 if isSaved {
                     Text("Full breakdown in Pitaya")
-                        .font(Theme.text(5.75))
+                        .font(Theme.wText(5.75))
                         .foregroundStyle(Theme.textMuted)
                         .frame(maxWidth: .infinity)
                         .padding(.top, Theme.px(12))
@@ -49,7 +49,7 @@ struct SummaryView: View {
                         confirmDiscard = true
                     } label: {
                         Text("Discard")
-                            .font(Theme.text(11, weight: .semibold))
+                            .font(Theme.wText(11, weight: .semibold))
                             .foregroundStyle(Theme.danger)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
@@ -84,7 +84,7 @@ struct SummaryView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(isSaved ? "Saved" : "Finished")
-                    .font(Theme.display(12))
+                    .font(Theme.wDisplay(12))
                     .foregroundStyle(Theme.textBright)
                 syncLine
             }
@@ -96,22 +96,22 @@ struct SummaryView: View {
         switch model.syncState {
         case .unsaved:
             Text("review · save or discard")
-                .font(Theme.text(5.75)).foregroundStyle(Theme.textTertiary)
+                .font(Theme.wText(5.75)).foregroundStyle(Theme.textTertiary)
         case .syncing:
             HStack(spacing: 4) {
                 ProgressView().tint(Theme.accent).scaleEffect(0.55).frame(width: 10, height: 10)
                 Text("syncing to Pitaya")
-                    .font(Theme.text(5.75)).foregroundStyle(Theme.textTertiary)
+                    .font(Theme.wText(5.75)).foregroundStyle(Theme.textTertiary)
             }
         case .synced:
             Text("synced to Pitaya")
-                .font(Theme.text(5.75)).foregroundStyle(Theme.mint)
+                .font(Theme.wText(5.75)).foregroundStyle(Theme.mint)
         case .queued:
             Text("offline · queued to sync")
-                .font(Theme.text(5.75)).foregroundStyle(Theme.textTertiary)
+                .font(Theme.wText(5.75)).foregroundStyle(Theme.textTertiary)
         case .failed(let message):
             Text(message)
-                .font(Theme.text(5.75)).foregroundStyle(Theme.danger)
+                .font(Theme.wText(5.75)).foregroundStyle(Theme.danger)
         case .idle:
             EmptyView()
         }
@@ -127,7 +127,7 @@ struct SummaryView: View {
                 .fontWeight(.semibold)
                 + Text(vsSuffix)
                 .foregroundStyle(Theme.textMuted))
-                .font(Theme.text(6))
+                .font(Theme.wText(6))
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
                 .padding(.horizontal, Theme.px(4))
@@ -203,18 +203,18 @@ struct SummaryView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
-                    .font(Theme.display(11))
+                    .font(Theme.wDisplay(11))
                     .foregroundStyle(color)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                 if let delta {
                     Text(deltaText(delta))
-                        .font(Theme.text(5.5, weight: .semibold))
+                        .font(Theme.wText(5.5, weight: .semibold))
                         .foregroundStyle(delta == 0 ? Theme.textMuted : Theme.mint)
                 }
             }
             Text(label)
-                .font(Theme.text(4.75, weight: .semibold))
+                .font(Theme.wText(4.75, weight: .semibold))
                 .kerning(0.7)
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.top, 1)
@@ -280,12 +280,12 @@ struct SummaryView: View {
                     .padding(.top, Theme.px(3))
                 VStack(alignment: .leading, spacing: Theme.px(3)) {
                     Text(coda.reason ?? defaultReason(coda.verdict))
-                        .font(Theme.text(7, weight: .semibold))
+                        .font(Theme.wText(7, weight: .semibold))
                         .foregroundStyle(Theme.prText)
                         .lineSpacing(2)
                     if coda.verdict == "raise" {
                         Text("the next bell waits in Pitaya → Train")
-                            .font(Theme.text(5.5))
+                            .font(Theme.wText(5.5))
                             .foregroundStyle(Theme.accentWashSub)
                     }
                 }
@@ -312,14 +312,14 @@ struct SummaryView: View {
                 RecoveryGlyph(color: Theme.accent, arrowColor: Theme.mint, size: Theme.px(20))
                 VStack(alignment: .leading, spacing: 1) {
                     (Text("Recovery −\(capture.drop)")
-                        .font(Theme.text(7.5, weight: .semibold))
+                        .font(Theme.wText(7.5, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
                         + Text("  in 1:00")
-                        .font(Theme.text(5.5))
+                        .font(Theme.wText(5.5))
                         .foregroundStyle(Theme.textTertiary))
                         .lineLimit(1)
                     Text("\(capture.fromBpm) → \(capture.toBpm) after the last set · \(capture.band)")
-                        .font(Theme.text(5.5))
+                        .font(Theme.wText(5.5))
                         .foregroundStyle(Theme.textTertiary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -362,7 +362,7 @@ struct SummaryView: View {
             let total = seconds.reduce(0, +)
             VStack(alignment: .leading, spacing: 0) {
                 Text("TIME IN ZONES")
-                    .font(Theme.text(4.75, weight: .semibold))
+                    .font(Theme.wText(4.75, weight: .semibold))
                     .kerning(0.7)
                     .foregroundStyle(Theme.textTertiary)
                 HStack(spacing: Theme.px(3)) {
@@ -381,7 +381,7 @@ struct SummaryView: View {
                 .clipShape(RoundedRectangle(cornerRadius: Theme.px(5)))
                 .padding(.top, Theme.px(9))
                 Text(zonesCaption(seconds))
-                    .font(Theme.text(5.5))
+                    .font(Theme.wText(5.5))
                     .foregroundStyle(Theme.textTertiary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -430,7 +430,7 @@ struct SummaryView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text("THE \(Int((summary.durationSeconds / 60).rounded())) MINUTES")
-                        .font(Theme.text(4.75, weight: .semibold))
+                        .font(Theme.wText(4.75, weight: .semibold))
                         .kerning(0.7)
                         .foregroundStyle(Theme.textTertiary)
                     Spacer(minLength: 0)
@@ -446,7 +446,7 @@ struct SummaryView: View {
                 .frame(height: Theme.px(30), alignment: .bottom)
                 .padding(.top, Theme.px(9))
                 Text(tapeCaption(rounds, prRound: prRound))
-                    .font(Theme.text(5.5))
+                    .font(Theme.wText(5.5))
                     .foregroundStyle(Theme.textTertiary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)

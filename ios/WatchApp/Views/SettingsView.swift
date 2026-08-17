@@ -23,7 +23,7 @@ struct SettingsView: View {
                 HStack(spacing: Theme.px(8)) {
                     BackChevron { model.backToHome() }
                     Text("Settings")
-                        .font(Theme.display(13))
+                        .font(Theme.wDisplay(13))
                         .foregroundStyle(Theme.textBright)
                 }
 
@@ -62,7 +62,7 @@ struct SettingsView: View {
                 }
 
                 Text("Everything else is already right — routines carry their own rest and weights.")
-                    .font(Theme.text(6))
+                    .font(Theme.wText(6))
                     .foregroundStyle(Theme.textFaint)
                     .padding(.horizontal, Theme.px(6))
                     .padding(.top, Theme.px(16))
@@ -118,7 +118,7 @@ struct SettingsView: View {
     @ViewBuilder
     private func group(_ label: String, @ViewBuilder rows: () -> some View) -> some View {
         Text(label)
-            .font(Theme.text(5.5, weight: .semibold))
+            .font(Theme.wText(5.5, weight: .semibold))
             .kerning(1.0)
             .foregroundStyle(Theme.textMuted)
             .padding(.horizontal, Theme.px(6))
@@ -138,11 +138,11 @@ struct SettingsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title)
-                        .font(Theme.text(8.5, weight: .semibold))
+                        .font(Theme.wText(8.5, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
                     if let subtitle {
                         Text(subtitle)
-                            .font(Theme.text(5.75))
+                            .font(Theme.wText(5.75))
                             .foregroundStyle(Theme.textMuted)
                             .padding(.top, 0.5)
                     }
@@ -151,15 +151,15 @@ struct SettingsView: View {
                 HStack(spacing: 3) {
                     if let accentValue {
                         Text(accentValue)
-                            .font(Theme.text(7, weight: .semibold))
+                            .font(Theme.wText(7, weight: .semibold))
                             .foregroundStyle(Theme.accent)
                     } else if let value {
                         Text(value)
-                            .font(Theme.text(7))
+                            .font(Theme.wText(7))
                             .foregroundStyle(Theme.textSecondary)
                     }
                     Text("›")
-                        .font(Theme.text(7))
+                        .font(Theme.wText(7))
                         .foregroundStyle(Theme.textMuted)
                 }
                 .lineLimit(1)
@@ -176,10 +176,10 @@ struct SettingsView: View {
         HStack {
             VStack(alignment: .leading, spacing: 0) {
                 Text(title)
-                    .font(Theme.text(8.5, weight: .semibold))
+                    .font(Theme.wText(8.5, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
                 Text(subtitle)
-                    .font(Theme.text(5.75))
+                    .font(Theme.wText(5.75))
                     .foregroundStyle(Theme.textMuted)
                     .padding(.top, 0.5)
             }
@@ -208,7 +208,7 @@ struct SettingsView: View {
     private var unitsRow: some View {
         HStack {
             Text("Weight")
-                .font(Theme.text(8.5, weight: .semibold))
+                .font(Theme.wText(8.5, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
             Spacer(minLength: 4)
             HStack(spacing: 0) {
@@ -226,7 +226,7 @@ struct SettingsView: View {
     private func segment(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(Theme.text(6.25, weight: .semibold))
+                .font(Theme.wText(6.25, weight: .semibold))
                 .foregroundStyle(selected ? Color(hex: 0x131216) : Theme.textTertiary)
                 .padding(.horizontal, Theme.px(selected ? 14 : 12))
                 .padding(.vertical, Theme.px(4))
@@ -238,7 +238,7 @@ struct SettingsView: View {
     private var syncRow: some View {
         HStack {
             Text("Sync")
-                .font(Theme.text(8.5, weight: .semibold))
+                .font(Theme.wText(8.5, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
             Spacer(minLength: 4)
             HStack(spacing: Theme.px(6)) {
@@ -246,7 +246,7 @@ struct SettingsView: View {
                     .fill(model.queuedCount == 0 ? Theme.mint : Color(hex: 0xE8B675))
                     .frame(width: Theme.px(7), height: Theme.px(7))
                 Text(syncValue)
-                    .font(Theme.text(7))
+                    .font(Theme.wText(7))
                     .foregroundStyle(model.queuedCount == 0 ? Theme.mint : Color(hex: 0xE8B675))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -273,11 +273,11 @@ struct SettingsView: View {
         } label: {
             HStack {
                 Text("Unpair this watch")
-                    .font(Theme.text(8.5, weight: .semibold))
+                    .font(Theme.wText(8.5, weight: .semibold))
                     .foregroundStyle(Theme.danger)
                 Spacer(minLength: 4)
                 Text("›")
-                    .font(Theme.text(7))
+                    .font(Theme.wText(7))
                     .foregroundStyle(Theme.textMuted)
             }
             .padding(.horizontal, Theme.px(16))
@@ -301,7 +301,7 @@ struct OptionSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.px(7)) {
                 Text(title)
-                    .font(Theme.display(10))
+                    .font(Theme.wDisplay(10))
                     .foregroundStyle(Theme.textBright)
                     .padding(.bottom, Theme.px(4))
                 ForEach(options, id: \.self) { option in
@@ -311,7 +311,7 @@ struct OptionSheet: View {
                     } label: {
                         HStack {
                             Text(option)
-                                .font(Theme.text(8, weight: .medium))
+                                .font(Theme.wText(8, weight: .medium))
                                 .foregroundStyle(Theme.textPrimary)
                             Spacer()
                             if option == selected {
@@ -343,20 +343,20 @@ struct RestFallbackSheet: View {
     var body: some View {
         VStack(spacing: Theme.px(2)) {
             Text("REST FALLBACK")
-                .font(Theme.text(6.5, weight: .semibold))
+                .font(Theme.wText(6.5, weight: .semibold))
                 .kerning(1.2)
                 .foregroundStyle(Theme.textTertiary)
             Spacer(minLength: 0)
             Text(":\(Int(crownValue))")
-                .font(Theme.numeric(38))
+                .font(Theme.wNumeric(38))
                 .foregroundStyle(Theme.accent)
                 .contentTransition(.numericText())
             Text("SECONDS · CROWN")
-                .font(Theme.text(6, weight: .semibold))
+                .font(Theme.wText(6, weight: .semibold))
                 .kerning(0.8)
                 .foregroundStyle(Theme.textMuted)
             Text("used when a routine has no rest of its own")
-                .font(Theme.text(6))
+                .font(Theme.wText(6))
                 .foregroundStyle(Theme.textFaint)
                 .multilineTextAlignment(.center)
                 .padding(.top, Theme.px(6))

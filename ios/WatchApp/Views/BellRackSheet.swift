@@ -21,18 +21,18 @@ struct BellRackSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("BELLS")
-                .font(Theme.text(6.5, weight: .semibold))
+                .font(Theme.wText(6.5, weight: .semibold))
                 .kerning(1.0)
                 .foregroundStyle(Theme.textTertiary)
 
             Text("\(cursorKg)")
-                .font(Theme.numeric(38))
+                .font(Theme.wNumeric(38))
                 .foregroundStyle(Theme.accent)
                 .contentTransition(.numericText())
                 .padding(.top, Theme.px(10))
 
             Text("KG · CROWN")
-                .font(Theme.text(6, weight: .semibold))
+                .font(Theme.wText(6, weight: .semibold))
                 .kerning(0.9)
                 .foregroundStyle(Theme.textMuted)
                 .padding(.top, Theme.px(2))
@@ -84,10 +84,10 @@ struct BellRackSheet: View {
     private var ownedLine: some View {
         HStack(spacing: 3) {
             Text(prefs.ownedBells.contains(cursorKg) ? "owned ✓" : "not owned")
-                .font(Theme.text(6.5, weight: .semibold))
+                .font(Theme.wText(6.5, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
             Text("· tap to toggle")
-                .font(Theme.text(6.5))
+                .font(Theme.wText(6.5))
                 .foregroundStyle(Theme.textMuted)
         }
     }

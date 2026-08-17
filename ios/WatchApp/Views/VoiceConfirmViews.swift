@@ -17,16 +17,16 @@ struct VoiceWeightConfirmView: View {
 
             HStack(alignment: .firstTextBaseline, spacing: Theme.px(8)) {
                 Text(String(format: "%.1f", model.voiceWeightKg))
-                    .font(Theme.display(28))
+                    .font(Theme.wDisplay(28))
                     .foregroundStyle(Theme.textBright)
                     .contentTransition(.numericText())
                 Text("kg")
-                    .font(Theme.text(7, weight: .semibold))
+                    .font(Theme.wText(7, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
                 Spacer(minLength: 0)
                 if let chip = trendChip {
                     Text(chip)
-                        .font(Theme.text(6))
+                        .font(Theme.wText(6))
                         .foregroundStyle(Theme.mint)
                 }
             }
@@ -38,7 +38,7 @@ struct VoiceWeightConfirmView: View {
                     model.dismissVoiceLog()
                 } label: {
                     Text("Edit")
-                        .font(Theme.display(8.5, weight: .semibold))
+                        .font(Theme.wDisplay(8.5, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
                         .frame(width: Theme.px(86))
                         .padding(.vertical, Theme.px(13))
@@ -49,7 +49,7 @@ struct VoiceWeightConfirmView: View {
             .padding(.top, Theme.px(16))
 
             Text("offline — queued until sync")
-                .font(Theme.text(5.75))
+                .font(Theme.wText(5.75))
                 .foregroundStyle(Theme.textFaint)
                 .padding(.top, Theme.px(12))
         }
@@ -82,14 +82,14 @@ struct VoiceFoodConfirmView: View {
             header(label: "HEARD · FOOD")
 
             Text(model.voiceFoodText)
-                .font(Theme.display(11))
+                .font(Theme.wDisplay(11))
                 .foregroundStyle(Theme.textBright)
                 .lineLimit(3)
                 .minimumScaleFactor(0.7)
                 .padding(.top, Theme.px(12))
 
             Text("Pitaya will price it")
-                .font(Theme.text(6))
+                .font(Theme.wText(6))
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.top, Theme.px(6))
 
@@ -99,7 +99,7 @@ struct VoiceFoodConfirmView: View {
                     model.dismissVoiceLog()
                 } label: {
                     Text("Edit")
-                        .font(Theme.display(8.5, weight: .semibold))
+                        .font(Theme.wDisplay(8.5, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
                         .frame(width: Theme.px(86))
                         .padding(.vertical, Theme.px(13))
@@ -110,7 +110,7 @@ struct VoiceFoodConfirmView: View {
             .padding(.top, Theme.px(16))
 
             Text("offline — queued until sync")
-                .font(Theme.text(5.75))
+                .font(Theme.wText(5.75))
                 .foregroundStyle(Theme.textFaint)
                 .padding(.top, Theme.px(12))
         }
@@ -125,7 +125,7 @@ private func header(label: String) -> some View {
     HStack(spacing: Theme.px(8)) {
         PitayaMark(size: Theme.px(11), color: Theme.accent)
         Text(label)
-            .font(Theme.text(5.5, weight: .bold))
+            .font(Theme.wText(5.5, weight: .bold))
             .kerning(Theme.px(11) * 0.16)
             .foregroundStyle(Theme.textTertiary)
     }

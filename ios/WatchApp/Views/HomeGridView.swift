@@ -30,7 +30,7 @@ struct HomeGridView: View {
             PitayaMark(size: Theme.px(14) * 0.72, color: Theme.accent)
                 .frame(width: Theme.px(14), height: Theme.px(14))
             Text("Pitaya")
-                .font(Theme.display(12))
+                .font(Theme.wDisplay(12))
                 .foregroundStyle(Theme.textBright)
             Spacer(minLength: 0)
             weekTicks
@@ -91,7 +91,7 @@ struct HomeGridView: View {
                 .foregroundStyle(Theme.textMuted)
             VerdictChip(readiness: model.readiness) { model.openReady() }
         }
-        .font(Theme.text(6))
+        .font(Theme.wText(6))
         .lineLimit(1)
         .minimumScaleFactor(0.8)
         .padding(.horizontal, Theme.px(6))
@@ -138,16 +138,16 @@ struct HomeGridView: View {
                 .frame(width: Theme.px(34), height: Theme.px(34))
                 Spacer(minLength: 0)
                 Text("Workouts")
-                    .font(Theme.text(8, weight: .semibold))
+                    .font(Theme.wText(8, weight: .semibold))
                     .foregroundStyle(Theme.textBright)
                 Group {
                     if let trained {
                         Text("✓ \(shortTime(trained))")
-                            .font(Theme.text(5.5, weight: .semibold))
+                            .font(Theme.wText(5.5, weight: .semibold))
                             .foregroundStyle(Theme.mint)
                     } else if let due {
                         Text("due · \(due.name)")
-                            .font(Theme.text(5.5, weight: .semibold))
+                            .font(Theme.wText(5.5, weight: .semibold))
                             .foregroundStyle(Theme.accentWashText)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -155,7 +155,7 @@ struct HomeGridView: View {
                         // Neither state exists in the design (it always has a
                         // due routine or a trained day) — quiet fallback.
                         Text("\(model.sequences.count) routines · free sets")
-                            .font(Theme.text(5.5))
+                            .font(Theme.wText(5.5))
                             .foregroundStyle(Theme.textMuted)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -198,10 +198,10 @@ struct HomeGridView: View {
             .frame(width: Theme.px(34), height: Theme.px(34))
             Spacer(minLength: 0)
             Text(title)
-                .font(Theme.text(8, weight: .semibold))
+                .font(Theme.wText(8, weight: .semibold))
                 .foregroundStyle(titleColor)
             Text(subtitle)
-                .font(Theme.text(5.5))
+                .font(Theme.wText(5.5))
                 .foregroundStyle(subtitleColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -223,7 +223,7 @@ struct HomeGridView: View {
             HStack(spacing: Theme.px(7)) {
                 TuneGlyph(color: Theme.textMuted, size: Theme.px(13))
                 Text("Settings")
-                    .font(Theme.text(6))
+                    .font(Theme.wText(6))
                     .foregroundStyle(Theme.textMuted)
             }
             .frame(maxWidth: .infinity)

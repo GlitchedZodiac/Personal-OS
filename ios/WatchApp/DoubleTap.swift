@@ -62,7 +62,7 @@ struct DoubleTapToast: View {
                 HStack(spacing: Theme.px(8)) {
                     PitayaMark(size: Theme.px(9), color: Theme.prText)
                     Text("Double Tap logged it")
-                        .font(Theme.text(6.25, weight: .semibold))
+                        .font(Theme.wText(6.25, weight: .semibold))
                         .foregroundStyle(Theme.prText)
                 }
                 .padding(.horizontal, Theme.px(15))
@@ -100,14 +100,14 @@ struct DoubleTapCoachView: View {
             .onAppear { ripple = true }
 
             Text("Pinch twice —\nhands stay on the bell.")
-                .font(Theme.display(13))
+                .font(Theme.wDisplay(13))
                 .foregroundStyle(Theme.textBright)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, Theme.px(16))
 
             Text("It always presses the pink button.")
-                .font(Theme.text(6.5))
+                .font(Theme.wText(6.5))
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.top, Theme.px(8))
 

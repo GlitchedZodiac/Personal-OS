@@ -68,10 +68,18 @@ public enum Theme {
     // at N × 0.5625 pt on screen.
     private static let typeScale: CGFloat = 1.125
 
+    /// Michael's on-wrist sizing, re-applied to the Round 1+2 screens
+    /// (2026-08-17). The verbatim design port maps the 352 px canvas to the
+    /// 45 mm screen 1:1 — proportionally exact, but it silently reverted the
+    /// two +12 % passes he'd asked for on the older screens (1.12 × 1.12 ≈
+    /// 1.25), which is why Home and Settings read smaller than the rest of
+    /// the app. Deviation from the design file is deliberate and his call.
+    public static let wristScale: CGFloat = 1.25
+
     /// Geometry mapping for Round 1 screens: design px → on-screen pt at the
-    /// same proportional scale the fonts use.
+    /// same proportional scale the fonts use, carrying the wrist bump.
     public static func px(_ designPx: CGFloat) -> CGFloat {
-        designPx * 0.5625
+        designPx * 0.5625 * wristScale
     }
     private static func familjen(_ weight: Font.Weight) -> String {
         switch weight {
@@ -102,6 +110,24 @@ public enum Theme {
     /// carries tabular figures; monospacedDigit engages them).
     public static func numeric(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
         .custom(familjen(weight), size: size * typeScale).monospacedDigit()
+    }
+
+    // ── Round 1+2 type (design px ÷ 2 in, wrist-scaled out) ───────────
+    // Same argument convention as the three above — these just carry
+    // `wristScale`. Screens ported from the Round 1 design file call these;
+    // the hand-tuned older screens (logger, live pages, controls) keep the
+    // plain helpers, since his +12 % passes are already baked into them.
+
+    public static func wDisplay(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
+        display(size * wristScale, weight: weight)
+    }
+
+    public static func wText(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        text(size * wristScale, weight: weight)
+    }
+
+    public static func wNumeric(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
+        numeric(size * wristScale, weight: weight)
     }
 
     // ── Shape ─────────────────────────────────────────────────────────

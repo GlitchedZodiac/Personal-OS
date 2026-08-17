@@ -139,7 +139,7 @@ struct SetLoggerPage: View {
                     .foregroundStyle(Theme.textSecondary)
             }
         }
-        .font(Theme.text(6.75))
+        .font(Theme.wText(6.75))
         .lineLimit(1)
         .minimumScaleFactor(0.8)
     }
