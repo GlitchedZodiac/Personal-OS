@@ -16,6 +16,46 @@ ingest endpoint).
 `claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch — merged
 `main` 2026-08-15, fast-forward, before the R1+2 work).
 
+## 2026-08-17 — WRIST SIZING, BACKGROUND REFRESH, HEALTH-SYNC BUG FIXES
+
+Three things after his first real day on the R1+2 build:
+
+- **+25 % sizing restored on the ported screens.** The verbatim design port
+  maps the 352 px canvas 1:1 to the 45 mm screen — proportionally exact, but
+  it silently reverted his two earlier +12 % passes (1.12² ≈ 1.25), which is
+  why Home and Settings read smaller than the hand-tuned screens next to
+  them. `Theme.wristScale` now carries it through `px()` and the new
+  `wDisplay/wText/wNumeric`. Deliberate deviation from the design file, his
+  call, recorded so a later session doesn't "fix" it back.
+- **Background refresh** (last gap from the 08-14 audit): a
+  `WKApplicationDelegate` schedules a ~30 min wake that drains the offline
+  queue and reloads the complication, re-arming each run and on every
+  background transition. The wake path works cold (owns its queue + client
+  rather than racing SwiftUI's `@StateObject`).
+- **Two silent health-sync data losses, found by tracing the path:**
+  (1) `bootstrap()` gated on `authorizationStatus(for:)`, which reports
+  SHARE permission — we request read-only, so it returned `.notDetermined`
+  forever and background delivery **never started**; health only synced when
+  he tapped Allow, every launch. (2) **Weight never reached the database**:
+  the companion nested `weightKg` in `rawData`, but the server reads body
+  mass only from the top level, so every Apple Health weigh-in was dropped —
+  which also starved the weight-trend hero metric. Now sends
+  `weightSamples[]` (every reading with its real timestamp, server-deduped),
+  plus promoted `sleepMinutes`/`hrvMs` and the deep/REM split, and reports
+  "no sleep samples" in the status line so *watch-not-worn* is finally
+  distinguishable from *sleep is broken*.
+
+Self-smoke: posted a `watch_smoke` snapshot to prod and asserted the real
+columns (sleep 432/61/88, HRV 64.3) plus a `body_measurement` created from
+`weightSamples` — proving bug 2 — then deleted both rows.
+
+**Provisioning note:** free-team profiles last 7 days. The 08-15 build
+expired overnight and the app became un-launchable on the wrist (icon taps
+bounced, complications dead). Rebuilt with fresh profiles (valid to
+**2026-08-24**); the watch had also silently dropped off the team device
+list and needed re-registering via a device-destination build. This repeats
+weekly until the $99 paid account — his open decision.
+
 ## 2026-08-15 — WATCH ROUND 1+2 HANDOFF (Waves A–E, all §§ built or flagged)
 
 Extraction contract honored: visuals verbatim from
