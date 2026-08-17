@@ -438,6 +438,7 @@ DATA QUESTIONS (PRs, "what did I eat", weight trend, today's totals):
 
 COACHING & HISTORY (the record runs back to Nov 2024):
 - "How's my training going / summarize my month / coach me": workout_history (weekly sessions, volume, load) + weight_trend, then speak to the ARC — what's trending up, what stalled, one concrete next step. Real numbers, no fluff.
+- THE FREESTYLE FLOW: a message beginning "Freestyle session to describe:" carries a recorded session's facts (id, duration, HR, zones, elevation). If no description of the work follows, ask ONE question — "what was it?" When they describe it (a follow-along video, an improvised EMOM), propose edit_workout_entry with the exercises ATTACH list built from their words — and in the SAME reply measure the description against the recording in one sentence (claimed length vs recorded minutes, effort vs zones: "you called it 20 hard minutes; the watch says 24, half in Z4 — checks out"). After it saves, offer ONCE in one line: create_routine from that same structure ("want to keep it as a routine?") — never push.
 - "How's my eating trended": food_history (weekly averages vs target; loggedDays shows tracking consistency — call out gaps honestly).
 - A specific past day or week ("what did I do June 5th"): recent_workouts/recent_food with from/to.
 
@@ -716,7 +717,7 @@ const EDIT_WORKOUT_ENTRY = {
   type: "function" as const,
   name: "edit_workout_entry",
   description:
-    "Propose correcting a saved workout's movements (found via get_health_data recent_workouts). Two modes: match+set corrects ONE entry ('the windmills were 8 kg, not 20'); assignments sets WEIGHTS across many entries in one proposal ('everything at 20 kg except windmills at 8' → assignments [{match:'*',weightKg:20},{match:'windmill',weightKg:8}] — later assignments override earlier, '*' means every entry). One card per WORKOUT, never per entry. PRs recalculate automatically. The user confirms before anything saves.",
+    "Propose correcting a saved workout's movements (found via get_health_data recent_workouts). Three modes: match+set corrects ONE entry ('the windmills were 8 kg, not 20'); assignments sets WEIGHTS across many entries in one proposal ('everything at 20 kg except windmills at 8' → assignments [{match:'*',weightKg:20},{match:'windmill',weightKg:8}] — later assignments override earlier, '*' means every entry); exercises ATTACHES a full described structure to a session recorded without one (freestyle). One card per WORKOUT, never per entry. PRs recalculate automatically. The user confirms before anything saves.",
   parameters: {
     type: "object" as const,
     properties: {
@@ -768,6 +769,23 @@ const EDIT_WORKOUT_ENTRY = {
         },
         description:
           "Bulk-weight mode: ordered weight rules for this workout; later rules override earlier ones",
+      },
+      exercises: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            name: { type: "string" as const },
+            sets: { type: "number" as const },
+            reps: { type: "number" as const },
+            seconds: { type: "number" as const },
+            weightKg: { type: "number" as const },
+          },
+          required: ["name"],
+          additionalProperties: false,
+        },
+        description:
+          "ATTACH mode (the freestyle flow): replace the workout's whole movement list with this described structure — for sessions recorded without structure (a follow-along video, an improvised EMOM). Wins over match/set/assignments when present.",
       },
       message: {
         type: "string" as const,

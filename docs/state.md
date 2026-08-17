@@ -145,6 +145,31 @@ keep/kill, TS7-upstream, round-3 design asks). Spirit is complete for
 daily life: v3 curriculum, homework engine, Track 2, Library, free
 Bible, memory, church track. Health: progression intelligence shipped.
 
+## 2026-08-14f — FREESTYLE: record → describe → measure → keep
+
+His ask: track HR + elevation for follow-along videos and improvised
+EMOMs, describe the work after, measure the description against the
+recording, and keep it as a routine when it earned it.
+
+- **The recording half already existed** (Strava streams adoption):
+  any session recorded on the watch via the Strava app arrives with
+  hrStream/timeInZones/altitudeStream in metricsData. The native wrist
+  "Freestyle" tile is the watch lane's ask — contract + his zone
+  boundaries written into docs/watch-contract.md §Freestyle (the sync
+  route needs zero changes; verified).
+- **edit_workout_entry grew ATTACH mode**: an `exercises` array
+  replaces a structure-less session's movement list, names normalized
+  against the catalog (smoke: "kettlebell swing" → kb-swing, persisted,
+  PRs rebuilt, throwaway row deleted). Chat card renders the attached
+  list; confirm copy says "measured against the recording."
+- **"Describe what this was →"** on the Activities detail for any
+  session without segments/sequence: hands the recording's facts
+  (duration · avg/max HR · zones · elevation · kcal) to chat via the
+  existing pending-chat handoff.
+- **Prompt: THE FREESTYLE FLOW** — ask one question if no description
+  came; attach via exercises mode; measure claim-vs-recording in one
+  sentence; offer create_routine ONCE, never push.
+
 ## 2026-08-14b — THE DEFERRED-QUEUE SWEEP (his "run all deferred items")
 
 Built:

@@ -632,6 +632,51 @@ export default function ActivitiesPage() {
             </div>
           )}
 
+          {/* freestyle: a recorded session with no structure — describe it,
+              the coach measures the description against the recording */}
+          {det.segments.length === 0 && !det.sequenceName && (
+            <button
+              onClick={() => {
+                const facts = [
+                  `Freestyle session to describe: workout ${det.id}`,
+                  new Date(det.startedAt).toLocaleDateString("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  }),
+                  `${det.durationMinutes} min`,
+                  det.avgHeartRateBpm
+                    ? `avg HR ${det.avgHeartRateBpm}${det.maxHeartRateBpm ? ` (max ${det.maxHeartRateBpm})` : ""}`
+                    : null,
+                  det.zonePct
+                    ? `zones ${det.zonePct.map((p, i) => `Z${i + 1} ${p}%`).join(" ")}`
+                    : null,
+                  det.elevationGainM && det.elevationGainM > 0
+                    ? `+${Math.round(det.elevationGainM)} m elevation`
+                    : null,
+                  det.caloriesBurned ? `${Math.round(det.caloriesBurned)} kcal` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                sessionStorage.setItem(
+                  "pitaya:pending-chat",
+                  JSON.stringify({ text: facts, source: "text" }),
+                );
+                router.push("/chat");
+              }}
+              className="tap-scale mt-4 w-full rounded-[12px] bg-[#232227] py-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#38343C]"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Describe what this was →
+            </button>
+          )}
+          {det.segments.length === 0 && !det.sequenceName && (
+            <p className="mt-2 text-center text-[10.5px] leading-[1.5] text-muted-foreground">
+              A follow-along or improvised session? Say what you did — the coach
+              measures it against the recording, and can keep it as a routine.
+            </p>
+          )}
+
           <div className="mt-4 text-center text-[11px] text-muted-foreground">
             {sourceLabel(det).charAt(0) + sourceLabel(det).slice(1).toLowerCase()} · synced to
             Pitaya

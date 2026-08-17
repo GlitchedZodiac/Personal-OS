@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rebuildPersonalRecords } from "@/lib/prs";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
+import { normalizeExerciseName } from "@/lib/exercises";
 import {
   applyEntryEdit,
   applyWeightAssignments,
@@ -12,11 +13,11 @@ import {
 export const maxDuration = 60;
 
 // PATCH - Correct ONE exercise entry of a saved workout ("the windmills I
-// just did were 8 kg, not 20"). Deliberately narrow: touches only the
-// exercises JSON — never startedAt/type/duration (the general workouts PATCH
-// rebuilds its whole mutation and would clobber those on a partial body).
-// PRs are rebuilt from history afterwards so a corrected weight retracts any
-// phantom record the wrong number created.
+// just did were 8 kg, not 20"), bulk-set weights, or — the freestyle flow —
+// ATTACH a whole movement list to a session recorded without structure (a
+// follow-along video, an improvised EMOM). Deliberately narrow: touches only
+// the exercises JSON — never startedAt/type/duration. PRs are rebuilt from
+// history afterwards so corrected/attached numbers register honestly.
 export async function PATCH(request: NextRequest) {
   try {
     const body = (await request.json()) as {
@@ -24,6 +25,13 @@ export async function PATCH(request: NextRequest) {
       match?: { name?: unknown; index?: unknown };
       set?: object;
       assignments?: WeightAssignment[];
+      exercises?: {
+        name?: unknown;
+        sets?: unknown;
+        reps?: unknown;
+        seconds?: unknown;
+        weightKg?: unknown;
+      }[];
     };
     const id = typeof body.id === "string" ? body.id : null;
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
@@ -35,12 +43,35 @@ export async function PATCH(request: NextRequest) {
 
     await ensureUserExercisesLoaded();
 
-    // Bulk weight mode — one call carries "everything at 20, windmills at 8".
     let edit:
       | { ok: true; exercises: object[]; changed: string[] }
       | { ok: false; error: string };
     let editedIndex = -1;
-    if (Array.isArray(body.assignments) && body.assignments.length > 0) {
+    if (Array.isArray(body.exercises) && body.exercises.length > 0) {
+      // Attach mode — the described structure replaces the (empty or
+      // rough) movement list, names normalized against the catalog.
+      const num = (v: unknown) =>
+        typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined;
+      const attached = body.exercises
+        .map((e) => {
+          const raw = String(e.name ?? "").trim();
+          if (!raw) return null;
+          const def = normalizeExerciseName(raw);
+          return {
+            name: def?.name ?? raw,
+            ...(def ? { exercise: def.id } : {}),
+            ...(num(e.sets) !== undefined ? { sets: num(e.sets) } : {}),
+            ...(num(e.reps) !== undefined ? { reps: num(e.reps) } : {}),
+            ...(num(e.seconds) !== undefined ? { seconds: num(e.seconds) } : {}),
+            ...(num(e.weightKg) !== undefined ? { weightKg: num(e.weightKg) } : {}),
+          };
+        })
+        .filter((e): e is NonNullable<typeof e> => e !== null);
+      if (attached.length === 0) {
+        return NextResponse.json({ error: "No usable movements" }, { status: 400 });
+      }
+      edit = { ok: true, exercises: attached, changed: [`attached×${attached.length}`] };
+    } else if (Array.isArray(body.assignments) && body.assignments.length > 0) {
       const bulk = applyWeightAssignments(workout.exercises, body.assignments);
       edit = bulk.ok
         ? { ok: true, exercises: bulk.exercises, changed: [`weightKg×${bulk.touched}`] }
