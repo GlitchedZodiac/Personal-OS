@@ -5,8 +5,8 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-15 (watch lane — Round 1+2 design handoff BUILT,
-Waves A–E, on Michael's wrist)
+**Last updated:** 2026-08-17 (watch lane — wrist sizing, background refresh,
+health-sync fixes; Round 1+2 handoff shipped 08-15)
 **Current phase:** the watch is a designed instrument now: Settings + bell
 rack, a real data complication, receipts-vs-last-run summary, Double Tap +
 App Intents, readiness verdict, motion/AOD per spec. Two server deps wait on
@@ -113,6 +113,35 @@ sim ("◆ 4 kg shy of your best" from live baselines); voice card verbatim at
 installed OTA to the Series 8 (device provisioning accepted the keychain
 group). iPhone companion build is ready but the phone was locked — install
 pending.
+
+## 2026-08-15 — WATCH ROUND 1+2: the phone half (API dependencies)
+
+Michael fired the design-handoff implementation prompt to the watch lane.
+Its API-dependencies block is main-lane territory — implemented here so the
+wrist binds to real endpoints instead of stubs:
+
+- **`POST /api/mobile/workouts/sync`** response adds `summary` (streakDays,
+  weight7dAvgKg, weight7dDeltaKg, z2WeeklyMinutes) and `routine` (sequenceId,
+  sequenceName, verdict raise/hold/deload from lib/progression.ts, reason,
+  lastRun stats of the run BEFORE the one just synced). Additive; a summary
+  hiccup can never fail a sync that already persisted.
+- **`GET /api/mobile/summary`** (new, bearer) — the complication's
+  widget-side fetch: the three hero metrics + timeZone, kept deliberately
+  cheap for widget timeline budgets.
+- Shared math in **lib/mobile-summary.ts**; exact field names + semantics in
+  deferred-items (the 2026-08-15 watch← main entry). Spec-vs-names rule: the
+  server renames to match the handoff spec if they differ.
+
+Self-smoke: GET returned live data (streak 7 · 82.5 kg −0.4 · Z2 44 min);
+sync probe against the real Full-Body Kettlebell Circuit returned its actual
+08-11 run as lastRun (18 min · 2,080 kg · 153 kcal · 166 bpm); 401 without a
+bearer. Probe rows + probe device session deleted after.
+
+DEPLOY DEPENDENCY: the watch client talks to PRODUCTION
+(MobileAPIClient.productionBaseURL). These endpoints must reach prod before
+the wrist features light up — `vercel --prod` or the Vercel↔GitHub
+connection Michael chose on 08-14.
+
 
 ## 2026-08-14d — BRANCH CONSOLIDATION (main = both lanes)
 
