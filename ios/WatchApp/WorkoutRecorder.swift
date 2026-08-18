@@ -49,8 +49,9 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     private var latestAltitude: Double?
     private var collectAltitude = false
     private var lastGainAltitude: Double?
-    /// Cumulative positive barometric climb (m) — the TRAILS card's "+186 m".
-    private var elevationGain: Double = 0
+    /// Cumulative positive barometric climb (m) — the TRAILS card's "+186 m"
+    /// and freestyle's metricsData.elevationGainM.
+    private(set) var elevationGain: Double = 0
     /// §06 segments/markers, batched into the workout at close.
     private var pendingEvents: [HKWorkoutEvent] = []
     /// Health-detail title (§06 mock: "EMOM 20 — Swings + Press").
@@ -87,7 +88,12 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
 
     // MARK: - Lifecycle
 
-    public func start(activityType: HKWorkoutActivityType, outdoor: Bool) async throws {
+    /// `captureAltitude` defaults to outdoor, but freestyle asks for the
+    /// barometer indoors too — a follow-along in a stairwell or on a hill
+    /// still earns its elevation.
+    public func start(
+        activityType: HKWorkoutActivityType, outdoor: Bool, captureAltitude: Bool? = nil
+    ) async throws {
         guard phase == .idle else { return }
         phase = .requestingAuth
         do {
@@ -122,7 +128,7 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         lastGainAltitude = nil
         elevationGain = 0
         elevationGainLive = 0
-        collectAltitude = outdoor && CMAltimeter.isRelativeAltitudeAvailable()
+        collectAltitude = (captureAltitude ?? outdoor) && CMAltimeter.isRelativeAltitudeAvailable()
         if collectAltitude {
             let altimeter = CMAltimeter()
             altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, _ in
@@ -159,6 +165,17 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         phase = .running
         startTicker()
     }
+
+    #if DEBUG
+    /// Smoke-only: stand in for the heart sensor the simulator doesn't have,
+    /// so the freestyle zone math and downsampling can be proven against
+    /// prod. Never compiled into a release build.
+    public func injectSyntheticStreams(hr: [Int], time: [Int]) {
+        guard hrStream.isEmpty else { return }
+        hrStream = hr
+        timeStream = time
+    }
+    #endif
 
     // MARK: - §06 session tape (segments + markers in Apple Health)
 

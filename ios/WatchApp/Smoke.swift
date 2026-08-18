@@ -108,6 +108,41 @@ enum Smoke {
             return
         }
 
+        // FREESTYLE end-to-end: record for N seconds with the real recorder,
+        // stand in a synthetic HR trace (no sensor in the sim), finish, save.
+        // Proves: zones fetched → timeInZones computed on-wrist → streams
+        // downsampled to ≤200 → row lands as workoutType "freestyle".
+        if let seconds = env["PITAYA_SMOKE_FREESTYLE"].flatMap(Int.init), model.phase == .home {
+            model.externalSourceOverride = "watch_smoke"
+            DoubleTapCoach.shared.coachShown = true // don't gate on the coach
+            await model.refreshHistory()            // pulls zone boundaries
+            log("freestyle: zones=\(model.zones.map { "\($0.tops)" } ?? "MISSING")")
+
+            await model.startWorkout(.freestyle)
+            try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+
+            #if DEBUG
+            // 600 samples at 2 s cadence — a warm-up climbing through the
+            // zones then settling, so every zone bucket gets real seconds
+            // and the ≤200 downsample actually has work to do.
+            if model.recorder.hrStream.isEmpty {
+                let hr = (0..<600).map { i -> Int in
+                    let t = Double(i) / 600.0
+                    return Int(105 + 80 * min(t * 1.6, 1.0))
+                }
+                let time = (0..<600).map { $0 * 2 }
+                model.recorder.injectSyntheticStreams(hr: hr, time: time)
+                log("freestyle: injected \(hr.count) synthetic HR samples")
+            }
+            #endif
+
+            await model.finishWorkout(.freestyle)
+            log("freestyle: zoneSeconds=\(model.freestyleZoneSeconds.map { "\($0)" } ?? "nil")")
+            await model.saveWorkout()
+            log("freestyle: saved — syncState=\(String(describing: model.syncState))")
+            return
+        }
+
         // §08 visual check: present the wrist-voice weight confirm card.
         if let weight = env["PITAYA_SMOKE_VOICE"].flatMap(Double.init), model.phase == .home {
             model.presentVoiceWeight(weight)

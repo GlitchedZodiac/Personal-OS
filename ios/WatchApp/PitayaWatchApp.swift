@@ -52,7 +52,13 @@ struct RootView: View {
             case .sequenceDetail(let sequence):
                 SequenceDetailView(sequence: sequence)
             case .live(let kind):
-                LiveWorkoutView(kind: kind)
+                // Freestyle's recorder screen is deliberately its own thing:
+                // no pages, no logging — elapsed, HR, zone, End.
+                if kind == .freestyle {
+                    FreestyleRunView()
+                } else {
+                    LiveWorkoutView(kind: kind)
+                }
             case .liveSequence(let sequence):
                 SequenceLiveView(sequence: sequence)
             case .summary:

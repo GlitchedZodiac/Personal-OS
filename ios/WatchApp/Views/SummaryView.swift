@@ -187,6 +187,13 @@ struct SummaryView: View {
                 delta: lastRun.map { Int(summary.totalVolumeKg.rounded()) - Int($0.volumeKg.rounded()) },
                 color: Theme.accent
             )
+        } else if summary.kind == .freestyle {
+            // No volume, no distance — the honest fourth number for a
+            // follow-along is where the effort actually sat.
+            deltaCell(
+                value: dominantZoneLabel ?? "––", label: "TOP ZONE",
+                delta: nil, color: Theme.accent
+            )
         } else {
             deltaCell(
                 value: summary.distanceMeters.map { String(format: "%.2f", $0 / 1000) } ?? "––",
@@ -220,6 +227,16 @@ struct SummaryView: View {
                 .padding(.top, 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The zone that held the most time in this session, from the on-wrist
+    /// breakdown (freestyle) or the server's enrichment (everything else).
+    private var dominantZoneLabel: String? {
+        guard let seconds = model.freestyleZoneSeconds ?? model.summaryZones,
+              let top = seconds.enumerated().filter({ $0.element > 0 })
+                  .max(by: { $0.element < $1.element })
+        else { return nil }
+        return model.zones?.name(top.offset + 1) ?? "Z\(top.offset + 1)"
     }
 
     private func deltaText(_ delta: Int) -> String {

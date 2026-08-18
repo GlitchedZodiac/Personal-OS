@@ -17,6 +17,7 @@ struct HomeGridView: View {
                 header
                 subline
                 grid
+                freestyleTile
                 footer
             }
             .padding(.horizontal, Theme.px(8))
@@ -121,6 +122,43 @@ struct HomeGridView: View {
             }
         }
         .padding(.top, Theme.px(11))
+    }
+
+    /// UNDESIGNED (2026-08-17): the Round 1 grid is a fixed 2×2 whose fourth
+    /// slot is Spirit, so Freestyle rides below it full-width rather than
+    /// displacing a designed tile. Flagged for the next design pass.
+    private var freestyleTile: some View {
+        Button {
+            Task { await model.startWorkout(.freestyle) }
+        } label: {
+            HStack(spacing: Theme.px(12)) {
+                ZStack {
+                    Circle().fill(Theme.elementDim)
+                    PitayaGlyph(
+                        paths: Glyphs.heart, style: .fill,
+                        color: Theme.accent, size: Theme.px(15)
+                    )
+                }
+                .frame(width: Theme.px(34), height: Theme.px(34))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Freestyle")
+                        .font(Theme.wText(8, weight: .semibold))
+                        .foregroundStyle(Theme.textBright)
+                    Text("record · describe it later")
+                        .font(Theme.wText(5.5))
+                        .foregroundStyle(Theme.textMuted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Theme.px(13))
+            .padding(.vertical, Theme.px(12))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.px(20)))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, Theme.px(8))
     }
 
     private var workoutsTile: some View {

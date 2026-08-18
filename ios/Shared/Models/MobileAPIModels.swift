@@ -431,6 +431,19 @@ public struct SequenceListResponse: Codable, Sendable {
 /// up unprocessed — the SERVER runs the same downsample/zones/load math as
 /// the Strava import (streams contract, 2026-08-11); never pre-compute
 /// zones on-wrist.
+/// Time-in-zone for one session, in the shape the phone's analytics read.
+public struct WorkoutZoneBreakdown: Codable, Hashable, Sendable {
+    public let seconds: [Int]
+    public let pct: [Double]
+    public let totalSeconds: Int
+
+    public init(seconds: [Int], pct: [Double], totalSeconds: Int) {
+        self.seconds = seconds
+        self.pct = pct
+        self.totalSeconds = totalSeconds
+    }
+}
+
 public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     public let sequenceId: String?
     public let sequenceName: String?
@@ -442,14 +455,25 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     public let hrStream: [Int]?
     /// Elapsed seconds from session start, parallel to hrStream.
     public let timeStream: [Int]?
-    /// Relative altitude (m) parallel to timeStream — outdoor sessions only.
+    /// Relative altitude (m) parallel to timeStream — outdoor sessions, and
+    /// freestyle whenever the barometer has something to say.
     public let altitudeStream: [Double]?
+    /// Freestyle contract: computed ON-WRIST from the server's zone
+    /// boundaries (the one place the wrist does zone math — every other
+    /// path leaves it to the server per the streams contract, and the raw
+    /// streams still ride along so the server can always recompute).
+    public let timeInZones: WorkoutZoneBreakdown?
+    /// Barometric climb, mirrored into metricsData for the phone's
+    /// freestyle analytics (also sent top-level on the sync item).
+    public let elevationGainM: Double?
 
     public init(
         sequenceId: String? = nil, sequenceName: String? = nil,
         roundsCompleted: Int? = nil, stepSeconds: [Int]? = nil,
         hrStream: [Int]? = nil, timeStream: [Int]? = nil,
-        altitudeStream: [Double]? = nil
+        altitudeStream: [Double]? = nil,
+        timeInZones: WorkoutZoneBreakdown? = nil,
+        elevationGainM: Double? = nil
     ) {
         self.sequenceId = sequenceId
         self.sequenceName = sequenceName
@@ -458,10 +482,13 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
         self.hrStream = hrStream
         self.timeStream = timeStream
         self.altitudeStream = altitudeStream
+        self.timeInZones = timeInZones
+        self.elevationGainM = elevationGainM
     }
 
     public var isEmpty: Bool {
         sequenceId == nil && stepSeconds == nil && hrStream == nil
+            && timeInZones == nil
     }
 }
 

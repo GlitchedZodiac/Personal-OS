@@ -14,7 +14,7 @@ import WidgetKit
 // MARK: - Workout kinds
 
 public enum WorkoutKind: String, CaseIterable, Identifiable {
-    case kettlebell, walk, treadmill, run, hike, other
+    case kettlebell, walk, treadmill, run, hike, freestyle, other
 
     public var id: String { rawValue }
 
@@ -25,6 +25,7 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         case .treadmill: return "Treadmill"
         case .run: return "Run"
         case .hike: return "Hike"
+        case .freestyle: return "Freestyle"
         case .other: return "Other"
         }
     }
@@ -39,6 +40,9 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         case .treadmill: return "treadmill_walk"
         case .run: return "run"
         case .hike: return "hike"
+        // Freestyle's own vocabulary — the phone keys its "Describe what
+        // this was →" affordance off this type.
+        case .freestyle: return "freestyle"
         case .other: return "other"
         }
     }
@@ -46,7 +50,7 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
     public var isOutdoor: Bool {
         switch self {
         case .walk, .run, .hike: return true
-        case .kettlebell, .treadmill, .other: return false
+        case .kettlebell, .treadmill, .freestyle, .other: return false
         }
     }
 
@@ -56,6 +60,9 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         case .walk, .treadmill: return .walking
         case .run: return .running
         case .hike: return .hiking
+        // Follow-alongs and improvised EMOMs read as interval work, which
+        // is also what gives HealthKit its best calorie model for them.
+        case .freestyle: return .highIntensityIntervalTraining
         case .other: return .other
         }
     }
@@ -153,6 +160,12 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var emomRoundSeconds: [Int] = []
     /// Which EMOM round earned the tape's ◆ (set by the same taps).
     @Published public private(set) var emomPRRound: Int?
+    /// Time-in-zone for the freestyle session just finished — computed
+    /// on-wrist, so the summary can show it before any sync.
+    @Published public private(set) var freestyleZoneSeconds: [Int]?
+    /// Server-served HR zone boundaries (Freestyle contract), last-good
+    /// cached so an out-of-signal session still gets its time-in-zone.
+    @Published public private(set) var zones: HeartRateZones?
     /// §08 voice-confirm card state (set by the App Intents).
     @Published public var voiceWeightKg: Double = 0
     @Published public private(set) var voiceFoodText: String = ""
@@ -244,6 +257,7 @@ public final class AppModel: ObservableObject {
         if let cached = customExerciseCache?.load() {
             ExerciseCatalog.setCustom(cached)
         }
+        zones = ZonesCache.load()
         AppModel.shared = self
     }
 
@@ -323,6 +337,11 @@ public final class AppModel: ObservableObject {
             return
         } catch {
             // Offline is fine — cached baselines stand.
+        }
+
+        if let served = try? await api.fetchZones() {
+            zones = served.zones
+            ZonesCache.save(served.zones)
         }
 
         if let list = try? await api.fetchSequences() {
@@ -545,7 +564,10 @@ public final class AppModel: ObservableObject {
         await runCountdown()
         workoutStartedAt = Date()
         do {
-            try await recorder.start(activityType: kind.activityType, outdoor: kind.isOutdoor)
+            try await recorder.start(
+                activityType: kind.activityType, outdoor: kind.isOutdoor,
+                captureAltitude: kind == .freestyle ? true : nil
+            )
         } catch {
             // HealthKit refused (denied auth, restricted) — the session still
             // runs on wall clock so a workout is never lost.
@@ -974,7 +996,26 @@ public final class AppModel: ObservableObject {
         // Raw streams ride along for the server's zone/load enrichment
         // (streams contract 2026-08-11 — the server downsamples and computes;
         // the wrist just reports what HealthKit saw).
-        let hrStream = recorder.hrStream
+        // Freestyle ships a self-contained payload (contract: downsample to
+        // ≤200 points on-wrist, compute timeInZones from the server's
+        // boundaries) so the phone's analytics render it without any
+        // server-side enrichment. Every other kind keeps the streams
+        // contract: raw up, server computes.
+        let isFreestyle = kind == .freestyle
+        let rawHR = recorder.hrStream
+        let rawTime = recorder.timeStream
+        let rawAltitude = recorder.altitudeStream
+
+        let zoneBreakdown: WorkoutZoneBreakdown? = isFreestyle
+            ? zones.flatMap { StreamMath.timeInZones(hr: rawHR, time: rawTime, zones: $0) }
+            : nil
+        let hrStream = isFreestyle ? StreamMath.downsample(rawHR) : rawHR
+        let timeStream = isFreestyle ? StreamMath.downsample(rawTime) : rawTime
+        let altitudeStream = isFreestyle
+            ? StreamMath.downsample(rawAltitude) : rawAltitude
+
+        freestyleZoneSeconds = zoneBreakdown?.seconds
+
         let metrics = WorkoutMetricsData(
             sequenceId: sequence?.id,
             sequenceName: sequence?.name,
@@ -982,8 +1023,11 @@ public final class AppModel: ObservableObject {
             stepSeconds: circuitStepSeconds.contains(where: { $0 > 0 })
                 ? circuitStepSeconds : nil,
             hrStream: hrStream.isEmpty ? nil : hrStream,
-            timeStream: hrStream.isEmpty ? nil : recorder.timeStream,
-            altitudeStream: recorder.altitudeStream.isEmpty ? nil : recorder.altitudeStream
+            timeStream: hrStream.isEmpty ? nil : timeStream,
+            altitudeStream: altitudeStream.isEmpty ? nil : altitudeStream,
+            timeInZones: zoneBreakdown,
+            elevationGainM: isFreestyle && recorder.elevationGain > 1
+                ? (recorder.elevationGain * 10).rounded() / 10 : nil
         )
 
         pendingItem = WorkoutSyncItem(
@@ -1078,6 +1122,7 @@ public final class AppModel: ObservableObject {
         lastRunBaseline = nil
         recoveryCapture = nil
         summaryZones = nil
+        freestyleZoneSeconds = nil
         emomRoundSeconds = []
         emomPRRound = nil
     }
