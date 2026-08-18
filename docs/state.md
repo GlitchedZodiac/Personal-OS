@@ -5,8 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-17 (watch lane — wrist sizing, background refresh,
-health-sync fixes; Round 1+2 handoff shipped 08-15)
+**Last updated:** 2026-08-17b (watch lane — Freestyle recording mode)
 **Current phase:** the watch is a designed instrument now: Settings + bell
 rack, a real data complication, receipts-vs-last-run summary, Double Tap +
 App Intents, readiness verdict, motion/AOD per spec. Two server deps wait on
@@ -15,6 +14,50 @@ ingest endpoint).
 **Branch in flight:** `claude/phase1-modernization` (web) ·
 `claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch — merged
 `main` 2026-08-15, fast-forward, before the R1+2 work).
+
+## 2026-08-17b — FREESTYLE (the wrist records, the phone structures)
+
+A Freestyle tile whose only job during a follow-along video or improvised
+EMOM is to **record** — HR + altitude — while he trains to something else.
+No structure UI on the wrist: he describes it on the phone afterwards and
+the coach attaches the movements (that half was already live).
+
+- **Running screen:** elapsed · live HR as the hero, tinted by zone (§09's
+  Z1–2 mint / Z3–4 accent / Z5 blush) · zone chip · End. directionUp/Down
+  haptic on each zone change; AOD drops the chip fill, keeps the outline.
+- **Zones bind to `GET /api/mobile/zones`** — never hardcoded, so a
+  recalibration lands everywhere at once. Fetched with history, cached
+  last-good for out-of-signal sessions; with no cache the screen says
+  "zones sync on next connection" rather than claiming a zone.
+- **Sync is the existing endpoint, zero server changes:** workoutType
+  `freestyle`, empty `exercises`, metricsData carrying hrStream/timeStream
+  (uniform stride ≤200), altitudeStream, `timeInZones {seconds,pct,
+  totalSeconds}` and `elevationGainM`. Freestyle is the ONE path computing
+  zones on-wrist (per its contract); every other kind still ships raw for
+  the server to enrich, and the streams ride along here so the server can
+  always recompute.
+- Barometer now runs on indoor freestyle too (recorder gained a
+  `captureAltitude` override); the summary's 4th stat cell becomes TOP
+  ZONE for freestyle instead of an empty "–– KM".
+
+**Deviations, both deliberate:** the grid's fourth slot is Spirit per the
+Round 1 design (1j) — the "Coming soon" placeholder the kickoff expected
+was already replaced — so Freestyle rides below the 2×2 full-width and is
+FLAGGED as undesigned for the next design pass. And End does NOT wear the
+Double Tap gesture: everywhere else the primary action is additive, here it
+would end a running session.
+
+Self-smoke: 2-min sim recording → prod row `freestyle` with empty
+exercises, 24-pt streams, timeInZones seconds [121,0,0,0,0]; the phone's
+activity detail then returned `segments: []`, `sequenceName: null`,
+`zonePct: [100,0,0,0,0]` — exactly the condition its "Describe what this
+was →" button renders on. Zone math unit-tested standalone (boundary
+inclusivity, 50/50 split, pct→100, 1200→200 downsample keeping endpoints,
+empty tops → no zone invented). Smoke row swept, PR backfill re-run.
+
+**Also confirmed today:** `GET /api/mobile/summary` now returns 200 on prod
+— the main lane deployed, so the complication's hero metrics and the
+summary's server deltas are live (top deferred item resolved).
 
 ## 2026-08-17 — WRIST SIZING, BACKGROUND REFRESH, HEALTH-SYNC BUG FIXES
 
