@@ -149,3 +149,43 @@ wrist flow stays — it is design-styled and secure enough for one user.
 4. **Sequences contract** — defined above; implementation lands in the
    Train stage (main lane), then the wrist UI (watch lane).
 5. **Fonts + kettlebell glyph** — watch lane; extract per PORT GATE.
+
+## Freestyle sessions (2026-08-14 — main lane ready, wrist UI is the ask)
+
+Michael's flow: he does a follow-along video or an improvised EMOM,
+the WATCH just records — heart rate + altitude — and he structures it
+afterward on the phone by describing it in chat.
+
+**Server contract (LIVE NOW — no changes needed):** sync the session
+through the existing `POST /api/mobile/workouts/sync` with
+`workoutType: "freestyle"`, `durationMinutes`, `caloriesBurned` if
+known, and `metricsData` using the SAME vocabulary Strava rows carry so
+the phone's analytics render identically:
+
+```json
+{
+  "workoutType": "freestyle",
+  "startedAt": "...", "durationMinutes": 27,
+  "exercises": [],
+  "metricsData": {
+    "hrStream": [/* downsampled ≤200 pts */],
+    "timeStream": [/* seconds, same length */],
+    "altitudeStream": [/* optional */],
+    "timeInZones": { "pct": [z1,z2,z3,z4,z5], "totalSeconds": 1620 },
+    "elevationGainM": 12
+  }
+}
+```
+
+Zone boundaries (his Strava profile, age-derived): Z1 <122 · Z2
+123–152 · Z3 153–167 · Z4 168–182 · Z5 183+.
+
+**Phone half (LIVE):** a structure-less session's detail shows
+"Describe what this was →" → chat carries the recording's facts → the
+coach attaches the described movement list (edit_workout_entry
+exercises mode), measures the description against the recording, and
+offers to keep it as a routine.
+
+**Wrist ask:** a "Freestyle" tile on the watch — start/stop, live HR,
+records the streams above, syncs on end. No structure UI on the wrist;
+structure happens on the phone after.

@@ -598,11 +598,14 @@ export default function ChatPage() {
             match: data.match,
             set: data.set,
             assignments: data.assignments,
+            exercises: data.exercises,
           }),
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || "Edit failed");
-        followUp = "Fixed — PRs recalculated.";
+        followUp = Array.isArray(data.exercises)
+          ? "Structured — the session now carries what you actually did, measured against the recording. PRs checked."
+          : "Fixed — PRs recalculated.";
       } else if (kind === "product") {
         const res = await fetch("/api/health/favorites", {
           method: "POST",
@@ -826,20 +829,37 @@ export default function ChatPage() {
           {kind === "edit_workout" && (
             <div className="py-3 text-[13.5px] leading-relaxed text-foreground">
               <span className="font-semibold">{String(data.label ?? "Entry")}</span>
-              {" → "}
-              {Array.isArray(data.assignments) && data.assignments.length > 0
-                ? (data.assignments as { match: string; weightKg: number }[])
-                    .map((a) =>
-                      a.match === "*" || a.match === ""
-                        ? `everything ${a.weightKg} kg`
-                        : `${a.match} ${a.weightKg} kg`
+              {Array.isArray(data.exercises) && data.exercises.length > 0 ? (
+                <ul className="mt-1.5 space-y-0.5 text-[12.5px]">
+                  {(data.exercises as { name: string; sets?: number; reps?: number; seconds?: number; weightKg?: number }[]).map(
+                    (e, i) => (
+                      <li key={i} className="text-secondary-foreground">
+                        {e.name}
+                        {e.sets ? ` · ${e.sets}×${e.reps ?? "?"}` : e.reps ? ` · ${e.reps} reps` : ""}
+                        {e.seconds ? ` · ${e.seconds}s` : ""}
+                        {e.weightKg ? ` · ${e.weightKg} kg` : ""}
+                      </li>
                     )
-                    .join(" · ")
-                : Object.entries((data.set as object) ?? {})
-                    .map(([k, v]) =>
-                      k === "weightKg" ? `${v} kg` : k === "seconds" ? `${v}s` : `${k} ${v}`
-                    )
-                    .join(" · ")}
+                  )}
+                </ul>
+              ) : (
+                <>
+                  {" → "}
+                  {Array.isArray(data.assignments) && data.assignments.length > 0
+                    ? (data.assignments as { match: string; weightKg: number }[])
+                        .map((a) =>
+                          a.match === "*" || a.match === ""
+                            ? `everything ${a.weightKg} kg`
+                            : `${a.match} ${a.weightKg} kg`
+                        )
+                        .join(" · ")
+                    : Object.entries((data.set as object) ?? {})
+                        .map(([k, v]) =>
+                          k === "weightKg" ? `${v} kg` : k === "seconds" ? `${v}s` : `${k} ${v}`
+                        )
+                        .join(" · ")}
+                </>
+              )}
             </div>
           )}
 
