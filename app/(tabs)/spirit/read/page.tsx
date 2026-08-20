@@ -16,6 +16,8 @@ import {
   categoryColor,
 } from "@/lib/spirit-ui";
 import { useReaderPrefs, READER_SIZES, type ReaderTheme } from "@/lib/spirit-theme";
+import { assignedInChapter, type RefSegment } from "@/lib/spirit-refs";
+import { useBackTo } from "@/lib/nav-stack";
 
 // The Reader — round-2 port (docs/design/pitaya-app.dc.html): themed
 // surfaces (light/dark/night), Literata serif, chapter chips, two-stage
@@ -49,6 +51,12 @@ interface PassageData {
   suggested: { refInt: number; category: string }[];
 }
 
+interface Assignment {
+  label: string;
+  scope: string;
+  segments: RefSegment[];
+}
+
 type BarMode = "act" | "hl" | "note" | "link" | "word" | "ask" | "more" | "mem" | "done";
 
 const OCCASIONS = ["Assurance", "Anxiety", "Temptation", "Grief", "Gratitude", "Witness"];
@@ -61,6 +69,7 @@ function logosUrl(ref: number) {
 
 export default function SpiritReaderPage() {
   const router = useRouter();
+  const goBack = useBackTo("/spirit");
   const { prefs, update, tokens: T, fontSize, fontFamily } = useReaderPrefs();
   const [q, setQ] = useState<string | null>(null);
   const [freeMode, setFreeMode] = useState(false);
@@ -71,6 +80,8 @@ export default function SpiritReaderPage() {
     readingLabel: string;
     readingDone: boolean;
   } | null>(null);
+  const [assignment, setAssignment] = useState<Assignment | null>(null);
+  const [segIndex, setSegIndex] = useState(0);
   const [data, setData] = useState<PassageData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [sel, setSel] = useState<number | null>(null);
@@ -93,6 +104,7 @@ export default function SpiritReaderPage() {
   const [askAnswer, setAskAnswer] = useState<{
     answer: string;
     citations: { label: string; key: string }[];
+    grounded: boolean;
   } | null>(null);
   const [marking, setMarking] = useState(false);
   const [memOccasion, setMemOccasion] = useState("Assurance");
@@ -124,7 +136,6 @@ export default function SpiritReaderPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.day) {
-          const first = String(d.day.readingRef).split(/[-–,]/)[0].trim();
           setDayMeta({
             id: d.day.id,
             kicker: `TERM ${d.term.orderIndex} · ${d.term.title.toUpperCase()} · WEEK ${d.day.weekIndex}`,
@@ -132,7 +143,13 @@ export default function SpiritReaderPage() {
             readingLabel: d.day.readingLabel,
             readingDone: d.readingDone,
           });
-          setQ(qp ?? first);
+          // The assignment is parsed server-side. Open the CHAPTER that
+          // holds it — never the bare verse the old string-split produced,
+          // which opened "1 Corinthians 7:1" alone and left him hunting
+          // through chapters 8 and 9 for the end of his reading.
+          const parsed: Assignment | null = d.assignment ?? null;
+          setAssignment(parsed);
+          setQ(qp ?? parsed?.segments?.[0]?.chapterQuery ?? "John 1");
         } else {
           setQ(qp ?? "John 1");
         }
@@ -204,6 +221,23 @@ export default function SpiritReaderPage() {
         (c) => c >= 1 && c <= maxCh,
       )
     : [];
+
+  // ——— the assignment bracket ———
+  // The Reader shows the whole chapter (context matters) but says
+  // plainly where today's reading starts and stops. Before this, nothing
+  // on screen marked the boundary at all.
+  const activeSeg: RefSegment | null =
+    assignment && assignment.segments.length
+      ? assignment.segments[Math.min(segIndex, assignment.segments.length - 1)]
+      : null;
+  const assignedHere =
+    activeSeg && cur && activeSeg.book === cur.book
+      ? assignedInChapter(activeSeg, cur.chapter)
+      : null;
+  const isAssigned = (verseNum: number) =>
+    !!assignedHere &&
+    verseNum >= assignedHere.from &&
+    (assignedHere.to === null || verseNum <= assignedHere.to);
 
   const selVerse = data?.verses.find((v) => v.refInt === sel) ?? null;
   const accepted = new Map<number, string>();
@@ -339,7 +373,11 @@ export default function SpiritReaderPage() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Ask failed");
-      setAskAnswer({ answer: body.answer, citations: body.citations ?? [] });
+      setAskAnswer({
+        answer: body.answer,
+        citations: body.citations ?? [],
+        grounded: Boolean(body.grounded),
+      });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Ask failed");
     } finally {
@@ -380,12 +418,12 @@ export default function SpiritReaderPage() {
       if (dayMeta.readingDone) {
         await fetch(`/api/spirit/read?dayId=${dayMeta.id}`, { method: "DELETE" });
       } else {
+        // The day owns the range: posting {dayId} logs the assignment
+        // that was actually set, not whichever chapter is on screen.
         await fetch("/api/spirit/read", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            refStart: data.verses[0].refInt,
-            refEnd: data.verses[data.verses.length - 1].refInt,
             label: dayMeta.readingLabel,
             medium: "app",
             dayId: dayMeta.id,
@@ -465,7 +503,7 @@ export default function SpiritReaderPage() {
       {/* header */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push(freeMode ? "/spirit/bible" : "/spirit")}
+          onClick={goBack}
           className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border"
           style={{ background: T.card, borderColor: T.rule }}
           aria-label="Back"
@@ -503,6 +541,35 @@ export default function SpiritReaderPage() {
           Legend
         </button>
       </div>
+
+      {/* what you were sent here to read — stated, not implied */}
+      {assignment && !freeMode && (
+        <div
+          className="mt-3 flex items-center justify-between gap-3 rounded-[12px] px-3.5 py-[9px]"
+          style={{ background: chipAccentBg }}
+        >
+          <span className="min-w-0">
+            <span
+              className="block text-[9px] font-bold tracking-[0.13em]"
+              style={{ color: chipAccentFg }}
+            >
+              TODAY&apos;S ASSIGNMENT
+            </span>
+            <span
+              className="mt-[1px] block truncate text-[13px] font-semibold"
+              style={{ fontFamily: "var(--font-display)", color: T.ink }}
+            >
+              {assignment.label}
+            </span>
+          </span>
+          <span
+            className="flex-none text-[10.5px] font-semibold tabular-nums"
+            style={{ color: chipAccentFg }}
+          >
+            {assignment.scope}
+          </span>
+        </div>
+      )}
 
       {/* chapter chips · ESV⇄NBLA · Aa · ▶ */}
       <div className="mt-3.5 flex items-center gap-1.5">
@@ -645,10 +712,28 @@ export default function SpiritReaderPage() {
             const sug = suggestedFor(v.refInt);
             const on = sel === v.refInt;
             const dimmed = sel !== null && !on;
+            const assigned = isAssigned(v.verseNum);
+            const outside = Boolean(assignedHere) && !assigned;
             const notes = data.layer.notes.filter((n) => n.refStart === v.refInt);
             const tipHere = tip?.refInt === v.refInt ? tip : null;
             return (
               <div key={v.refInt}>
+                {assignedHere && v.verseNum === assignedHere.from && (
+                  <div
+                    className="mb-1.5 flex items-center gap-2 rounded-[9px] px-2.5 py-[7px]"
+                    style={{ background: chipAccentBg }}
+                  >
+                    <svg width="9" height="9" viewBox="0 0 10 10" className="flex-none">
+                      <rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63" />
+                    </svg>
+                    <span
+                      className="text-[9.5px] font-bold tracking-[0.13em]"
+                      style={{ color: chipAccentFg }}
+                    >
+                      TODAY&apos;S ASSIGNMENT STARTS HERE · {activeSeg?.label}
+                    </span>
+                  </div>
+                )}
                 {v.heading && (
                   <p
                     className="border-b px-2.5 pb-2.5 pt-3 text-[12px] italic leading-[1.6]"
@@ -676,8 +761,10 @@ export default function SpiritReaderPage() {
                       ? `3px solid ${categoryColor(cat)}`
                       : sug
                         ? `3px dashed ${categoryColor(sug.category)}AA`
-                        : "3px solid transparent",
-                    opacity: dimmed ? 0.45 : 1,
+                        : assigned
+                          ? "3px solid #A63D6355"
+                          : "3px solid transparent",
+                    opacity: dimmed ? 0.45 : outside ? 0.5 : 1,
                   }}
                 >
                   {v.lines ? (
@@ -906,9 +993,61 @@ export default function SpiritReaderPage() {
                     </div>
                   )}
                 </div>
+                {assignedHere?.to === v.verseNum && (
+                  <div className="mb-1 mt-2.5 flex items-center gap-2.5 px-1">
+                    <span className="h-px flex-1" style={{ background: T.rule }} />
+                    <span
+                      className="text-[9.5px] font-bold tracking-[0.13em]"
+                      style={{ color: chipAccentFg }}
+                    >
+                      TODAY&apos;S READING ENDS HERE
+                    </span>
+                    <span className="h-px flex-1" style={{ background: T.rule }} />
+                  </div>
+                )}
               </div>
             );
           })}
+          {assignedHere?.to && (
+            <p className="px-2.5 pt-1 text-center text-[10px] leading-[1.6]" style={{ color: T.faint }}>
+              the rest of the chapter is here if you want it — it just isn&apos;t assigned
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* the other half of a two-part assignment */}
+      {assignment && assignment.segments.length > 1 && !freeMode && (
+        <div className="mt-3 flex gap-2">
+          {assignment.segments.map((seg, i) => (
+            <button
+              key={seg.label}
+              onClick={() => {
+                setSegIndex(i);
+                setQ(seg.chapterQuery);
+                setSel(null);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className="tap-scale flex-1 rounded-[11px] px-3 py-2.5 text-left transition-colors"
+              style={{
+                background: i === segIndex ? chipAccentBg : T.card,
+                boxShadow: T.shadow,
+              }}
+            >
+              <span
+                className="block text-[9px] font-bold tracking-[0.12em]"
+                style={{ color: i === segIndex ? chipAccentFg : T.faint }}
+              >
+                PART {i + 1} OF {assignment.segments.length}
+              </span>
+              <span
+                className="mt-0.5 block text-[12.5px] font-semibold"
+                style={{ fontFamily: "var(--font-display)", color: T.ink }}
+              >
+                {seg.label}
+              </span>
+            </button>
+          ))}
         </div>
       )}
 
@@ -1343,7 +1482,7 @@ export default function SpiritReaderPage() {
                       value={askText}
                       onChange={(e) => setAskText(e.target.value)}
                       rows={2}
-                      placeholder={`Ask about ${formatRef(sel)} — answers cite your library`}
+                      placeholder={`Ask about ${formatRef(sel)} — cited when your library covers it`}
                       className="min-h-[52px] flex-1 resize-none rounded-xl border px-3 py-2.5 text-[13px] leading-[1.55] outline-none"
                       style={{ borderColor: T.rule, background: T.card, color: T.ink }}
                     />
@@ -1367,7 +1506,18 @@ export default function SpiritReaderPage() {
                       style={{ borderColor: T.rule, background: T.chip, color: T.ink }}
                     >
                       {askAnswer.answer}
-                      <div className="mt-[7px] flex flex-wrap gap-1.5">
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span
+                          className="inline-flex rounded-full px-[9px] py-[3px] text-[9.5px] font-bold tracking-[0.1em]"
+                          style={{
+                            fontFamily: "var(--font-display)",
+                            background: askAnswer.grounded ? "#EAF3ED" : T.card,
+                            color: askAnswer.grounded ? "#3E7A54" : T.faint,
+                            border: askAnswer.grounded ? "none" : `1px solid ${T.rule}`,
+                          }}
+                        >
+                          {askAnswer.grounded ? "FROM YOUR LIBRARY" : "NOT IN YOUR LIBRARY"}
+                        </span>
                         {askAnswer.citations.map((c) => (
                           <span
                             key={c.key}
@@ -1378,6 +1528,12 @@ export default function SpiritReaderPage() {
                           </span>
                         ))}
                       </div>
+                      {!askAnswer.grounded && (
+                        <p className="mt-1.5 text-[10.5px] leading-[1.5]" style={{ color: T.faint }}>
+                          Taught in its own words — no source in your library covers this
+                          yet, so nothing here is a quotation.
+                        </p>
+                      )}
                     </div>
                     <div className="mt-2.5 flex items-center justify-between">
                       <span className="text-[10.5px]" style={{ color: T.faint }}>

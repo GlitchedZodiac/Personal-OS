@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { BOOKS, BOOK_ABBREV, CHAPTERS, refParts } from "@/lib/bible-refs";
+import { BOOK_ABBREV, CHAPTERS, refParts } from "@/lib/bible-refs";
+import { parseReadingRef } from "@/lib/spirit-refs";
 
 // GET — the lifetime coverage map, computed purely from ReadingLog
 // (nothing fabricated: an unread Bible shows 66 honest "not yet" cells)
@@ -47,10 +48,9 @@ export async function GET() {
     const termBooks = new Set<number>();
     const syllabus = Array.isArray(activeTerm?.syllabus) ? activeTerm.syllabus : [];
     for (const row of syllabus as { ref?: string }[]) {
-      const name = row.ref?.replace(/\s+[\d:–-]+$/, "").trim().toLowerCase();
-      if (!name) continue;
-      const idx = BOOKS.findIndex((b) => b.toLowerCase() === name);
-      if (idx >= 0) termBooks.add(idx + 1);
+      // Units carry real refs — "Psalm 23; Proverbs 22:6" names two
+      // books, and the old suffix-strip matched neither.
+      for (const seg of parseReadingRef(row.ref ?? "")) termBooks.add(seg.book);
     }
 
     const books = BOOK_ABBREV.map((ab, i) => ({

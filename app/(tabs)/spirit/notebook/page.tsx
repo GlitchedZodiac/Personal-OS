@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useBackTo } from "@/lib/nav-stack";
 import { HIGHLIGHT_CATEGORIES, categoryColor } from "@/lib/spirit-ui";
 
 // The Passage Notebook — his whole layer, grouped by passage. A view
@@ -29,7 +29,7 @@ interface NbData {
 const KIND_CHIPS = ["All", "Observation", "Question", "Connection", "Conviction", "Doctrine"];
 
 export default function SpiritNotebookPage() {
-  const router = useRouter();
+  const goBack = useBackTo("/spirit");
   const [data, setData] = useState<NbData | null>(null);
   const [view, setView] = useState<"all" | "oq">("all");
   const [kind, setKind] = useState("All");
@@ -81,7 +81,7 @@ export default function SpiritNotebookPage() {
     <div className="push-in stagger-children min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push("/spirit")}
+          onClick={goBack}
           className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
           aria-label="Back to Spirit"
         >

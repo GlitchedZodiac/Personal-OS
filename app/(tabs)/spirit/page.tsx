@@ -52,6 +52,16 @@ interface TodayData {
   } | null;
 }
 
+interface CarriedHomework {
+  dayId: string;
+  studyTitle: string;
+  kind: string;
+  label: string;
+  minutes: number;
+  text: string;
+  since: string;
+}
+
 interface TranscriptData {
   books: { abbrev: string; readThroughs: number; thisTerm: boolean }[];
   booksRead: number;
@@ -72,6 +82,8 @@ export default function SpiritPage() {
   const [verseSnip, setVerseSnip] = useState<string | null>(null);
   const [t2, setT2] = useState<{ position: number; total: number; done: boolean; next: { label: string } | null } | null>(null);
   const [posture, setPosture] = useState<string | null>(null);
+  const [carrying, setCarrying] = useState<CarriedHomework | null>(null);
+  const [ticking, setTicking] = useState(false);
 
   useEffect(() => {
     fetch("/api/spirit/today")
@@ -102,7 +114,27 @@ export default function SpiritPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then(setT2)
       .catch(() => {});
+    fetch("/api/spirit/homework")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setCarrying(d?.carrying ?? null))
+      .catch(() => {});
   }, []);
+
+  // The homework outlives its study — it waits here until he ticks it.
+  const tickHomework = async () => {
+    if (!carrying || ticking) return;
+    setTicking(true);
+    try {
+      await fetch("/api/spirit/homework", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dayId: carrying.dayId }),
+      });
+      setCarrying(null);
+    } finally {
+      setTicking(false);
+    }
+  };
 
   const cyclePosture = () => {
     if (!posture) return;
@@ -230,15 +262,21 @@ export default function SpiritPage() {
           )}
           <div className="mt-3.5 flex gap-2.5">
             <button
-              onClick={() => router.push("/spirit/study")}
+              onClick={() =>
+                router.push(
+                  data.progress && data.progress.done > 0
+                    ? "/spirit/study"
+                    : "/spirit/term/start",
+                )
+              }
               className="tap-scale flex-[1.6] rounded-[10px] bg-[#A63D63] py-[11px] text-[13px] font-semibold text-white hover:bg-[#8C2F51]"
               style={{ fontFamily: "var(--font-display)" }}
             >
               {data.progress && data.progress.completedToday > 0
                 ? "One more — eager day"
                 : data.progress && data.progress.done > 0
-                  ? "Continue the term"
-                  : "Begin the term"}
+                  ? `Continue — study ${data.progress.done + 1}`
+                  : "Start here — the term ahead"}
             </button>
             <button
               onClick={() => router.push("/spirit/term")}
@@ -271,6 +309,34 @@ export default function SpiritPage() {
           >
             Open the next term
           </button>
+        </div>
+      )}
+
+      {/* the homework you're carrying — it doesn't evaporate at midnight */}
+      {carrying && (
+        <div className="mt-3 rounded-[16px] border-[1.5px] border-[#E9CFDC] bg-white p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold tracking-[0.14em] text-[#8C2F51]">
+              CARRYING · {carrying.label.toUpperCase()}
+            </p>
+            <span className="rounded-full bg-accent px-[9px] py-[2.5px] text-[9.5px] font-semibold tabular-nums text-[#8C2F51]">
+              ≤ {carrying.minutes} min
+            </span>
+          </div>
+          <p className="mt-2 text-[13.5px] leading-[1.65] text-[#454349]">{carrying.text}</p>
+          <div className="mt-3 flex items-center gap-2.5">
+            <button
+              onClick={tickHomework}
+              disabled={ticking}
+              className="tap-scale flex-none whitespace-nowrap rounded-[9px] bg-[#232227] px-4 py-[9px] text-xs font-semibold text-white disabled:opacity-60"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {ticking ? "…" : "✓ Did it"}
+            </button>
+            <span className="min-w-0 flex-1 text-[10.5px] leading-[1.4] text-muted-foreground">
+              from &ldquo;{carrying.studyTitle}&rdquo; · never overdue
+            </span>
+          </div>
         </div>
       )}
 

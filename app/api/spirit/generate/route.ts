@@ -39,6 +39,7 @@ const WEEK_SCHEMA = {
         properties: {
           dayIndex: { type: "number" },
           title: { type: "string", description: "lecture title, sentence case, no colon-itis" },
+          aim: { type: "string", description: "THE AIM — one sentence, second person, naming what this study is FOR: what he should be able to see or do by the end. Concrete, never 'reflect deeply'. e.g. 'Spot the question Paul is answering before you decide what the answer means to you.'" },
           body: { type: "string", description: "the teaching, 110-170 words, warm lecturer. MUST open with one line naming the previous study's homework before teaching anything." },
           pullRef: { type: "string", description: "ONE hinge verse ref inside the day's reading, e.g. 'Judges 4:14'" },
           contextBlock: { type: "string", description: "THE WORLD BEHIND THE TEXT — history/geography/culture, 60-110 words, concrete" },
@@ -87,7 +88,7 @@ const WEEK_SCHEMA = {
           },
         },
         required: [
-          "dayIndex", "title", "body", "pullRef", "contextBlock", "doctrine",
+          "dayIndex", "title", "aim", "body", "pullRef", "contextBlock", "doctrine",
           "practice", "question", "oneMoreTitle", "oneMoreBody", "readingRef",
           "readingLabel", "estMinutes", "homework", "citations", "suggested",
         ],
@@ -324,6 +325,7 @@ Produce exactly ${nDays} days (dayIndex 1-${nDays}).`,
         question: string;
         oneMoreTitle: string;
         oneMoreBody: string;
+        aim?: string;
         readingRef: string;
         readingLabel: string;
         estMinutes: number;
@@ -398,6 +400,7 @@ Produce exactly ${nDays} days (dayIndex 1-${nDays}).`,
           question: d.question,
           oneMoreTitle: d.oneMoreTitle,
           oneMoreBody: d.oneMoreBody,
+          aim: d.aim ?? null,
           readingRef: d.readingRef,
           readingLabel: d.readingLabel,
           estMinutes: Math.min(30, Math.max(8, Math.round(d.estMinutes))),

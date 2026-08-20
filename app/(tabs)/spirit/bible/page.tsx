@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useBackTo } from "@/lib/nav-stack";
 import { SheetPortal } from "@/components/sheet-portal";
 
 // The Bible — free reading, pick up anywhere. The whole shelf: 66
@@ -20,6 +21,7 @@ interface BibleBook {
 
 export default function SpiritBiblePage() {
   const router = useRouter();
+  const goBack = useBackTo("/spirit");
   const [books, setBooks] = useState<BibleBook[] | null>(null);
   const [open, setOpen] = useState<BibleBook | null>(null);
   const [lastRead, setLastRead] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export default function SpiritBiblePage() {
     <div className="push-in stagger-children min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push("/spirit")}
+          onClick={goBack}
           className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
           aria-label="Back to Spirit"
         >

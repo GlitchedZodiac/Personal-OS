@@ -225,6 +225,22 @@ model UserSettings {
   @@map("user_settings")
 }
 
+// Web-push endpoints for the installed PWA (iOS 16.4+ requires the app
+// be added to the home screen). One row per browser/device install;
+// a 404/410 from the push service means the install is gone and the
+// row is deleted on the spot.
+model PushSubscription {
+  id         String   @id @default(uuid())
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  label      String? // "iPhone · home screen"
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @updatedAt
+
+  @@map("push_subscriptions")
+}
+
 model AuthCredential {
   id        String   @id @default("default")
   pinHash   String
@@ -1090,6 +1106,7 @@ model Term {
   hardNote    String? // hard-sayings statement when the term contains one
   secondNote  String? // second-reading note when revisiting a book
   homeworkArc String? // term-long running assignment, surfaced daily
+  objectives  Json? // string[] — what he walks away with; the orientation screen
   weeks       Int
   syllabus    Json // [{week, label, ref, days, homework: [kinds], hard?}]
   status      String    @default("upcoming") // upcoming | active | completed
@@ -1128,6 +1145,18 @@ model StudyCompletion {
   @@map("spirit_study_completions")
 }
 
+// The homework outlives the study screen: it is carried through the
+// day, reminded once in the evening, and ticked here. One row per day
+// he actually did it — absence is not failure, it just stays carried.
+model HomeworkCheck {
+  id     String   @id @default(uuid())
+  dayId  String   @unique
+  doneAt DateTime @default(now())
+
+  @@index([doneAt])
+  @@map("spirit_homework_checks")
+}
+
 model DevotionalDay {
   id           String   @id @default(uuid())
   termId       String
@@ -1150,6 +1179,7 @@ model DevotionalDay {
   citations    Json? // [{label, sourceKey, locator}]
   suggested    Json? // [{refInt, category}] — pre-marked highlights
   homework     Json? // {kind, label, minutes, text} — exactly one per study
+  aim          String? // one line: what THIS study is for, shown on every step
   generatedAt  DateTime @default(now())
 
   @@unique([termId, weekIndex, dayIndex])

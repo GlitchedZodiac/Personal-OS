@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useBackTo } from "@/lib/nav-stack";
 import { useReaderPrefs } from "@/lib/spirit-theme";
 
 // Track 2 — the whole Bible, quietly. Berean Standard Bible (public
@@ -25,7 +25,7 @@ interface T2Data {
 }
 
 export default function SpiritTrack2Page() {
-  const router = useRouter();
+  const goBack = useBackTo("/spirit");
   const { prefs, tokens: T, fontSize, fontFamily } = useReaderPrefs();
   const [data, setData] = useState<T2Data | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,7 +64,7 @@ export default function SpiritTrack2Page() {
     >
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push("/spirit")}
+          onClick={goBack}
           className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border"
           style={{ background: T.card, borderColor: T.rule }}
           aria-label="Back to Spirit"

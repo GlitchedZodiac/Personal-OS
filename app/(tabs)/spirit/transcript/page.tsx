@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useBackTo } from "@/lib/nav-stack";
 
 // The Transcript — every book, honestly. Computed purely from the
 // reading log; "not yet" is a shelf, not a debt.
@@ -25,7 +25,7 @@ interface TranscriptData {
 }
 
 export default function SpiritTranscriptPage() {
-  const router = useRouter();
+  const goBack = useBackTo("/spirit");
   const [data, setData] = useState<TranscriptData | null>(null);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function SpiritTranscriptPage() {
     <div className="push-in stagger-children min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push("/spirit")}
+          onClick={goBack}
           className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
           aria-label="Back to Spirit"
         >

@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-15 (WATCH ROUND 1+2 phone half: sync summary/routine coda + GET /api/mobile/summary)
+**Last updated:** 2026-08-20 (SPIRIT: the lesson becomes a guided journey; backlinks; web push)
 **Current phase:** the watch lane is implementing the Round 1+2 design
 handoff on `claude/watch-app`; the main lane shipped its API dependencies
 (below). `main` is the single source of truth as of 08-14d.
@@ -13,6 +13,87 @@ handoff on `claude/watch-app`; the main lane shipped its API dependencies
 `claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch —
 **must merge `main` FIRST**, it is 56+ commits behind and its docs/ios
 snapshot predates the consolidation).
+
+## 2026-08-20 — SPIRIT: the lesson is a journey now (his 08-19 feedback)
+
+He used the Spirit section for real on 08-19 and it lost him. The database
+recorded exactly how: at 02:07 the Reader loaded `1 Corinthians 7:37`, at
+02:12 `1 Corinthians 7:1` — **one verse** — then 7, 8, 9 in sequence. His
+assignment was 1 Cor 7:1–7. He did the work (3 highlights, a saved question,
+an Ask thread) and **`StudyCompletion` still had zero rows** — the Complete
+button sat under a long scroll he never reached.
+
+Three root causes, all fixed:
+
+- **The Reader never opened his assignment.** The study screen sent him to
+  `/spirit/read` with no passage; the Reader then did
+  `readingRef.split(/[-–,]/)[0]` — `"1 Corinthians 7:1-7"` → `"1 Corinthians
+  7:1"` — and asked Crossway for that. New **`lib/spirit-refs.ts`**
+  (`parseReadingRef`, 18 tests) parses every shape the curriculum actually
+  contains: verse ranges, chapter ranges, cross-chapter, two-book refs
+  ("Psalm 23; Proverbs 22:6"), book-inheriting continuations, en-dashes.
+- **The reading log lied.** It stored whatever chapter was on screen —
+  `refStart == refEnd == 46007001`, one verse, counted toward the lifetime
+  Transcript. `POST /api/spirit/read` now accepts `{dayId}` alone and
+  resolves the honest range server-side. His 08-19 row was corrected to
+  7:1–7 in place.
+- **The order was not an order.** The screen rendered teaching → homework →
+  *the reading assignment* → one more thing → complete.
+
+**The study is now six steps** (`/spirit/study?step=N`): read the passage →
+the teaching → behind the text → what it means → the question → the
+homework, and the last step's button IS "Mark this study complete ✓". The
+step is in the URL (so the phone's back gesture walks the lesson backwards)
+and in localStorage (so closing the app mid-lesson resumes where he
+stopped). Nothing is gated; Next always advances.
+
+**The Reader brackets the assignment.** Full chapter for context, with
+"TODAY'S ASSIGNMENT STARTS HERE · 1 Corinthians 7:1–7", an accent rail on
+the assigned verses, a "TODAY'S READING ENDS HERE" rule after the last one,
+and everything beyond it at half opacity but fully readable. Two-part
+assignments get a PART 1 / PART 2 switcher.
+
+**Backlinks, twelve of them.** Every ‹ in Spirit was `router.push("/spirit")`.
+New `lib/nav-stack.ts` + `components/nav-stack-tracker.tsx`: ‹ prefers an
+explicit `?from=` (the study↔reader round trip carries its step), then the
+previous in-app page, then the section root when the PWA cold-started there.
+
+**The orientation** (`/spirit/term/start`) — his "what am I supposed to get
+out of this term" ask. Why this term, WHAT YOU WALK AWAY WITH (new
+`Term.objectives`, written once per term by `POST /api/spirit/orientation`),
+how a study goes (the six steps, named), the running assignment, the units.
+It is the home card's primary button until the first study is complete, and
+always reachable from the Syllabus. Every study also carries **THE AIM**
+(new `DevotionalDay.aim`) — one line saying what THAT study is for. All 8 of
+Term 1's studies were backfilled; the generator writes it for new terms.
+
+**Ask stopped being a wall.** The old rule refused to answer when the
+library had no source — that is what his 1 Cor 7:37 question hit. The real
+rule is *no quotation without a source*, not *no answer*: it now always
+answers, quotes only from stored sources, and labels each reply FROM YOUR
+LIBRARY or NOT IN YOUR LIBRARY.
+
+**Notifications exist now** (the first sender is the homework). `web-push` +
+`PushSubscription` + `POST /api/push/subscribe` + a toggle in Spirit
+settings + `/api/cron/spirit-reminder` at 00:00 UTC (7pm Bogotá). It fires
+only when he is carrying homework he hasn't ticked — never a streak nag.
+The homework itself now outlives its study: new `HomeworkCheck`, a CARRYING
+card on the Spirit home, `carriedHomework()` shared by the API and the cron.
+**Prod needs the VAPID vars** — see deferred-items.
+
+Migration `20260820164148_spirit_lesson_flow` (additive only: `spirit_days.aim`,
+`spirit_terms.objectives`, `push_subscriptions`, `spirit_homework_checks`)
+is applied to the shared Supabase instance.
+
+Self-smoke caught two real bugs: the action bar was rendered *inside* the
+`.push-in` container, whose finished animation leaves `transform:
+matrix(1,0,0,1,0,0)` — an identity transform is still a containing block,
+so "Mark this study complete" anchored to the page and fell below the fold
+on long steps (the very bug he reported, reintroduced); and the bar
+collided with the floating voice dock. Both fixed and re-verified in the
+browser. A probe completion was written, verified end-to-end (celebration →
+carried homework → cron payload), then deleted — **study 1 is still his to
+finish.**
 
 ## 2026-08-15 — WATCH ROUND 1+2: the phone half (API dependencies)
 

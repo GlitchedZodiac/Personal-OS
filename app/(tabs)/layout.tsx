@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { DemoBanner } from "@/components/demo-banner";
 import { DemoWalkthrough } from "@/components/demo-walkthrough";
 import { GlobalDock } from "@/components/global-dock";
+import { NavStackTracker } from "@/components/nav-stack-tracker";
 import { PinGate } from "@/components/pin-gate";
 
 export default function TabsLayout({
@@ -12,6 +13,7 @@ export default function TabsLayout({
 }) {
   return (
     <PinGate>
+      <NavStackTracker />
       <div className="min-h-screen bg-background lg:flex">
         <AppSidebar />
         <div className="flex-1 min-w-0">

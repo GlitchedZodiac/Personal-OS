@@ -75,7 +75,7 @@ self.addEventListener("fetch", (event) => {
 // ─── Push Notification Support ───────────────────────────────────────
 
 self.addEventListener("push", (event) => {
-  let data = { title: "Personal OS", body: "You have a reminder", url: "/todos" };
+  let data = { title: "Pitaya", body: "You have a reminder", url: "/dashboard" };
 
   try {
     if (event.data) {
@@ -90,7 +90,7 @@ self.addEventListener("push", (event) => {
     icon: "/icon-192.png",
     badge: "/icon-192.png",
     vibrate: [100, 50, 100],
-    data: { url: data.url || "/todos" },
+    data: { url: data.url || "/dashboard" },
     actions: [
       { action: "open", title: "Open" },
       { action: "dismiss", title: "Dismiss" },
@@ -106,7 +106,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const url = event.notification.data?.url || "/health";
+  const url = event.notification.data?.url || "/dashboard";
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
@@ -133,7 +133,7 @@ self.addEventListener("message", (event) => {
       icon: "/icon-192.png",
       badge: "/icon-192.png",
       vibrate: [100, 50, 100],
-      data: { url: url || "/todos" },
+      data: { url: url || "/dashboard" },
       tag: tag || "reminder",
       renotify: true,
     });

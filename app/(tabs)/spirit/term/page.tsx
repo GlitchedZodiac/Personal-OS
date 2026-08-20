@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useBackTo } from "@/lib/nav-stack";
 
 // The Term — syllabus, "why this term," the hard-sayings commitment,
 // the year at a glance, and THE VISIBLE BATCH: a term's studies are
@@ -36,6 +37,7 @@ interface GenStatus {
 
 export default function SpiritTermPage() {
   const router = useRouter();
+  const goBack = useBackTo("/spirit");
   const [data, setData] = useState<TermData | null>(null);
   const [gen, setGen] = useState<GenStatus | null>(null);
   const [writing, setWriting] = useState(false);
@@ -105,7 +107,7 @@ export default function SpiritTermPage() {
     <div className="push-in stagger-children min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push("/spirit")}
+          onClick={goBack}
           className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
           aria-label="Back to Spirit"
         >
@@ -171,7 +173,25 @@ export default function SpiritTermPage() {
         </div>
       )}
 
-      <div className="mt-4 rounded-[18px] bg-white p-[18px] shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+      <button
+        onClick={() => router.push("/spirit/term/start")}
+        className="tap-scale mt-4 flex w-full items-center gap-[11px] rounded-[14px] bg-accent px-3.5 py-3 text-left hover:bg-[#F0D3E0]"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" className="flex-none">
+          <rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63" />
+        </svg>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[9.5px] font-bold tracking-[0.14em] text-[#8C2F51]">
+            THE ORIENTATION
+          </span>
+          <span className="mt-[3px] block text-[12.5px] text-foreground">
+            What this term is for, and how a study goes
+          </span>
+        </span>
+        <span className="flex-none text-[15px] text-[#8C2F51]">›</span>
+      </button>
+
+      <div className="mt-3 rounded-[18px] bg-white p-[18px] shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
         <p className="text-[10px] font-bold tracking-[0.16em] text-muted-foreground">
           WHY THIS TERM, WHY NOW
         </p>

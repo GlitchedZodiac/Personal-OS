@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useBackTo } from "@/lib/nav-stack";
 import { toast } from "sonner";
 import {
   getOrCreateMicrophoneStream,
@@ -34,6 +35,7 @@ type Mode = "speak" | "photo" | "paste";
 
 export default function SpiritChurchPage() {
   const router = useRouter();
+  const goBack = useBackTo("/spirit");
   const [step, setStep] = useState<Step>("entry");
   const [mode, setMode] = useState<Mode>("paste");
   const [series, setSeries] = useState<Series | null>(null);
@@ -187,7 +189,7 @@ export default function SpiritChurchPage() {
     <div className="push-in stagger-children min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push("/spirit")}
+          onClick={goBack}
           className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
           aria-label="Back to Spirit"
         >
@@ -481,7 +483,7 @@ export default function SpiritChurchPage() {
               <span className="font-semibold text-[#8C2F51]">Promoting it to a term arrives with the pipeline</span>
             </span>
             <button
-              onClick={() => router.push("/spirit")}
+              onClick={goBack}
               className="rounded-[9px] border border-[#D9D7DC] px-4 py-2 text-xs font-semibold text-[#66646C] hover:bg-[#FAF9FA]"
               style={{ fontFamily: "var(--font-display)" }}
             >

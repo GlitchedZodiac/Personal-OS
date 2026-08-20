@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useBackTo } from "@/lib/nav-stack";
+import { ReminderToggle } from "@/components/reminder-toggle";
 import { toast } from "sonner";
 
 // Spirit settings — small screen, big trust. Translation, posture,
@@ -15,7 +16,7 @@ const POSTURES = [
 ];
 
 export default function SpiritSettingsPage() {
-  const router = useRouter();
+  const goBack = useBackTo("/spirit");
   const [posture, setPosture] = useState("westminster");
   const [paused, setPaused] = useState(false);
   const [expState, setExpState] = useState<0 | 1 | 2>(0);
@@ -71,7 +72,7 @@ export default function SpiritSettingsPage() {
     <div className="push-in stagger-children min-h-screen bg-[#F2F1F2] px-[22px] pb-52 pt-12 lg:px-8">
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push("/spirit")}
+          onClick={goBack}
           className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white hover:bg-[#FAF9FA]"
           aria-label="Back to Spirit"
         >
@@ -90,7 +91,9 @@ export default function SpiritSettingsPage() {
         </div>
       </div>
 
-      <div className="mt-4 rounded-[16px] bg-white p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+      <ReminderToggle />
+
+      <div className="mt-2.5 rounded-[16px] bg-white p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
         <p className="text-[10px] font-bold tracking-[0.16em] text-muted-foreground">TRANSLATION</p>
         <div className="mt-2 flex gap-1.5">
           <span

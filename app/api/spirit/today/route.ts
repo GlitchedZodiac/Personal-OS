@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { refParts, syllabusTarget } from "@/lib/bible-refs";
+import { assignmentLabel, parseReadingRef, scopeLabel } from "@/lib/spirit-refs";
 import { DEFAULT_TIME_ZONE, getDateStringInTimeZone } from "@/lib/timezone";
 
 // GET — the Spirit home + the current study in one call. SELF-PACED:
@@ -30,6 +31,7 @@ export async function GET() {
 
     const [
       readRow,
+      homeworkRow,
       noteCount,
       openQuestions,
       linkCount,
@@ -44,6 +46,9 @@ export async function GET() {
     ] = await Promise.all([
       day
         ? prisma.readingLog.findFirst({ where: { dayId: day.id } })
+        : Promise.resolve(null),
+      day
+        ? prisma.homeworkCheck.findUnique({ where: { dayId: day.id } })
         : Promise.resolve(null),
       prisma.spiritNote.count(),
       prisma.spiritNote.count({ where: { kind: "question", resolvedAt: null } }),
@@ -92,6 +97,8 @@ export async function GET() {
       cursor.setDate(cursor.getDate() - 1);
     }
 
+    const assignment = day ? parseReadingRef(day.readingRef) : [];
+
     const todayKey = getDateStringInTimeZone(new Date(), DEFAULT_TIME_ZONE);
     const completedToday = completions.filter(
       (c) => getDateStringInTimeZone(c.completedAt, DEFAULT_TIME_ZONE) === todayKey,
@@ -116,11 +123,23 @@ export async function GET() {
         hardNote: term.hardNote,
         secondNote: term.secondNote,
         homeworkArc: term.homeworkArc,
+        objectives: Array.isArray(term.objectives) ? term.objectives : null,
         weeks: term.weeks,
         syllabus: term.syllabus,
       },
       day,
+      // The assignment, parsed once server-side: what the Reader opens,
+      // where the bracket falls, and how big it actually is. The screen
+      // never splits a ref string again.
+      assignment: assignment.length
+        ? {
+            label: assignmentLabel(assignment),
+            scope: scopeLabel(assignment),
+            segments: assignment,
+          }
+        : null,
       readingDone: Boolean(readRow),
+      homeworkDone: Boolean(homeworkRow),
       progress: {
         done: doneIds.size,
         total: allDays.length,
