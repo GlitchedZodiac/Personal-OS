@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-20 (SPIRIT: the lesson becomes a guided journey; backlinks; web push)
+**Last updated:** 2026-08-20 (SPIRIT: the lesson becomes a guided journey; backlinks; web push — DEPLOYED)
 **Current phase:** the watch lane is implementing the Round 1+2 design
 handoff on `claude/watch-app`; the main lane shipped its API dependencies
 (below). `main` is the single source of truth as of 08-14d.
@@ -15,6 +15,20 @@ handoff on `claude/watch-app`; the main lane shipped its API dependencies
 snapshot predates the consolidation).
 
 ## 2026-08-20 — SPIRIT: the lesson is a journey now (his 08-19 feedback)
+
+**DEPLOYED to production 2026-08-20** (`dpl_4Vco3e7ZjjqDrD43ifwkK46VdDyz`).
+The deploy had a trap worth recording: **production was running
+`claude/phase1-modernization`, not `main`** — that branch carried two
+Freestyle commits (08-17) `main` had never seen, confirmed live by
+`/api/mobile/zones` answering on prod. Shipping the Spirit branch alone
+would have silently removed Freestyle from production. So the Freestyle
+lane was merged in first (clean, no conflicts: it touches
+`app/api/mobile/*`, chat, and workout entry; Spirit touches none of them),
+`main` was fast-forwarded to the merge, and prod shipped from that. **main
+and production are the same tree again.** VAPID_PUBLIC_KEY /
+VAPID_PRIVATE_KEY / VAPID_SUBJECT were added to Vercel production, and prod
+now reports `configured: true` — the evening reminder can be switched on
+from his phone once the PWA is reinstalled/refreshed.
 
 He used the Spirit section for real on 08-19 and it lost him. The database
 recorded exactly how: at 02:07 the Reader loaded `1 Corinthians 7:37`, at
