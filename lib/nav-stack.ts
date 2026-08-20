@@ -64,11 +64,19 @@ export function previousPath(): string | null {
   return stack.length > 1 ? stack[stack.length - 2] : null;
 }
 
-/** An explicit ?from= target, when the caller handed us one. */
+/**
+ * An explicit ?from= target, when the caller handed us one. Same-origin
+ * paths only: "//evil.example" also starts with "/" and the router would
+ * treat it as protocol-relative, so it is rejected along with anything
+ * carrying a scheme.
+ */
 export function fromParam(): string | null {
   if (typeof window === "undefined") return null;
   const raw = new URLSearchParams(window.location.search).get("from");
-  return raw && raw.startsWith("/") ? raw : null;
+  if (!raw) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  if (/^\/\\/.test(raw)) return null;
+  return raw;
 }
 
 /**
