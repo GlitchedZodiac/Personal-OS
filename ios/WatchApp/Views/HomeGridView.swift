@@ -1,4 +1,7 @@
 // Home — Round 1 §04, option 1j "Due-aware grid · fourth tile = Spirit".
+// 2026-08-20: the Freestyle strip that rode below the grid moved into the
+// Workouts list (his ask — "the freestyle is not in the workouts tab, it's
+// at the bottom"), so this screen is the designed 2×2 again.
 // Extracted verbatim from Pitaya Watch Round 1.dc.html: brand row + 7 week
 // ticks (filled #A63D63 done · outlined #DC74A0 today · #2A292E ahead),
 // derived subline, stateful Workouts tile (pink wash when due, mint ✓ once
@@ -17,7 +20,6 @@ struct HomeGridView: View {
                 header
                 subline
                 grid
-                freestyleTile
                 footer
             }
             .padding(.horizontal, Theme.px(8))
@@ -124,43 +126,6 @@ struct HomeGridView: View {
         .padding(.top, Theme.px(11))
     }
 
-    /// UNDESIGNED (2026-08-17): the Round 1 grid is a fixed 2×2 whose fourth
-    /// slot is Spirit, so Freestyle rides below it full-width rather than
-    /// displacing a designed tile. Flagged for the next design pass.
-    private var freestyleTile: some View {
-        Button {
-            Task { await model.startWorkout(.freestyle) }
-        } label: {
-            HStack(spacing: Theme.px(12)) {
-                ZStack {
-                    Circle().fill(Theme.elementDim)
-                    PitayaGlyph(
-                        paths: Glyphs.heart, style: .fill,
-                        color: Theme.accent, size: Theme.px(15)
-                    )
-                }
-                .frame(width: Theme.px(34), height: Theme.px(34))
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Freestyle")
-                        .font(Theme.wText(8, weight: .semibold))
-                        .foregroundStyle(Theme.textBright)
-                    Text("record · describe it later")
-                        .font(Theme.wText(5.5))
-                        .foregroundStyle(Theme.textMuted)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, Theme.px(13))
-            .padding(.vertical, Theme.px(12))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.px(20)))
-        }
-        .buttonStyle(.plain)
-        .padding(.top, Theme.px(8))
-    }
-
     private var workoutsTile: some View {
         let due = model.trainedTodayAt == nil ? model.dueRoutine : nil
         let trained = model.trainedTodayAt
@@ -192,7 +157,7 @@ struct HomeGridView: View {
                     } else {
                         // Neither state exists in the design (it always has a
                         // due routine or a trained day) — quiet fallback.
-                        Text("\(model.sequences.count) routines · free sets")
+                        Text("\(model.sequences.count) routines · freestyle")
                             .font(Theme.wText(5.5))
                             .foregroundStyle(Theme.textMuted)
                             .lineLimit(1)

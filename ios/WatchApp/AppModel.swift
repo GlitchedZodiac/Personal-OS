@@ -11,6 +11,34 @@ import SwiftUI
 import WatchKit
 import WidgetKit
 
+// MARK: - Routine disciplines
+
+/// Michael's 2026-08-20 IA: the Workouts list splits saved routines by what
+/// they're loaded with. "Kettlebell" means the routine uses a bell at all —
+/// his words: "routines that don't use kettlebells will show there [weight
+/// training]" — so any bell step claims the routine, and the gym days (leg
+/// press, bench, machines) fall to Weight Training.
+public enum WorkoutDiscipline: String, CaseIterable, Identifiable, Hashable, Sendable {
+    case kettlebell, weights
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .kettlebell: return "Kettlebell"
+        case .weights: return "Weight Training"
+        }
+    }
+
+    /// Shown when the list is empty — routines are authored on the phone.
+    public var emptyHint: String {
+        switch self {
+        case .kettlebell: return "Build a bell routine in Pitaya chat"
+        case .weights: return "Build a gym routine in Pitaya chat"
+        }
+    }
+}
+
 // MARK: - Workout kinds
 
 public enum WorkoutKind: String, CaseIterable, Identifiable {
@@ -108,8 +136,8 @@ public final class AppModel: ObservableObject {
         case home              // design 04 — tile grid
         case settings          // Round 1 §01
         case workoutList       // design 05
-        case kettlebellSpace   // Michael's 2026-08-10 IA: routines + free sets
-        case sequences         // design 06
+        case hikeMenu          // Michael's 2026-08-20 IA: new hike vs. a saved trail
+        case sequences(WorkoutDiscipline) // design 06, split by discipline
         case sequenceDetail(SequenceDef) // design 07
         case live(WorkoutKind)           // freeform live pages
         case liveSequence(SequenceDef)   // EMOM ring or circuit runner by kind
@@ -492,16 +520,57 @@ public final class AppModel: ObservableObject {
     public func openWorkoutList() { phase = .workoutList }
     public func openSettings() { phase = .settings }
     public func openReady() { phase = .ready }
-    public func openKettlebellSpace() { phase = .kettlebellSpace }
-    public func openSequences() { phase = .sequences }
+    public func openHikeMenu() { phase = .hikeMenu }
+    /// Kettlebell and Weight Training both land straight on their routine
+    /// list — no intermediate "space" screen (his 08-20 note: "I click on
+    /// weight training, and I have the routines drop down that I get to pick").
+    public func openSequences(_ discipline: WorkoutDiscipline) {
+        phase = .sequences(discipline)
+    }
     public func openSequence(_ sequence: SequenceDef) {
         loadWeightOverrides(for: sequence)
         phase = .sequenceDetail(sequence)
     }
     public func backToHome() { phase = .home }
     public func backToWorkoutList() { phase = .workoutList }
-    public func backToKettlebellSpace() { phase = .kettlebellSpace }
-    public func backToSequences() { phase = .sequences }
+    public func backToSequences(_ discipline: WorkoutDiscipline) {
+        phase = .sequences(discipline)
+    }
+
+    // MARK: - Routine disciplines
+
+    /// Which list a routine belongs in. A single bell step claims the whole
+    /// routine for Kettlebell; everything else — barbell, dumbbell, machine,
+    /// bodyweight, unrecognised — is Weight Training. Steps resolve through
+    /// the generated catalog (which already carries his AI-created customs),
+    /// with a name fallback so a routine full of movements the catalog has
+    /// never heard of still lands correctly if it says "bell" on the tin.
+    public func discipline(of sequence: SequenceDef) -> WorkoutDiscipline {
+        let usesBell = sequence.steps.contains { step in
+            if ExerciseCatalog.byId(step.exercise)?.category == .kettlebell { return true }
+            if ExerciseCatalog.normalize(step.exerciseName)?.category == .kettlebell { return true }
+            return false
+        }
+        if usesBell { return .kettlebell }
+
+        // Nothing resolved to a bell — before calling it a gym day, check the
+        // words themselves (a routine of customs the catalog can't place).
+        let resolved = sequence.steps.contains { ExerciseCatalog.byId($0.exercise) != nil }
+        if !resolved {
+            let haystack = ([sequence.name] + sequence.steps.map(\.exerciseName))
+                .joined(separator: " ")
+                .lowercased()
+            for needle in ["kettlebell", "kb ", "bell", "swing", "goblet", "turkish", "snatch"] {
+                if haystack.contains(needle) { return .kettlebell }
+            }
+        }
+        return .weights
+    }
+
+    /// The routine list behind Kettlebell / Weight Training.
+    public func sequences(for discipline: WorkoutDiscipline) -> [SequenceDef] {
+        sequences.filter { self.discipline(of: $0) == discipline }
+    }
 
     // MARK: - Weight overrides
 
@@ -1063,7 +1132,43 @@ public final class AppModel: ObservableObject {
         pendingItem = nil
         try? await queue?.enqueue(item)
         await drainQueue(reconcilePRsFor: item.externalId)
+
+        // His 08-20 note: "I should just be able to click save, maybe a
+        // confirmation, and then it goes." Save is a two-tap ritual today
+        // only because the server still owes some summaries their zone
+        // breakdown. When the wrist already holds every number the screen
+        // will ever show — freestyle computes its own zones live — there is
+        // nothing to wait for, so confirm and get out of the way.
+        if summaryNeedsNothingFurther {
+            await confirmSaveAndLeave()
+            return
+        }
         await loadSummaryZones(externalId: item.externalId)
+    }
+
+    /// True when saving cannot add anything to the summary screen.
+    private var summaryNeedsNothingFurther: Bool {
+        summary?.kind == .freestyle || freestyleZoneSeconds != nil
+    }
+
+    /// Mint check + success tap, held long enough to read, then home. The
+    /// workout is safe either way — a failed sync leaves it queued on disk
+    /// (drainQueue never drops it), which the confirmation says out loud.
+    private func confirmSaveAndLeave() async {
+        guard case .summary = phase else { return }
+        switch syncState {
+        case .synced, .queued:
+            Haptics.key(.success)
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            // A Double Tap or an App Intent may have moved him meanwhile.
+            guard case .summary = phase else { return }
+            dismissSummary()
+        default:
+            // Nothing else reaches here today (drainQueue only ever lands on
+            // .synced or .queued) — but if it ever does, leave the screen up
+            // rather than dismissing a workout he can't see the state of.
+            break
+        }
     }
 
     /// §03 zones card: the sync enrichment stores timeInZones on the row —

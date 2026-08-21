@@ -11,24 +11,31 @@ import WatchKit
 
 struct SequencesListView: View {
     @EnvironmentObject private var model: AppModel
+    /// Kettlebell or Weight Training — the list is this discipline's routines
+    /// and nothing else (his 08-20 IA: no Routines/Free-sets middle screen).
+    let discipline: WorkoutDiscipline
+
+    private var routines: [SequenceDef] { model.sequences(for: discipline) }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
-                    BackChevron { model.backToKettlebellSpace() }
-                    Text("Routines")
+                    BackChevron { model.backToWorkoutList() }
+                    Text(discipline.title)
                         .font(Theme.display(16))
                         .foregroundStyle(Theme.textBright)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 .padding(.horizontal, 4)
 
-                Text("built in Pitaya on iPhone")
+                Text(routines.isEmpty ? discipline.emptyHint : "built in Pitaya on iPhone")
                     .font(Theme.text(8.5))
                     .foregroundStyle(Theme.textMuted)
                     .padding(.horizontal, 6)
 
-                ForEach(model.sequences) { sequence in
+                ForEach(routines) { sequence in
                     Button {
                         model.openSequence(sequence)
                     } label: {
@@ -99,7 +106,7 @@ struct SequenceDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 6) {
-                    BackChevron { model.backToSequences() }
+                    BackChevron { model.backToSequences(model.discipline(of: sequence)) }
                     Text(sequence.name)
                         .font(Theme.display(12.5))
                         .foregroundStyle(Theme.textBright)

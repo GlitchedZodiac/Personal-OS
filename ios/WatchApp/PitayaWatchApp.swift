@@ -45,10 +45,10 @@ struct RootView: View {
                 SettingsView()
             case .workoutList:
                 WorkoutListView()
-            case .kettlebellSpace:
-                KettlebellSpaceView()
-            case .sequences:
-                SequencesListView()
+            case .hikeMenu:
+                HikeMenuView()
+            case .sequences(let discipline):
+                SequencesListView(discipline: discipline)
             case .sequenceDetail(let sequence):
                 SequenceDetailView(sequence: sequence)
             case .live(let kind):

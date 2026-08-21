@@ -76,6 +76,32 @@ enum Glyphs {
     static let pencil = ["M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"]
 }
 
+/// Barbell — the Weight Training row (Michael's 2026-08-20 category).
+///
+/// NOT EXTRACTED: the design file has no barbell, because the category
+/// didn't exist when it was drawn. Built to match the kettlebell's own
+/// grammar — 24×24 box, 2.1 stroke, rounded caps — and flagged for the next
+/// design pass. THE PORT GATE: replace this verbatim the moment a slice
+/// lands; do not reach for an SF Symbol in the meantime.
+struct BarbellGlyph: View {
+    var color: Color = Theme.accent
+    var size: CGFloat = 13
+
+    var body: some View {
+        PitayaGlyph(
+            paths: [
+                "M7.5 12 H16.5",          // the bar
+                "M5.5 8.5 V15.5",         // inner plates
+                "M18.5 8.5 V15.5",
+                "M2.75 10.25 V13.75",     // outer plates
+                "M21.25 10.25 V13.75",
+            ],
+            color: color,
+            size: size
+        )
+    }
+}
+
 /// Walk figure = design circle head (cx13 cy4.5 r2) + body strokes.
 struct WalkGlyph: View {
     var color: Color = Theme.accent

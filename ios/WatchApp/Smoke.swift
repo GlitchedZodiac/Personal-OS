@@ -59,6 +59,43 @@ enum Smoke {
             log("sample circuit injected")
         }
 
+        // Discipline-split check (2026-08-20): a gym routine with no bell in
+        // it, so Workouts → Weight Training has something to list and the
+        // Kettlebell list can be seen NOT to contain it.
+        if env["PITAYA_SMOKE_SAMPLE_WEIGHTS"] == "1" {
+            model.debugInjectSequence(SequenceDef(
+                id: "smoke-weights",
+                name: "Leg Day (sample)",
+                kind: "straight",
+                restSecondsDefault: 90,
+                durationMinutes: nil,
+                rounds: nil,
+                steps: [
+                    SequenceStep(exercise: "leg-press", exerciseName: "Leg Press",
+                                 reps: 10, seconds: nil, weightKg: 120, restSeconds: nil),
+                    SequenceStep(exercise: "back-squat", exerciseName: "Squat",
+                                 reps: 5, seconds: nil, weightKg: 80, restSeconds: nil),
+                    SequenceStep(exercise: "romanian-deadlift", exerciseName: "Romanian Deadlift",
+                                 reps: 8, seconds: nil, weightKg: 60, restSeconds: nil),
+                ],
+                updatedAt: Date()
+            ))
+            log("sample weights routine injected")
+        }
+
+        // Prove the classifier, not just the screens: every routine the model
+        // holds, with the list it will appear under.
+        if env["PITAYA_SMOKE_DISCIPLINES"] == "1" {
+            // The injected samples are there from launch; his real routines
+            // arrive with the history fetch — wait for them or the dump only
+            // ever proves the synthetic half.
+            await model.refreshHistory()
+            for sequence in model.sequences {
+                log("discipline: \(model.discipline(of: sequence).rawValue) ← \(sequence.name)")
+            }
+            log("discipline: kettlebell=\(model.sequences(for: .kettlebell).count) weights=\(model.sequences(for: .weights).count)")
+        }
+
         // WALK variant: an outdoor session with the real recorder + GPS, held
         // open for N seconds while a route is fed in (simctl location), then
         // finished and saved — proves the whole route pipeline to prod.
@@ -140,6 +177,10 @@ enum Smoke {
             log("freestyle: zoneSeconds=\(model.freestyleZoneSeconds.map { "\($0)" } ?? "nil")")
             await model.saveWorkout()
             log("freestyle: saved — syncState=\(String(describing: model.syncState))")
+            // 2026-08-20: Save is one tap now — it confirms and returns him
+            // home itself. If this ever prints .summary again, the second
+            // "Done" tap is back.
+            log("freestyle: phase after save = \(String(describing: model.phase))")
             return
         }
 

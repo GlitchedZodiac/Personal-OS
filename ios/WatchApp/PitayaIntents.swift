@@ -65,7 +65,9 @@ struct StartRoutineIntent: AppIntent {
             // weights editor and its Start runs the 3·2·1.
             model.openSequence(match)
         } else {
-            model.openSequences()
+            // The entity is stale (routine deleted on the phone) — the
+            // Workouts list is honest; guessing a discipline isn't.
+            model.openWorkoutList()
         }
         return .result()
     }

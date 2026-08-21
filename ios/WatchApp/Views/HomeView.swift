@@ -1,6 +1,14 @@
-// Workout list — design screen 05: Sequences row (live now that
-// /api/mobile/sequences shipped) + Kettlebell / Trail Run / Walk with the
-// design's own glyphs and real-history subtitles.
+// Workout list — design screen 05, restructured to Michael's 2026-08-20 IA:
+// EVERY way to start a session lives here (Freestyle came up off the home
+// grid), strength splits into Kettlebell and Weight Training, each landing
+// straight on its own routine list, and Hike gets a submenu because a hike
+// is either new ground or ground he's covered before.
+//
+// UNDESIGNED (2026-08-20): the Freestyle row, the Weight Training row + its
+// barbell glyph, and the whole hike submenu have no slice in
+// docs/design/pitaya-watch.dc.html — they are built inside the watch design
+// system (existing row grammar, Theme idiom) and flagged for the next design
+// pass. THE PORT GATE applies the moment a slice lands.
 
 #if os(watchOS)
 import SwiftUI
@@ -19,10 +27,20 @@ struct WorkoutListView: View {
                 }
                 .padding(.horizontal, 4)
 
-                row(title: "Kettlebell", subtitle: kettlebellSubtitle) {
+                // Freestyle first: it's the catch-all, and it replaced free
+                // sets as the way to record something unstructured.
+                row(kind: .freestyle, title: "Freestyle", subtitle: "record · describe it later") {
+                    PitayaGlyph(paths: Glyphs.heart, style: .fill, color: Theme.accent, size: 15)
+                }
+                row(title: "Kettlebell", subtitle: routineSubtitle(.kettlebell), pushes: true) {
                     PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 15)
                 } action: {
-                    model.openKettlebellSpace()
+                    model.openSequences(.kettlebell)
+                }
+                row(title: "Weight Training", subtitle: routineSubtitle(.weights), pushes: true) {
+                    BarbellGlyph(color: Theme.accent, size: 15)
+                } action: {
+                    model.openSequences(.weights)
                 }
                 row(kind: .run, title: "Trail Run", subtitle: runSubtitle) {
                     PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 15)
@@ -33,8 +51,10 @@ struct WorkoutListView: View {
                 row(kind: .treadmill, title: "Treadmill", subtitle: "indoor · distance & HR") {
                     WalkGlyph(color: Theme.accent, size: 15)
                 }
-                row(kind: .hike, title: "Hike", subtitle: "elevation & heart rate") {
+                row(title: "Hike", subtitle: "new ground or a trail you know", pushes: true) {
                     PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 15)
+                } action: {
+                    model.openHikeMenu()
                 }
             }
             .padding(.horizontal, 2)
@@ -45,13 +65,15 @@ struct WorkoutListView: View {
         kind: WorkoutKind, title: String, subtitle: String,
         @ViewBuilder glyph: () -> some View
     ) -> some View {
-        row(title: title, subtitle: subtitle, glyph: glyph) {
+        row(title: title, subtitle: subtitle, pushes: false, glyph: glyph) {
             Task { await model.startWorkout(kind) }
         }
     }
 
+    /// `pushes` earns the ›. A row that starts a 3·2·1 countdown the instant
+    /// it's tapped doesn't get one — the chevron promises another screen.
     private func row(
-        title: String, subtitle: String,
+        title: String, subtitle: String, pushes: Bool,
         @ViewBuilder glyph: () -> some View,
         action: @escaping () -> Void
     ) -> some View {
@@ -74,9 +96,11 @@ struct WorkoutListView: View {
                         .minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Theme.textMuted)
+                if pushes {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.textMuted)
+                }
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 9)
@@ -85,17 +109,12 @@ struct WorkoutListView: View {
         .buttonStyle(.plain)
     }
 
-    private var kettlebellSubtitle: String {
-        let routines = model.sequences.count
-        if routines > 0 {
-            return "\(routines) \(routines == 1 ? "routine" : "routines") · free sets"
-        }
-        if let last = model.lastKettlebell {
-            let f = RelativeDateTimeFormatter()
-            f.unitsStyle = .short
-            return "last · " + f.localizedString(for: last, relativeTo: Date())
-        }
-        return "routines · free sets · PRs"
+    /// "3 routines" / "1 routine" / the honest empty hint. The row stays
+    /// tappable when empty — a dead row that swallows the tap reads as a bug.
+    private func routineSubtitle(_ discipline: WorkoutDiscipline) -> String {
+        let count = model.sequences(for: discipline).count
+        guard count > 0 else { return discipline.emptyHint }
+        return "\(count) \(count == 1 ? "routine" : "routines")"
     }
 
     private var runSubtitle: String {
@@ -104,14 +123,13 @@ struct WorkoutListView: View {
             f.dateFormat = "EEE"
             return String(format: "%.1f km · %@", run.km, f.string(from: run.at))
         }
-        return "GPS coming · HR live"
+        return "GPS · HR live"
     }
 }
 
-// MARK: - Kettlebell space (Michael's 2026-08-10 IA: routines are the main
-// object; free sets are the freestyle corner)
+// MARK: - Hike submenu (his 08-20 ask: new ground, or ground he's covered)
 
-struct KettlebellSpaceView: View {
+struct HikeMenuView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
@@ -119,86 +137,73 @@ struct KettlebellSpaceView: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     BackChevron { model.backToWorkoutList() }
-                    Text("Kettlebell")
+                    Text("Hike")
                         .font(Theme.display(16))
                         .foregroundStyle(Theme.textBright)
                 }
                 .padding(.horizontal, 4)
 
-                spaceRow(
-                    title: "Routines",
-                    subtitle: model.sequences.isEmpty
-                        ? "build one in Pitaya chat"
-                        : "\(model.sequences.count) saved · EMOM · circuits"
+                Button {
+                    Task { await model.startWorkout(.hike) }
+                } label: {
+                    hikeRow(
+                        title: "New Hike",
+                        subtitle: "GPS · elevation · heart rate",
+                        live: true
+                    ) {
+                        PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 15)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                // Honest placeholder, in the grammar the home grid already
+                // uses for Sleep and Journal — never a dashed promise, never
+                // a tappable row that does nothing. Naming a trail from chat
+                // and comparing runs against it is filed in
+                // docs/deferred-items.md (2026-08-20, needs a Trail model).
+                hikeRow(
+                    title: "Saved trails",
+                    subtitle: "soon · name one in Pitaya chat",
+                    live: false
                 ) {
-                    SequenceGridGlyph(color: Theme.accent, size: 14)
-                } action: {
-                    if !model.sequences.isEmpty { model.openSequences() }
+                    SegmentsGlyph(color: Theme.textMuted, size: 15)
                 }
 
-                spaceRow(title: "Free sets", subtitle: "crown weight · tap reps · PRs") {
-                    PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 15)
-                } action: {
-                    Task { await model.startWorkout(.kettlebell) }
-                }
+                Text("Trails you've named will start here, so a second run can be compared to the first.")
+                    .font(Theme.text(8.5))
+                    .foregroundStyle(Theme.textMuted)
+                    .padding(.horizontal, 6)
+                    .padding(.top, 2)
             }
             .padding(.horizontal, 2)
         }
     }
 
-    private func spaceRow(
-        title: String, subtitle: String,
-        @ViewBuilder glyph: () -> some View,
-        action: @escaping () -> Void
+    private func hikeRow(
+        title: String, subtitle: String, live: Bool,
+        @ViewBuilder glyph: () -> some View
     ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                ZStack {
-                    Circle().fill(Theme.accentDim)
-                    glyph()
-                }
-                .frame(width: 31, height: 31)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(title)
-                        .font(Theme.text(13, weight: .semibold))
-                        .foregroundStyle(Theme.textBright)
-                    Text(subtitle)
-                        .font(Theme.text(9))
-                        .foregroundStyle(Theme.textTertiary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Theme.textMuted)
+        HStack(spacing: 8) {
+            ZStack {
+                Circle().fill(live ? Theme.accentDim : Theme.elementDim)
+                glyph()
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 10)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// The design's sequences glyph — three offset rounded tiles.
-struct SequenceGridGlyph: View {
-    var color: Color
-    var size: CGFloat = 13
-
-    var body: some View {
-        Canvas { context, canvasSize in
-            let u = canvasSize.width / 24
-            for (x, y) in Glyphs.sequenceRects {
-                let rect = CGRect(x: x * u, y: y * u, width: 7 * u, height: 6 * u)
-                context.stroke(
-                    Path(roundedRect: rect, cornerRadius: 1.5 * u),
-                    with: .color(color),
-                    style: StrokeStyle(lineWidth: 2 * u, lineCap: .round)
-                )
+            .frame(width: 31, height: 31)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(Theme.text(13, weight: .semibold))
+                    .foregroundStyle(live ? Theme.textBright : Theme.textSecondary)
+                Text(subtitle)
+                    .font(Theme.text(9))
+                    .foregroundStyle(Theme.textTertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
+            Spacer(minLength: 0)
         }
-        .frame(width: size, height: size)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 10)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
     }
 }
 
