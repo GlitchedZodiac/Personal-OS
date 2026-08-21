@@ -5,16 +5,102 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-20 (SPIRIT: the lesson becomes a guided journey; backlinks; web push — DEPLOYED)
+**Last updated:** 2026-08-20b (WRIST IA + measurement cards — not deployed)
 **Current phase:** both lanes are merged into `claude/watchos-workout-ui-ba4448`
 (2026-08-20) — the web tree from `main` plus the watch lane's Round 1+2 +
 Freestyle work. The watch is a designed instrument: Settings + bell rack, a
 real data complication, receipts-vs-last-run summary, Double Tap + App
 Intents, readiness verdict, motion/AOD per spec. `main` is the single source
 of truth as of 08-14d.
-**Branch in flight:** `claude/phase1-modernization` (web) ·
-`claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch — merged
-`main` 2026-08-15, fast-forward, before the R1+2 work).
+**Branch in flight:** `claude/watchos-workout-ui-ba4448` (BOTH lanes — see
+below) · `claude/phase1-modernization` (web) · `claude/watch-app` (watch,
+worktree ~/VibeCoding/personal-os-watch).
+
+## 2026-08-20b — THE WRIST'S IA, AND CARDS THAT SHOW WHAT HE MEASURED
+
+**Not deployed.** His 08-20 feedback, both surfaces, on one branch.
+
+**LANE NOTE — the watch lane must merge this branch before it resumes.**
+This session was handed watch work in a worktree whose `ios/` was 12 commits
+stale (Freestyle, Settings and ReadyView existed only on `claude/watch-app`).
+On his call, `claude/watch-app` was merged into this branch — clean apart
+from `docs/state.md` + `docs/deferred-items.md`, both lanes' entries kept —
+and the watch work happened here. `~/VibeCoding/personal-os-watch` was never
+touched, so it is now behind: `git -C ~/VibeCoding/personal-os-watch merge
+claude/watchos-workout-ui-ba4448` first thing next watch session.
+
+**Save is one tap.** Ending a Freestyle session asked him to save twice —
+"Save workout", wait for the sync, then "Done". That second tap exists
+because the zones card only lights after the server enriches the row. A
+freestyle summary computes its own zones on the wrist, so it waits for
+nothing: it confirms with the mint check and a success tap and returns home
+by itself. Structured sessions keep Done. `PITAYA_SMOKE_FREESTYLE` now
+asserts `phase after save = home`, so a returning second tap fails the smoke.
+
+**Workouts owns every start.** Freestyle was a full-width strip below the
+designed 2×2 (its own author flagged it UNDESIGNED); it is the first row of
+the Workouts list now, and Home is the designed grid again. The list reads
+Freestyle · Kettlebell · Weight Training · Trail Run · Walk · Treadmill ·
+Hike. Rows that push a screen keep the ›; rows that start a 3·2·1 countdown
+lost it.
+
+**Strength splits by what's on the bar.** Kettlebell and Weight Training
+each open straight onto their own routine list — the Routines/Free-sets
+middle screen is gone, and so are free sets (Freestyle replaced them).
+Discipline is **derived, not stored**: any bell step claims the routine (his
+rule — "routines that don't use kettlebells will show there"), with a name
+fallback for routines built entirely from AI-created customs the catalog
+can't place. `PITAYA_SMOKE_DISCIPLINES=1` dumps the verdict per routine;
+against his real four, the EMOM, the clean flow, the full-body circuit and
+the KB-loaded core session land under Kettlebell, a machine/barbell leg day
+under Weight Training. No schema change, works offline.
+
+**Hike is a submenu.** New Hike starts GPS today; Saved trails is an honest
+"soon" in the grammar Sleep and Journal use. Naming a trail and comparing
+runs needs a Trail model — filed, his call.
+
+**UNDESIGNED and flagged in-file:** the Freestyle row, the Weight Training
+row, its barbell glyph (built to the kettlebell's own 24×24 grammar, NOT an
+SF Symbol) and the hike submenu. THE PORT GATE applies when a slice lands.
+
+**Measurement cards stop dumping the schema.** His check-in came back as
+`notes Navel circumference · arms 0 cm · hips 0 cm · legs 0 cm · … ·
+measuredAt 2026-08-20T10:04:00-05:00 · shoulders 0 cm`. Three faults:
+
+- **The zeros are the model padding the schema**, and they were never saved
+  either (`/api/health/body` coerces `0 || null`) — the card promised a write
+  that never happened. Instructing the model to omit them, in both the system
+  prompt and the tool description, **did not hold** — re-tested live, it
+  zero-filled anyway. `sanitizeMeasurementArgs` (lib/chat-tools.ts) strips
+  them in code on both AI paths before a proposal is persisted. 3 new tests.
+- **The raw ISO stamp and the `notes <text>` key-value** came from the
+  generic fallback renderer. Measurements have a real card now: labelled rows
+  head-to-toe in the wizard's own order, only what he measured, notes as
+  prose, "Today at 10:04 AM". The shared fallback also stopped printing zeros
+  and formats `*At`/`*Date` keys as clock times, so workout/water benefit.
+- **A number he spoke vanished.** He dictates in rapid pairs and the pairing
+  flips mid-sentence ("42.7 calf 57.8 neck 39.3 shoulder width 50.9"); the
+  model couldn't place 57.8 and dropped it. His stored card has `legsCm: 0` —
+  **57.8 is his thigh**. The card now checks the arithmetic itself: any
+  decimal he spoke that the proposal doesn't account for (values or notes) is
+  called out — "57.8 isn't on this card — say which measurement, and I'll add
+  it." Decimals only, so stray integers never cry wolf. It reuses the
+  source-message lookup that was already computed and discarded with `void
+  source`, and fixes it — it took the *oldest* user message in the thread,
+  not the nearest one before the card.
+
+Every measurement field (shoulders included) was already supported by the
+tool, the wizard and the API — nothing was missing; the zeros and the drop
+made it look that way.
+
+**Self-smoke:** watch build green, drove the sim through Home → Workouts →
+Kettlebell / Weight Training / Hike; freestyle smoke proved the one-tap save
+end to end against prod. Dev server + his real thread: both stored cards
+re-rendered correctly and the 10:10 card flags 57.8. His exact sentence
+through `/api/ai/chat/stream` before/after: before `weightKg: 0,
+bodyFatPct: 0, legsCm: 0`; after, no zeros and `legsCm: 57.8`. Every row
+written during smoke (2 workouts, 4 chat messages) was deleted.
+Build green · 149/149 tests.
 
 ## 2026-08-17b — FREESTYLE (the wrist records, the phone structures)
 
