@@ -8,6 +8,7 @@ import {
 import { getUserTimeZone } from "@/lib/server-timezone";
 import { HEALTH_SYSTEM_PROMPT, HEALTH_TOOLS } from "@/lib/ai-prompts";
 import { normalizeFoodItemsWithTiming } from "@/lib/food-timing";
+import { sanitizeMeasurementArgs } from "@/lib/chat-tools";
 import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 
 // Allow up to 60s for AI generation (Vercel Pro)
@@ -152,26 +153,30 @@ export async function POST(request: NextRequest) {
             items: args.items,
           });
 
-        case "log_measurement":
+        case "log_measurement": {
+          // Same guard as the streaming path: the model zero-fills every
+          // field it wasn't given, and a 0 is a measurement, not a blank.
+          const m = sanitizeMeasurementArgs(args as Record<string, unknown>);
           return NextResponse.json({
             type: "measurement",
             message: args.message,
             measurement: {
               measuredAt: args.measuredAt || null,
-              weightKg: args.weightKg,
-              bodyFatPct: args.bodyFatPct,
-              waistCm: args.waistCm,
-              chestCm: args.chestCm,
-              armsCm: args.armsCm,
-              legsCm: args.legsCm,
-              hipsCm: args.hipsCm,
-              shouldersCm: args.shouldersCm,
-              neckCm: args.neckCm,
-              forearmsCm: args.forearmsCm,
-              calvesCm: args.calvesCm,
+              weightKg: m.weightKg,
+              bodyFatPct: m.bodyFatPct,
+              waistCm: m.waistCm,
+              chestCm: m.chestCm,
+              armsCm: m.armsCm,
+              legsCm: m.legsCm,
+              hipsCm: m.hipsCm,
+              shouldersCm: m.shouldersCm,
+              neckCm: m.neckCm,
+              forearmsCm: m.forearmsCm,
+              calvesCm: m.calvesCm,
               notes: args.notes,
             },
           });
+        }
 
         case "log_workout":
           return NextResponse.json({

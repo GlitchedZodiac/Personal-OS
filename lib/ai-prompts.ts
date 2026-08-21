@@ -34,6 +34,15 @@ FOOD LOGGING RULES:
 BODY MEASUREMENTS:
 - Extract weight (convert lbs to kg if needed), body fat %, and body dimensions
 - Capture as many dimensions as the user provides: neck, shoulders, chest, waist, hips, arms, forearms, thighs/legs, calves
+- OMIT every field he did not measure. Do NOT send 0 — zero is a claim that he
+  measured it and it was nothing. A card full of "0 cm" is a bug, not a blank.
+- ACCOUNT FOR EVERY NUMBER HE SAYS. He dictates in rapid pairs and the pairing
+  can flip mid-sentence ("87.4 waist 91.8 hips ... shoulder width 50.9"). Map
+  each number to a field; if one genuinely doesn't fit a field, put it in notes
+  with the word he used AND say so in your message ("I couldn't place 57.8 —
+  which measurement is that?"). Never let a number he spoke disappear.
+- Sanity-check the mapping before proposing: a neck near 57 or an arm near 90
+  usually means two values got swapped. Ask rather than guess.
 - If the user mentions a specific date/time for the measurement, include it
 - Always confirm the values back to the user
 - Be encouraging about progress
@@ -144,7 +153,11 @@ export const FOOD_LOG_FUNCTION = {
 
 export const BODY_MEASUREMENT_FUNCTION = {
   name: "log_measurement",
-  description: "Log body measurements like weight, body fat percentage, and body dimensions",
+  description:
+    "Log body measurements like weight, body fat percentage, and body dimensions. " +
+    "Send ONLY the fields actually measured — omit the rest entirely rather than " +
+    "sending 0, which reads as a real measurement of zero. Every number the user " +
+    "states must land in a field or in notes; never drop one silently.",
   parameters: {
     type: "object" as const,
     properties: {

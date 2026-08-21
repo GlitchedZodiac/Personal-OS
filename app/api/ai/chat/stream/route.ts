@@ -7,6 +7,7 @@ import { CHAT_SYSTEM_PROMPT, CHAT_RESPONSES_TOOLS } from "@/lib/ai-prompts";
 import {
   executeGetHealthData,
   proposalKindFor,
+  sanitizeProposalArgs,
 } from "@/lib/chat-tools";
 import { normalizeFoodItemsWithTiming } from "@/lib/food-timing";
 import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
@@ -228,6 +229,8 @@ export async function POST(request: NextRequest) {
 
             const kind = proposalKindFor(call.name);
             if (kind) {
+              // Zero-filled measurement fields never reach the card or the DB.
+              args = sanitizeProposalArgs(call.name, args);
               if (call.name === "log_food") {
                 args = {
                   ...args,

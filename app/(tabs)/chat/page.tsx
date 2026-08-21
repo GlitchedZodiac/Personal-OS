@@ -102,6 +102,78 @@ function fmtTime(iso?: string) {
     .toUpperCase();
 }
 
+// ————— Measurement card —————
+// Head-to-toe, the same order the measurement wizard asks for them in, so a
+// card and the wizard read as the same form. A proposal card is the last
+// chance to catch a mis-heard number, so it has to be legible: labelled rows,
+// nothing he didn't measure, and no raw ISO timestamps.
+const MEASUREMENT_FIELDS: { key: string; label: string; unit: string }[] = [
+  { key: "weightKg", label: "Weight", unit: "kg" },
+  { key: "bodyFatPct", label: "Body fat", unit: "%" },
+  { key: "neckCm", label: "Neck", unit: "cm" },
+  { key: "shouldersCm", label: "Shoulders", unit: "cm" },
+  { key: "chestCm", label: "Chest", unit: "cm" },
+  { key: "waistCm", label: "Waist", unit: "cm" },
+  { key: "hipsCm", label: "Hips", unit: "cm" },
+  { key: "armsCm", label: "Arms", unit: "cm" },
+  { key: "forearmsCm", label: "Forearms", unit: "cm" },
+  { key: "legsCm", label: "Legs", unit: "cm" },
+  { key: "calvesCm", label: "Calves", unit: "cm" },
+];
+
+/// Only what he actually measured. A 0 is not a measurement — the model used
+/// to zero-fill every field it wasn't given, and the API drops those to null
+/// anyway, so showing them promised a save that never happened.
+function measurementRows(data: ProposalData) {
+  return MEASUREMENT_FIELDS.flatMap(({ key, label, unit }) => {
+    const raw = data[key];
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return [];
+    return [{ key, label, value: `${raw} ${unit}` }];
+  });
+}
+
+/**
+ * Decimals he spoke that the proposal doesn't account for.
+ *
+ * He dictates in rapid pairs and the pairing flips mid-sentence ("42.7 calf
+ * 57.8 neck 39.3 shoulder width 50.9"). When the model can't place one, it
+ * drops it silently — 57.8 vanished from his 08-20 check-in and the card
+ * gave no sign. Prompting the model to ask instead did not hold (it still
+ * dropped it), so the card checks the arithmetic itself.
+ *
+ * Only decimals count. Every measurement he dictates has a decimal point,
+ * while stray integers ("the 20th", "5 kg per ankle") do not — so this
+ * never cries wolf, at the cost of missing a dropped whole number.
+ */
+function unaccountedNumbers(said: string | undefined, data: ProposalData): string[] {
+  if (!said) return [];
+  const spoken = said.match(/\d+\.\d+/g);
+  if (!spoken) return [];
+
+  const used = new Set<string>();
+  for (const { key } of MEASUREMENT_FIELDS) {
+    const v = data[key];
+    if (typeof v === "number" && v > 0) used.add(String(v));
+  }
+  // A number the model explained in notes ("Navel: 89.8 cm") is accounted
+  // for — he can see where it went.
+  const notes = typeof data.notes === "string" ? data.notes : "";
+  for (const n of notes.match(/\d+\.\d+/g) ?? []) used.add(n);
+
+  return [...new Set(spoken)].filter((n) => !used.has(n) && !used.has(String(Number(n))));
+}
+
+/// "Today at 10:04 AM" / "Aug 18 at 7:30 AM" — never the raw ISO string.
+function fmtWhen(iso?: unknown) {
+  if (typeof iso !== "string" || !iso) return null;
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return null;
+  const time = when.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const sameDay = when.toDateString() === new Date().toDateString();
+  if (sameDay) return `Today at ${time}`;
+  return `${when.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${time}`;
+}
+
 function MicGlyph({ size = 16, color = "#8C2F51" }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20">
@@ -659,10 +731,14 @@ export default function ChatPage() {
     const kind = msg.meta?.kind ?? "food";
     const status = msg.meta?.status ?? "pending";
     const data = msg.meta?.data ?? {};
-    const source = messages.find(
-      (m) => m.role === "user" && m.createdAt && msg.createdAt && m.createdAt <= msg.createdAt
-    );
-    void source;
+    // The message that prompted this card — the NEAREST one before it. (This
+    // used to take the first match, i.e. the oldest user message in the whole
+    // thread, and was then thrown away with `void source`.)
+    const source = messages
+      .filter(
+        (m) => m.role === "user" && m.createdAt && msg.createdAt && m.createdAt <= msg.createdAt
+      )
+      .at(-1);
     const editing = editingCard === msg.id;
     const items = kind === "food" ? scaledItems(msg) : [];
     const totalKcal = items.reduce((s, i) => s + i.calories, 0);
@@ -863,7 +939,58 @@ export default function ChatPage() {
             </div>
           )}
 
-          {!["food", "routine", "routine_update", "exercise", "edit_workout", "product"].includes(kind) && (
+          {kind === "measurement" && (
+            <div className="py-2">
+              {measurementRows(data).length > 0 ? (
+                <div>
+                  {measurementRows(data).map(({ key, label, value }) => (
+                    <div
+                      key={key}
+                      className="flex items-baseline justify-between border-b border-muted py-[7px] last:border-b-0"
+                    >
+                      <span className="text-[12px] font-semibold uppercase tracking-wide text-secondary-foreground">
+                        {label}
+                      </span>
+                      <span className="text-[14px] font-semibold tabular-nums text-foreground">
+                        {value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-1 text-[13px] text-muted-foreground">
+                  No measurements read — say the numbers again?
+                </p>
+              )}
+
+              {typeof data.notes === "string" && data.notes.trim() !== "" && (
+                <p className="mt-2 text-[12.5px] leading-relaxed text-secondary-foreground">
+                  {data.notes}
+                </p>
+              )}
+
+              {(() => {
+                const missed = unaccountedNumbers(source?.content, data);
+                if (missed.length === 0) return null;
+                return (
+                  <p className="mt-2 rounded-[8px] bg-accent px-2.5 py-2 text-[12px] leading-relaxed text-[#8C2F51]">
+                    <span className="font-semibold">
+                      {missed.join(", ")} {missed.length === 1 ? "isn't" : "aren't"} on this card
+                    </span>{" "}
+                    — say which measurement, and I&apos;ll add it.
+                  </p>
+                );
+              })()}
+
+              {fmtWhen(data.measuredAt) && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  {fmtWhen(data.measuredAt)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {!["food", "routine", "routine_update", "exercise", "edit_workout", "product", "measurement"].includes(kind) && (
             <div className="py-3 text-[13.5px] leading-relaxed text-foreground">
               {kind === "delete" ? (
                 <>Delete <span className="font-semibold">{String(data.label ?? "this entry")}</span>?</>
@@ -878,12 +1005,22 @@ export default function ChatPage() {
               ) : (
                 Object.entries(data)
                   .filter(([k, v]) => k !== "message" && v != null && typeof v !== "object")
+                  // A zero-filled numeric field is the model padding out a
+                  // schema, not something the user reported — and the CRUD
+                  // routes drop it to null on save, so showing it lies.
+                  .filter(([, v]) => v !== 0)
                   .map(([k, v]) => {
                     // "waistCm: 88" reads like a debug dump — humanize.
                     if (k.endsWith("Kg")) return `${k.slice(0, -2)} ${v} kg`;
                     if (k.endsWith("Cm")) return `${k.slice(0, -2)} ${v} cm`;
                     if (k.endsWith("Pct")) return `${k.slice(0, -3)} ${v}%`;
                     if (k.endsWith("Minutes")) return `${v} min`;
+                    // ISO datetimes ("startedAt", "loggedAt") are unreadable
+                    // raw — every card that carries one shows a clock time.
+                    if (/(At|Date)$/.test(k)) {
+                      const when = fmtWhen(v);
+                      if (when) return when.toLowerCase();
+                    }
                     return `${k} ${v}`;
                   })
                   .join(" · ")

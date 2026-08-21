@@ -386,6 +386,63 @@ export const PROPOSAL_TOOL_NAMES = new Set([
   "save_food_product",
 ]);
 
+/// Numeric measurement fields — the ones the model zero-fills.
+const MEASUREMENT_NUMERIC_FIELDS = [
+  "weightKg",
+  "bodyFatPct",
+  "waistCm",
+  "chestCm",
+  "armsCm",
+  "legsCm",
+  "hipsCm",
+  "shouldersCm",
+  "neckCm",
+  "forearmsCm",
+  "calvesCm",
+] as const;
+
+/**
+ * Strip zero-filled measurements out of a `log_measurement` tool call.
+ *
+ * The model pads the schema: asked for a waist, it returns a waist plus
+ * `weightKg: 0, bodyFatPct: 0, legsCm: 0` and nine more. Zero is not a
+ * missing value, it's a claim he measured his weight and it was nothing —
+ * and the card used to print all of it ("weight 0 kg · arms 0 cm"), which
+ * reads as a broken app promising a save that never happens (the CRUD route
+ * coerces `0 || null` on the way in, so the zeros were never stored either).
+ *
+ * Told not to in the system prompt AND in the tool description, it still
+ * does it (verified live 2026-08-20), so this is enforced in code rather
+ * than asked for in English.
+ */
+export function sanitizeMeasurementArgs(
+  args: Record<string, unknown>
+): Record<string, unknown> {
+  const clean: Record<string, unknown> = { ...args };
+  for (const field of MEASUREMENT_NUMERIC_FIELDS) {
+    const value = clean[field];
+    if (value === null || value === undefined) {
+      delete clean[field];
+      continue;
+    }
+    const n = typeof value === "string" ? Number(value) : value;
+    if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) {
+      delete clean[field];
+    } else {
+      clean[field] = n;
+    }
+  }
+  return clean;
+}
+
+/// Applied to every proposal before it's persisted or sent to the client.
+export function sanitizeProposalArgs(
+  toolName: string,
+  args: Record<string, unknown>
+): Record<string, unknown> {
+  return toolName === "log_measurement" ? sanitizeMeasurementArgs(args) : args;
+}
+
 export type ProposalKind =
   | "food"
   | "measurement"

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { PROPOSAL_TOOL_NAMES, proposalKindFor } from "@/lib/chat-tools";
+import {
+  PROPOSAL_TOOL_NAMES,
+  proposalKindFor,
+  sanitizeMeasurementArgs,
+  sanitizeProposalArgs,
+} from "@/lib/chat-tools";
 import { CHAT_RESPONSES_TOOLS, CHAT_SYSTEM_PROMPT } from "@/lib/ai-prompts";
 
 describe("chat 2b tool surface", () => {
@@ -99,5 +104,63 @@ describe("chat 2b tool surface", () => {
       }
     )?.properties?.entity?.enum;
     expect(entityEnum).toEqual(["food", "workout", "measurement"]);
+  });
+});
+
+// The model pads the measurement schema with zeros no matter what the prompt
+// says (verified live 2026-08-20), so the strip is enforced in code.
+describe("measurement zero-fill strip", () => {
+  it("drops zero-filled fields and keeps the real ones", () => {
+    // His 08-20 10:04 card, verbatim from chat_messages.
+    const clean = sanitizeMeasurementArgs({
+      notes: "Navel circumference",
+      armsCm: 0,
+      hipsCm: 0,
+      legsCm: 0,
+      neckCm: 0,
+      chestCm: 0,
+      message: "Navel measurement: 89.8 cm.",
+      waistCm: 89.8,
+      calvesCm: 0,
+      weightKg: 0,
+      bodyFatPct: 0,
+      forearmsCm: 0,
+      measuredAt: "2026-08-20T10:04:00-05:00",
+      shouldersCm: 0,
+    });
+
+    expect(clean.waistCm).toBe(89.8);
+    for (const dropped of [
+      "armsCm", "hipsCm", "legsCm", "neckCm", "chestCm",
+      "calvesCm", "weightKg", "bodyFatPct", "forearmsCm", "shouldersCm",
+    ]) {
+      expect(clean).not.toHaveProperty(dropped);
+    }
+    // Non-numeric fields ride through untouched.
+    expect(clean.notes).toBe("Navel circumference");
+    expect(clean.measuredAt).toBe("2026-08-20T10:04:00-05:00");
+    expect(clean.message).toBe("Navel measurement: 89.8 cm.");
+  });
+
+  it("drops nulls and negatives, and coerces numeric strings", () => {
+    const clean = sanitizeMeasurementArgs({
+      weightKg: null,
+      waistCm: "87.4",
+      chestCm: -3,
+      neckCm: undefined,
+      hipsCm: 91.8,
+    });
+    expect(clean).not.toHaveProperty("weightKg");
+    expect(clean).not.toHaveProperty("chestCm");
+    expect(clean).not.toHaveProperty("neckCm");
+    expect(clean.waistCm).toBe(87.4);
+    expect(clean.hipsCm).toBe(91.8);
+  });
+
+  it("leaves other proposal kinds alone", () => {
+    // log_workout legitimately reports a zero (a bodyweight set, no load).
+    const args = { workoutType: "strength", durationMinutes: 0, weightKg: 0 };
+    expect(sanitizeProposalArgs("log_workout", args)).toEqual(args);
+    expect(sanitizeProposalArgs("log_measurement", { weightKg: 0 })).toEqual({});
   });
 });
