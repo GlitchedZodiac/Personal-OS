@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-20b (WRIST IA + measurement cards — not deployed)
+**Last updated:** 2026-08-20b (WRIST IA + measurement cards — web DEPLOYED)
 **Current phase:** both lanes are merged into `claude/watchos-workout-ui-ba4448`
 (2026-08-20) — the web tree from `main` plus the watch lane's Round 1+2 +
 Freestyle work. The watch is a designed instrument: Settings + bell rack, a
@@ -18,7 +18,28 @@ worktree ~/VibeCoding/personal-os-watch).
 
 ## 2026-08-20b — THE WRIST'S IA, AND CARDS THAT SHOW WHAT HE MEASURED
 
-**Not deployed.** His 08-20 feedback, both surfaces, on one branch.
+**Web DEPLOYED to production 2026-08-20** (`dpl_EsT37HyUiuMGjRng6hyGBzhSZT5d`,
+`personal-os-plum.vercel.app` re-aliased, build ran `prisma migrate deploy`
+over the same 19 migrations and compiled clean). **The watch half is NOT
+deployed by that** — the wrist app is a `WKWatchOnly` Xcode install, not a
+Vercel artifact; it needs `xcodebuild -scheme "PersonalOS Watch"` against his
+watch (docs/watch-device-runbook.md §3) before any of the IA work is on his
+wrist.
+
+No repeat of the 08-14/08-20 branch trap: before shipping, `origin/main` AND
+`claude/phase1-modernization` (the branch prod had been running) were both
+confirmed to be ancestors of this branch, and the web diff vs `main` was
+exactly the six measurement files — the `claude/watch-app` merge brought in
+nothing the web build sees. `main` was fast-forwarded to `6e2d695` and prod
+shipped from that, so **main and production are the same tree again**.
+
+Verified post-deploy: READY, `target: production`, alias resolves to the new
+deployment id, build log clean. NOT verified: the running prod UI — that
+needs the PIN, so the card fixes are confirmed only against the local dev
+server (driven end-to-end against the same production database, including
+re-rendering his two stored 08-20 cards).
+
+His 08-20 feedback, both surfaces, on one branch.
 
 **LANE NOTE — the watch lane must merge this branch before it resumes.**
 This session was handed watch work in a worktree whose `ios/` was 12 commits
