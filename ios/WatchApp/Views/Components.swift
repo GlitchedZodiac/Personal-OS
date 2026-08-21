@@ -10,12 +10,19 @@ struct PitayaCTA: View {
     let title: String
     var icon: String?
     var background: Color = Theme.accentDeep
+    /// §05: this CTA wears the Double Tap gesture — pinch glyph inside the
+    /// label (1m), dimming to 45% after three fires. Exactly one per screen.
+    var primary: Bool = false
     let action: () -> Void
+    @ObservedObject private var coach = DoubleTapCoach.shared
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                if let icon {
+        let button = Button(action: fire) {
+            HStack(spacing: primary ? Theme.px(9) : 5) {
+                if primary {
+                    DoubleTapGlyph(color: Theme.prText, size: Theme.px(17))
+                        .opacity(coach.glyphDimmed ? 0.45 : 1)
+                } else if let icon {
                     Image(systemName: icon).font(.system(size: 10, weight: .bold))
                 }
                 Text(title).font(Theme.display(13, weight: .semibold))
@@ -26,6 +33,17 @@ struct PitayaCTA: View {
             .background(background, in: Capsule())
         }
         .buttonStyle(.plain)
+
+        if primary {
+            button.handGestureShortcut(.primaryAction)
+        } else {
+            button
+        }
+    }
+
+    private func fire() {
+        if primary { coach.recordFire() }
+        action()
     }
 }
 
@@ -83,6 +101,33 @@ struct PRBanner: View {
         .padding(.horizontal, 9)
         .padding(.vertical, 8)
         .background(Theme.accentWash, in: RoundedRectangle(cornerRadius: 11))
+    }
+}
+
+// MARK: - PR seeds (§10 — five diamonds arc out and fade, 0.9 s)
+
+struct PRSeeds: View {
+    @State private var flown = false
+    /// Five directions fanning up-and-out from the banner.
+    private static let angles: [Double] = [-150, -120, -90, -60, -30]
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(Self.angles.enumerated()), id: \.offset) { index, angle in
+                PitayaMark(size: 5, color: Theme.accent)
+                    .offset(
+                        x: flown ? 30 * cos(angle * .pi / 180) : 0,
+                        y: flown ? 30 * sin(angle * .pi / 180) : 0
+                    )
+                    .opacity(flown ? 0 : 1)
+                    .animation(
+                        .easeOut(duration: 0.9).delay(Double(index) * 0.03),
+                        value: flown
+                    )
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear { flown = true }
     }
 }
 

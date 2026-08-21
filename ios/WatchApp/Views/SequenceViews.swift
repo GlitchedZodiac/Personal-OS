@@ -236,7 +236,13 @@ struct WeightDialSheet: View {
     @Environment(\.dismiss) private var dismiss
     let exerciseId: String
     let exerciseName: String
-    @State private var crownWeight: Double = 16
+    @State private var crownIndex: Double = 0
+
+    private var detents: [Int] { WatchPrefs.shared.dialDetents }
+    private var crownWeight: Double {
+        let index = max(0, min(detents.count - 1, Int(crownIndex.rounded())))
+        return Double(detents[index])
+    }
 
     var body: some View {
         VStack(spacing: 4) {
@@ -263,13 +269,17 @@ struct WeightDialSheet: View {
         .padding(.horizontal, 10)
         .focusable(true)
         .digitalCrownRotation(
-            // Real bell denominations — 4 kg jumps, 8→64 per Michael (4 kept
-            // for halos/windmill warm-ups).
-            $crownWeight, from: 4, through: 64, by: 4,
+            // Detents run ONLY through owned bells (§01 payoff); the full
+            // 4–64 range applies until the rack is configured.
+            $crownIndex, from: 0, through: Double(max(detents.count - 1, 0)), by: 1,
             sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true
         )
         .onAppear {
-            crownWeight = model.weightOverrides[exerciseId] ?? 16
+            let start = model.weightOverrides[exerciseId] ?? 16
+            let nearest = detents.enumerated().min {
+                abs(Double($0.element) - start) < abs(Double($1.element) - start)
+            }?.offset ?? 0
+            crownIndex = Double(nearest)
         }
     }
 }
@@ -303,52 +313,94 @@ struct SequenceLiveView: View {
         }
     }
 
+    /// §10 AOD twin ("Always-On dimmed state"): ring 13→4 px in the dimmed
+    /// palette, countdown → session clock, weight + HR leave, move stays.
+    @Environment(\.isLuminanceReduced) private var dimmed
+
     private var runner: some View {
         let totalRounds = max(sequence.durationMinutes ?? sequence.steps.count, 1)
         let progress = Double(60 - model.emomSecondsLeft) / 60.0
 
         return ZStack {
             Circle()
-                .stroke(Theme.accentDim, lineWidth: 7)
+                .stroke(dimmed ? Color(hex: 0x1A191D) : Theme.accentDim,
+                        lineWidth: dimmed ? 2.25 : 7)
                 .padding(10)
             Circle()
                 .trim(from: 0, to: progress)
-                .stroke(Theme.accent, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                .stroke(dimmed ? Color(hex: 0x5B3B4A) : Theme.accent,
+                        style: StrokeStyle(lineWidth: dimmed ? 2.25 : 7, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .padding(10)
-                .animation(.linear(duration: 0.25), value: progress)
+                .animation(dimmed ? nil : .linear(duration: 0.25), value: progress)
 
             VStack(spacing: 1) {
                 Text("ROUND \(max(model.emomRound, 1)) OF \(totalRounds)")
                     .font(Theme.text(8, weight: .bold))
                     .kerning(1)
-                    .foregroundStyle(Theme.textTertiary)
-                Text(":\(String(format: "%02d", model.emomSecondsLeft))")
-                    .font(Theme.numeric(40))
-                    .foregroundStyle(Theme.textBright)
+                    .foregroundStyle(dimmed ? Theme.textFaint : Theme.textTertiary)
+                if dimmed {
+                    // 1 Hz budget: the session clock replaces the countdown.
+                    Text(Fmt.clock(model.recorder.elapsed))
+                        .font(.custom("FamiljenGrotesk-Medium", size: 40 * 1.125))
+                        .foregroundStyle(Theme.textTertiary)
+                } else {
+                    Text(":\(String(format: "%02d", model.emomSecondsLeft))")
+                        .font(Theme.numeric(40))
+                        .foregroundStyle(Theme.textBright)
+                }
                 if let step = model.currentStep(of: sequence) {
-                    Text(stepLabel(step))
+                    // Move name stays in AOD (weight leaves); springs in at
+                    // each boundary (translateY 10→0, 0.35 s).
+                    Text(dimmed ? bareMoveName(step) : stepLabel(step))
                         .font(Theme.display(12, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(dimmed ? Color(hex: 0x8A5B6E) : Theme.accent)
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
+                        .id(model.emomRound)
+                        .transition(.offset(y: Theme.px(10)).combined(with: .opacity))
+                        .animation(dimmed ? nil : .spring(duration: 0.35), value: model.emomRound)
                 }
-                if let next = model.nextStep(of: sequence) {
-                    Text("next · \(next.reps.map { "\($0) " } ?? "")\(next.exerciseName.lowercased())")
-                        .font(Theme.text(8.5))
-                        .foregroundStyle(Theme.textTertiary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                if !dimmed {
+                    if let next = model.nextStep(of: sequence) {
+                        Text("next · \(next.reps.map { "\($0) " } ?? "")\(next.exerciseName.lowercased())")
+                            .font(Theme.text(8.5))
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    HStack(spacing: 4) {
+                        BeatingHeart(size: 10)
+                        Text(model.recorder.heartRate.map { String(Int($0)) } ?? "––")
+                            .font(Theme.numeric(12, weight: .semibold))
+                            .foregroundStyle(Theme.textPrimary)
+                    }
+                    .padding(.top, 3)
                 }
-                HStack(spacing: 4) {
-                    BeatingHeart(size: 10)
-                    Text(model.recorder.heartRate.map { String(Int($0)) } ?? "––")
-                        .font(Theme.numeric(12, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                }
-                .padding(.top, 3)
             }
             .padding(.horizontal, 20)
+        }
+        .overlay {
+            // §10 minute boundary: full-screen wash, 120 ms in / 400 ms out.
+            if model.emomBoundaryWash, !dimmed {
+                Theme.accentWash.ignoresSafeArea()
+                    .transition(.opacity)
+            }
+        }
+        .animation(
+            model.emomBoundaryWash ? .easeIn(duration: 0.12) : .easeOut(duration: 0.4),
+            value: model.emomBoundaryWash
+        )
+        .overlay(alignment: .topLeading) {
+            // §05: the EMOM runner has no visible CTA (design 09), but the
+            // Double Tap map says "move done early" — the gesture rides an
+            // invisible control; work seconds land in stepSeconds[] + tape.
+            Button { model.markEmomDone() } label: {
+                Color.clear.frame(width: 1, height: 1)
+            }
+            .buttonStyle(.plain)
+            .handGestureShortcut(.primaryAction)
+            .accessibilityLabel("Move done early")
         }
     }
 
@@ -361,6 +413,13 @@ struct SequenceLiveView: View {
             label += " · \(Fmt.kg(weight))KG"
         }
         return label
+    }
+
+    /// AOD keeps the move, drops reps + weight ("SWINGS").
+    private func bareMoveName(_ step: SequenceStep) -> String {
+        step.exerciseName
+            .replacingOccurrences(of: "Kettlebell ", with: "")
+            .uppercased()
     }
 }
 
@@ -423,7 +482,8 @@ struct CircuitRunnerPage: View {
 
             Spacer(minLength: 2)
 
-            PitayaCTA(title: "Done") {
+            // §05: the circuit step's Done wears the Double Tap.
+            PitayaCTA(title: "Done", primary: true) {
                 Task { await model.advanceCircuitStep(sequence) }
             }
         }
@@ -431,32 +491,72 @@ struct CircuitRunnerPage: View {
         .padding(.vertical, 4)
     }
 
+    /// §10 rest: calm mint until :03, each of the last 3 s pulses the digits
+    /// (1→1.12, 0.5 s); :00 flips to the accent GO + round/move line with a
+    /// 0.5 s pop before work resumes.
     private func restView(_ seconds: Int) -> some View {
         ZStack {
             Circle()
                 .stroke(Theme.mintRing, lineWidth: 2)
                 .padding(18)
                 .scaleEffect(1.02)
-            VStack(spacing: 2) {
-                Text("REST")
-                    .font(Theme.text(9, weight: .bold))
-                    .kerning(1.4)
-                    .foregroundStyle(Theme.mint)
-                Text(":\(String(format: "%02d", seconds))")
-                    .font(Theme.numeric(46))
-                    .foregroundStyle(Theme.mint)
-                Text("round \(model.circuitRound + 1) next")
-                    .font(Theme.text(9))
-                    .foregroundStyle(Theme.textSecondary)
-                Button("Skip") {
-                    model.skipCircuitRest()
+            if seconds == 0 {
+                VStack(spacing: 2) {
+                    Text("GO")
+                        .font(Theme.numeric(46))
+                        .foregroundStyle(Theme.accent)
+                        .scaleEffect(goPop ? 1.0 : 0.8)
+                        .animation(
+                            .interpolatingSpring(stiffness: 320, damping: 14), value: goPop
+                        )
+                        .onAppear { goPop = true }
+                        .onDisappear { goPop = false }
+                    Text("round \(model.circuitRound + 1) · \(nextRoundFirstMove)")
+                        .font(Theme.text(9))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
-                .buttonStyle(.plain)
-                .font(Theme.text(10, weight: .semibold))
-                .foregroundStyle(Theme.accent)
-                .padding(.top, 4)
+            } else {
+                VStack(spacing: 2) {
+                    Text("REST")
+                        .font(Theme.text(9, weight: .bold))
+                        .kerning(1.4)
+                        .foregroundStyle(Theme.mint)
+                    Text(":\(String(format: "%02d", seconds))")
+                        .font(Theme.numeric(46))
+                        .foregroundStyle(Theme.mint)
+                        .scaleEffect(digitPulse ? 1.12 : 1.0)
+                        .onChange(of: seconds) { _, s in
+                            guard (1...3).contains(s) else { return }
+                            withAnimation(.easeOut(duration: 0.25)) { digitPulse = true }
+                            Task {
+                                try? await Task.sleep(nanoseconds: 250_000_000)
+                                withAnimation(.easeIn(duration: 0.25)) { digitPulse = false }
+                            }
+                        }
+                    Text("round \(model.circuitRound + 1) next")
+                        .font(Theme.text(9))
+                        .foregroundStyle(Theme.textSecondary)
+                    Button("Skip") {
+                        model.skipCircuitRest()
+                    }
+                    .buttonStyle(.plain)
+                    .font(Theme.text(10, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .padding(.top, 4)
+                    // §05: on the rest ring, Double Tap skips the rest.
+                    .handGestureShortcut(.primaryAction)
+                }
             }
         }
+    }
+
+    @State private var goPop = false
+    @State private var digitPulse = false
+
+    private var nextRoundFirstMove: String {
+        sequence.steps.first?.exerciseName.lowercased() ?? "next move"
     }
 }
 

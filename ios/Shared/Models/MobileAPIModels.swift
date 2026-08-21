@@ -122,11 +122,28 @@ public struct MobileWorkoutRow: Decodable, Hashable, Identifiable, Sendable {
     public let externalId: String?
     public let source: String?
     public let exercises: [ExerciseEntry]
+    /// From metricsData — links a run to its routine (due rotation, deltas).
+    public let sequenceId: String?
+    /// From metricsData — the routine's display name ("EMOM 20 done").
+    public let sequenceName: String?
+    /// Server-enriched 5-zone seconds (lib/zones.ts ordering) — present once
+    /// the sync enrichment ran over the row's HR stream; §03 zones card.
+    public let timeInZonesSeconds: [Int]?
 
     enum CodingKeys: String, CodingKey {
         case id, startedAt, endedAt, durationMinutes, workoutType, description
         case caloriesBurned, distanceMeters, avgHeartRateBpm, maxHeartRateBpm
-        case externalSource, externalId, source, exercises
+        case externalSource, externalId, source, exercises, metricsData
+    }
+
+    private struct RowMetrics: Decodable {
+        let sequenceId: String?
+        let sequenceName: String?
+        let timeInZones: RowZones?
+
+        struct RowZones: Decodable {
+            let seconds: [Int]?
+        }
     }
 
     public init(from decoder: Decoder) throws {
@@ -145,6 +162,10 @@ public struct MobileWorkoutRow: Decodable, Hashable, Identifiable, Sendable {
         externalId = try c.decodeIfPresent(String.self, forKey: .externalId)
         source = try c.decodeIfPresent(String.self, forKey: .source)
         exercises = (try? c.decodeIfPresent(TolerantExerciseList.self, forKey: .exercises))??.entries ?? []
+        let metrics = (try? c.decodeIfPresent(RowMetrics.self, forKey: .metricsData)) ?? nil
+        sequenceId = metrics?.sequenceId
+        sequenceName = metrics?.sequenceName
+        timeInZonesSeconds = metrics?.timeInZones?.seconds
     }
 }
 
@@ -248,6 +269,90 @@ public struct WorkoutSyncResponse: Codable, Hashable, Sendable {
     /// Server-side PR detection per synced item (2026-08-09 contract);
     /// optional so an older server never breaks decode.
     public let prs: [SyncPRResult]?
+    /// Hero metrics coda (Round 1+2 §02 contract, lib/mobile-summary.ts) —
+    /// optional until prod redeploys with the endpoint.
+    public let summary: HeroMetricsPayload?
+    /// Post-run verdict + previous-run stats for the routine just synced
+    /// (§03 deltas + §07 progression); null on freeform runs.
+    public let routine: RoutineCodaPayload?
+}
+
+// MARK: - Hero metrics + routine coda (Round 1+2 handoff §02/§03/§07)
+
+/// lib/mobile-summary.ts HeroMetrics — field names are the contract
+/// (streakDays, weight7dAvgKg, weight7dDeltaKg, z2WeeklyMinutes); renames go
+/// through deferred-items, never adapted watch-side.
+public struct HeroMetricsPayload: Codable, Hashable, Sendable {
+    /// Consecutive local days with any food log (the Today screen streak —
+    /// NOT a training streak).
+    public let streakDays: Int
+    /// Mean of the last 7 days of weight logs; null with no data.
+    public let weight7dAvgKg: Double?
+    /// vs the 7 days before that window; null until both windows have data.
+    public let weight7dDeltaKg: Double?
+    /// Zone-2 minutes summed over the current Mon-start week.
+    public let z2WeeklyMinutes: Int
+
+    public init(
+        streakDays: Int, weight7dAvgKg: Double?, weight7dDeltaKg: Double?,
+        z2WeeklyMinutes: Int
+    ) {
+        self.streakDays = streakDays
+        self.weight7dAvgKg = weight7dAvgKg
+        self.weight7dDeltaKg = weight7dDeltaKg
+        self.z2WeeklyMinutes = z2WeeklyMinutes
+    }
+}
+
+/// GET /api/mobile/summary — {timeZone, ...HeroMetrics} spread flat.
+public struct SummaryResponse: Codable, Hashable, Sendable {
+    public let timeZone: String
+    public let streakDays: Int
+    public let weight7dAvgKg: Double?
+    public let weight7dDeltaKg: Double?
+    public let z2WeeklyMinutes: Int
+
+    public var metrics: HeroMetricsPayload {
+        HeroMetricsPayload(
+            streakDays: streakDays, weight7dAvgKg: weight7dAvgKg,
+            weight7dDeltaKg: weight7dDeltaKg, z2WeeklyMinutes: z2WeeklyMinutes
+        )
+    }
+}
+
+/// lib/mobile-summary.ts LastRunStats — the run BEFORE the one just synced.
+/// Also constructed locally from cached workout rows so the §03 deltas render
+/// pre-save; the server's coda replaces it after sync (server wins on drift).
+public struct LastRunStats: Codable, Hashable, Sendable {
+    public let startedAt: Date
+    public let durationMinutes: Int?
+    public let volumeKg: Double
+    public let caloriesBurned: Double?
+    public let avgHeartRateBpm: Int?
+    public let roundsCompleted: Int?
+
+    public init(
+        startedAt: Date, durationMinutes: Int?, volumeKg: Double,
+        caloriesBurned: Double?, avgHeartRateBpm: Int?, roundsCompleted: Int?
+    ) {
+        self.startedAt = startedAt
+        self.durationMinutes = durationMinutes
+        self.volumeKg = volumeKg
+        self.caloriesBurned = caloriesBurned
+        self.avgHeartRateBpm = avgHeartRateBpm
+        self.roundsCompleted = roundsCompleted
+    }
+}
+
+/// lib/mobile-summary.ts RoutineCoda. Verdict only — the server never
+/// mutates the routine; "take the raise" stays an explicit user action.
+public struct RoutineCodaPayload: Codable, Hashable, Sendable {
+    public let sequenceId: String
+    public let sequenceName: String?
+    /// "raise" | "hold" | "deload"
+    public let verdict: String
+    public let reason: String?
+    public let lastRun: LastRunStats?
 }
 
 // MARK: - Personal records (GET /api/mobile/prs)
@@ -326,6 +431,19 @@ public struct SequenceListResponse: Codable, Sendable {
 /// up unprocessed — the SERVER runs the same downsample/zones/load math as
 /// the Strava import (streams contract, 2026-08-11); never pre-compute
 /// zones on-wrist.
+/// Time-in-zone for one session, in the shape the phone's analytics read.
+public struct WorkoutZoneBreakdown: Codable, Hashable, Sendable {
+    public let seconds: [Int]
+    public let pct: [Double]
+    public let totalSeconds: Int
+
+    public init(seconds: [Int], pct: [Double], totalSeconds: Int) {
+        self.seconds = seconds
+        self.pct = pct
+        self.totalSeconds = totalSeconds
+    }
+}
+
 public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     public let sequenceId: String?
     public let sequenceName: String?
@@ -337,14 +455,25 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     public let hrStream: [Int]?
     /// Elapsed seconds from session start, parallel to hrStream.
     public let timeStream: [Int]?
-    /// Relative altitude (m) parallel to timeStream — outdoor sessions only.
+    /// Relative altitude (m) parallel to timeStream — outdoor sessions, and
+    /// freestyle whenever the barometer has something to say.
     public let altitudeStream: [Double]?
+    /// Freestyle contract: computed ON-WRIST from the server's zone
+    /// boundaries (the one place the wrist does zone math — every other
+    /// path leaves it to the server per the streams contract, and the raw
+    /// streams still ride along so the server can always recompute).
+    public let timeInZones: WorkoutZoneBreakdown?
+    /// Barometric climb, mirrored into metricsData for the phone's
+    /// freestyle analytics (also sent top-level on the sync item).
+    public let elevationGainM: Double?
 
     public init(
         sequenceId: String? = nil, sequenceName: String? = nil,
         roundsCompleted: Int? = nil, stepSeconds: [Int]? = nil,
         hrStream: [Int]? = nil, timeStream: [Int]? = nil,
-        altitudeStream: [Double]? = nil
+        altitudeStream: [Double]? = nil,
+        timeInZones: WorkoutZoneBreakdown? = nil,
+        elevationGainM: Double? = nil
     ) {
         self.sequenceId = sequenceId
         self.sequenceName = sequenceName
@@ -353,10 +482,13 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
         self.hrStream = hrStream
         self.timeStream = timeStream
         self.altitudeStream = altitudeStream
+        self.timeInZones = timeInZones
+        self.elevationGainM = elevationGainM
     }
 
     public var isEmpty: Bool {
         sequenceId == nil && stepSeconds == nil && hrStream == nil
+            && timeInZones == nil
     }
 }
 
@@ -376,6 +508,19 @@ public struct CustomExerciseListResponse: Codable, Sendable {
 
 // MARK: - Daily health snapshot
 
+/// One HealthKit body-mass reading. The server dedups against existing
+/// weigh-ins by near-twin rule (±10 min, ±0.3 kg) and writes the survivors
+/// to body_measurements — so sending every sample is safe and correct.
+public struct WeightSamplePayload: Codable, Hashable, Sendable {
+    public let measuredAt: Date
+    public let weightKg: Double
+
+    public init(measuredAt: Date, weightKg: Double) {
+        self.measuredAt = measuredAt
+        self.weightKg = weightKg
+    }
+}
+
 public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
     public let localDate: String
     public let timeZone: String
@@ -383,9 +528,20 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
     public let restingHeartRateBpm: Int?
     public let activeEnergyKcal: Double?
     public let walkingRunningDistanceMeters: Double?
+    /// Promoted to top level 2026-08-17 — these columns shipped long ago,
+    /// and the server only reads the nested copies as a legacy fallback
+    /// (which it can now drop).
+    public let sleepMinutes: Int?
+    public let sleepDeepMinutes: Int?
+    public let sleepRemMinutes: Int?
+    public let hrvMs: Double?
+    /// Body mass never belonged in the snapshot: the server routes these to
+    /// body_measurements, and it reads ONLY the top-level key — the old
+    /// rawData.weightKg was silently dropped on every sync.
+    public let weightSamples: [WeightSamplePayload]?
     public let source: String
-    /// Extras riding until dedicated columns ship (announced 2026-08-11):
-    /// sleepMinutes, hrvMs, weightKg.
+    /// Anything without a column of its own. No longer carries the promoted
+    /// fields above.
     public let rawData: [String: Double]?
 
     public init(
@@ -395,6 +551,11 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
         restingHeartRateBpm: Int? = nil,
         activeEnergyKcal: Double? = nil,
         walkingRunningDistanceMeters: Double? = nil,
+        sleepMinutes: Int? = nil,
+        sleepDeepMinutes: Int? = nil,
+        sleepRemMinutes: Int? = nil,
+        hrvMs: Double? = nil,
+        weightSamples: [WeightSamplePayload]? = nil,
         source: String = "apple_health",
         rawData: [String: Double]? = nil
     ) {
@@ -404,6 +565,11 @@ public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
         self.restingHeartRateBpm = restingHeartRateBpm
         self.activeEnergyKcal = activeEnergyKcal
         self.walkingRunningDistanceMeters = walkingRunningDistanceMeters
+        self.sleepMinutes = sleepMinutes
+        self.sleepDeepMinutes = sleepDeepMinutes
+        self.sleepRemMinutes = sleepRemMinutes
+        self.hrvMs = hrvMs
+        self.weightSamples = weightSamples
         self.source = source
         self.rawData = rawData
     }

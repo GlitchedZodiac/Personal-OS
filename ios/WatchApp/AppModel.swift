@@ -9,11 +9,12 @@ import Foundation
 import HealthKit
 import SwiftUI
 import WatchKit
+import WidgetKit
 
 // MARK: - Workout kinds
 
 public enum WorkoutKind: String, CaseIterable, Identifiable {
-    case kettlebell, walk, treadmill, run, hike, other
+    case kettlebell, walk, treadmill, run, hike, freestyle, other
 
     public var id: String { rawValue }
 
@@ -24,6 +25,7 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         case .treadmill: return "Treadmill"
         case .run: return "Run"
         case .hike: return "Hike"
+        case .freestyle: return "Freestyle"
         case .other: return "Other"
         }
     }
@@ -38,6 +40,9 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         case .treadmill: return "treadmill_walk"
         case .run: return "run"
         case .hike: return "hike"
+        // Freestyle's own vocabulary — the phone keys its "Describe what
+        // this was →" affordance off this type.
+        case .freestyle: return "freestyle"
         case .other: return "other"
         }
     }
@@ -45,7 +50,7 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
     public var isOutdoor: Bool {
         switch self {
         case .walk, .run, .hike: return true
-        case .kettlebell, .treadmill, .other: return false
+        case .kettlebell, .treadmill, .freestyle, .other: return false
         }
     }
 
@@ -55,6 +60,9 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         case .walk, .treadmill: return .walking
         case .run: return .running
         case .hike: return .hiking
+        // Follow-alongs and improvised EMOMs read as interval work, which
+        // is also what gives HealthKit its best calorie model for them.
+        case .freestyle: return .highIntensityIntervalTraining
         case .other: return .other
         }
     }
@@ -69,6 +77,8 @@ public struct LoggedSet: Identifiable, Hashable {
     public let reps: Int
     public let at: Date
     public let isWeightPR: Bool
+    /// §10 PR banner copy: "PR · Swing 32 kg — was 28".
+    public let previousWeightKg: Double?
 }
 
 // MARK: - Summary
@@ -96,6 +106,7 @@ public final class AppModel: ObservableObject {
         case pinEntry
         case pairedIntro
         case home              // design 04 — tile grid
+        case settings          // Round 1 §01
         case workoutList       // design 05
         case kettlebellSpace   // Michael's 2026-08-10 IA: routines + free sets
         case sequences         // design 06
@@ -103,6 +114,10 @@ public final class AppModel: ObservableObject {
         case live(WorkoutKind)           // freeform live pages
         case liveSequence(SequenceDef)   // EMOM ring or circuit runner by kind
         case summary
+        case doubleTapCoach              // §05 1o — once, before first live session
+        case voiceWeight                 // §08 2e — "HEARD · WEIGHT" confirm card
+        case voiceFood                   // §08 — parsed food confirm card
+        case ready                       // §07 2b — readiness verdict screen
     }
 
     public enum SyncState: Equatable {
@@ -117,8 +132,43 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var lastKettlebell: Date?
     @Published public private(set) var lastRun: (at: Date, km: Double)?
     @Published public private(set) var sequences: [SequenceDef] = []
+    /// Weekday indices (1 = Mon … 7 = Sun) with a trained session this week.
+    @Published public private(set) var trainedWeekdays: Set<Int> = []
+    /// First session logged today, if any (Home's mint "✓ 7:12a").
+    @Published public private(set) var trainedTodayAt: Date?
+    /// Least-recently-run routine — the Home "due · <name>" state (§04).
+    @Published public private(set) var dueRoutine: SequenceDef?
+    /// Offline-queue depth + the last successful sync touch (Settings row).
+    @Published public private(set) var queuedCount = 0
+    @Published public private(set) var lastSyncCheckAt: Date?
     @Published public private(set) var syncState: SyncState = .idle
     @Published public private(set) var summary: WorkoutSummary?
+    /// Sync-response codas (Round 1+2 §02/§03): hero metrics + the routine
+    /// verdict/last-run for the session just saved. Optional until the main
+    /// lane deploys the enriched sync response to prod.
+    @Published public private(set) var heroMetrics: HeroMetricsPayload?
+    @Published public private(set) var routineCoda: RoutineCodaPayload?
+    /// §03 deltas baseline — local rows instantly, server coda after sync.
+    @Published public private(set) var lastRunBaseline: LastRunStats?
+    /// §03 recovery card — lands ~60 s after the last Done, if HR was live.
+    @Published public private(set) var recoveryCapture: WorkoutRecorder.RecoveryCapture?
+    /// §03 zones card — server-enriched seconds, refetched after Save syncs.
+    @Published public private(set) var summaryZones: [Int]?
+    /// §03 tape — per-round work seconds for EMOM runs (populated by
+    /// early-done taps; without them a full minute isn't "work", so the tape
+    /// stays honest by staying empty).
+    @Published public private(set) var emomRoundSeconds: [Int] = []
+    /// Which EMOM round earned the tape's ◆ (set by the same taps).
+    @Published public private(set) var emomPRRound: Int?
+    /// Time-in-zone for the freestyle session just finished — computed
+    /// on-wrist, so the summary can show it before any sync.
+    @Published public private(set) var freestyleZoneSeconds: [Int]?
+    /// Server-served HR zone boundaries (Freestyle contract), last-good
+    /// cached so an out-of-signal session still gets its time-in-zone.
+    @Published public private(set) var zones: HeartRateZones?
+    /// §08 voice-confirm card state (set by the App Intents).
+    @Published public var voiceWeightKg: Double = 0
+    @Published public private(set) var voiceFoodText: String = ""
 
     // Kettlebell live state
     @Published public private(set) var loggedSets: [LoggedSet] = []
@@ -131,6 +181,8 @@ public final class AppModel: ObservableObject {
     // EMOM runner state
     @Published public private(set) var emomRound = 0
     @Published public private(set) var emomSecondsLeft = 60
+    /// §10 minute-boundary wash (#3D1526, 120 ms in / 400 ms out).
+    @Published public private(set) var emomBoundaryWash = false
 
     // Circuit runner state (tap-driven)
     @Published public private(set) var circuitRound = 1
@@ -153,9 +205,13 @@ public final class AppModel: ObservableObject {
     @Published public var idleNudgeActive = false
     private var lastActivityAt = Date()
     private var idleWatchdog: Task<Void, Never>?
-    private static let idleThreshold: TimeInterval = 8 * 60
+    private var idleThreshold: TimeInterval {
+        TimeInterval(WatchPrefs.shared.idleNudgeMinutes) * 60
+    }
 
     public let recorder = WorkoutRecorder()
+    /// §07 — verdict only; reads the watch's own HealthKit, never the plan.
+    let readiness = Readiness()
 
     private let sessionStore: any SessionStore
     private let api: MobileAPIClient
@@ -175,12 +231,24 @@ public final class AppModel: ObservableObject {
     private var engineTask: Task<Void, Never>?
     private var sequencePausedAccum: TimeInterval = 0
     private var sequencePauseStartedAt: Date?
+    /// Last 50 server rows, retained for the §03 local deltas baseline.
+    private var recentRows: [MobileWorkoutRow] = []
+    private var recoveryTask: Task<Void, Never>?
+    /// §05 1o: the start the coach interrupted, resumed on "Got it".
+    private var pendingCoachAction: (() async -> Void)?
+
+    /// The App Intents (§05/§08) reach the live model through this — the
+    /// watch app runs its intents in-process.
+    public private(set) static weak var shared: AppModel?
 
     public init(
         sessionStore: (any SessionStore)? = nil,
         baseURL: URL = MobileAPIClient.productionBaseURL
     ) {
-        let store = sessionStore ?? KeychainSessionStore()
+        // Shared access group so the widget extension reads the same bearer
+        // session (§02 widget-side fetch); existing ungrouped sessions are
+        // migrated on first load.
+        let store = sessionStore ?? KeychainSessionStore(accessGroup: PitayaKeychain.sharedGroup)
         self.sessionStore = store
         self.api = MobileAPIClient(baseURL: baseURL, sessionStore: store)
         self.queue = try? OfflineWorkoutQueue()
@@ -189,6 +257,8 @@ public final class AppModel: ObservableObject {
         if let cached = customExerciseCache?.load() {
             ExerciseCatalog.setCustom(cached)
         }
+        zones = ZonesCache.load()
+        AppModel.shared = self
     }
 
     // MARK: - Boot & pairing
@@ -207,6 +277,7 @@ public final class AppModel: ObservableObject {
                 await self?.refreshHistory()
                 await self?.drainQueue()
             }
+            Task { [weak self] in await self?.readiness.refresh() }
         } else {
             phase = .welcome
         }
@@ -268,6 +339,11 @@ public final class AppModel: ObservableObject {
             // Offline is fine — cached baselines stand.
         }
 
+        if let served = try? await api.fetchZones() {
+            zones = served.zones
+            ZonesCache.save(served.zones)
+        }
+
         if let list = try? await api.fetchSequences() {
             sequences = list.sequences
             #if DEBUG
@@ -292,6 +368,7 @@ public final class AppModel: ObservableObject {
 
         do {
             let list = try await api.fetchWorkouts(limit: 50)
+            recentRows = list.entries
             historyCount = list.entries.count
             lastKettlebell = list.entries.first {
                 $0.workoutType == "strength" && !$0.exercises.isEmpty
@@ -302,14 +379,119 @@ public final class AppModel: ObservableObject {
             }.flatMap { row in
                 row.distanceMeters.map { (row.startedAt, $0 / 1000) }
             }
+
+            // §04 week ticks + due rotation, computed from local history.
+            var calendar = Calendar.current
+            calendar.firstWeekday = 2 // weeks start Monday
+            let now = Date()
+            var weekdays = Set<Int>()
+            var todayAt: Date?
+            var lastRunBySequence: [String: Date] = [:]
+            for row in list.entries {
+                if calendar.isDate(row.startedAt, equalTo: now, toGranularity: .weekOfYear) {
+                    let weekday = calendar.component(.weekday, from: row.startedAt)
+                    weekdays.insert(weekday == 1 ? 7 : weekday - 1)
+                }
+                if calendar.isDateInToday(row.startedAt) {
+                    todayAt = min(todayAt ?? row.startedAt, row.startedAt)
+                }
+                if let sequenceId = row.sequenceId {
+                    let prior = lastRunBySequence[sequenceId] ?? .distantPast
+                    lastRunBySequence[sequenceId] = max(prior, row.startedAt)
+                }
+            }
+            trainedWeekdays = weekdays
+            trainedTodayAt = todayAt
+            dueRoutine = sequences.min { a, b in
+                (lastRunBySequence[a.id] ?? .distantPast)
+                    < (lastRunBySequence[b.id] ?? .distantPast)
+            }
+            lastSyncCheckAt = Date()
         } catch {
             // Offline — home facts stay stale, nothing breaks.
         }
+
+        // Fresh history changes the complication's due/trained state too.
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    // MARK: - §05 coach + §08 voice entry points
+
+    /// "Got it" on the one-time coach → mark shown, resume the start it
+    /// interrupted.
+    public func finishDoubleTapCoach() {
+        DoubleTapCoach.shared.coachShown = true
+        let pending = pendingCoachAction
+        pendingCoachAction = nil
+        if let pending {
+            Task { await pending() }
+        } else {
+            phase = .home
+        }
+    }
+
+    /// "Log eighty-four point two kilos" → 2e confirm card.
+    public func presentVoiceWeight(_ weightKg: Double) {
+        voiceWeightKg = weightKg
+        phase = .voiceWeight
+    }
+
+    /// "Log two eggs and toast" → food confirm card.
+    public func presentVoiceFood(_ text: String) {
+        voiceFoodText = text
+        phase = .voiceFood
+    }
+
+    /// Log it → offline voice queue (no ingest endpoint on the mobile
+    /// surface yet — filed; the card's "queued until sync" footer is true).
+    public func confirmVoiceLog() {
+        switch phase {
+        case .voiceWeight:
+            VoiceLogQueue.append(VoiceLogEntry(
+                kind: "weight", weightKg: (voiceWeightKg * 10).rounded() / 10,
+                text: nil, at: Date()
+            ))
+        case .voiceFood:
+            VoiceLogQueue.append(VoiceLogEntry(
+                kind: "food", weightKg: nil, text: voiceFoodText, at: Date()
+            ))
+        default:
+            return
+        }
+        Haptics.key(.success)
+        phase = .home
+    }
+
+    public func dismissVoiceLog() { phase = .home }
+
+    /// §05: EMOM Double Tap — "move done early", recording real work seconds
+    /// into stepSeconds[] (sync payload) and the round tape (§03).
+    public func markEmomDone() {
+        guard case .liveSequence(let sequence) = phase, sequence.kind == "emom",
+              emomRound >= 1 else { return }
+        let index = emomRound - 1
+        if emomRoundSeconds.count <= index {
+            emomRoundSeconds.append(
+                contentsOf: Array(repeating: 0, count: index + 1 - emomRoundSeconds.count)
+            )
+        }
+        guard emomRoundSeconds[index] == 0 else { return } // first tap counts
+        let work = max(60 - emomSecondsLeft, 1)
+        emomRoundSeconds[index] = work
+        let stepCount = max(sequence.steps.count, 1)
+        let stepIndex = (emomRound - 1) % stepCount
+        if circuitStepSeconds.indices.contains(stepIndex) {
+            circuitStepSeconds[stepIndex] += work
+        }
+        markActivity()
+        Haptics.minor(.click)
     }
 
     // MARK: - Navigation
 
     public func openWorkoutList() { phase = .workoutList }
+    public func openSettings() { phase = .settings }
+    public func openReady() { phase = .ready }
     public func openKettlebellSpace() { phase = .kettlebellSpace }
     public func openSequences() { phase = .sequences }
     public func openSequence(_ sequence: SequenceDef) {
@@ -363,13 +545,29 @@ public final class AppModel: ObservableObject {
     /// `useRecorder: false` is the headless-smoke path (no HealthKit sheet,
     /// no countdown in a simulator run); every user-facing call leaves it true.
     public func startWorkout(_ kind: WorkoutKind, useRecorder: Bool = true) async {
+        // §05 1o: the one-time coach interrupts the first-ever live session
+        // (real sessions only — the headless smoke path skips it).
+        if useRecorder, !DoubleTapCoach.shared.coachShown {
+            pendingCoachAction = { [weak self] in await self?.startWorkout(kind) }
+            phase = .doubleTapCoach
+            return
+        }
         resetLiveState()
+        if kind == .kettlebell {
+            reps = WatchPrefs.shared.startRepsAt == .lastLogged
+                ? WatchPrefs.shared.lastLoggedReps : 10
+        }
         phase = .live(kind)
         guard useRecorder else { return }
+        // A recovery window still watching the previous session yields first.
+        await recorder.abortRecoveryIfNeeded()
         await runCountdown()
         workoutStartedAt = Date()
         do {
-            try await recorder.start(activityType: kind.activityType, outdoor: kind.isOutdoor)
+            try await recorder.start(
+                activityType: kind.activityType, outdoor: kind.isOutdoor,
+                captureAltitude: kind == .freestyle ? true : nil
+            )
         } catch {
             // HealthKit refused (denied auth, restricted) — the session still
             // runs on wall clock so a workout is never lost.
@@ -389,6 +587,11 @@ public final class AppModel: ObservableObject {
         markActivity()
     }
 
+    /// Weight-PR gap for the logger's idle line ("4 kg shy of your best").
+    public func bestWeightKg(for exerciseId: String) -> Double? {
+        baselines.best[exerciseId]?.weightKg
+    }
+
     public func logSet() {
         let result = baselines.evaluate(exerciseId: currentExercise.id, weightKg: weightKg)
         let set = LoggedSet(
@@ -396,13 +599,21 @@ public final class AppModel: ObservableObject {
             weightKg: weightKg,
             reps: reps,
             at: Date(),
-            isWeightPR: result.isWeightPR
+            isWeightPR: result.isWeightPR,
+            previousWeightKg: result.previousWeightKg
         )
         loggedSets.append(set)
         markActivity()
+        WatchPrefs.shared.lastLoggedReps = reps
 
         if result.isWeightPR {
-            WKInterfaceDevice.current().play(.success)
+            // §06: the PR lands as a marker in the Health session tape.
+            recorder.addMarker(
+                name: "PR · \(set.exercise.name) \(Fmt.kg(set.weightKg)) kg", at: set.at
+            )
+            // §10: PR haptic is .success + .directionUp.
+            Haptics.key(.success)
+            Haptics.key(.directionUp)
             prFlash = set
             prFlashTask?.cancel()
             prFlashTask = Task { [weak self] in
@@ -410,8 +621,14 @@ public final class AppModel: ObservableObject {
                 if !Task.isCancelled { self?.prFlash = nil }
             }
         } else {
-            WKInterfaceDevice.current().play(.click)
+            Haptics.minor(.click)
         }
+    }
+
+    /// §05: the PR flash owns the Double Tap while visible — Dismiss.
+    public func dismissPRFlash() {
+        prFlashTask?.cancel()
+        prFlash = nil
     }
 
     public func repeatLastSet() {
@@ -423,8 +640,15 @@ public final class AppModel: ObservableObject {
     }
 
     public func finishWorkout(_ kind: WorkoutKind) async {
-        let totals = await recorder.finish()
         let entries = aggregatedEntries()
+        // §03 HRR: kettlebell sessions freeze the numbers at the last Done
+        // and watch the descent for 60 s; outdoor kinds close as before.
+        let totals: WorkoutRecorder.Totals?
+        if kind == .kettlebell {
+            totals = await beginRecoveryOrFinish()
+        } else {
+            totals = await recorder.finish()
+        }
         prepareSummary(
             kind: kind,
             totals: totals,
@@ -437,9 +661,35 @@ public final class AppModel: ObservableObject {
         )
     }
 
+    /// Freeze-now-finish-later (§03): snapshot totals immediately so the
+    /// summary renders, then complete the 60 s recovery capture off-screen.
+    private func beginRecoveryOrFinish() async -> WorkoutRecorder.Totals? {
+        guard let totals = await recorder.beginRecoveryWindow() else {
+            return await recorder.finish()
+        }
+        let sessionToken = workoutStartedAt
+        recoveryTask?.cancel()
+        recoveryTask = Task { [weak self] in
+            let capture = await self?.recorder.completeRecovery()
+            guard let self, !Task.isCancelled else { return }
+            // Only surface it if we're still on this session's summary.
+            if case .summary = self.phase,
+               self.workoutStartedAt == sessionToken,
+               let capture, capture.drop > 0 {
+                self.recoveryCapture = capture
+            }
+        }
+        return totals
+    }
+
     // MARK: - Sequence (EMOM) flow
 
     public func startSequence(_ sequence: SequenceDef, useRecorder: Bool = true) async {
+        if useRecorder, !DoubleTapCoach.shared.coachShown {
+            pendingCoachAction = { [weak self] in await self?.startSequence(sequence) }
+            phase = .doubleTapCoach
+            return
+        }
         resetLiveState()
         activeSequence = sequence
         persistWeightOverrides(for: sequence)
@@ -455,6 +705,8 @@ public final class AppModel: ObservableObject {
         phase = .liveSequence(sequence)
 
         if useRecorder {
+            // A recovery window still watching the previous session yields.
+            await recorder.abortRecoveryIfNeeded()
             await runCountdown()
         }
         workoutStartedAt = Date()
@@ -489,6 +741,11 @@ public final class AppModel: ObservableObject {
         if circuitStepIndex < circuitStepCompletions.count {
             circuitStepCompletions[circuitStepIndex] += 1
             circuitStepSeconds[circuitStepIndex] += Int(Date().timeIntervalSince(circuitStepMark))
+            // §06: each work interval lands as a named Health segment.
+            recorder.addSegment(
+                name: "Round \(circuitRound) · \(sequence.steps[circuitStepIndex].exerciseName.lowercased())",
+                from: circuitStepMark, to: Date()
+            )
         }
 
         if circuitStepIndex + 1 < sequence.steps.count {
@@ -514,7 +771,8 @@ public final class AppModel: ObservableObject {
 
     private func runCircuitRest(_ sequence: SequenceDef) async {
         let restSeconds = sequence.steps[circuitStepIndex].restSeconds
-            ?? sequence.restSecondsDefault ?? 60
+            ?? sequence.restSecondsDefault
+            ?? WatchPrefs.shared.restFallbackSeconds
         guard restSeconds > 0 else { return }
 
         circuitRestTask?.cancel()
@@ -526,9 +784,13 @@ public final class AppModel: ObservableObject {
                 guard !Task.isCancelled else { return }
                 left -= 1
                 self?.circuitRestLeft = left
+                // §10: each of the last 3 s pulses the digits + .click.
+                if (1...3).contains(left) { Haptics.minor(.click) }
             }
             if !Task.isCancelled {
-                WKInterfaceDevice.current().play(.notification) // design 14: haptic at zero
+                // §10: :00 → accent GO pop (0.5 s) + .success, then work.
+                Haptics.key(.success)
+                try? await Task.sleep(nanoseconds: 600_000_000)
             }
         }
         circuitRestTask = task
@@ -541,6 +803,18 @@ public final class AppModel: ObservableObject {
     private func runEMOMEngine(_ sequence: SequenceDef) async {
         let totalRounds = max(sequence.durationMinutes ?? sequence.steps.count, 1)
         let startedAt = Date()
+        var roundStartedAt = Date()
+
+        // §06: name the round that just closed ("Round 3 · press").
+        func closeRoundSegment(_ round: Int, at date: Date) {
+            guard round >= 1, !sequence.steps.isEmpty else { return }
+            let step = sequence.steps[(round - 1) % sequence.steps.count]
+            recorder.addSegment(
+                name: "Round \(round) · \(step.exerciseName.lowercased())",
+                from: roundStartedAt, to: date
+            )
+            roundStartedAt = date
+        }
 
         while !Task.isCancelled {
             guard case .liveSequence = phase else { return }
@@ -556,6 +830,7 @@ public final class AppModel: ObservableObject {
                 let minuteIndex = Int(elapsed / 60)
 
                 if minuteIndex >= totalRounds {
+                    closeRoundSegment(totalRounds, at: Date())
                     WKInterfaceDevice.current().play(.success)
                     await finishSequence(roundsCompleted: totalRounds)
                     return
@@ -563,7 +838,19 @@ public final class AppModel: ObservableObject {
 
                 let round = minuteIndex + 1
                 if round != emomRound {
-                    if emomRound != 0 { WKInterfaceDevice.current().play(.notification) }
+                    if emomRound != 0 {
+                        closeRoundSegment(emomRound, at: Date())
+                        // §10 boundary: wash 120 ms in / 400 ms out,
+                        // haptic .start ×2.
+                        emomBoundaryWash = true
+                        Haptics.key(.start)
+                        Task { [weak self] in
+                            try? await Task.sleep(nanoseconds: 120_000_000)
+                            self?.emomBoundaryWash = false
+                            try? await Task.sleep(nanoseconds: 60_000_000)
+                            Haptics.key(.start)
+                        }
+                    }
                     emomRound = round
                     markActivity()
                 }
@@ -606,8 +893,20 @@ public final class AppModel: ObservableObject {
         circuitRestLeft = nil
         guard let sequence = activeSequence else { return }
 
-        let totals = await recorder.finish()
         let entries = sequenceEntries(sequence: sequence, rounds: roundsCompleted)
+
+        // §06: Health detail carries the routine's name and its PR markers.
+        // (Sequence PRs are only known from the completed entries, so the
+        // marker sits at the session end rather than the exact round.)
+        recorder.sessionTitle = sequence.name
+        for pr in baselines.sessionPRs(entries: entries) where pr.kind == "weight" {
+            recorder.addMarker(
+                name: "PR · \(pr.exerciseName) \(Fmt.kg(pr.value)) kg", at: Date()
+            )
+        }
+
+        // §03 HRR: freeze now, watch the descent for 60 s off-screen.
+        let totals = await beginRecoveryOrFinish()
         let volume = entries.reduce(0.0) { acc, entry in
             guard let sets = entry.sets, let reps = entry.reps, let weight = entry.weightKg
             else { return acc }
@@ -676,6 +975,11 @@ public final class AppModel: ObservableObject {
         let prs = baselines.sessionPRs(entries: entries)
         baselines.absorb(entries: entries)
 
+        // §03 deltas: instant baseline from cached rows (same semantics as
+        // the server's lastRun — the run before this one, same routine);
+        // the sync response's coda replaces it, server winning on drift.
+        lastRunBaseline = sequence.flatMap { localLastRun(sequenceId: $0.id, before: started) }
+
         summary = WorkoutSummary(
             kind: kind,
             durationSeconds: duration,
@@ -692,7 +996,26 @@ public final class AppModel: ObservableObject {
         // Raw streams ride along for the server's zone/load enrichment
         // (streams contract 2026-08-11 — the server downsamples and computes;
         // the wrist just reports what HealthKit saw).
-        let hrStream = recorder.hrStream
+        // Freestyle ships a self-contained payload (contract: downsample to
+        // ≤200 points on-wrist, compute timeInZones from the server's
+        // boundaries) so the phone's analytics render it without any
+        // server-side enrichment. Every other kind keeps the streams
+        // contract: raw up, server computes.
+        let isFreestyle = kind == .freestyle
+        let rawHR = recorder.hrStream
+        let rawTime = recorder.timeStream
+        let rawAltitude = recorder.altitudeStream
+
+        let zoneBreakdown: WorkoutZoneBreakdown? = isFreestyle
+            ? zones.flatMap { StreamMath.timeInZones(hr: rawHR, time: rawTime, zones: $0) }
+            : nil
+        let hrStream = isFreestyle ? StreamMath.downsample(rawHR) : rawHR
+        let timeStream = isFreestyle ? StreamMath.downsample(rawTime) : rawTime
+        let altitudeStream = isFreestyle
+            ? StreamMath.downsample(rawAltitude) : rawAltitude
+
+        freestyleZoneSeconds = zoneBreakdown?.seconds
+
         let metrics = WorkoutMetricsData(
             sequenceId: sequence?.id,
             sequenceName: sequence?.name,
@@ -700,8 +1023,11 @@ public final class AppModel: ObservableObject {
             stepSeconds: circuitStepSeconds.contains(where: { $0 > 0 })
                 ? circuitStepSeconds : nil,
             hrStream: hrStream.isEmpty ? nil : hrStream,
-            timeStream: hrStream.isEmpty ? nil : recorder.timeStream,
-            altitudeStream: recorder.altitudeStream.isEmpty ? nil : recorder.altitudeStream
+            timeStream: hrStream.isEmpty ? nil : timeStream,
+            altitudeStream: altitudeStream.isEmpty ? nil : altitudeStream,
+            timeInZones: zoneBreakdown,
+            elevationGainM: isFreestyle && recorder.elevationGain > 1
+                ? (recorder.elevationGain * 10).rounded() / 10 : nil
         )
 
         pendingItem = WorkoutSyncItem(
@@ -737,28 +1063,75 @@ public final class AppModel: ObservableObject {
         pendingItem = nil
         try? await queue?.enqueue(item)
         await drainQueue(reconcilePRsFor: item.externalId)
+        await loadSummaryZones(externalId: item.externalId)
+    }
+
+    /// §03 zones card: the sync enrichment stores timeInZones on the row —
+    /// one refetch after Save lights the card (zone math stays server-side
+    /// per the streams contract).
+    private func loadSummaryZones(externalId: String) async {
+        guard summary != nil, syncState == .synced else { return }
+        guard let list = try? await api.fetchWorkouts(limit: 5) else { return }
+        summaryZones = list.entries.first { $0.externalId == externalId }?.timeInZonesSeconds
+    }
+
+    /// "The run before this one, same routine" from the cached history rows.
+    private func localLastRun(sequenceId: String, before: Date) -> LastRunStats? {
+        guard let row = recentRows.first(where: {
+            $0.sequenceId == sequenceId && $0.startedAt < before
+        }) else { return nil }
+        let volume = row.exercises.reduce(0.0) {
+            $0 + Double(($1.sets ?? 0) * ($1.reps ?? 0)) * ($1.weightKg ?? 0)
+        }
+        return LastRunStats(
+            startedAt: row.startedAt,
+            durationMinutes: row.durationMinutes,
+            volumeKg: volume,
+            caloriesBurned: row.caloriesBurned,
+            avgHeartRateBpm: row.avgHeartRateBpm,
+            roundsCompleted: nil
+        )
     }
 
     public func discardWorkout() {
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        Task { await recorder.abortRecoveryIfNeeded() }
         pendingItem = nil
         summary = nil
         loggedSets = []
         activeSequence = nil
         syncState = .idle
+        clearSummaryExtras()
         phase = .home
     }
 
     public func dismissSummary() {
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        Task { await recorder.abortRecoveryIfNeeded() }
         summary = nil
         loggedSets = []
         activeSequence = nil
+        clearSummaryExtras()
         phase = .home
         Task { await refreshHistory() }
+    }
+
+    private func clearSummaryExtras() {
+        lastRunBaseline = nil
+        recoveryCapture = nil
+        summaryZones = nil
+        freestyleZoneSeconds = nil
+        emomRoundSeconds = []
+        emomPRRound = nil
     }
 
     // MARK: - Idle nudge
 
     private func resetLiveState() {
+        recoveryTask?.cancel()
+        recoveryTask = nil
         loggedSets = []
         summary = nil
         pendingItem = nil
@@ -767,6 +1140,7 @@ public final class AppModel: ObservableObject {
         countdown = nil
         circuitRestTask?.cancel()
         circuitRestLeft = nil
+        clearSummaryExtras()
         workoutStartedAt = Date()
         markActivity()
         startIdleWatchdog()
@@ -796,9 +1170,10 @@ public final class AppModel: ObservableObject {
                     self.markActivity()
                 }
                 if !self.idleNudgeActive,
-                   Date().timeIntervalSince(self.lastActivityAt) > Self.idleThreshold {
+                   self.idleThreshold > 0,
+                   Date().timeIntervalSince(self.lastActivityAt) > self.idleThreshold {
                     self.idleNudgeActive = true
-                    WKInterfaceDevice.current().play(.notification)
+                    Haptics.key(.notification)
                 }
             }
         }
@@ -812,9 +1187,18 @@ public final class AppModel: ObservableObject {
 
     // MARK: - Sync
 
+    /// Scheduled background wake: push the queue, refresh the face. Kept
+    /// deliberately light — the widget runs its own fetch when its timeline
+    /// reloads, so this never needs the full history refresh.
+    public func backgroundRefresh() async {
+        await drainQueue()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     public func drainQueue(reconcilePRsFor externalId: String? = nil) async {
         guard let queue else { return }
         let pending = await queue.load()
+        queuedCount = pending.count
         guard !pending.isEmpty else { return }
 
         syncState = .syncing
@@ -822,9 +1206,24 @@ public final class AppModel: ObservableObject {
             let response = try await api.syncWorkouts(pending)
             try? await queue.removeSynced(pending)
             syncState = .synced
+            queuedCount = 0
+            lastSyncCheckAt = Date()
             reconcileSummaryPRs(from: response, matching: externalId)
+            // §02/§03 codas: hero metrics for the wrist surfaces, routine
+            // verdict + last-run for the summary deltas — the server's
+            // lastRun replaces the local baseline (server wins on drift).
+            if let metrics = response.summary { heroMetrics = metrics }
+            if let coda = response.routine {
+                routineCoda = coda
+                if summary != nil, let serverLastRun = coda.lastRun {
+                    lastRunBaseline = serverLastRun
+                }
+            }
+            // §02: every sync refreshes the complication timeline.
+            WidgetCenter.shared.reloadAllTimelines()
         } catch {
             syncState = .queued(pending.count)
+            queuedCount = pending.count
         }
     }
 

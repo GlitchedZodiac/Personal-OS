@@ -6,13 +6,157 @@ first. Update the top of this file whenever a session ships.
 ---
 
 **Last updated:** 2026-08-20 (SPIRIT: the lesson becomes a guided journey; backlinks; web push — DEPLOYED)
-**Current phase:** the watch lane is implementing the Round 1+2 design
-handoff on `claude/watch-app`; the main lane shipped its API dependencies
-(below). `main` is the single source of truth as of 08-14d.
+**Current phase:** both lanes are merged into `claude/watchos-workout-ui-ba4448`
+(2026-08-20) — the web tree from `main` plus the watch lane's Round 1+2 +
+Freestyle work. The watch is a designed instrument: Settings + bell rack, a
+real data complication, receipts-vs-last-run summary, Double Tap + App
+Intents, readiness verdict, motion/AOD per spec. `main` is the single source
+of truth as of 08-14d.
 **Branch in flight:** `claude/phase1-modernization` (web) ·
-`claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch —
-**must merge `main` FIRST**, it is 56+ commits behind and its docs/ios
-snapshot predates the consolidation).
+`claude/watch-app` (watch, worktree ~/VibeCoding/personal-os-watch — merged
+`main` 2026-08-15, fast-forward, before the R1+2 work).
+
+## 2026-08-17b — FREESTYLE (the wrist records, the phone structures)
+
+A Freestyle tile whose only job during a follow-along video or improvised
+EMOM is to **record** — HR + altitude — while he trains to something else.
+No structure UI on the wrist: he describes it on the phone afterwards and
+the coach attaches the movements (that half was already live).
+
+- **Running screen:** elapsed · live HR as the hero, tinted by zone (§09's
+  Z1–2 mint / Z3–4 accent / Z5 blush) · zone chip · End. directionUp/Down
+  haptic on each zone change; AOD drops the chip fill, keeps the outline.
+- **Zones bind to `GET /api/mobile/zones`** — never hardcoded, so a
+  recalibration lands everywhere at once. Fetched with history, cached
+  last-good for out-of-signal sessions; with no cache the screen says
+  "zones sync on next connection" rather than claiming a zone.
+- **Sync is the existing endpoint, zero server changes:** workoutType
+  `freestyle`, empty `exercises`, metricsData carrying hrStream/timeStream
+  (uniform stride ≤200), altitudeStream, `timeInZones {seconds,pct,
+  totalSeconds}` and `elevationGainM`. Freestyle is the ONE path computing
+  zones on-wrist (per its contract); every other kind still ships raw for
+  the server to enrich, and the streams ride along here so the server can
+  always recompute.
+- Barometer now runs on indoor freestyle too (recorder gained a
+  `captureAltitude` override); the summary's 4th stat cell becomes TOP
+  ZONE for freestyle instead of an empty "–– KM".
+
+**Deviations, both deliberate:** the grid's fourth slot is Spirit per the
+Round 1 design (1j) — the "Coming soon" placeholder the kickoff expected
+was already replaced — so Freestyle rides below the 2×2 full-width and is
+FLAGGED as undesigned for the next design pass. And End does NOT wear the
+Double Tap gesture: everywhere else the primary action is additive, here it
+would end a running session.
+
+Self-smoke: 2-min sim recording → prod row `freestyle` with empty
+exercises, 24-pt streams, timeInZones seconds [121,0,0,0,0]; the phone's
+activity detail then returned `segments: []`, `sequenceName: null`,
+`zonePct: [100,0,0,0,0]` — exactly the condition its "Describe what this
+was →" button renders on. Zone math unit-tested standalone (boundary
+inclusivity, 50/50 split, pct→100, 1200→200 downsample keeping endpoints,
+empty tops → no zone invented). Smoke row swept, PR backfill re-run.
+
+**Also confirmed today:** `GET /api/mobile/summary` now returns 200 on prod
+— the main lane deployed, so the complication's hero metrics and the
+summary's server deltas are live (top deferred item resolved).
+
+## 2026-08-17 — WRIST SIZING, BACKGROUND REFRESH, HEALTH-SYNC BUG FIXES
+
+Three things after his first real day on the R1+2 build:
+
+- **+25 % sizing restored on the ported screens.** The verbatim design port
+  maps the 352 px canvas 1:1 to the 45 mm screen — proportionally exact, but
+  it silently reverted his two earlier +12 % passes (1.12² ≈ 1.25), which is
+  why Home and Settings read smaller than the hand-tuned screens next to
+  them. `Theme.wristScale` now carries it through `px()` and the new
+  `wDisplay/wText/wNumeric`. Deliberate deviation from the design file, his
+  call, recorded so a later session doesn't "fix" it back.
+- **Background refresh** (last gap from the 08-14 audit): a
+  `WKApplicationDelegate` schedules a ~30 min wake that drains the offline
+  queue and reloads the complication, re-arming each run and on every
+  background transition. The wake path works cold (owns its queue + client
+  rather than racing SwiftUI's `@StateObject`).
+- **Two silent health-sync data losses, found by tracing the path:**
+  (1) `bootstrap()` gated on `authorizationStatus(for:)`, which reports
+  SHARE permission — we request read-only, so it returned `.notDetermined`
+  forever and background delivery **never started**; health only synced when
+  he tapped Allow, every launch. (2) **Weight never reached the database**:
+  the companion nested `weightKg` in `rawData`, but the server reads body
+  mass only from the top level, so every Apple Health weigh-in was dropped —
+  which also starved the weight-trend hero metric. Now sends
+  `weightSamples[]` (every reading with its real timestamp, server-deduped),
+  plus promoted `sleepMinutes`/`hrvMs` and the deep/REM split, and reports
+  "no sleep samples" in the status line so *watch-not-worn* is finally
+  distinguishable from *sleep is broken*.
+
+Self-smoke: posted a `watch_smoke` snapshot to prod and asserted the real
+columns (sleep 432/61/88, HRV 64.3) plus a `body_measurement` created from
+`weightSamples` — proving bug 2 — then deleted both rows.
+
+**Provisioning note:** free-team profiles last 7 days. The 08-15 build
+expired overnight and the app became un-launchable on the wrist (icon taps
+bounced, complications dead). Rebuilt with fresh profiles (valid to
+**2026-08-24**); the watch had also silently dropped off the team device
+list and needed re-registering via a device-destination build. This repeats
+weekly until the $99 paid account — his open decision.
+
+## 2026-08-15 — WATCH ROUND 1+2 HANDOFF (Waves A–E, all §§ built or flagged)
+
+Extraction contract honored: visuals verbatim from
+`Pitaya Watch Round 1.dc.html` (committed as
+`docs/design/pitaya-watch-round1.dc.html`), behavior from the Watch Handoff
+Spec; unpicked variants not built. Five commits, one per wave
+(aa138f9 → 848875f):
+
+- **§01 Settings + bells (1a)** — 4 groups / 8 rows; bell rack sheet with
+  crown cursor over 4–64 kg detents; every weight dial now detents through
+  owned bells; Unpair moved off Home. `WatchPrefs` persists all eight.
+- **§02+§09 complication (1d/1e/2a)** — the static launcher is gone. The
+  widget extension fetches the bearer API itself (session shared via
+  keychain access group — allowed on the free team; app groups are not),
+  caches last-good, reloads at midnight + after every app sync. Circular
+  streak ◆ · corner Z2 mint gauge · inline "◆ 23d · Block A due"/"trained ✓"
+  · rect DUE TODAY + week ring + hero footer flipping to the trained
+  receipt. `/api/mobile/summary` 404s on prod until the main lane deploys —
+  the week/due slice works today, hero numbers light up on deploy.
+- **§03 summary (1g) + logger line** — deltas vs the last run of the same
+  routine (local rows instantly; server coda replaces on sync), ranked
+  insights max 2 (PR › progression › recovery › zones), 60 s HR-recovery
+  capture (freezes the workout's numbers at the last Done, watches the
+  descent, closes HealthKit at the frozen end), zones card from the row's
+  server-enriched timeInZones post-save. Logger totals line: "4 kg shy of
+  your best" / "set 4 · 3,120 kg today" / "◆ new best — 32 kg".
+- **§05 Double Tap + intents (1m/1o)** — one primary CTA per screen wears
+  the gesture + pinch glyph (3-fire toast, then 45% dim); one-time coach
+  before the first live session; EMOM early-done records real work seconds
+  into stepSeconds[] + the session tape. Five App Intents: Start <routine>,
+  Log a Set, Start a Walk, Log Weight, Log Food (the last two open the §08
+  2e confirm cards → local voice queue, see deferred).
+- **§06 HK events** — circuit Dones + EMOM boundaries land as named
+  segments, PRs as markers, routine name as brand metadata: Apple Health
+  shows the designed session tape.
+- **§07 readiness (2b)** — verdict ONLY (Recovered/Take it easy/Rough
+  night) from the watch's own HealthKit HRV/RHR/sleep vs 30-day baseline;
+  "· ◆ ready" on the Home subline → Ready screen. Never alters the plan;
+  no notifications anywhere (§11 holds).
+- **§09 live surfaces + §10 motion/AOD** — outdoor dist+elev top slots, Z2
+  accumulator card; EMOM boundary wash/springs/.start ×2, rest last-3
+  pulses + GO pop, PR seeds + "— was 28" copy, AOD dimmed twin verbatim.
+  NEW iPhone widget extension (2f): Home small/medium + Lock Screen
+  families over the companion's shared-keychain session.
+- **Flagged, not built** (platform/API constraints, see deferred): watch
+  Smart Stack live tile (no app group for live state on the free team),
+  Live Activity mirror (WKWatchOnly has no real-time phone channel), voice
+  ingest endpoint (no API), Action-button per-screen mirroring (no API —
+  intents are assignable instead).
+
+Self-smoke: circuit-run-twice seam proved the deltas pipeline against prod
+(vs-line + mint/ghost deltas on screen); coach → logger flow tap-driven in
+sim ("◆ 4 kg shy of your best" from live baselines); voice card verbatim at
+84.2 kg; smoke rows swept + PR backfill re-run (53 records). Watch app
+installed OTA to the Series 8 (device provisioning accepted the keychain
+group). iPhone companion build is ready but the phone was locked — install
+pending.
 
 ## 2026-08-20 — SPIRIT: the lesson is a journey now (his 08-19 feedback)
 

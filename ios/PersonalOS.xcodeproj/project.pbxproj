@@ -7,16 +7,25 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		000AEB3978A821CC6BC57227 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
+		0028C1690C38674F05C27913 /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
+		0152AC266644EF9569DF142B /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */; };
+		034D889106F844518B56AA92 /* BackgroundRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BCE2ACF93EFE5AC3F1C8A7 /* BackgroundRefresh.swift */; };
 		05317DBD031E73DDAE8151C6 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
+		0560335F103FC404BD9260F7 /* HeartRateZones.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A0B8709774A8E1242A9C8B /* HeartRateZones.swift */; };
 		09DE6BDE7477E9EAD65961D0 /* PersonalOS WatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 93B03235195B45C26E62AD2A /* PersonalOS WatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0B73A4EC13599FACFA029DF5 /* SequenceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */; };
 		119C8051CB463E710DA49416 /* HomeGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D569AE319D0679E013CC7F3 /* HomeGridView.swift */; };
+		15E59B176A850805DFDF032D /* HeartRateZones.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A0B8709774A8E1242A9C8B /* HeartRateZones.swift */; };
+		176A47C2FF42310442B7263C /* MobileAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977A9107D8035E968679A59C /* MobileAPIModels.swift */; };
 		192FB618D1D7D216B916DBA0 /* CompanionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE4FCE8EC35856A1AC60D762 /* CompanionViews.swift */; };
 		1AD7225F8119DEE334552638 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
 		1E57C0B28724B24673F91B65 /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
 		1F4F7858F490CDE118F92780 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 779544B3E1F855E1019BE07F /* Components.swift */; };
 		2035454F5CAFE23ABBAABAC1 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 5266E99A5C09DF8C1D834F88 /* Fonts */; };
+		230BF255E4339DEC5F3FAB0D /* CustomExerciseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */; };
 		267048DC6977B56F65B7C242 /* WorkoutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAD62BC2C3D39E29DAEB3A3 /* WorkoutRecorder.swift */; };
+		2986EE03015C9F2841DAE630 /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
 		2DF1CA1D50939C507B4D10F3 /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
 		310B0256403A7D299CD83E0B /* CustomExerciseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */; };
 		348ED9F32442F6B9D6D65ECF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 674D825EB1855E75A9381EE7 /* Assets.xcassets */; };
@@ -25,13 +34,26 @@
 		3C4D117DD1598B40D7AAC1FA /* WebShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B38DC7F103BB0BBB78466C /* WebShellView.swift */; };
 		3CEB3D4F1FB7CF28281BD4C4 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
 		3D27EC707EF2442F6A321307 /* InstrumentSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 006CA2CFCE38709ABB5C790F /* InstrumentSans-Medium.ttf */; };
+		3E0112038C648F0F981A50B8 /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
+		44685096B6F3EB989431DB8B /* HeartRateZones.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A0B8709774A8E1242A9C8B /* HeartRateZones.swift */; };
+		45C3E5F95B4ADB9FA3531DB7 /* VoiceConfirmViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36AC19919D266FAC898F02F9 /* VoiceConfirmViews.swift */; };
+		45FD93D779577606636ECF4E /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 5266E99A5C09DF8C1D834F88 /* Fonts */; };
 		480F47558B0D592A5ADB0746 /* CompanionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF0284F25AF6DA96F5873EB /* CompanionModel.swift */; };
+		53BBD4CE3D8C55875FFAC7CC /* HeartRateZones.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A0B8709774A8E1242A9C8B /* HeartRateZones.swift */; };
+		53F7EF13276DA62AED6B7113 /* HeroSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226F5F09DE55F1A25DE33584 /* HeroSnapshot.swift */; };
 		5427D9F48D8059CB0AC1580D /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
+		5444D0A2CB78DDE1BBD9D6A0 /* HeroSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226F5F09DE55F1A25DE33584 /* HeroSnapshot.swift */; };
+		5534A613A3896175CF250B6B /* PitayaIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE5EE4B1A279FA6A6FC8378 /* PitayaIntents.swift */; };
 		55E9EAB4707D71D7514C4CF6 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
 		6207641BFC15B4427525659D /* TrailPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE040138C592BFC1248B7D1 /* TrailPage.swift */; };
+		639147367078B36ACE424AA2 /* MobileAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977A9107D8035E968679A59C /* MobileAPIModels.swift */; };
+		646CAD349C342835D2C5E56B /* PitayaVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2020045D700AEC8774E254 /* PitayaVector.swift */; };
+		665833E7E355F33B286A7079 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
+		6822B4817B7FDAF08422AA13 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8043C8384A872FA3669DFF35 /* SettingsView.swift */; };
 		6EF00415B4AD3B33E2B6C717 /* Smoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAABEEDD8A9DD0E43F18673C /* Smoke.swift */; };
 		6FFE9221290D2657D9C64588 /* PersonalOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2BE5E7DEF13CBB8EFDE90AC /* PersonalOSApp.swift */; };
 		7348E390E2D5C943EBAB1253 /* PitayaVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2020045D700AEC8774E254 /* PitayaVector.swift */; };
+		736DE63E4433A944B7EF967F /* DoubleTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2EF43C80F46EB6C976F9FD /* DoubleTap.swift */; };
 		74BAAB263357D00A03E05E4B /* InstrumentSans-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DCB60A5B0C7DC32000E873A6 /* InstrumentSans-SemiBold.ttf */; };
 		7C1C73B93520F304DF109AAD /* CustomExerciseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */; };
 		7CEC08ACE05C328348AD7791 /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
@@ -39,29 +61,55 @@
 		7FDC7116A0E356DF685AA40D /* HealthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19835752792B8774D2AD643F /* HealthStore.swift */; };
 		836DABC6857606F8BB040B10 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0960EA68534280B484B235 /* AppModel.swift */; };
 		83FB94B008C61E0037CDB980 /* MobileAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977A9107D8035E968679A59C /* MobileAPIModels.swift */; };
+		850C3AB6C285CA6E0A67C714 /* ReadyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 484A0AD6AD034324F8E5B900 /* ReadyView.swift */; };
 		86CDB2DEBE59EC1C1E425730 /* LiveWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90514349C02B2B967189761C /* LiveWorkoutView.swift */; };
+		887885D4C181081A988247E7 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B00C978153160C55EFA8A /* Theme.swift */; };
+		8E6D2211FBBDF8DA98F9D848 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
+		8E8B8A2D8D74B604DE3CDD08 /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
+		911A530B51CDC76F8D2CBF7E /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16589754476E6469459CB02 /* MobileAPIClient.swift */; };
 		9768A01B73B3B14BDBB8D6C2 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C296B6BB79F59CD32FB649 /* HomeView.swift */; };
 		9890184C4B9B3D1073B8B4D7 /* PairingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA94BE4FFDB0509B29D5AF96 /* PairingViews.swift */; };
 		9BA75CC94705B686D9DCC46E /* FamiljenGrotesk-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 662A6D243528AE6967F5E3EA /* FamiljenGrotesk-Regular.ttf */; };
 		9D732791423DF4AD53F31380 /* FamiljenGrotesk-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DE19A2C40C78F1DB0C5E021D /* FamiljenGrotesk-Medium.ttf */; };
 		A02A6000CD7F80F1C1B81CF8 /* PitayaGlyphs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79984AFEC08AF2C2C87E907E /* PitayaGlyphs.swift */; };
+		A53892D00B54F88E67367D8E /* PitayaVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2020045D700AEC8774E254 /* PitayaVector.swift */; };
+		AEAFA601122A895042F1281E /* PersonalOS PhoneWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 192D161054DC382C11CA0031 /* PersonalOS PhoneWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B00B0A7ABDF2552A868200C3 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B00C978153160C55EFA8A /* Theme.swift */; };
 		B207070B7B7A1738BBF3F1F1 /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */; };
+		B23012774B80410807929E40 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 5266E99A5C09DF8C1D834F88 /* Fonts */; };
 		B4FE0E0A8D8734ED1191377D /* PitayaWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A818535E93E67612022919 /* PitayaWatchApp.swift */; };
 		B51F6AD550EEB2F65BC6677F /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D0C5609A11F08C551F2A60 /* SummaryView.swift */; };
 		B5954AB70A7B681072E2CFCD /* SetLoggerPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1377A069127D2D8A55879B3B /* SetLoggerPage.swift */; };
+		C4EB475C227F447DDB4927E2 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B00C978153160C55EFA8A /* Theme.swift */; };
+		CAF556C4E8A758671DE9D597 /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
+		CD188B25C1A6BDF8283345BF /* WatchPrefs.swift in Sources */ = {isa = PBXBuildFile; fileRef = D79068F331997CA47450480A /* WatchPrefs.swift */; };
 		D029562938A0F67D6B37E745 /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */; };
 		D04C12C02EB0A78E098EEC8F /* InstrumentSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F0AF3ED8F961B0749F4434D0 /* InstrumentSans-Regular.ttf */; };
 		D1667DF004D2B8CCD9737C26 /* MobileAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977A9107D8035E968679A59C /* MobileAPIModels.swift */; };
 		D6E5E44C068FD03F5D914953 /* PitayaWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D67C6689A274F536320D83D /* PitayaWidgets.swift */; };
+		DA3F573B2892E366E22CB20C /* CustomExerciseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */; };
 		E055B584F27FDA5F0F34016F /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
+		E06EFC014ED687F2AFB317AF /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
+		E1112713A4A1BFAF3893AB61 /* BellRackSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A369B79979560A206B14E9 /* BellRackSheet.swift */; };
+		E9FECD01D5CAB3831E763075 /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */; };
 		F00FF746AAAD6C758063B052 /* FamiljenGrotesk-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C877F517D2C66C9CB8017AB8 /* FamiljenGrotesk-Bold.ttf */; };
+		F402B3B9F8678025DB562512 /* HeroSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226F5F09DE55F1A25DE33584 /* HeroSnapshot.swift */; };
 		F6905EC6F5599D66A96803A0 /* FamiljenGrotesk-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4E3A0588ED582B61CC96FCD3 /* FamiljenGrotesk-SemiBold.ttf */; };
+		F70912D78B917B44F89CF433 /* HeroSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226F5F09DE55F1A25DE33584 /* HeroSnapshot.swift */; };
 		F7AC3277CC304EB90CFA8B16 /* PitayaVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2020045D700AEC8774E254 /* PitayaVector.swift */; };
+		F7BFF607CF8093A79BE01BFD /* FreestyleRunView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311753C805ACFC8B8A60A892 /* FreestyleRunView.swift */; };
+		F7E8A4CAD8F161BE75CDEB98 /* PitayaPhoneWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0353910C9AC8AB8FCA3BD6B9 /* PitayaPhoneWidgets.swift */; };
 		FD0ABE944039C2090164EB53 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B00C978153160C55EFA8A /* Theme.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		16F105793D90B5D7FF5D9CF4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D7C951264FC5DCA3AF9A15DB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E11540A79B6F5FB2E9597669;
+			remoteInfo = "PersonalOS PhoneWidgets";
+		};
 		3A5978E01234D61A949F9597 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D7C951264FC5DCA3AF9A15DB /* Project object */;
@@ -72,6 +120,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		019B806F621D155F135C7B75 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				AEAFA601122A895042F1281E /* PersonalOS PhoneWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2F4DEEECA9EB129DFE9F7F3A /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -87,18 +146,26 @@
 
 /* Begin PBXFileReference section */
 		006CA2CFCE38709ABB5C790F /* InstrumentSans-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "InstrumentSans-Medium.ttf"; sourceTree = "<group>"; };
+		0353910C9AC8AB8FCA3BD6B9 /* PitayaPhoneWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaPhoneWidgets.swift; sourceTree = "<group>"; };
 		03B38DC7F103BB0BBB78466C /* WebShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebShellView.swift; sourceTree = "<group>"; };
 		09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomExerciseCache.swift; sourceTree = "<group>"; };
 		0B3EC5A28C6DC130B5F45FE1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		12D0C5609A11F08C551F2A60 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		1377A069127D2D8A55879B3B /* SetLoggerPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetLoggerPage.swift; sourceTree = "<group>"; };
+		192D161054DC382C11CA0031 /* PersonalOS PhoneWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = "PersonalOS PhoneWidgets.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		19835752792B8774D2AD643F /* HealthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStore.swift; sourceTree = "<group>"; };
 		1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseCatalog.swift; sourceTree = "<group>"; };
+		226F5F09DE55F1A25DE33584 /* HeroSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroSnapshot.swift; sourceTree = "<group>"; };
+		23F46564CE1A1A56D0244764 /* PitayaPhoneWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PitayaPhoneWidgets.entitlements; sourceTree = "<group>"; };
+		27A369B79979560A206B14E9 /* BellRackSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BellRackSheet.swift; sourceTree = "<group>"; };
 		2D2267F0F55DAA9167B98D75 /* PersonalOS Watch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PersonalOS Watch.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2FAD62BC2C3D39E29DAEB3A3 /* WorkoutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutRecorder.swift; sourceTree = "<group>"; };
+		311753C805ACFC8B8A60A892 /* FreestyleRunView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FreestyleRunView.swift; sourceTree = "<group>"; };
+		36AC19919D266FAC898F02F9 /* VoiceConfirmViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceConfirmViews.swift; sourceTree = "<group>"; };
 		3EF0284F25AF6DA96F5873EB /* CompanionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionModel.swift; sourceTree = "<group>"; };
 		40DD35A02B11408515079C64 /* PRBaselines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRBaselines.swift; sourceTree = "<group>"; };
 		42ADF8B3E198AEB2237AD08D /* PersonalOSWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PersonalOSWatch.entitlements; sourceTree = "<group>"; };
+		484A0AD6AD034324F8E5B900 /* ReadyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadyView.swift; sourceTree = "<group>"; };
 		4A0960EA68534280B484B235 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		4E3A0588ED582B61CC96FCD3 /* FamiljenGrotesk-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "FamiljenGrotesk-SemiBold.ttf"; sourceTree = "<group>"; };
 		5266E99A5C09DF8C1D834F88 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = WatchApp/Fonts; sourceTree = SOURCE_ROOT; };
@@ -113,23 +180,31 @@
 		779544B3E1F855E1019BE07F /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		79984AFEC08AF2C2C87E907E /* PitayaGlyphs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaGlyphs.swift; sourceTree = "<group>"; };
 		7E4AC2F072E9A3D3911A6CBF /* PersonalOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PersonalOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8043C8384A872FA3669DFF35 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		80A0B8709774A8E1242A9C8B /* HeartRateZones.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateZones.swift; sourceTree = "<group>"; };
 		87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteModels.swift; sourceTree = "<group>"; };
 		8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SequenceViews.swift; sourceTree = "<group>"; };
 		90514349C02B2B967189761C /* LiveWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveWorkoutView.swift; sourceTree = "<group>"; };
 		93B03235195B45C26E62AD2A /* PersonalOS WatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "PersonalOS WatchWidgets.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		977A9107D8035E968679A59C /* MobileAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAPIModels.swift; sourceTree = "<group>"; };
 		9D67C6689A274F536320D83D /* PitayaWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaWidgets.swift; sourceTree = "<group>"; };
+		A29139B53372E4565B93E223 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		ACE040138C592BFC1248B7D1 /* TrailPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrailPage.swift; sourceTree = "<group>"; };
 		ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineWorkoutQueue.swift; sourceTree = "<group>"; };
+		B9BCE2ACF93EFE5AC3F1C8A7 /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
+		BA4739C9C1BE068652A2633F /* PitayaWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PitayaWidgets.entitlements; sourceTree = "<group>"; };
 		BAB5F2EC88271FD5EC8C556E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		BC2020045D700AEC8774E254 /* PitayaVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaVector.swift; sourceTree = "<group>"; };
 		BE7B00C978153160C55EFA8A /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		C877F517D2C66C9CB8017AB8 /* FamiljenGrotesk-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "FamiljenGrotesk-Bold.ttf"; sourceTree = "<group>"; };
 		D2BE5E7DEF13CBB8EFDE90AC /* PersonalOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalOSApp.swift; sourceTree = "<group>"; };
+		D79068F331997CA47450480A /* WatchPrefs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchPrefs.swift; sourceTree = "<group>"; };
 		DA99F817ED45C90C522F36AB /* RouteTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteTracker.swift; sourceTree = "<group>"; };
 		DCB60A5B0C7DC32000E873A6 /* InstrumentSans-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "InstrumentSans-SemiBold.ttf"; sourceTree = "<group>"; };
 		DE19A2C40C78F1DB0C5E021D /* FamiljenGrotesk-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "FamiljenGrotesk-Medium.ttf"; sourceTree = "<group>"; };
+		DE2EF43C80F46EB6C976F9FD /* DoubleTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleTap.swift; sourceTree = "<group>"; };
 		DE4FCE8EC35856A1AC60D762 /* CompanionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionViews.swift; sourceTree = "<group>"; };
+		DEE5EE4B1A279FA6A6FC8378 /* PitayaIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaIntents.swift; sourceTree = "<group>"; };
 		E9A818535E93E67612022919 /* PitayaWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaWatchApp.swift; sourceTree = "<group>"; };
 		EA94BE4FFDB0509B29D5AF96 /* PairingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingViews.swift; sourceTree = "<group>"; };
 		F0AF3ED8F961B0749F4434D0 /* InstrumentSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "InstrumentSans-Regular.ttf"; sourceTree = "<group>"; };
@@ -141,16 +216,21 @@
 		0DD4F18CE1D1882FFDE5BA1F /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				27A369B79979560A206B14E9 /* BellRackSheet.swift */,
 				779544B3E1F855E1019BE07F /* Components.swift */,
+				311753C805ACFC8B8A60A892 /* FreestyleRunView.swift */,
 				5D569AE319D0679E013CC7F3 /* HomeGridView.swift */,
 				59C296B6BB79F59CD32FB649 /* HomeView.swift */,
 				90514349C02B2B967189761C /* LiveWorkoutView.swift */,
 				EA94BE4FFDB0509B29D5AF96 /* PairingViews.swift */,
 				79984AFEC08AF2C2C87E907E /* PitayaGlyphs.swift */,
+				484A0AD6AD034324F8E5B900 /* ReadyView.swift */,
 				8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */,
 				1377A069127D2D8A55879B3B /* SetLoggerPage.swift */,
+				8043C8384A872FA3669DFF35 /* SettingsView.swift */,
 				12D0C5609A11F08C551F2A60 /* SummaryView.swift */,
 				ACE040138C592BFC1248B7D1 /* TrailPage.swift */,
+				36AC19919D266FAC898F02F9 /* VoiceConfirmViews.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -160,11 +240,22 @@
 			children = (
 				C4655E30656B97F40D1ADC7A /* iOSApp */,
 				62F1BA4FDF1AE7FA3E9436A8 /* iPhone */,
+				1E630A1176A8914889E3B8E9 /* PhoneWidgets */,
 				F3E7F35B0D1D8C1B1A873A68 /* Shared */,
 				6120242F3F5A6892CC740690 /* WatchApp */,
 				BFB35778CCBD76739947D2A9 /* WatchWidgets */,
 				7431D2A6AE9186C80A596BE6 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		1E630A1176A8914889E3B8E9 /* PhoneWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				A29139B53372E4565B93E223 /* Info.plist */,
+				23F46564CE1A1A56D0244764 /* PitayaPhoneWidgets.entitlements */,
+				0353910C9AC8AB8FCA3BD6B9 /* PitayaPhoneWidgets.swift */,
+			);
+			path = PhoneWidgets;
 			sourceTree = "<group>";
 		};
 		3EB2EF6426CD0FB7A62EF165 /* Networking */ = {
@@ -189,12 +280,16 @@
 			children = (
 				4A0960EA68534280B484B235 /* AppModel.swift */,
 				674D825EB1855E75A9381EE7 /* Assets.xcassets */,
+				B9BCE2ACF93EFE5AC3F1C8A7 /* BackgroundRefresh.swift */,
+				DE2EF43C80F46EB6C976F9FD /* DoubleTap.swift */,
 				5266E99A5C09DF8C1D834F88 /* Fonts */,
 				570E4172D82BFC1B6E10D848 /* Info.plist */,
 				42ADF8B3E198AEB2237AD08D /* PersonalOSWatch.entitlements */,
+				DEE5EE4B1A279FA6A6FC8378 /* PitayaIntents.swift */,
 				E9A818535E93E67612022919 /* PitayaWatchApp.swift */,
 				DA99F817ED45C90C522F36AB /* RouteTracker.swift */,
 				FAABEEDD8A9DD0E43F18673C /* Smoke.swift */,
+				D79068F331997CA47450480A /* WatchPrefs.swift */,
 				2FAD62BC2C3D39E29DAEB3A3 /* WorkoutRecorder.swift */,
 				C3803332AC85DD368948FF1A /* Fonts */,
 				0DD4F18CE1D1882FFDE5BA1F /* Views */,
@@ -213,6 +308,7 @@
 		7431D2A6AE9186C80A596BE6 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				192D161054DC382C11CA0031 /* PersonalOS PhoneWidgets.appex */,
 				2D2267F0F55DAA9167B98D75 /* PersonalOS Watch.app */,
 				93B03235195B45C26E62AD2A /* PersonalOS WatchWidgets.appex */,
 				7E4AC2F072E9A3D3911A6CBF /* PersonalOS.app */,
@@ -234,6 +330,7 @@
 			isa = PBXGroup;
 			children = (
 				534A2F0033D20D620F9394D7 /* Info.plist */,
+				BA4739C9C1BE068652A2633F /* PitayaWidgets.entitlements */,
 				9D67C6689A274F536320D83D /* PitayaWidgets.swift */,
 			);
 			path = WatchWidgets;
@@ -271,6 +368,8 @@
 			isa = PBXGroup;
 			children = (
 				1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */,
+				80A0B8709774A8E1242A9C8B /* HeartRateZones.swift */,
+				226F5F09DE55F1A25DE33584 /* HeroSnapshot.swift */,
 				BC2020045D700AEC8774E254 /* PitayaVector.swift */,
 				40DD35A02B11408515079C64 /* PRBaselines.swift */,
 				BE7B00C978153160C55EFA8A /* Theme.swift */,
@@ -290,10 +389,12 @@
 			buildPhases = (
 				0C643070322A965CD35F1302 /* Sources */,
 				366560F08F26FE43B560B218 /* Resources */,
+				019B806F621D155F135C7B75 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				911000A457C04D1386C22C16 /* PBXTargetDependency */,
 			);
 			name = PersonalOS;
 			packageProductDependencies = (
@@ -307,6 +408,7 @@
 			buildConfigurationList = E78FF2C1EF46C2A0445B3BEA /* Build configuration list for PBXNativeTarget "PersonalOS WatchWidgets" */;
 			buildPhases = (
 				59ED907DDBB7B53EBE3021BA /* Sources */,
+				A9FB734EA0DF05597DC2B801 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -339,6 +441,24 @@
 			productReference = 2D2267F0F55DAA9167B98D75 /* PersonalOS Watch.app */;
 			productType = "com.apple.product-type.application";
 		};
+		E11540A79B6F5FB2E9597669 /* PersonalOS PhoneWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA5ED9F4B4205FA5D7900A92 /* Build configuration list for PBXNativeTarget "PersonalOS PhoneWidgets" */;
+			buildPhases = (
+				9E1966E61E13C02504192546 /* Sources */,
+				64FFA93B96BF73BDE521ADC1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "PersonalOS PhoneWidgets";
+			packageProductDependencies = (
+			);
+			productName = "PersonalOS PhoneWidgets";
+			productReference = 192D161054DC382C11CA0031 /* PersonalOS PhoneWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -357,6 +477,10 @@
 						ProvisioningStyle = Automatic;
 					};
 					AD4D41AF62428EAB5D82B96C = {
+						DevelopmentTeam = HDR67SL3JG;
+						ProvisioningStyle = Automatic;
+					};
+					E11540A79B6F5FB2E9597669 = {
 						DevelopmentTeam = HDR67SL3JG;
 						ProvisioningStyle = Automatic;
 					};
@@ -379,6 +503,7 @@
 				536B420B2D8018B46F3047EF /* PersonalOS */,
 				AD4D41AF62428EAB5D82B96C /* PersonalOS Watch */,
 				75897E2E37A1C9CCC2DDB78D /* PersonalOS WatchWidgets */,
+				E11540A79B6F5FB2E9597669 /* PersonalOS PhoneWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -389,6 +514,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				39D5185076FAC8169E6993F8 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		64FFA93B96BF73BDE521ADC1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B23012774B80410807929E40 /* Fonts in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -408,6 +541,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A9FB734EA0DF05597DC2B801 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				45FD93D779577606636ECF4E /* Fonts in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -420,6 +561,8 @@
 				310B0256403A7D299CD83E0B /* CustomExerciseCache.swift in Sources */,
 				55E9EAB4707D71D7514C4CF6 /* ExerciseCatalog.swift in Sources */,
 				7FDC7116A0E356DF685AA40D /* HealthStore.swift in Sources */,
+				0560335F103FC404BD9260F7 /* HeartRateZones.swift in Sources */,
+				F402B3B9F8678025DB562512 /* HeroSnapshot.swift in Sources */,
 				7CEC08ACE05C328348AD7791 /* MobileAPIClient.swift in Sources */,
 				D1667DF004D2B8CCD9737C26 /* MobileAPIModels.swift in Sources */,
 				E055B584F27FDA5F0F34016F /* OfflineWorkoutQueue.swift in Sources */,
@@ -437,7 +580,19 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				230BF255E4339DEC5F3FAB0D /* CustomExerciseCache.swift in Sources */,
+				665833E7E355F33B286A7079 /* ExerciseCatalog.swift in Sources */,
+				53BBD4CE3D8C55875FFAC7CC /* HeartRateZones.swift in Sources */,
+				53F7EF13276DA62AED6B7113 /* HeroSnapshot.swift in Sources */,
+				911A530B51CDC76F8D2CBF7E /* MobileAPIClient.swift in Sources */,
+				176A47C2FF42310442B7263C /* MobileAPIModels.swift in Sources */,
+				0028C1690C38674F05C27913 /* OfflineWorkoutQueue.swift in Sources */,
+				8E8B8A2D8D74B604DE3CDD08 /* PRBaselines.swift in Sources */,
+				646CAD349C342835D2C5E56B /* PitayaVector.swift in Sources */,
 				D6E5E44C068FD03F5D914953 /* PitayaWidgets.swift in Sources */,
+				E9FECD01D5CAB3831E763075 /* RouteModels.swift in Sources */,
+				E06EFC014ED687F2AFB317AF /* SessionStore.swift in Sources */,
+				887885D4C181081A988247E7 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -446,9 +601,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				836DABC6857606F8BB040B10 /* AppModel.swift in Sources */,
+				034D889106F844518B56AA92 /* BackgroundRefresh.swift in Sources */,
+				E1112713A4A1BFAF3893AB61 /* BellRackSheet.swift in Sources */,
 				1F4F7858F490CDE118F92780 /* Components.swift in Sources */,
 				7C1C73B93520F304DF109AAD /* CustomExerciseCache.swift in Sources */,
+				736DE63E4433A944B7EF967F /* DoubleTap.swift in Sources */,
 				3CEB3D4F1FB7CF28281BD4C4 /* ExerciseCatalog.swift in Sources */,
+				F7BFF607CF8093A79BE01BFD /* FreestyleRunView.swift in Sources */,
+				15E59B176A850805DFDF032D /* HeartRateZones.swift in Sources */,
+				5444D0A2CB78DDE1BBD9D6A0 /* HeroSnapshot.swift in Sources */,
 				119C8051CB463E710DA49416 /* HomeGridView.swift in Sources */,
 				9768A01B73B3B14BDBB8D6C2 /* HomeView.swift in Sources */,
 				86CDB2DEBE59EC1C1E425730 /* LiveWorkoutView.swift in Sources */,
@@ -458,24 +619,54 @@
 				3907BAA59C9AC5461171670C /* PRBaselines.swift in Sources */,
 				9890184C4B9B3D1073B8B4D7 /* PairingViews.swift in Sources */,
 				A02A6000CD7F80F1C1B81CF8 /* PitayaGlyphs.swift in Sources */,
+				5534A613A3896175CF250B6B /* PitayaIntents.swift in Sources */,
 				F7AC3277CC304EB90CFA8B16 /* PitayaVector.swift in Sources */,
 				B4FE0E0A8D8734ED1191377D /* PitayaWatchApp.swift in Sources */,
+				850C3AB6C285CA6E0A67C714 /* ReadyView.swift in Sources */,
 				D029562938A0F67D6B37E745 /* RouteModels.swift in Sources */,
 				7DC9C0F3539C60B452675007 /* RouteTracker.swift in Sources */,
 				0B73A4EC13599FACFA029DF5 /* SequenceViews.swift in Sources */,
 				1AD7225F8119DEE334552638 /* SessionStore.swift in Sources */,
 				B5954AB70A7B681072E2CFCD /* SetLoggerPage.swift in Sources */,
+				6822B4817B7FDAF08422AA13 /* SettingsView.swift in Sources */,
 				6EF00415B4AD3B33E2B6C717 /* Smoke.swift in Sources */,
 				B51F6AD550EEB2F65BC6677F /* SummaryView.swift in Sources */,
 				B00B0A7ABDF2552A868200C3 /* Theme.swift in Sources */,
 				6207641BFC15B4427525659D /* TrailPage.swift in Sources */,
+				45C3E5F95B4ADB9FA3531DB7 /* VoiceConfirmViews.swift in Sources */,
+				CD188B25C1A6BDF8283345BF /* WatchPrefs.swift in Sources */,
 				267048DC6977B56F65B7C242 /* WorkoutRecorder.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9E1966E61E13C02504192546 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DA3F573B2892E366E22CB20C /* CustomExerciseCache.swift in Sources */,
+				8E6D2211FBBDF8DA98F9D848 /* ExerciseCatalog.swift in Sources */,
+				44685096B6F3EB989431DB8B /* HeartRateZones.swift in Sources */,
+				F70912D78B917B44F89CF433 /* HeroSnapshot.swift in Sources */,
+				3E0112038C648F0F981A50B8 /* MobileAPIClient.swift in Sources */,
+				639147367078B36ACE424AA2 /* MobileAPIModels.swift in Sources */,
+				CAF556C4E8A758671DE9D597 /* OfflineWorkoutQueue.swift in Sources */,
+				2986EE03015C9F2841DAE630 /* PRBaselines.swift in Sources */,
+				F7E8A4CAD8F161BE75CDEB98 /* PitayaPhoneWidgets.swift in Sources */,
+				A53892D00B54F88E67367D8E /* PitayaVector.swift in Sources */,
+				0152AC266644EF9569DF142B /* RouteModels.swift in Sources */,
+				000AEB3978A821CC6BC57227 /* SessionStore.swift in Sources */,
+				C4EB475C227F447DDB4927E2 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		911000A457C04D1386C22C16 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E11540A79B6F5FB2E9597669 /* PersonalOS PhoneWidgets */;
+			targetProxy = 16F105793D90B5D7FF5D9CF4 /* PBXContainerItemProxy */;
+		};
 		D4A506651BAABB2C0ABB3AEB /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 75897E2E37A1C9CCC2DDB78D /* PersonalOS WatchWidgets */;
@@ -555,6 +746,7 @@
 		3A73747AD8327740D5DBCC03 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WatchWidgets/PitayaWidgets.entitlements;
 				INFOPLIST_FILE = WatchWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -672,6 +864,23 @@
 			};
 			name = Debug;
 		};
+		BE2540A7CFE1A3830FBFD07B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PhoneWidgets/PitayaPhoneWidgets.entitlements;
+				INFOPLIST_FILE = PhoneWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = net.blacksheepglobal.pitaya.phonewidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		C0E95E9AA356141A3CD6EE7E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -689,9 +898,27 @@
 			};
 			name = Release;
 		};
+		CE4567B9C82B0D61B4BF740A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PhoneWidgets/PitayaPhoneWidgets.entitlements;
+				INFOPLIST_FILE = PhoneWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = net.blacksheepglobal.pitaya.phonewidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		FDC294456342407C6E3F0CC9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WatchWidgets/PitayaWidgets.entitlements;
 				INFOPLIST_FILE = WatchWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -722,6 +949,15 @@
 			buildConfigurations = (
 				AC66B4258780992A0D84336F /* Debug */,
 				C0E95E9AA356141A3CD6EE7E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AA5ED9F4B4205FA5D7900A92 /* Build configuration list for PBXNativeTarget "PersonalOS PhoneWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BE2540A7CFE1A3830FBFD07B /* Debug */,
+				CE4567B9C82B0D61B4BF740A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

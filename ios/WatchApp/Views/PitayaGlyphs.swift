@@ -130,4 +130,219 @@ struct PlayGlyph: View {
         .frame(width: size, height: size)
     }
 }
+// MARK: - Round 1 glyphs (§08 — paths verbatim; 24×24, stroke 2.1, round)
+
+/// tune — Settings affordance: three rails, three filled stops.
+struct TuneGlyph: View {
+    var color: Color
+    var size: CGFloat = 13
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 24
+            let scale = CGAffineTransform(scaleX: u, y: u)
+            let rails = svgPath("M4 7h16 M4 12h16 M4 17h16").applying(scale)
+            context.stroke(
+                Path(rails.cgPath), with: .color(color),
+                style: StrokeStyle(lineWidth: 2.1 * u, lineCap: .round)
+            )
+            for (cx, cy) in [(9.0, 7.0), (15.5, 12.0), (7.0, 17.0)] {
+                let r = 2.4 * u
+                context.fill(
+                    Path(ellipseIn: CGRect(x: cx * u - r, y: cy * u - r, width: 2 * r, height: 2 * r)),
+                    with: .color(color)
+                )
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// bells — three bells ascending (rack).
+struct BellsGlyph: View {
+    var color: Color
+    var size: CGFloat = 13
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 24
+            let scale = CGAffineTransform(scaleX: u, y: u)
+            let stroke = StrokeStyle(lineWidth: 2.1 * u, lineCap: .round, lineJoin: .round)
+            let bells: [(Double, Double, Double, String)] = [
+                (4.9, 16.2, 2.7, "M3.5 12.9 a1.4 1.4 0 0 1 2.8 0"),
+                (12, 15.4, 3.4, "M10.3 11.2 a1.7 1.7 0 0 1 3.4 0"),
+                (19.3, 14.6, 4.0, "M17.3 9.8 a2 2 0 0 1 4 0"),
+            ]
+            for (cx, cy, r, handle) in bells {
+                context.stroke(
+                    Path(ellipseIn: CGRect(
+                        x: (cx - r) * u, y: (cy - r) * u, width: 2 * r * u, height: 2 * r * u
+                    )),
+                    with: .color(color), style: stroke
+                )
+                context.stroke(
+                    Path(svgPath(handle).applying(scale).cgPath),
+                    with: .color(color), style: stroke
+                )
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// repeat-set — retires arrow.counterclockwise (port gate).
+struct RepeatSetGlyph: View {
+    var color: Color
+    var size: CGFloat = 13
+
+    var body: some View {
+        PitayaGlyph(
+            paths: ["M20 12 a8 8 0 1 1 -2.34-5.66", "M20.2 3.8 v4.2 h-4.2"],
+            style: .stroke(width: 2.1), color: color, size: size
+        )
+    }
+}
+
+/// double-tap — fingertip dot + two signal arcs.
+struct DoubleTapGlyph: View {
+    var color: Color
+    var size: CGFloat = 13
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 24
+            let scale = CGAffineTransform(scaleX: u, y: u)
+            let r = 2.5 * u
+            context.fill(
+                Path(ellipseIn: CGRect(x: 8.6 * u - r, y: 14.6 * u - r, width: 2 * r, height: 2 * r)),
+                with: .color(color)
+            )
+            let arcs = svgPath("M12.8 8.2 a7 7 0 0 1 5.6 6.7 M13.6 4.2 a11 11 0 0 1 8 9.6")
+                .applying(scale)
+            context.stroke(
+                Path(arcs.cgPath), with: .color(color),
+                style: StrokeStyle(lineWidth: 2.1 * u, lineCap: .round)
+            )
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// spirit — lotus (provisional).
+struct SpiritGlyph: View {
+    var color: Color
+    var size: CGFloat = 13
+
+    var body: some View {
+        PitayaGlyph(
+            paths: [
+                "M12 4.5 C10.3 6.7 10.3 9.6 12 11.8 C13.7 9.6 13.7 6.7 12 4.5 Z",
+                "M5.2 8.8 C5.2 12.6 7.8 15.5 12 15.7 C16.2 15.5 18.8 12.6 18.8 8.8",
+                "M6 18.6 C9.5 19.9 14.5 19.9 18 18.6",
+            ],
+            style: .stroke(width: 2.1), color: color, size: size
+        )
+    }
+}
+
+/// trend — rising line ending in a diamond.
+struct TrendGlyph: View {
+    var color: Color
+    var size: CGFloat = 13
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 24
+            let scale = CGAffineTransform(scaleX: u, y: u)
+            let line = svgPath("M3 17.5 L8.2 12.2 L11.6 15.2 L17.2 8").applying(scale)
+            context.stroke(
+                Path(line.cgPath), with: .color(color),
+                style: StrokeStyle(lineWidth: 2.1 * u, lineCap: .round, lineJoin: .round)
+            )
+            var diamond = Path(CGRect(x: 17 * u, y: 4.7 * u, width: 4.4 * u, height: 4.4 * u))
+            diamond = diamond.applying(
+                CGAffineTransform(translationX: 19.2 * u, y: 6.9 * u)
+                    .rotated(by: .pi / 4)
+                    .translatedBy(x: -19.2 * u, y: -6.9 * u)
+            )
+            context.fill(diamond, with: .color(color))
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// recovery — heart + settling arrow.
+struct RecoveryGlyph: View {
+    var color: Color
+    /// 1g recovery card is two-tone: heart #DC74A0, arrow #8FBF9C.
+    var arrowColor: Color?
+    var size: CGFloat = 13
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 24
+            let scale = CGAffineTransform(scaleX: u, y: u)
+            let heart = svgPath(
+                "M9 18.5 C4.5 14.6 2.6 11.6 2.6 9.1 A3.4 3.4 0 0 1 9 7.7 A3.4 3.4 0 0 1 15.4 9.1 C15.4 11.6 13.5 14.6 9 18.5 Z"
+            ).applying(scale)
+            context.fill(Path(heart.cgPath), with: .color(color))
+            let arrow = svgPath("M19.5 5 v10 M17 12.5 l2.5 2.5 2.5-2.5").applying(scale)
+            context.stroke(
+                Path(arrow.cgPath), with: .color(arrowColor ?? color),
+                style: StrokeStyle(lineWidth: 2.1 * u, lineCap: .round, lineJoin: .round)
+            )
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// segments — three tape blocks, middle at 45%.
+struct SegmentsGlyph: View {
+    var color: Color
+    var size: CGFloat = 13
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 24
+            let blocks: [(Double, Double, Double)] = [(2.6, 6.2, 1.0), (10.4, 3.6, 0.45), (15.6, 5.8, 1.0)]
+            for (x, w, opacity) in blocks {
+                context.opacity = opacity
+                context.fill(
+                    Path(roundedRect: CGRect(x: x * u, y: 9.6 * u, width: w * u, height: 4.8 * u),
+                         cornerRadius: 1.6 * u),
+                    with: .color(color)
+                )
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// intent — diamond speaking (Siri phrase).
+struct IntentGlyph: View {
+    var color: Color
+    var size: CGFloat = 13
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 24
+            let scale = CGAffineTransform(scaleX: u, y: u)
+            var diamond = Path(CGRect(x: 4.4 * u, y: 9.7 * u, width: 4.6 * u, height: 4.6 * u))
+            diamond = diamond.applying(
+                CGAffineTransform(translationX: 6.7 * u, y: 12 * u)
+                    .rotated(by: .pi / 4)
+                    .translatedBy(x: -6.7 * u, y: -12 * u)
+            )
+            context.fill(diamond, with: .color(color))
+            let arcs = svgPath("M13 8.2 a5.6 5.6 0 0 1 0 7.6 M16.2 5.4 a10 10 0 0 1 0 13.2")
+                .applying(scale)
+            context.stroke(
+                Path(arcs.cgPath), with: .color(color),
+                style: StrokeStyle(lineWidth: 2.1 * u, lineCap: .round)
+            )
+        }
+        .frame(width: size, height: size)
+    }
+}
+
 #endif

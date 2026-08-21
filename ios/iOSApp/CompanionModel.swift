@@ -37,7 +37,12 @@ final class CompanionModel: NSObject, ObservableObject {
     private var healthForwarder: AnyCancellable?
 
     override init() {
-        let store = KeychainSessionStore(service: "net.blacksheepglobal.pitaya.ios.session")
+        // Shared group so the §09 phone widgets read the same session;
+        // pre-sharing items migrate on first load.
+        let store = KeychainSessionStore(
+            service: "net.blacksheepglobal.pitaya.ios.session",
+            accessGroup: PitayaKeychain.sharedGroup
+        )
         sessionStore = store
         api = MobileAPIClient(sessionStore: store)
         health = HealthSyncManager(api: api)

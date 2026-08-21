@@ -31,10 +31,18 @@ struct LiveWorkoutView: View {
         }
         .overlay(alignment: .bottom) {
             if let flash = model.prFlash {
-                PRBanner(text: "PR · \(flash.exercise.name) \(Fmt.kg(flash.weightKg)) kg")
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 2)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                // §05: while the flash is up, Double Tap dismisses it.
+                Button {
+                    model.dismissPRFlash()
+                } label: {
+                    PRBanner(text: prCopy(flash))
+                }
+                .buttonStyle(.plain)
+                .handGestureShortcut(.primaryAction)
+                .overlay { PRSeeds() } // §10: five diamonds arc out, 0.9 s
+                .padding(.horizontal, 8)
+                .padding(.bottom, 2)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .overlay {
@@ -45,7 +53,19 @@ struct LiveWorkoutView: View {
         .overlay {
             CountdownOverlay()
         }
-        .animation(.spring(duration: 0.35), value: model.prFlash != nil)
+        // §10: the banner springs up 0.35 s on the design's curve.
+        .animation(
+            .timingCurve(0.34, 1.4, 0.5, 1, duration: 0.35), value: model.prFlash != nil
+        )
+    }
+
+    /// §10 copy: "PR · Swing 32 kg — was 28".
+    private func prCopy(_ flash: LoggedSet) -> String {
+        var copy = "PR · \(flash.exercise.name) \(Fmt.kg(flash.weightKg)) kg"
+        if let previous = flash.previousWeightKg {
+            copy += " — was \(Fmt.kg(previous))"
+        }
+        return copy
     }
 }
 
@@ -155,12 +175,10 @@ struct ControlsPage: View {
                 }
                 if kind == .kettlebell && !isSequence {
                     // The design's 4th control is a Lap flag; kettlebell has
-                    // no laps, so this slot repeats the last set (deviation
-                    // surfaced in state.md; glyph is undesigned → SF).
+                    // no laps, so this slot repeats the last set. §12: the
+                    // repeat-set glyph retires the arrow.counterclockwise SF.
                     controlButton("Repeat set", bg: Theme.accentDim, glyph: {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(Theme.accent)
+                        RepeatSetGlyph(color: Theme.accent, size: 15)
                     }) {
                         model.repeatLastSet()
                     }

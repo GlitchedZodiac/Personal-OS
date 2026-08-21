@@ -45,10 +45,19 @@ public final class HealthSyncManager: ObservableObject {
             status = .unavailable
             return
         }
-        // If any type is already determined we were granted before —
-        // resume silently; otherwise wait for the explicit user action.
-        let stepStatus = store.authorizationStatus(for: HKQuantityType(.stepCount))
-        if stepStatus != .notDetermined {
+        // BUG (fixed 2026-08-17): this used to test
+        // `authorizationStatus(for:) != .notDetermined`, which can NEVER be
+        // true here — that call reports SHARE (write) permission, and we
+        // request read-only, so it returns .notDetermined forever. The app
+        // therefore never resumed silently: background delivery was never
+        // started and no sync ran until the Allow button was tapped again,
+        // every launch. statusForAuthorizationRequest is the supported way
+        // to ask "have I already prompted?".
+        let alreadyAsked = (try? await store.statusForAuthorizationRequest(
+            toShare: [], read: readTypes
+        )) == .unnecessary
+
+        if alreadyAsked || UserDefaults.standard.bool(forKey: "health.granted") {
             status = .authorized
             startObserversAndDeliver()
             await syncNow()
@@ -63,6 +72,7 @@ public final class HealthSyncManager: ObservableObject {
         do {
             try await store.requestAuthorization(toShare: [], read: readTypes)
             status = .authorized
+            UserDefaults.standard.set(true, forKey: "health.granted")
             startObserversAndDeliver()
             await syncNow()
         } catch {
@@ -139,13 +149,11 @@ public final class HealthSyncManager: ObservableObject {
             .heartRateVariabilitySDNN, unit: HKUnit.secondUnit(with: .milli),
             from: day, to: now
         )
-        let weight = try await latest(.bodyMass, unit: .gramUnit(with: .kilo), from: day, to: now)
-        let sleepMin = await sleepMinutes(endingOn: day)
-
-        var raw: [String: Double] = [:]
-        if let sleep = sleepMin, sleep > 0 { raw["sleepMinutes"] = (sleep).rounded() }
-        if let hrvValue = hrv { raw["hrvMs"] = (hrvValue * 10).rounded() / 10 }
-        if let weightKg = weight { raw["weightKg"] = (weightKg * 100).rounded() / 100 }
+        // Every body-mass reading of the day, with its real timestamp — not
+        // just the latest. The server dedups by near-twin rule, so sending
+        // all of them can only add missing weigh-ins.
+        let weights = try await weightSamples(from: day, to: now)
+        let sleep = await sleepBreakdown(endingOn: day)
 
         let formatter = DateFormatter()
         formatter.calendar = calendar
@@ -159,19 +167,39 @@ public final class HealthSyncManager: ObservableObject {
             restingHeartRateBpm: restingHR.map { Int($0.rounded()) },
             activeEnergyKcal: energy > 0 ? energy : nil,
             walkingRunningDistanceMeters: distance > 0 ? distance : nil,
-            rawData: raw.isEmpty ? nil : raw
+            sleepMinutes: sleep.map { Int($0.total.rounded()) },
+            sleepDeepMinutes: sleep.flatMap { $0.deep > 0 ? Int($0.deep.rounded()) : nil },
+            sleepRemMinutes: sleep.flatMap { $0.rem > 0 ? Int($0.rem.rounded()) : nil },
+            hrvMs: hrv.map { ($0 * 10).rounded() / 10 },
+            weightSamples: weights.isEmpty ? nil : weights
         )
         try await api.syncDailyHealth(payload)
 
+        // Diagnostics visible in the companion's Settings row: this is how we
+        // tell "no sleep data exists" (watch not worn overnight) apart from
+        // "sleep is broken" — the 2026-08-14 open question.
         var parts = ["\(payload.steps) steps"]
-        if let weightValue = raw["weightKg"] { parts.append("\(weightValue) kg") }
-        if let sleep = raw["sleepMinutes"] { parts.append("\(Int(sleep)) min sleep") }
+        if let weight = weights.last { parts.append("\(weight.weightKg) kg") }
+        if let minutes = payload.sleepMinutes {
+            parts.append("\(minutes) min sleep")
+        } else {
+            parts.append("no sleep samples")
+        }
+        if let hrvValue = payload.hrvMs { parts.append("HRV \(hrvValue)") }
         return "Synced \(payload.localDate): " + parts.joined(separator: " · ")
     }
 
+    private struct SleepBreakdown {
+        let total: Double
+        let deep: Double
+        let rem: Double
+    }
+
     /// Asleep minutes for the night ENDING on `day` — samples between the
-    /// previous day's 6 pm and this day's 6 pm, asleep stages only.
-    private func sleepMinutes(endingOn day: Date) async -> Double? {
+    /// previous day's 6 pm and this day's 6 pm, asleep stages only, split by
+    /// stage. nil means HealthKit holds no asleep samples in that window at
+    /// all (the watch wasn't worn, or it was on the charger).
+    private func sleepBreakdown(endingOn day: Date) async -> SleepBreakdown? {
         let calendar = Calendar.current
         guard
             let windowStart = calendar.date(byAdding: .hour, value: -6, to: day),
@@ -179,22 +207,49 @@ public final class HealthSyncManager: ObservableObject {
         else { return nil }
 
         return await withCheckedContinuation { continuation in
-            let asleepValues: Set<Int> = [
-                HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
-                HKCategoryValueSleepAnalysis.asleepCore.rawValue,
-                HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
-                HKCategoryValueSleepAnalysis.asleepREM.rawValue,
-            ]
             let query = HKSampleQuery(
                 sampleType: HKCategoryType(.sleepAnalysis),
                 predicate: HKQuery.predicateForSamples(withStart: windowStart, end: windowEnd),
                 limit: HKObjectQueryNoLimit,
                 sortDescriptors: nil
             ) { _, samples, _ in
-                let total = (samples as? [HKCategorySample])?
-                    .filter { asleepValues.contains($0.value) }
-                    .reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) } ?? 0
-                continuation.resume(returning: total > 0 ? total / 60 : nil)
+                var total = 0.0, deep = 0.0, rem = 0.0
+                for sample in (samples as? [HKCategorySample]) ?? [] {
+                    let seconds = sample.endDate.timeIntervalSince(sample.startDate)
+                    switch HKCategoryValueSleepAnalysis(rawValue: sample.value) {
+                    case .asleepDeep: deep += seconds; total += seconds
+                    case .asleepREM: rem += seconds; total += seconds
+                    case .asleepCore, .asleepUnspecified: total += seconds
+                    default: break // inBed / awake don't count
+                    }
+                }
+                continuation.resume(
+                    returning: total > 0
+                        ? SleepBreakdown(total: total / 60, deep: deep / 60, rem: rem / 60)
+                        : nil
+                )
+            }
+            store.execute(query)
+        }
+    }
+
+    private func weightSamples(from: Date, to: Date) async throws -> [WeightSamplePayload] {
+        try await withCheckedThrowingContinuation { continuation in
+            let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: true)
+            let query = HKSampleQuery(
+                sampleType: HKQuantityType(.bodyMass),
+                predicate: HKQuery.predicateForSamples(withStart: from, end: to),
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sort]
+            ) { _, samples, _ in
+                let readings = (samples as? [HKQuantitySample])?.map {
+                    WeightSamplePayload(
+                        measuredAt: $0.startDate,
+                        weightKg: ($0.quantity.doubleValue(for: .gramUnit(with: .kilo)) * 100)
+                            .rounded() / 100
+                    )
+                } ?? []
+                continuation.resume(returning: readings)
             }
             store.execute(query)
         }

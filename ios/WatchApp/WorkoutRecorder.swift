@@ -24,6 +24,11 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     @Published public private(set) var distanceMeters: Double?
     /// Live barometric climb for the trail page (finalized into Totals).
     @Published public private(set) var elevationGainLive: Double = 0
+    /// §09 zone-2 accumulator (display-only heuristic zones — the stored
+    /// weekly number stays server-computed from the raw streams).
+    @Published public private(set) var z2Seconds: Int = 0
+    @Published public private(set) var z2AvgBpm: Int?
+    private var z2BpmSum = 0
 
     // Raw streams for the server's zone/load enrichment (streams contract
     // 2026-08-11): appended at HealthKit's natural HR cadence, cleared on
@@ -44,8 +49,16 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     private var latestAltitude: Double?
     private var collectAltitude = false
     private var lastGainAltitude: Double?
-    /// Cumulative positive barometric climb (m) — the TRAILS card's "+186 m".
-    private var elevationGain: Double = 0
+    /// Cumulative positive barometric climb (m) — the TRAILS card's "+186 m"
+    /// and freestyle's metricsData.elevationGainM.
+    private(set) var elevationGain: Double = 0
+    /// §06 segments/markers, batched into the workout at close.
+    private var pendingEvents: [HKWorkoutEvent] = []
+    /// Health-detail title (§06 mock: "EMOM 20 — Swings + Press").
+    public var sessionTitle: String?
+    /// §03 recovery window: stats/streams freeze while HR keeps flowing.
+    private var frozen = false
+    private var frozenEnd: Date?
 
     public struct Totals: Sendable {
         public let startedAt: Date
@@ -75,7 +88,12 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
 
     // MARK: - Lifecycle
 
-    public func start(activityType: HKWorkoutActivityType, outdoor: Bool) async throws {
+    /// `captureAltitude` defaults to outdoor, but freestyle asks for the
+    /// barometer indoors too — a follow-along in a stairwell or on a hill
+    /// still earns its elevation.
+    public func start(
+        activityType: HKWorkoutActivityType, outdoor: Bool, captureAltitude: Bool? = nil
+    ) async throws {
         guard phase == .idle else { return }
         phase = .requestingAuth
         do {
@@ -103,11 +121,14 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         hrStream = []
         timeStream = []
         altitudeStream = []
+        z2Seconds = 0
+        z2BpmSum = 0
+        z2AvgBpm = nil
         latestAltitude = nil
         lastGainAltitude = nil
         elevationGain = 0
         elevationGainLive = 0
-        collectAltitude = outdoor && CMAltimeter.isRelativeAltitudeAvailable()
+        collectAltitude = (captureAltitude ?? outdoor) && CMAltimeter.isRelativeAltitudeAvailable()
         if collectAltitude {
             let altimeter = CMAltimeter()
             altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, _ in
@@ -145,6 +166,51 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         startTicker()
     }
 
+    #if DEBUG
+    /// Smoke-only: stand in for the heart sensor the simulator doesn't have,
+    /// so the freestyle zone math and downsampling can be proven against
+    /// prod. Never compiled into a release build.
+    public func injectSyntheticStreams(hr: [Int], time: [Int]) {
+        guard hrStream.isEmpty else { return }
+        hrStream = hr
+        timeStream = time
+    }
+    #endif
+
+    // MARK: - §06 session tape (segments + markers in Apple Health)
+
+    /// "Round 1 · swings 0:00–0:42" — one HKWorkoutEvent per work interval.
+    public func addSegment(name: String, from start: Date, to end: Date) {
+        guard builder != nil, end > start else { return }
+        pendingEvents.append(HKWorkoutEvent(
+            type: .segment,
+            dateInterval: DateInterval(start: start, end: end),
+            metadata: [HKMetadataKeyWorkoutBrandName: name]
+        ))
+    }
+
+    /// "Round 14 · swings ◆ PR" — instant marker at the PR set.
+    public func addMarker(name: String, at date: Date) {
+        guard builder != nil else { return }
+        pendingEvents.append(HKWorkoutEvent(
+            type: .marker,
+            dateInterval: DateInterval(start: date, duration: 0),
+            metadata: [HKMetadataKeyWorkoutBrandName: name]
+        ))
+    }
+
+    /// Flush events + title into the builder just before the workout closes.
+    private func flushEventsAndTitle(_ builder: HKLiveWorkoutBuilder) async {
+        if !pendingEvents.isEmpty {
+            try? await builder.addWorkoutEvents(pendingEvents)
+        }
+        if let sessionTitle {
+            try? await builder.addMetadata([HKMetadataKeyWorkoutBrandName: sessionTitle])
+        }
+        pendingEvents = []
+        sessionTitle = nil
+    }
+
     public func pause() {
         guard phase == .running else { return }
         session?.pause()
@@ -168,10 +234,11 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         route.stop()
 
         session.end()
-        let end = Date()
+        let end = frozenEnd ?? Date()
 
         var workout: HKWorkout?
         do {
+            await flushEventsAndTitle(builder)
             try await builder.endCollection(at: end)
             workout = try await builder.finishWorkout()
         } catch {
@@ -203,9 +270,77 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         self.session = nil
         self.builder = nil
         self.startedAt = nil
+        frozen = false
+        frozenEnd = nil
         elapsed = totals.durationSeconds
         phase = .idle
         return totals
+    }
+
+    // MARK: - §03 recovery capture (60 s HR descent after the last Done)
+
+    public struct RecoveryCapture: Sendable {
+        public let fromBpm: Int
+        public let toBpm: Int
+        /// Six points, 12 s apart (0 → 60 s) — the summary card's sparkline.
+        public let samples: [Int]
+
+        public var drop: Int { fromBpm - toBpm }
+        /// Spec bands: quick ≥25 · typical 15–25 · slow <15.
+        public var band: String {
+            drop >= 25 ? "quick" : (drop >= 15 ? "typical" : "slow")
+        }
+    }
+
+    /// The workout's numbers END here (duration/kcal/streams freeze at this
+    /// instant); HR keeps flowing so completeRecovery() can watch the
+    /// descent. Returns snapshot totals so the summary renders immediately.
+    /// Indoor sessions only (route/altimeter never ran).
+    public func beginRecoveryWindow() async -> Totals? {
+        guard let builder, startedAt != nil, phase == .running || phase == .paused
+        else { return nil }
+        let end = Date()
+        frozen = true
+        frozenEnd = end
+        stopTicker()
+
+        return Totals(
+            startedAt: startedAt ?? end,
+            endedAt: end,
+            durationSeconds: builder.elapsedTime,
+            activeCalories: activeCalories,
+            avgHeartRate: avgHeartRate,
+            maxHeartRate: maxHeartRate,
+            distanceMeters: distanceMeters,
+            stepCount: await queryStepCount(from: startedAt ?? end, to: end),
+            elevationGainMeters: nil,
+            routeData: nil
+        )
+    }
+
+    /// A new session (or a discarded summary) mustn't inherit a live
+    /// recovery window — close HealthKit immediately at the frozen end.
+    public func abortRecoveryIfNeeded() async {
+        guard frozen else { return }
+        _ = await finish()
+    }
+
+    /// Sample the descent (6 × 12 s), then close HealthKit at the frozen end
+    /// date so the recovery minute never inflates the workout.
+    public func completeRecovery() async -> RecoveryCapture? {
+        guard frozen else { return nil }
+        var samples: [Int] = []
+        if heartRate != nil {
+            for i in 0..<6 {
+                if let hr = heartRate { samples.append(Int(hr)) }
+                if i < 5 { try? await Task.sleep(nanoseconds: 12_000_000_000) }
+            }
+        }
+        _ = await finish() // closes at frozenEnd; events/title flush inside
+
+        guard let first = samples.first, let last = samples.last, samples.count >= 2
+        else { return nil }
+        return RecoveryCapture(fromBpm: first, toBpm: last, samples: samples)
     }
 
     /// Session step total — queried at finish (live-builder statistics don't
@@ -234,6 +369,14 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self, let builder = self.builder else { return }
                 self.elapsed = builder.elapsedTime
+                // §09: count each running second spent in zone 2 (same
+                // display heuristic as the live ZoneBar).
+                if self.phase == .running, !self.frozen,
+                   let hr = self.heartRate, (0.57..<0.64).contains(hr / 190.0) {
+                    self.z2Seconds += 1
+                    self.z2BpmSum += Int(hr)
+                    self.z2AvgBpm = self.z2BpmSum / max(self.z2Seconds, 1)
+                }
             }
         }
     }
@@ -250,6 +393,9 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         if types.contains(hrType), let stats = builder.statistics(for: hrType) {
             let bpm = HKUnit.count().unitDivided(by: .minute())
             heartRate = stats.mostRecentQuantity()?.doubleValue(for: bpm)
+            // Recovery window (§03): the live bpm keeps updating for the
+            // descent sample, but the workout's own numbers are frozen.
+            guard !frozen else { return }
             avgHeartRate = stats.averageQuantity()?.doubleValue(for: bpm)
             maxHeartRate = stats.maximumQuantity()?.doubleValue(for: bpm)
 
@@ -266,6 +412,8 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
                 }
             }
         }
+
+        guard !frozen else { return }
 
         let kcalType = HKQuantityType(.activeEnergyBurned)
         if types.contains(kcalType), let stats = builder.statistics(for: kcalType) {

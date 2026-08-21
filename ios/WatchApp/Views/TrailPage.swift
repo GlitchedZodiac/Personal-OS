@@ -29,6 +29,7 @@ struct TrailPage: View {
                 .frame(height: 62)
                 .padding(.top, 5)
 
+            // §09: distance + elevation gain share the top slots.
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Text(String(format: "%.2f", distanceKm))
                     .font(Theme.numeric(30))
@@ -37,12 +38,19 @@ struct TrailPage: View {
                     .font(Theme.text(8, weight: .semibold))
                     .kerning(0.8)
                     .foregroundStyle(Theme.textTertiary)
+                Spacer(minLength: 0)
+                Text(elevationText)
+                    .font(Theme.numeric(30))
+                    .foregroundStyle(Theme.textBright)
+                Text("M")
+                    .font(Theme.text(8, weight: .semibold))
+                    .kerning(0.8)
+                    .foregroundStyle(Theme.textTertiary)
             }
             .padding(.top, 6)
             .padding(.horizontal, 2)
 
             HStack(spacing: 0) {
-                StatCell(value: elevationText, label: "ELEV M")
                 StatCell(value: paceText, label: "/KM")
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 3) {
@@ -60,9 +68,58 @@ struct TrailPage: View {
             }
             .padding(.top, 5)
             .padding(.horizontal, 2)
+
+            z2Card
+                .padding(.top, 5)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
+    }
+
+    /// §09 Z2 accumulator — "1:24 in zone 2 · 63% of the hike · 128 bpm".
+    /// AOD: the chip loses its fill and keeps the outline.
+    @Environment(\.isLuminanceReduced) private var dimmed
+
+    @ViewBuilder
+    private var z2Card: some View {
+        if recorder.z2Seconds >= 5 {
+            let share = recorder.elapsed > 0
+                ? Int((Double(recorder.z2Seconds) / recorder.elapsed * 100).rounded())
+                : 0
+            HStack(spacing: 4) {
+                Text("Z2")
+                    .font(Theme.text(6.5, weight: .bold))
+                    .foregroundStyle(dimmed ? Theme.mint : Theme.bg)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(
+                        dimmed ? AnyShapeStyle(Color.clear) : AnyShapeStyle(Theme.mint),
+                        in: RoundedRectangle(cornerRadius: 4)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(Theme.mint, lineWidth: dimmed ? 1 : 0)
+                    )
+                Text(z2Line(share: share))
+                    .font(Theme.text(6.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                dimmed ? Theme.bg : Theme.card,
+                in: RoundedRectangle(cornerRadius: Theme.px(12))
+            )
+        }
+    }
+
+    private func z2Line(share: Int) -> String {
+        var line = "\(Fmt.clock(TimeInterval(recorder.z2Seconds))) in zone 2 · \(share)% of the \(kind == .hike ? "hike" : kind.title.lowercased())"
+        if let avg = recorder.z2AvgBpm { line += " · \(avg) bpm" }
+        return line
     }
 
     private var distanceKm: Double {
