@@ -192,7 +192,7 @@ export function ReplayBar({
     <div style={{ flex: "none", borderTop: "1px solid #EDEBEE", background: "#FCFBFC", padding: "12px 16px 14px" }}>
       <audio ref={audioRef} onLoadedMetadata={onLoaded} onTimeUpdate={onTick} onEnded={onEnded} onPause={() => setPlaying(false)} style={{ display: "none" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <button type="button" onClick={toggle} disabled={audioGone} title={audioGone ? "audio deleted — transcript only" : playing ? "pause" : "play"} style={{ width: 34, height: 34, flex: "none", borderRadius: "50%", background: audioGone ? "#D9D7DC" : "#A63D63", display: "flex", alignItems: "center", justifyContent: "center", cursor: audioGone ? "default" : "pointer", border: 0 }}>
+        <button type="button" onClick={toggle} disabled={audioGone} title={audioGone ? "audio deleted — transcript only" : playing ? "pause" : "play"} className={playing ? "desk-pulse" : undefined} style={{ width: 34, height: 34, flex: "none", borderRadius: "50%", background: audioGone ? "#D9D7DC" : "#A63D63", display: "flex", alignItems: "center", justifyContent: "center", cursor: audioGone ? "default" : "pointer", border: 0 }}>
           {playing ? <PauseIcon /> : <PlayIcon />}
         </button>
         <div

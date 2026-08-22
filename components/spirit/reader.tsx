@@ -622,7 +622,7 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
       className={embedded ? "relative min-h-full px-3 pb-28 pt-2 transition-colors duration-300" : "push-in min-h-screen px-[22px] pb-56 pt-12 transition-colors duration-300 lg:px-8"}
       style={{
         background: T.bg,
-        ...(props.marginInset ? { [props.marginInset.side === "left" ? "paddingLeft" : "paddingRight"]: props.marginInset.px + 12 } : {}),
+        ...(props.marginInset && props.marginInset.px > 0 ? { [props.marginInset.side === "left" ? "paddingLeft" : "paddingRight"]: props.marginInset.px + 12 } : {}),
       }}
     >
       {!embedded && (

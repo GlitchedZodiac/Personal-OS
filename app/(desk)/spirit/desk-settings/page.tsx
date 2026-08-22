@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { DEFAULT_DESK_PREFS, mergeDeskPrefs, writeLocalDeskPrefs, type DeskPrefs } from "@/lib/desk-prefs";
 import { DISPLAY, cardShadow } from "@/components/spirit/desk/ui";
 import { PenIcon } from "@/components/spirit/desk/desk-icons";
+import { askPrompt } from "@/components/spirit/desk/dialog";
 
 interface Nb { id: string; title: string; kind: string; inkLang: string; audioLang: string }
 
@@ -64,7 +65,7 @@ export default function DeskSettingsPage() {
           <span style={{ flex: 1 }} />
           <Link href="/spirit/settings" style={{ fontSize: 11, fontWeight: 600, color: "#8C2F51", textDecoration: "none" }}>the phone&apos;s Spirit settings ›</Link>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22 }}>
+        <div className="desk-stagger" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22 }}>
           <div style={card}>
             {head("HANDEDNESS — THE DESK MIRRORS")}
             <div style={{ display: "flex", gap: 10, marginTop: 11 }}>
@@ -97,7 +98,7 @@ export default function DeskSettingsPage() {
             {prefs.palettes.map((p) => (
               <div key={p.id}>{row(p.name, <><span style={{ display: "flex", gap: 5 }}>{p.colors.map((c) => <span key={c} style={{ width: 16, height: 16, borderRadius: "50%", background: c }} />)}</span><span style={{ fontSize: 10, color: "#96949B" }}>{p.id === "sketch-purples" ? "default" : ""}</span></>, 10)}</div>
             ))}
-            <button type="button" onClick={() => { const nm = window.prompt("Name the palette"); if (nm) void save({ palettes: [...prefs.palettes, { id: `p-${Date.now()}`, name: nm, colors: prefs.pen.recents.slice(0, 6) }] }); }} style={{ marginTop: 8, fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer", padding: 0 }}>+ new palette</button>
+            <button type="button" onClick={async () => { const nm = await askPrompt({ title: "Name the palette", placeholder: "e.g. Sunday ink" }); if (nm) void save({ palettes: [...prefs.palettes, { id: `p-${Date.now()}`, name: nm, colors: prefs.pen.recents.slice(0, 6) }] }); }} style={{ marginTop: 8, fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer", padding: 0 }}>+ new palette</button>
           </div>
 
           <div style={card}>

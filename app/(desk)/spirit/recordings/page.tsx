@@ -11,6 +11,7 @@ import { DISPLAY, cardShadow } from "@/components/spirit/desk/ui";
 import { ReplayBar, type SegmentMeta, type TranscriptLine } from "@/components/spirit/desk/recording-control";
 import { PlayIcon, RecDot } from "@/components/spirit/desk/desk-icons";
 import { fmtSeconds, drawStrokes, type Stroke } from "@/lib/ink";
+import { askConfirm, askPrompt } from "@/components/spirit/desk/dialog";
 import { useRef } from "react";
 
 interface Row { id: string; title: string; label: string; preacher: string | null; passageRef: string | null; startedAt: string; durationSec: number; status: string; lineCount: number; pageId: string | null; page: { id: string; title: string } | null }
@@ -50,7 +51,7 @@ export default function RecordingsPage() {
     await openRec(id);
   };
   const del = async (id: string) => {
-    if (!window.confirm("Delete this recording? The page and its text layer stay.")) return;
+    if (!(await askConfirm({ title: "Delete this recording?", body: "The page and its text layer stay; replay will fall back to the transcript.", confirmLabel: "Delete recording", danger: true }))) return;
     await fetch(`/api/spirit/recordings/${id}`, { method: "DELETE" });
     setOpen(null);
     await load();
@@ -80,7 +81,7 @@ export default function RecordingsPage() {
         </div>
         <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
           <div style={{ width: 328, flex: "none" }}>
-            <div style={{ background: "#FFFFFF", borderRadius: 14, boxShadow: cardShadow, overflow: "hidden" }}>
+            <div className="desk-stagger" style={{ background: "#FFFFFF", borderRadius: 14, boxShadow: cardShadow, overflow: "hidden" }}>
               {rows.length === 0 && <div style={{ padding: 14, fontSize: 11.5, color: "#96949B" }}>No recordings yet — Sunday&apos;s page records in its header.</div>}
               {rows.map((r, i) => {
                 const on = open?.recording.id === r.id;
@@ -101,7 +102,7 @@ export default function RecordingsPage() {
             </div>
             <div style={{ fontSize: 10, color: "#96949B", marginTop: 9, padding: "0 2px", lineHeight: 1.5 }}>rename · label · delete — deleting audio keeps the page and its text layer</div>
           </div>
-          <div style={{ flex: 1, background: "#FFFFFF", borderRadius: 14, boxShadow: cardShadow, padding: "14px 16px", display: "flex", flexDirection: "column", minHeight: 420 }}>
+          <div key={open?.recording.id ?? "none"} className="desk-page-in" style={{ flex: 1, background: "#FFFFFF", borderRadius: 14, boxShadow: cardShadow, padding: "14px 16px", display: "flex", flexDirection: "column", minHeight: 420 }}>
             {!open && <div style={{ fontSize: 12, color: "#96949B" }}>Pick a recording.</div>}
             {open && (
               <>
@@ -111,10 +112,10 @@ export default function RecordingsPage() {
                     <div style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 700, color: "#232227" }}>{new Date(open.recording.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {open.recording.title}</div>
                     <div style={{ fontSize: 10, color: "#96949B" }}>{fmtSeconds(t)} / {fmtSeconds(open.recording.durationSec)} · {open.recording.status}</div>
                   </div>
-                  <button type="button" onClick={() => { const v = window.prompt("Rename", open.recording.title); if (v) void patch(open.recording.id, { title: v }); }} style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>rename</button>
-                  <button type="button" onClick={() => { const v = window.prompt("Label", open.recording.label); if (v !== null) void patch(open.recording.id, { label: v }); }} style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>label</button>
+                  <button type="button" onClick={async () => { const v = await askPrompt({ title: "Rename the recording", value: open.recording.title }); if (v) void patch(open.recording.id, { title: v }); }} style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>rename</button>
+                  <button type="button" onClick={async () => { const v = await askPrompt({ title: "Label", value: open.recording.label, placeholder: "sermon · class · retreat" }); if (v !== null) void patch(open.recording.id, { label: v }); }} style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>label</button>
                   {open.recording.status !== "ready" && open.recording.status !== "audio_deleted" && <button type="button" onClick={() => void transcribe(open.recording.id)} style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>transcribe</button>}
-                  {open.recording.status !== "audio_deleted" && <button type="button" onClick={() => { if (window.confirm("Delete the audio? The transcript and the page stay.")) void patch(open.recording.id, { deleteAudio: true }); }} style={{ fontSize: 10.5, fontWeight: 600, color: "#B4533F", background: "none", border: 0, cursor: "pointer" }}>delete audio</button>}
+                  {open.recording.status !== "audio_deleted" && <button type="button" onClick={async () => { if (await askConfirm({ title: "Delete the audio?", body: "The transcript and the page stay. Replay degrades to the transcript line.", confirmLabel: "Delete audio", danger: true })) void patch(open.recording.id, { deleteAudio: true }); }} style={{ fontSize: 10.5, fontWeight: 600, color: "#B4533F", background: "none", border: 0, cursor: "pointer" }}>delete audio</button>}
                   <button type="button" onClick={() => void del(open.recording.id)} style={{ fontSize: 10.5, fontWeight: 600, color: "#B4533F", background: "none", border: 0, cursor: "pointer" }}>delete</button>
                 </div>
                 <div style={{ display: "flex", gap: 12, marginTop: 12, flex: 1, minHeight: 0 }}>

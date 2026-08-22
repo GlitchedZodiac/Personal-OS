@@ -58,6 +58,9 @@ final class ShellViewController: UIViewController {
         configuration.websiteDataStore = .default() // persistent — PIN cookie survives
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
+        // Haptics: the desk posts window.webkit.messageHandlers.haptic.postMessage("light"|…)
+        // (lib/haptics.ts) and UIKit's feedback generators answer. Prepared once, kept warm.
+        configuration.userContentController.add(HapticBridge.shared, name: "haptic")
 
         let webView = WKWebView(frame: view.bounds, configuration: configuration)
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -91,7 +94,68 @@ final class ShellViewController: UIViewController {
     }
 }
 
+/// JS → UIKit haptics. Generators are prepared once so the first tick is not late.
+final class HapticBridge: NSObject, WKScriptMessageHandler {
+    static let shared = HapticBridge()
+    private let light = UIImpactFeedbackGenerator(style: .light)
+    private let medium = UIImpactFeedbackGenerator(style: .medium)
+    private let heavy = UIImpactFeedbackGenerator(style: .heavy)
+    private let rigid = UIImpactFeedbackGenerator(style: .rigid)
+    private let soft = UIImpactFeedbackGenerator(style: .soft)
+    private let selection = UISelectionFeedbackGenerator()
+    private let notify = UINotificationFeedbackGenerator()
+
+    private override init() {
+        super.init()
+        [light, medium, heavy, rigid, soft].forEach { $0.prepare() }
+        selection.prepare()
+        notify.prepare()
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let kind = message.body as? String else { return }
+        DispatchQueue.main.async { [self] in
+            switch kind {
+            case "light": light.impactOccurred()
+            case "medium": medium.impactOccurred()
+            case "heavy": heavy.impactOccurred()
+            case "rigid": rigid.impactOccurred()
+            case "soft": soft.impactOccurred()
+            case "selection": selection.selectionChanged()
+            case "success": notify.notificationOccurred(.success)
+            case "warning": notify.notificationOccurred(.warning)
+            case "error": notify.notificationOccurred(.error)
+            default: light.impactOccurred()
+            }
+        }
+    }
+}
+
 extension ShellViewController: WKUIDelegate {
+    // window.alert / confirm / prompt — without these, WKWebView answers "no" silently
+    // (the ✕-to-delete that "did nothing" on 2026-08-22). The desk now uses its own
+    // in-app dialog, but the native ones stay as the safety net for any stray call.
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
+        present(alert, animated: true)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
+        present(alert, animated: true)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+        let alert = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+        alert.addTextField { $0.text = defaultText }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(nil) })
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(alert.textFields?.first?.text) })
+        present(alert, animated: true)
+    }
+
     // iOS 15+: grant mic/camera to OUR origin only — the native permission
     // was granted once at install; the web origin never re-prompts.
     func webView(

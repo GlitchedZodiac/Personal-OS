@@ -168,6 +168,7 @@ export function DarkPill({ children, style }: { children: ReactNode; style?: CSS
         gap: 2,
         background: "#232227",
         borderRadius: 12,
+        animation: "deskPopIn .26s cubic-bezier(.2,.9,.3,1.2) both",
         padding: "5px 7px",
         boxShadow: "0 10px 28px rgba(20,15,18,0.35)",
         ...style,
@@ -230,7 +231,8 @@ export function Popover({
           borderRadius: 14,
           boxShadow: "0 16px 48px rgba(20,15,18,0.28)",
           padding: 13,
-          animation: "fadeUp .22s ease both",
+          animation: "deskPopIn .24s cubic-bezier(.2,.9,.3,1.15) both",
+          transformOrigin: "top right",
           ...style,
         }}
       >

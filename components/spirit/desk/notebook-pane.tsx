@@ -21,6 +21,8 @@ import { PaneHeader, Chip, DISPLAY, cardShadow, Popover, Kicker } from "./ui";
 import { CheckIcon, RecDot } from "./desk-icons";
 import { SermonRecorder } from "@/lib/spirit-recording";
 import { fmtSeconds, newId, pageHeightFor, strokeBounds, strokeDistanceTo, type PageObject, type Stroke } from "@/lib/ink";
+import { askConfirm, askPrompt } from "./dialog";
+import { haptic } from "@/lib/haptics";
 import { getOrCreateMicrophoneStream, deactivateMicrophoneStream } from "@/lib/microphone";
 import { formatRef } from "@/lib/bible-refs";
 import { parseReadingRef } from "@/lib/spirit-refs";
@@ -211,6 +213,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
       setFuture([]);
       setLasso(null);
       setMode("page");
+      haptic("light");
       setRecordingRow(d.recording ? { ...d.recording, transcript: (d.recording.transcript ?? []) as TranscriptLine[] } : null);
       if (d.recording?.id) {
         fetch(`/api/spirit/recordings/${d.recording.id}`).then((x) => (x.ok ? x.json() : null)).then((rr) => rr && setSegments(rr.segments ?? [])).catch(() => {});
@@ -436,6 +439,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
       data: { refStart, refEnd, label, text: body, droppedAt: recordingSeconds() },
     };
     applyObjects([...objects, o]);
+    haptic("success");
     setFreshCards((s) => new Set([...Array.from(s), o.id]));
     setTimeout(() => setFreshCards((s) => { const n = new Set(s); n.delete(o.id); return n; }), 6000);
   };
@@ -505,6 +509,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
       const i = secs.findIndex((o) => o.id === secId);
       if (i >= 0) {
         pushHistory();
+        haptic("light");
         const floor = i < secs.length - 1 ? secs[i + 1].y : Math.max(height - 40, secs[i].y + 200);
         applyGrow(floor, 200, strokes, objects);
       }
@@ -553,8 +558,10 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     if (o.type === "prompt") {
       const d = o.data as { field?: boolean; value?: string };
       if (d.field) {
-        const v = window.prompt("Type it", d.value ?? "");
-        if (v !== null) applyObjects(objects.map((x) => (x.id === o.id ? { ...x, data: { ...x.data, value: v } } : x)));
+        void (async () => {
+          const v = await askPrompt({ title: "Type it", value: d.value ?? "" });
+          if (v !== null) applyObjects(objects.map((x) => (x.id === o.id ? { ...x, data: { ...x.data, value: v } } : x)));
+        })();
       }
       return true;
     }
@@ -578,11 +585,11 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   };
   const editSermonHeader = async () => {
     if (!page) return;
-    const church = window.prompt("Church", prefs.sermon.church || "");
+    const church = await askPrompt({ title: "Church", value: prefs.sermon.church || "", placeholder: "Iglesia…" });
     if (church === null) return;
-    const preacher = window.prompt("Preacher", prefs.sermon.preacher || "");
+    const preacher = await askPrompt({ title: "Preacher", value: prefs.sermon.preacher || "", placeholder: "Pr. …" });
     if (preacher === null) return;
-    const passage = window.prompt("Passage (e.g. Galatians 3:1-14)", page.refStart ? formatRef(page.refStart, page.refEnd ?? page.refStart) : "");
+    const passage = await askPrompt({ title: "Passage", value: page.refStart ? formatRef(page.refStart, page.refEnd ?? page.refStart) : "", placeholder: "e.g. Galatians 3:1-14" });
     const r = await fetch("/api/spirit/sermon", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "header", pageId: page.id, church, preacher, passage }) });
     if (r.ok) {
       const d = await r.json();
@@ -594,6 +601,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
 
   // ——— lasso ———
   const onLasso = (selected: Stroke[], polygon: { x: number; y: number }[], bounds: { x: number; y: number; w: number; h: number }) => {
+    if (selected.length) haptic("light");
     if (!selected.length || !canvasRef.current) return;
     const c = canvasRef.current.pageToClient(bounds.x + bounds.w / 2, bounds.y);
     setLasso({ ids: new Set(selected.map((s) => s.id)), polygon, bounds, client: { x: c.x - 160, y: c.y } });
@@ -865,6 +873,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     if (!page) return;
     await flushNow();
     const r = await fetch("/api/spirit/worksheet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, pageId: page.id }) });
+    if (r.ok) haptic(action === "submit" ? "success" : "light");
     if (r.ok) {
       const d = await r.json();
       setPage((p) => (p ? { ...p, status: d.page.status, submittedAt: d.page.submittedAt } : p));
@@ -883,9 +892,31 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     setMode("list");
     setNbMenu(false);
   };
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleSelect = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  /** delete one or many pages from the list, with the warning */
+  const deletePages = async (ids: string[]) => {
+    if (!ids.length) return;
+    const titles = listPages.filter((p) => ids.includes(p.id)).map((p) => p.title || p.kind);
+    const ok = await askConfirm({
+      title: ids.length === 1 ? `Delete "${titles[0]}"?` : `Delete ${ids.length} pages?`,
+      body: ids.length === 1 ? "Its ink is gone for good. A recording attached to it stays in the library." : `${titles.slice(0, 3).join(" · ")}${ids.length > 3 ? ` · +${ids.length - 3} more` : ""}. Their ink is gone for good; recordings stay in the library.`,
+      confirmLabel: ids.length === 1 ? "Delete page" : `Delete ${ids.length} pages`,
+      danger: true,
+    });
+    if (!ok) return;
+    haptic("warning");
+    await Promise.all(ids.map((id) => fetch(`/api/spirit/ink/${id}`, { method: "DELETE" })));
+    if (page && ids.includes(page.id)) { setPage(null); setStrokes([]); setObjects([]); }
+    setSelected(new Set());
+    setSelectMode(false);
+    await loadNotebooks();
+    if (listNotebook) await openList(listNotebook);
+  };
   const deletePage = async () => {
     if (!page) return;
-    if (!window.confirm(`Delete "${page.title || "this page"}"? Its ink is gone for good${recordingRow ? " (the recording stays in the library)" : ""}.`)) return;
+    if (!(await askConfirm({ title: `Delete "${page.title || "this page"}"?`, body: `Its ink is gone for good${recordingRow ? " — the recording stays in the library" : ""}.`, confirmLabel: "Delete page", danger: true }))) return;
     const nbRow = notebooks.find((n) => n.id === page.notebookId) ?? null;
     pending.current = { append: [], remove: [], objects: false };
     await fetch(`/api/spirit/ink/${page.id}`, { method: "DELETE" });
@@ -899,6 +930,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     if (nbRow) await openList(nbRow);
   };
   const newPage = async (nb: NotebookRow) => {
+    haptic("medium");
     const kind = nb.kind === "sermons" ? "sermon" : nb.kind === "worksheets" ? "free" : "free";
     if (kind === "sermon") {
       const r = await fetch("/api/spirit/sermon", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "open", fresh: true }) });
@@ -925,7 +957,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
         addTextBlock("", false, lastTap.current ?? undefined);
       }}
       onRefCard={async () => {
-        const ref = window.prompt("Reference (e.g. Romans 9:6)");
+        const ref = await askPrompt({ title: "Reference card", placeholder: "e.g. Romans 9:6", confirmLabel: "Add card" });
         if (!ref) return;
         const segs = parseReadingRef(ref);
         if (!segs.length) return toast.error("Couldn't read that reference.");
@@ -965,7 +997,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
                       { label: "Page list", run: () => nb && openList(nb) },
                       { label: zoom === 1 ? "Zoom 150%" : "Zoom 100%", run: () => setZoom((z) => (z === 1 ? 1.5 : 1)) },
                       { label: "Export as PNG", run: () => { const png = canvasRef.current?.renderPng({ scale: 1.5 }); if (png) window.open(png, "_blank"); } },
-                      { label: "Clear the ink", run: () => { if (!strokes.length || !window.confirm("Clear every stroke on this page? The cards and sections stay.")) return; applyStrokes([], { removed: strokes.map((x) => x.id) }); } },
+                      { label: "Clear the ink", run: async () => { if (!strokes.length || !(await askConfirm({ title: "Clear every stroke on this page?", body: "The cards and sections stay. Undo brings the ink back while the page is open.", confirmLabel: "Clear ink", danger: true }))) return; applyStrokes([], { removed: strokes.map((x) => x.id) }); } },
                       { label: "Delete this page", run: deletePage, danger: true },
                     ].map((m) => (
                       <button key={m.label} type="button" onClick={() => { setMoreMenu(false); void m.run(); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 4, borderRadius: 9, fontSize: 12, fontWeight: 600, color: (m as { danger?: boolean }).danger ? "#B4533F" : "#232227", background: "transparent", border: 0, cursor: "pointer" }}>
@@ -976,7 +1008,9 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
                 )}
               </div>
             )}
-            {mode === "list" && <button type="button" onClick={() => listNotebook && newPage(listNotebook)} style={{ fontSize: 10, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>+ page</button>}
+            {mode === "list" && selectMode && selected.size > 0 && <button type="button" onClick={() => void deletePages(Array.from(selected))} style={{ fontSize: 10, fontWeight: 700, color: "#FFFFFF", background: "#B4533F", border: 0, borderRadius: 99, padding: "4px 10px", cursor: "pointer" }}>Delete {selected.size}</button>}
+            {mode === "list" && listPages.length > 0 && <button type="button" onClick={() => { setSelectMode((v) => !v); setSelected(new Set()); haptic("selection"); }} style={{ fontSize: 10, fontWeight: 600, color: selectMode ? "#FFFFFF" : "#66646C", background: selectMode ? "#232227" : "none", border: selectMode ? 0 : "1px solid #E4E2E6", borderRadius: 99, padding: "4px 10px", cursor: "pointer" }}>{selectMode ? "Done" : "Select"}</button>}
+            {mode === "list" && !selectMode && <button type="button" onClick={() => listNotebook && newPage(listNotebook)} style={{ fontSize: 10, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>+ page</button>}
             {mode === "list" && page && <button type="button" onClick={() => setMode("page")} style={{ fontSize: 10, fontWeight: 600, color: "#66646C", background: "none", border: 0, cursor: "pointer" }}>back to the page</button>}
           </div>
         }
@@ -992,7 +1026,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
                 <span style={{ fontSize: 10, color: "#96949B" }}>{n.pageCount} pages</span>
               </button>
             ))}
-            <button type="button" onClick={async () => { const t = window.prompt("Name the notebook"); if (!t) return; const r = await fetch("/api/spirit/notebooks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: t }) }); if (r.ok) { await loadNotebooks(); setNbMenu(false); } }} style={{ marginTop: 8, fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>+ new notebook</button>
+            <button type="button" onClick={async () => { const t = await askPrompt({ title: "Name the notebook", placeholder: "e.g. Term 2 · Romans" }); if (!t) return; const r = await fetch("/api/spirit/notebooks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: t }) }); if (r.ok) { await loadNotebooks(); setNbMenu(false); } }} style={{ marginTop: 8, fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>+ new notebook</button>
           </Popover>
         )}
       </PaneHeader>
@@ -1001,12 +1035,16 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
         {/* the page */}
         <div ref={scrollRef} style={{ flex: 1, minWidth: 0, overflow: "auto", position: "relative", background: "#FFFDF9" }}>
           {mode === "list" && listNotebook && (
-            <div style={{ padding: 14 }}>
+            <div className="desk-page-in" style={{ padding: 14 }}>
               <div style={{ display: "grid", gridTemplateColumns: paneW > 560 ? "1fr 1fr 1fr" : "1fr 1fr", gap: 10 }}>
-                {listPages.map((p) => (
-                  <div key={p.id} style={{ position: "relative" }}>
-                  <button type="button" aria-label="Delete page" onClick={async (e) => { e.stopPropagation(); if (!window.confirm(`Delete "${p.title || p.kind}"? Its ink is gone for good.`)) return; await fetch(`/api/spirit/ink/${p.id}`, { method: "DELETE" }); if (page?.id === p.id) { setPage(null); setStrokes([]); setObjects([]); } await loadNotebooks(); if (listNotebook) await openList(listNotebook); }} style={{ position: "absolute", top: 6, left: 7, zIndex: 2, width: 22, height: 22, borderRadius: "50%", background: "rgba(255,255,255,0.92)", border: "1px solid #E4E2E6", color: "#B4533F", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-                  <button type="button" onClick={() => openPage(p.id)} style={{ width: "100%", border: "1px solid #E4E2E6", borderRadius: 12, overflow: "hidden", cursor: "pointer", background: "#FFFFFF", textAlign: "left", padding: 0 }}>
+                {listPages.map((p, idx) => (
+                  <div key={p.id} className="desk-lift" style={{ position: "relative", animation: `deskStaggerIn .42s cubic-bezier(.2,.9,.25,1) both`, animationDelay: `${Math.min(idx, 9) * 40}ms` }}>
+                  {selectMode ? (
+                    <span aria-hidden style={{ position: "absolute", top: 6, left: 7, zIndex: 2, width: 22, height: 22, borderRadius: "50%", background: selected.has(p.id) ? "#A63D63" : "rgba(255,255,255,0.92)", border: `1.5px solid ${selected.has(p.id) ? "#A63D63" : "#C9C7CD"}`, color: "#FFFFFF", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", transition: "background .18s, border-color .18s" }}>{selected.has(p.id) ? "✓" : ""}</span>
+                  ) : (
+                    <button type="button" aria-label="Delete page" onClick={async (e) => { e.stopPropagation(); await deletePages([p.id]); }} style={{ position: "absolute", top: 6, left: 7, zIndex: 2, width: 22, height: 22, borderRadius: "50%", background: "rgba(255,255,255,0.92)", border: "1px solid #E4E2E6", color: "#B4533F", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                  )}
+                  <button type="button" onClick={() => (selectMode ? toggleSelect(p.id) : void openPage(p.id))} style={{ width: "100%", border: `1px solid ${selectMode && selected.has(p.id) ? "#A63D63" : "#E4E2E6"}`, boxShadow: selectMode && selected.has(p.id) ? "inset 0 0 0 1px #A63D63" : "none", borderRadius: 12, overflow: "hidden", cursor: "pointer", background: "#FFFFFF", textAlign: "left", padding: 0 }}>
                     <div style={{ height: 86, background: "#FFFDF9", backgroundImage: "radial-gradient(#EBE6E1 1px, transparent 1.2px)", backgroundSize: "14px 14px", position: "relative" }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       {p.thumbnail && <img src={p.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} />}
@@ -1030,7 +1068,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
             </div>
           )}
           {mode === "page" && page && (
-            <div ref={pageWrapRef} style={{ position: "relative", width: PAGE_W * scale, minHeight: "100%" }}>
+            <div ref={pageWrapRef} key={page.id} className="desk-page-in" style={{ position: "relative", width: PAGE_W * scale, minHeight: "100%" }}>
               <InkCanvas
                 ref={canvasRef}
                 strokes={strokes}

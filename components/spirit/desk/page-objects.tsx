@@ -94,7 +94,7 @@ export function PromptObject({ o, onChip }: { o: PageObject; onChip?: (ref: stri
 export function RefCardObject({ o, fresh, selected }: { o: PageObject; fresh?: boolean; selected?: boolean }) {
   const d = o.data as unknown as RefCardData;
   return (
-    <div style={{ position: "absolute", left: o.x, top: o.y }}>
+    <div className={fresh ? "desk-card-drop" : undefined} style={{ position: "absolute", left: o.x, top: o.y, transformOrigin: "left top" }}>
       <RefCard data={d} width={o.w ?? 196} fresh={fresh} selected={selected} />
     </div>
   );

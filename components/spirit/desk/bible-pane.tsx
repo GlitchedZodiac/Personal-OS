@@ -23,8 +23,10 @@ import { PaneHeader, Chip, Segmented, Popover, Kicker } from "./ui";
 import { EyeIcon, LayersIcon, MarginIcon, PinIcon, PenIcon } from "./desk-icons";
 import { formatRef, refParts, BOOKS } from "@/lib/bible-refs";
 import { type Stroke } from "@/lib/ink";
+import { askPrompt } from "./dialog";
+import { haptic } from "@/lib/haptics";
 
-const MARGIN_W = [26, 122, 170] as const;
+const MARGIN_W = [0, 122, 170] as const; // none · wide · wider — none is none
 const MARGIN_LABEL = ["MARGIN · NONE", "MARGIN · WIDE", "MARGIN · WIDER"] as const;
 
 export interface BiblePaneProps {
@@ -329,6 +331,7 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
     const vs = versesAlong(info.clientPts);
     if (!vs.length) return "discard";
     // the verse-level highlight (the data the phone, the notebook and the layer queries use) …
+    haptic("light");
     void readerRef.current?.applyHighlight(pen.hlCategory, vs[0], vs[vs.length - 1]);
     // … AND the band itself stays as ink in the category colour — a highlighter that feels like one
     stroke.color = hlColor(pen.hlCategory);
@@ -351,6 +354,7 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
       // a second verse number while one is selected → the span between them
       const ref = Number(num.getAttribute("data-verse-number"));
       if (ref !== sel.start && ref !== sel.end) {
+        haptic("selection");
         readerRef.current?.select(Math.min(sel.start, ref), Math.max(sel.end ?? sel.start, ref));
         return true;
       }
@@ -414,6 +418,7 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
     }
   };
   const barAction = (a: BarAction) => {
+    haptic(a === "send" ? "success" : "light");
     const reader = readerRef.current;
     if (!reader || sel.start === null) return;
     if (a === "hl") {
@@ -495,7 +500,7 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
                 <span style={{ fontSize: 9.5, color: "#96949B" }}>{l.strokeCount}</span>
               </button>
             ))}
-            <button type="button" onClick={() => { const nm = window.prompt("Name the layer"); if (nm?.trim()) { setLayerKey(`layer:${nm.trim()}`); setLayersOpen(false); } }} style={{ fontSize: 10, color: "#96949B", padding: "8px 9px 2px", borderTop: "1px solid #EDEBEE", marginTop: 8, lineHeight: 1.5, background: "none", border: 0, cursor: "pointer", width: "100%", textAlign: "left" }}>
+            <button type="button" onClick={async () => { const nm = await askPrompt({ title: "Name the layer", placeholder: "e.g. Sunday · Galatians series" }); if (nm?.trim()) { setLayerKey(`layer:${nm.trim()}`); setLayersOpen(false); } }} style={{ fontSize: 10, color: "#96949B", padding: "8px 9px 2px", borderTop: "1px solid #EDEBEE", marginTop: 8, lineHeight: 1.5, background: "none", border: 0, cursor: "pointer", width: "100%", textAlign: "left" }}>
               + new layer · layers are contexts, not versions — ink saves to the active one
             </button>
           </Popover>
@@ -511,21 +516,21 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
         <EyeIcon />
         <div style={{ display: "flex", gap: 2 }}>
           {(["hide", "dim", "show"] as const).map((v) => (
-            <button key={v} type="button" onClick={() => setOverlayVisibility(v)} style={{ fontSize: 8.5, letterSpacing: "0.06em", fontWeight: 700, borderRadius: 99, padding: "3.5px 9px", cursor: "pointer", border: 0, transition: "background .2s", background: overlayVisibility === v ? "#A63D63" : "transparent", color: overlayVisibility === v ? "#FFFFFF" : "#96949B" }}>
+            <button key={v} type="button" onClick={() => { haptic("selection"); setOverlayVisibility(v); }} style={{ fontSize: 8.5, letterSpacing: "0.06em", fontWeight: 700, borderRadius: 99, padding: "3.5px 9px", cursor: "pointer", border: 0, transition: "background .2s", background: overlayVisibility === v ? "#A63D63" : "transparent", color: overlayVisibility === v ? "#FFFFFF" : "#96949B" }}>
               {v.toUpperCase()}
             </button>
           ))}
         </div>
       </div>
       )}
-      <button type="button" onClick={() => setOverlayMargin(((overlayMargin + 1) % 3) as 0 | 1 | 2)} title="margin: none · wide · wider" style={{ display: "flex", alignItems: "center", gap: 5, border: "1px solid #E4E2E6", background: "#FFFFFF", borderRadius: 99, padding: "4px 10px", cursor: "pointer" }}>
+      <button type="button" onClick={() => { haptic("selection"); setOverlayMargin(((overlayMargin + 1) % 3) as 0 | 1 | 2); }} title="margin: none · wide · wider" style={{ display: "flex", alignItems: "center", gap: 5, border: "1px solid #E4E2E6", background: "#FFFFFF", borderRadius: 99, padding: "4px 10px", cursor: "pointer" }}>
         <MarginIcon />
         {!narrow && <span style={{ fontSize: 9, letterSpacing: "0.08em", fontWeight: 700, color: "#454349" }}>{MARGIN_LABEL[overlayMargin]}</span>}
       </button>
       {tiny ? (
-        <button type="button" title="Study ↔ Scratch" onClick={() => setBibleMode(bibleMode === "study" ? "scratch" : "study")} style={{ fontSize: 8.5, letterSpacing: "0.08em", fontWeight: 700, color: "#FFFFFF", background: "#A63D63", border: 0, borderRadius: 99, padding: "5px 10px", cursor: "pointer" }}>{bibleMode === "study" ? "STUDY" : "SCRATCH"}</button>
+        <button type="button" title="Study ↔ Scratch" onClick={() => { haptic("selection"); setBibleMode(bibleMode === "study" ? "scratch" : "study"); }} style={{ fontSize: 8.5, letterSpacing: "0.08em", fontWeight: 700, color: "#FFFFFF", background: "#A63D63", border: 0, borderRadius: 99, padding: "5px 10px", cursor: "pointer" }}>{bibleMode === "study" ? "STUDY" : "SCRATCH"}</button>
       ) : (
-        <Segmented value={bibleMode} onChange={setBibleMode} size="sm" options={[{ value: "study", label: "STUDY" }, { value: "scratch", label: "SCRATCH" }]} />
+        <Segmented value={bibleMode} onChange={(m) => { haptic("selection"); setBibleMode(m); }} size="sm" options={[{ value: "study", label: "STUDY" }, { value: "scratch", label: "SCRATCH" }]} />
       )}
       {headerExtra}
     </div>
