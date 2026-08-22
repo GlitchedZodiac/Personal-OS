@@ -62,8 +62,10 @@ recordings stagger-in, ref-card drop, tool pop, play-button pulse, compact pane 
 stagger; `prefers-reduced-motion` honoured. **Companion rebuilt and installed on his iPad**
 (haptics need the native bridge).
 
+**Deployed 2026-08-22 (round 3):** `main` `ae3b60a` → Vercel production Ready (51 s build). Verified in a real browser with the minted cookie (curl polling tripped Vercel's Security Checkpoint — `x-vercel-mitigated: challenge` — so never poll prod with curl in a loop; one `vercel ls` tells you the state): `/spirit/desk-settings` renders the round-2 copy, the round-3 motion keyframes and the dialog host are in the page. **Companion re-installed on his iPad** (`devicectl`, 2026-08-22 ~17:58) with the haptic bridge + native alert/confirm/prompt handlers.
+
 Verified on the dev server: the picker fits · the warning dialog over his real page (cancelled)
-· ··· menu · tab animations. Build green, 149/149, tsc + lint clean.
+· ··· menu · tab animations · shelf multi-select (Delete 1 · Done) · portrait Home stacked. Build green, 149/149, tsc + lint clean.
 
 ## 2026-08-22 — SPIRIT ON IPAD · round 2: his first hour on the iPad Air → eleven fixes, merged + deployed
 
