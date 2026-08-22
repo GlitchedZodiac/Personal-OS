@@ -115,7 +115,7 @@ export default function HomePage() {
 
   return (
     <div style={{ position: "absolute", inset: 0, fontFamily: "var(--font-body)", overflow: "auto" }}>
-      <div style={{ position: "relative", minHeight: "100%", padding: "40px 28px 24px", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+      <div style={{ position: "relative", minHeight: "100%", padding: "calc(40px + env(safe-area-inset-top, 0px)) 28px 24px", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 14 }}>
           <div>
             <div style={{ fontSize: 11, letterSpacing: "0.18em", fontWeight: 600, color: "#96949B" }}>{dateKicker}</div>

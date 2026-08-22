@@ -16,6 +16,8 @@ export interface PenDefaults {
   brush: "fountain" | "gpen" | "pencil" | "marker";
   color: string;
   widthStep: 0 | 1 | 2;
+  /** continuous width multiplier over the brush base (0.5–2.2); the three presets map onto it */
+  widthMul: number;
   opacity: number;
   streamline: number; // 0..1
   recents: string[];
@@ -36,7 +38,23 @@ export interface DeskPrefs {
   palettes: SavedPalette[];
   recording: { consent: boolean; retention: Retention; consentShownAt?: string | null };
   sermon: { church: string; preacher: string };
-  layouts: Record<DeskContext, { preset: string; nbFrac: number; stackFrac: number }>;
+  layouts: Record<DeskContext, DeskLayoutPrefs>;
+}
+
+/** A desk tab = one arrangement of panes (Logos-style). `cols` puts the text docs side by side instead of stacked. */
+export interface DeskTab {
+  id: string;
+  label: string;
+  writing: string[]; // DocKind[] — the writing column (usually ["notebook"]) or []
+  text: string[]; // DocKind[] — the text column, 1–2 docs (stacked unless cols)
+  cols?: boolean;
+}
+export interface DeskLayoutPrefs {
+  preset: string;
+  nbFrac: number;
+  stackFrac: number;
+  tabs?: DeskTab[];
+  activeTab?: string;
 }
 
 export const SKETCH_PURPLES: SavedPalette = {
@@ -64,13 +82,15 @@ export const INK_NAMES: Record<string, string> = {
 export const DEFAULT_DESK_PREFS: DeskPrefs = {
   handedness: "left",
   bibleMode: "study",
-  overlay: { margin: 1, visibility: "show", defaultLayer: "my" },
+  // no margin unless he asks for one (or margin ink exists and the layer is shown) — "no random whitespace"
+  overlay: { margin: 0, visibility: "show", defaultLayer: "my" },
   actionBar: "A",
   pen: {
     tool: "fountain",
     brush: "fountain",
     color: "#5F4B8B",
     widthStep: 1,
+    widthMul: 1,
     opacity: 1,
     streamline: 0.35,
     recents: ["#5F4B8B", "#B85C8A", "#5E7FA6", "#44414B", "#C99A3B", "#3E3357"],

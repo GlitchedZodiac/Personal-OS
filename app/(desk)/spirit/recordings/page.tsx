@@ -69,7 +69,7 @@ export default function RecordingsPage() {
 
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "auto", fontFamily: "var(--font-body)" }}>
-      <div style={{ padding: "40px 28px 24px" }}>
+      <div style={{ padding: "calc(40px + env(safe-area-inset-top, 0px)) 28px 24px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Link href="/home" style={{ width: 36, height: 36, borderRadius: "50%", background: "#FFFFFF", border: "1px solid #E4E2E6", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}><span style={{ fontSize: 17, color: "#232227", lineHeight: 1, marginTop: -2 }}>‹</span></Link>
           <div>

@@ -104,6 +104,40 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   const [history, setHistory] = useState<{ strokes: Stroke[]; objects: PageObject[] }[]>([]);
   const [future, setFuture] = useState<{ strokes: Stroke[]; objects: PageObject[] }[]>([]);
   const [zoom, setZoom] = useState(1);
+  // pinch: the page wrapper scales live via a transform (no re-render per move); on lift we
+  // commit the zoom and move the scroll so the point under the fingers stays put
+  const pageWrapRef = useRef<HTMLDivElement | null>(null);
+  const pinchRef = useRef<{ factor: number; cx: number; cy: number } | null>(null);
+  const onPinchZoom = (f: number, center: { x: number; y: number }) => {
+    const sc = scrollRef.current, wrap = pageWrapRef.current;
+    if (!sc || !wrap) return;
+    const r = sc.getBoundingClientRect();
+    const cx = center.x - r.left + sc.scrollLeft, cy = center.y - r.top + sc.scrollTop; // content coords at current zoom
+    const cur = pinchRef.current ?? { factor: 1, cx, cy };
+    const maxF = 3 / zoom, minF = 0.5 / zoom;
+    cur.factor = Math.max(minF, Math.min(maxF, cur.factor * f));
+    cur.cx = cx; cur.cy = cy;
+    pinchRef.current = cur;
+    wrap.style.transformOrigin = "0 0";
+    wrap.style.transform = `translate(${(1 - cur.factor) * cx}px, ${(1 - cur.factor) * cy}px) scale(${cur.factor})`;
+    wrap.style.willChange = "transform";
+  };
+  const onPinchEnd = () => {
+    const sc = scrollRef.current, wrap = pageWrapRef.current, cur = pinchRef.current;
+    pinchRef.current = null;
+    if (!wrap) return;
+    wrap.style.transform = "";
+    wrap.style.willChange = "";
+    if (!sc || !cur || Math.abs(cur.factor - 1) < 0.01) return;
+    const nextZoom = Math.round(zoom * cur.factor * 100) / 100;
+    const k = nextZoom / zoom;
+    setZoom(nextZoom);
+    // keep the pinch centre fixed on screen after the re-layout
+    requestAnimationFrame(() => {
+      sc.scrollLeft = cur.cx * k - (cur.cx - sc.scrollLeft);
+      sc.scrollTop = cur.cy * k - (cur.cy - sc.scrollTop);
+    });
+  };
   const [paneW, setPaneW] = useState(600);
   const [mode, setMode] = useState<"page" | "list">("page");
   const [listNotebook, setListNotebook] = useState<NotebookRow | null>(null);
@@ -276,6 +310,54 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     setHistory((h) => [...h.slice(-40), { strokes, objects }]);
     setFuture([]);
   };
+  // ——— sections that grow (the sermon/study templates): push everything below a line down ———
+  const growBelow = (boundaryY: number, delta: number, baseStrokes: Stroke[], baseObjects: PageObject[]) => {
+    const movedObjects = baseObjects.map((o) => (o.y >= boundaryY - 1 ? { ...o, y: o.y + delta } : o));
+    const moved: Stroke[] = [];
+    const nextStrokes = baseStrokes.map((st) => {
+      const b = strokeBounds(st);
+      if (b.y < boundaryY - 1) return st;
+      const ns = { ...st, pts: st.pts.map((pt) => ({ ...pt, y: pt.y + delta })) };
+      moved.push(ns);
+      return ns;
+    });
+    return { objects: movedObjects, strokes: nextStrokes, moved };
+  };
+  const applyGrow = (boundaryY: number, delta: number, fromStrokes: Stroke[], fromObjects: PageObject[]) => {
+    const g = growBelow(boundaryY, delta, fromStrokes, fromObjects);
+    setObjects(g.objects);
+    setStrokes(g.strokes);
+    pending.current.objects = true;
+    // moved strokes are re-written: remove the old ids, append the moved copies (same ids → replace)
+    if (g.moved.length) {
+      pending.current.remove.push(...g.moved.map((m) => m.id));
+      pending.current.append.push(...g.moved);
+    }
+    scheduleSave();
+  };
+  const sectionsSorted = () => objects.filter((o) => o.type === "section").sort((a, b) => a.y - b.y);
+  /** the stroke just written sits in a section and reaches its floor → the section grows */
+  const autoGrowFor = (stroke: Stroke, current: Stroke[], currentObjects: PageObject[]) => {
+    const secs = currentObjects.filter((o) => o.type === "section").sort((a, b) => a.y - b.y);
+    if (secs.length < 2) return;
+    const b = strokeBounds(stroke);
+    const idx = secs.findIndex((sec, i) => b.y >= sec.y && (i === secs.length - 1 || b.y < secs[i + 1].y));
+    if (idx < 0 || idx === secs.length - 1) return;
+    const floor = secs[idx + 1].y;
+    if (b.y + b.h > floor - 56) {
+      const delta = Math.max(140, Math.round(b.y + b.h + 90 - floor));
+      // everything at/below the NEXT section moves; the stroke that triggered it stays where he wrote it
+      const others = current.filter((st) => st.id !== stroke.id);
+      const g = growBelow(floor, delta, others, currentObjects);
+      setObjects(g.objects);
+      setStrokes([...g.strokes, stroke]);
+      pending.current.objects = true;
+      if (g.moved.length) {
+        pending.current.remove.push(...g.moved.map((m) => m.id));
+        pending.current.append.push(...g.moved);
+      }
+    }
+  };
   const applyStrokes = (next: Stroke[], delta: { appended?: Stroke[]; removed?: string[] }) => {
     if (readOnly) return;
     pushHistory();
@@ -283,6 +365,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     if (delta.appended?.length) pending.current.append.push(...delta.appended);
     if (delta.removed?.length) pending.current.remove.push(...delta.removed);
     scheduleSave();
+    if (delta.appended?.length === 1 && (isSermon || page?.kind === "study" || page?.kind === "worksheet")) autoGrowFor(delta.appended[0], next, objects);
   };
   const applyObjects = (next: PageObject[]) => {
     pushHistory();
@@ -415,6 +498,18 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
       }
     }
     const els = document.elementsFromPoint(pt.clientX, pt.clientY) as HTMLElement[];
+    const growEl = els.find((el) => el.closest?.("[data-section-grow]"))?.closest?.("[data-section-grow]") as HTMLElement | null;
+    if (growEl) {
+      const secId = growEl.getAttribute("data-section-grow");
+      const secs = sectionsSorted();
+      const i = secs.findIndex((o) => o.id === secId);
+      if (i >= 0) {
+        pushHistory();
+        const floor = i < secs.length - 1 ? secs[i + 1].y : Math.max(height - 40, secs[i].y + 200);
+        applyGrow(floor, 200, strokes, objects);
+      }
+      return true;
+    }
     const chipEl = els.find((el) => el.closest?.("[data-chip-ref]"))?.closest?.("[data-chip-ref]") as HTMLElement | null;
     if (chipEl) {
       emit({ type: "open-main", q: chipEl.getAttribute("data-chip-ref")!.replace(/:\d.*$/, "") });
@@ -788,10 +883,25 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     setMode("list");
     setNbMenu(false);
   };
+  const deletePage = async () => {
+    if (!page) return;
+    if (!window.confirm(`Delete "${page.title || "this page"}"? Its ink is gone for good${recordingRow ? " (the recording stays in the library)" : ""}.`)) return;
+    const nbRow = notebooks.find((n) => n.id === page.notebookId) ?? null;
+    pending.current = { append: [], remove: [], objects: false };
+    await fetch(`/api/spirit/ink/${page.id}`, { method: "DELETE" });
+    try {
+      localStorage.removeItem(`spirit-desk-page:${context}`);
+    } catch {}
+    setPage(null);
+    setStrokes([]);
+    setObjects([]);
+    await loadNotebooks();
+    if (nbRow) await openList(nbRow);
+  };
   const newPage = async (nb: NotebookRow) => {
     const kind = nb.kind === "sermons" ? "sermon" : nb.kind === "worksheets" ? "free" : "free";
     if (kind === "sermon") {
-      const r = await fetch("/api/spirit/sermon", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "open" }) });
+      const r = await fetch("/api/spirit/sermon", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "open", fresh: true }) });
       if (r.ok) return openPage((await r.json()).page.id);
     }
     const r = await fetch("/api/spirit/ink", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "free", notebookId: nb.id, title: `${nb.title} · page ${nb.pageCount + 1}`, objects: [] }) });
@@ -850,12 +960,15 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
                   <Popover width={232} onClose={() => setMoreMenu(false)} style={{ right: 0, top: 24 }}>
                     <Kicker>THIS PAGE</Kicker>
                     {[
+                      { label: "New page", run: () => nb && newPage(nb) },
                       { label: isSermon ? "Close the page — read it" : "Transcribe this page", run: closePage },
                       { label: "Page list", run: () => nb && openList(nb) },
                       { label: zoom === 1 ? "Zoom 150%" : "Zoom 100%", run: () => setZoom((z) => (z === 1 ? 1.5 : 1)) },
                       { label: "Export as PNG", run: () => { const png = canvasRef.current?.renderPng({ scale: 1.5 }); if (png) window.open(png, "_blank"); } },
+                      { label: "Clear the ink", run: () => { if (!strokes.length || !window.confirm("Clear every stroke on this page? The cards and sections stay.")) return; applyStrokes([], { removed: strokes.map((x) => x.id) }); } },
+                      { label: "Delete this page", run: deletePage, danger: true },
                     ].map((m) => (
-                      <button key={m.label} type="button" onClick={() => { setMoreMenu(false); void m.run(); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 4, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#232227", background: "transparent", border: 0, cursor: "pointer" }}>
+                      <button key={m.label} type="button" onClick={() => { setMoreMenu(false); void m.run(); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 4, borderRadius: 9, fontSize: 12, fontWeight: 600, color: (m as { danger?: boolean }).danger ? "#B4533F" : "#232227", background: "transparent", border: 0, cursor: "pointer" }}>
                         {m.label}
                       </button>
                     ))}
@@ -891,7 +1004,9 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
             <div style={{ padding: 14 }}>
               <div style={{ display: "grid", gridTemplateColumns: paneW > 560 ? "1fr 1fr 1fr" : "1fr 1fr", gap: 10 }}>
                 {listPages.map((p) => (
-                  <button key={p.id} type="button" onClick={() => openPage(p.id)} style={{ border: "1px solid #E4E2E6", borderRadius: 12, overflow: "hidden", cursor: "pointer", background: "#FFFFFF", textAlign: "left", padding: 0 }}>
+                  <div key={p.id} style={{ position: "relative" }}>
+                  <button type="button" aria-label="Delete page" onClick={async (e) => { e.stopPropagation(); if (!window.confirm(`Delete "${p.title || p.kind}"? Its ink is gone for good.`)) return; await fetch(`/api/spirit/ink/${p.id}`, { method: "DELETE" }); if (page?.id === p.id) { setPage(null); setStrokes([]); setObjects([]); } await loadNotebooks(); if (listNotebook) await openList(listNotebook); }} style={{ position: "absolute", top: 6, left: 7, zIndex: 2, width: 22, height: 22, borderRadius: "50%", background: "rgba(255,255,255,0.92)", border: "1px solid #E4E2E6", color: "#B4533F", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                  <button type="button" onClick={() => openPage(p.id)} style={{ width: "100%", border: "1px solid #E4E2E6", borderRadius: 12, overflow: "hidden", cursor: "pointer", background: "#FFFFFF", textAlign: "left", padding: 0 }}>
                     <div style={{ height: 86, background: "#FFFDF9", backgroundImage: "radial-gradient(#EBE6E1 1px, transparent 1.2px)", backgroundSize: "14px 14px", position: "relative" }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       {p.thumbnail && <img src={p.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} />}
@@ -904,6 +1019,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
                       </div>
                     </div>
                   </button>
+                  </div>
                 ))}
                 <button type="button" onClick={() => newPage(listNotebook)} style={{ border: "1.5px dashed #D9D7DC", borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, cursor: "pointer", minHeight: 128, background: "transparent" }}>
                   <span style={{ fontSize: 20, color: "#96949B", lineHeight: 1 }}>+</span>
@@ -914,7 +1030,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
             </div>
           )}
           {mode === "page" && page && (
-            <div style={{ position: "relative", width: PAGE_W * scale, minHeight: "100%" }}>
+            <div ref={pageWrapRef} style={{ position: "relative", width: PAGE_W * scale, minHeight: "100%" }}>
               <InkCanvas
                 ref={canvasRef}
                 strokes={strokes}
@@ -929,7 +1045,8 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
                 onLasso={onLasso}
                 onUndoGesture={undo}
                 onRedoGesture={redo}
-                onZoom={(f) => setZoom((z) => Math.max(0.6, Math.min(2.4, z * f)))}
+                onZoom={onPinchZoom}
+                onZoomEnd={onPinchEnd}
                 selectedIds={lasso?.ids ?? null}
                 highlightStrokeId={replayStroke}
                 paper={page.background === "blank" ? "#FFFFFF" : "#FFFDF9"}

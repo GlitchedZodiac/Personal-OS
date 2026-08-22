@@ -173,8 +173,8 @@ export function ToolRail({
       <button type="button" aria-label="Undo" onClick={onUndo} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canUndo ? 1 : 0.4 }}><UndoIcon /></button>
       <button type="button" aria-label="Redo" onClick={onRedo} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canRedo ? 1 : 0.4 }}><RedoIcon /></button>
       <span style={{ flex: 1 }} />
-      <Slider label="SIZE" value={pen.widthStep / 2} onChange={(f) => setPen({ widthStep: (f < 0.34 ? 0 : f < 0.67 ? 1 : 2) as 0 | 1 | 2 })} />
-      <Slider label="OPAC" value={pen.opacity} onChange={(f) => setPen({ opacity: Math.max(0.15, Math.round(f * 20) / 20) })} />
+      <Slider label="SIZE" value={(pen.widthMul - 0.5) / 1.7} onChange={(f) => setPen({ widthMul: Math.round((0.5 + f * 1.7) * 100) / 100 })} />
+      <Slider label="OPAC" value={(pen.opacity - 0.15) / 0.85} onChange={(f) => setPen({ opacity: Math.round((0.15 + f * 0.85) * 100) / 100 })} />
       <button
         type="button"
         aria-label="Palette"

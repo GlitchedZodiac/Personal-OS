@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-22 (SPIRIT ON IPAD — V1 **MERGED TO MAIN AND DEPLOYED TO PROD** on his go: merge `e1a10e8`; prod verified — `/home`, the desk, recordings, settings, shelf, phone pages all 200, hub/notebooks/desk-prefs/ink/recordings APIs live; `main` is the source of truth again)
+**Last updated:** 2026-08-22 (SPIRIT ON IPAD — round 2 from his first hour on the real iPad: tabs + layouts, growing sections, highlighter-as-ink, multi-verse select, smooth pinch zoom, continuous sliders, new/delete pages, no system text-selection menu, margin collapses, status-bar safe area — merged to main + deployed)
 **Current phase:** both lanes are merged into `claude/watchos-workout-ui-ba4448`
 (2026-08-20) — the web tree from `main` plus the watch lane's Round 1+2 +
 Freestyle work. The watch is a designed instrument: Settings + bell rack, a
@@ -15,6 +15,66 @@ of truth as of 08-14d.
 **Branch in flight:** `claude/watchos-workout-ui-ba4448` (BOTH lanes — see
 below) · `claude/phase1-modernization` (web) · `claude/watch-app` (watch,
 worktree ~/VibeCoding/personal-os-watch).
+
+## 2026-08-22 — SPIRIT ON IPAD · round 2: his first hour on the iPad Air → eleven fixes, merged + deployed
+
+He paired the companion (after the per-device trust tap), wrote on the Sunday
+page, and sent screenshots + eleven notes. Each one, what it was, what shipped:
+
+1. **"I can't just add a page"** → `+ New page` on the shelf (`/spirit/notebooks?nb=`),
+   in the notebook's ⋯ menu, and the dashed new-page card in every page list; in the
+   Sermons notebook it makes a **fresh** Sunday page (`POST /api/spirit/sermon
+   {action:"open", fresh:true}`) instead of collapsing into today's.
+2. **Sermon sections can't expand** → sections **grow**: a `+ room` chip on every
+   section head pushes everything below it down 200 units (undoable), and the page
+   **auto-grows** when a stroke reaches a section's floor (the next section and its
+   ink move down, the stroke stays where he wrote it). Works on study + worksheet
+   templates too.
+3. **Copy / Look Up / Translate menu keeps appearing** → the desk is a pen surface:
+   `user-select: none` + `-webkit-touch-callout: none` on `.desk-root` (typed fields
+   keep selection) and the long-press context menu is suppressed (`app/(desk)/layout.tsx`).
+4. **Can't delete pages / remove notes** → ⋯ → *Delete this page* (confirm) and
+   *Clear the ink*; ✕ on every page card (desk list + shelf); lasso-delete already
+   removed cards/typed notes.
+5. **"Circling a word in my scratch pad still fades"** → verified in the browser that
+   SCRATCH keeps ink (it persisted to the chapter overlay); his screenshot was STUDY
+   mode doing the designed thing (a circle selects, then evaporates). Two changes so
+   it can't surprise him: the hold→drag handoff now needs a stiller, longer rest
+   (600 ms, <4 px) so a slow pen start is never eaten, and the mode chip is a single
+   toggle in narrow panes.
+6. **Only one verse at a time** → tapping a second verse number while one is selected
+   selects the **span** (1:1–3); the loop gesture already selected spans.
+7. **"I can only tap, I want it dynamic"** → the highlighter is **real ink now**: the
+   band stays as a translucent stroke in the category colour (overlay, per verse
+   anchoring) AND records the verse-level highlight; the live stroke draws in the
+   category colour while he drags.
+8. **Zoom is stepped and stutters** → pinch is a live CSS transform on the page
+   wrapper (no re-render per move), committed on lift with the pinch centre kept
+   under the fingers, 0.5×–3×.
+9. **Sliders have fixed points** → size and opacity are continuous
+   (`pen.widthMul` 0.5–2.2 over the brush base; the three preset dots map onto it).
+10. **Layouts should be optional, tabbed like Logos** → a **tab strip** under the desk
+    bar: each tab is an arrangement (Notebook · Bible · Reference · Notebook | Bible ·
+    Notebook | Reference · Bible | Reference · Sunday stack · **three columns** ·
+    Study · Source); `+` opens the Logos-style picker that adds a tab; swipe the strip
+    with a finger or tap; rename/duplicate/close on the active chip; per-context tab
+    sets persist in `SpiritPref.desk.layouts[ctx].tabs`. Single-pane tabs render the
+    writing column full width; `cols` puts the text docs side by side; Bible headers
+    have a `tiny` mode (<360 px) for three columns.
+11. **Blank left margin on Bible/Reference** → the overlay margin is **none by default**
+    and collapses when the layer is hidden; it appears only when he sets it or margin
+    ink exists on the shown layer (his stored pref reset to none).
++ **Status bar collision** (seen in his screenshots): the desk bar, tab strip and the
+  Home/recordings/settings/shelf pages pad by `env(safe-area-inset-top)`.
++ Settings no longer promises "double-tap → eraser · squeeze → settings" (his Air 5 +
+  Pencil 2 can't do either; a native `UIPencilInteraction` bridge is the deferred way
+  to make double-tap real).
+
+Verified on the dev server (Browser pane, 1180×820): tab strip · All-three columns ·
+Notebook single pane · Scratch stroke persisted · highlighter band + verse highlight
+recorded · tap-extend 1:1–3 · ⋯ New page (fresh Sunday page) · + room pushed the
+sections · Delete page → list (his real page with 25 strokes untouched) · margin
+collapsed. Build green, tests 149/149, tsc + lint clean. Smoke rows deleted.
 
 ## 2026-08-22 — SPIRIT ON IPAD · V1 BUILT (web desk + API + iPad companion target) — branch `claude/spirit-app-ipad-redesign-79442c`, merged to `main` as `e1a10e8` and deployed to prod 2026-08-22 on his go ("merge it … push it so I can review")
 

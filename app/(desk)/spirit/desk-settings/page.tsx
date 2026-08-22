@@ -54,7 +54,7 @@ export default function DeskSettingsPage() {
 
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "auto", fontFamily: "var(--font-body)" }}>
-      <div style={{ padding: "40px 36px 24px", maxWidth: 1180, margin: "0 auto" }}>
+      <div style={{ padding: "calc(40px + env(safe-area-inset-top, 0px)) 36px 24px", maxWidth: 1180, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Link href="/home" style={{ width: 36, height: 36, borderRadius: "50%", background: "#FFFFFF", border: "1px solid #E4E2E6", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}><span style={{ fontSize: 17, color: "#232227", lineHeight: 1, marginTop: -2 }}>‹</span></Link>
           <div>
@@ -93,7 +93,7 @@ export default function DeskSettingsPage() {
 
           <div style={card}>
             {head("PEN — DEFAULTS & SAVED PALETTES", <Link href="/spirit/desk?ctx=free" style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", textDecoration: "none" }}>edit in the rail ›</Link>)}
-            {row("Default brush", <><span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#232227", border: "1px solid #E4E2E6", borderRadius: 99, padding: "4px 12px" }}><PenIcon size={12} strokeWidth={2} />{prefs.pen.brush === "fountain" ? "Fountain" : prefs.pen.brush === "gpen" ? "G-pen" : prefs.pen.brush === "pencil" ? "Pencil" : "Marker"} · {["0.25", "0.4", "0.7"][prefs.pen.widthStep]} mm</span><span style={{ fontSize: 10, color: "#96949B" }}>double-tap → eraser · squeeze → settings</span></>, 11)}
+            {row("Default brush", <><span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#232227", border: "1px solid #E4E2E6", borderRadius: 99, padding: "4px 12px" }}><PenIcon size={12} strokeWidth={2} />{prefs.pen.brush === "fountain" ? "Fountain" : prefs.pen.brush === "gpen" ? "G-pen" : prefs.pen.brush === "pencil" ? "Pencil" : "Marker"} · {(0.4 * (prefs.pen.widthMul ?? 1)).toFixed(2).replace(/0$/, "")} mm</span><span style={{ fontSize: 10, color: "#96949B" }}>the size and opacity sliders are continuous</span></>, 11)}
             {prefs.palettes.map((p) => (
               <div key={p.id}>{row(p.name, <><span style={{ display: "flex", gap: 5 }}>{p.colors.map((c) => <span key={c} style={{ width: 16, height: 16, borderRadius: "50%", background: c }} />)}</span><span style={{ fontSize: 10, color: "#96949B" }}>{p.id === "sketch-purples" ? "default" : ""}</span></>, 10)}</div>
             ))}
