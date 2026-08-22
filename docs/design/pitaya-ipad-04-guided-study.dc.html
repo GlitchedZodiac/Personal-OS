@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400..700;1,7..72,400..700&family=Caveat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#131216; -webkit-font-smoothing:antialiased; }
+    a { color:#DC74A0; text-decoration:none; } a:hover { color:#E795B4; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  </style>
+</helmet>
+<section data-screen-label="04 — Guided study" style="min-height:100vh; box-sizing:border-box; padding:56px 64px 90px; font-family:'Instrument Sans',sans-serif; background:#131216;">
+  <div style="max-width:1320px;">
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:10px; font-size:12px; letter-spacing:0.2em; font-weight:600; color:#DC74A0;"><svg width="11" height="11" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#DC74A0"></rect></svg> PITAYA · SPIRIT ON IPAD — ROUND 1</div>
+      <span style="flex:1;"></span>
+      <div style="display:flex; gap:6px; font-size:11.5px; font-weight:600; flex-wrap:wrap; justify-content:flex-end; max-width:780px;">
+        <a href="pitaya-ipad-00-home.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">00 · Home</a>
+        <a href="pitaya-ipad-01-sermon-desk.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">01 · Sermon Desk</a>
+        <a href="pitaya-ipad-02-bible-modes.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">02 · Bible modes</a>
+        <a href="pitaya-ipad-03-notebook-rail.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">03 · Notebook rail</a>
+        <span style="background:#F2F1F2; color:#131216; border-radius:99px; padding:5px 13px;">04 · Guided study</span>
+        <a href="pitaya-ipad-05-bible-overlay.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">05 · Overlay</a>
+        <a href="pitaya-ipad-06-sunday-replay.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">06 · Sunday replay</a>
+        <a href="pitaya-ipad-07-bible-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">07 · Bible states</a>
+        <a href="pitaya-ipad-08-notebook-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">08 · Notebook states</a>
+        <a href="pitaya-ipad-09-worksheets.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">09 · Worksheets</a>
+        <a href="pitaya-ipad-10-desk-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">10 · Desk states</a>
+        <a href="pitaya-ipad-11-settings.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">11 · Settings</a>
+      </div>
+    </div>
+    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:36px; font-weight:700; color:#F2F1F2; letter-spacing:-0.02em; margin-top:12px;">The guided study, at desk scale — walk it</div>
+    <div style="font-size:14px; color:#96949B; margin-top:8px; line-height:1.65; max-width:860px;">Built from the 2026-08-20 rebuild on <span style="color:#A5A3AA;">main</span>: one step at a time — read it cold → the teaching → behind the text → what it means → the question → the homework — with a tappable rail and one button that always names what comes next; the last step's button <span style="color:#A5A3AA;">is</span> Mark complete. On the desk the lesson keeps the Notebook beside it the whole way, and the Question step opens an answer box on the study page. <span style="color:#A5A3AA;">Every control below is live — click Next through the lesson.</span></div>
+
+    <div data-screen-label="Study desk · guided lesson · 1180×820" style="margin-top:24px; display:inline-block; background:#0B0A0D; border:1px solid #2A292E; border-radius:38px; padding:21px; box-shadow:0 24px 80px rgba(0,0,0,0.5);">
+      <div style="width:1180px; height:820px; background:#F2F1F2; border-radius:20px; position:relative; overflow:hidden; font-family:'Instrument Sans',sans-serif;">
+
+        <div style="position:absolute; top:0; left:0; right:0; height:26px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; box-sizing:border-box;">
+          <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:12px; font-weight:600; color:#454349;">7:05</span><span style="font-size:11.5px; color:#96949B;">Tue Aug 25</span></div>
+          <div style="display:flex; align-items:center; gap:7px;">
+            <svg width="15" height="11" viewBox="0 0 16 12" fill="none" stroke="#454349" stroke-width="1.6" stroke-linecap="round"><path d="M2 4.5a9 9 0 0 1 12 0M4.4 7a5.6 5.6 0 0 1 7.2 0"></path><circle cx="8" cy="9.8" r="1.15" fill="#454349" stroke="none"></circle></svg>
+            <svg width="24" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3" fill="none" stroke="#96949B"></rect><rect x="2" y="2" width="14" height="8" rx="1.6" fill="#454349"></rect><path d="M23.5 4v4a2 2 0 0 0 0-4Z" fill="#96949B"></path></svg>
+          </div>
+        </div>
+
+        <div style="position:absolute; top:26px; left:0; right:0; height:50px; display:flex; align-items:center; gap:10px; padding:0 16px; box-sizing:border-box;">
+          <a href="pitaya-ipad-00-home.dc.html" style="display:flex; align-items:center; gap:6px; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:99px; padding:6px 13px 6px 10px; cursor:pointer;" style-hover="background:#FAF9FA;"><span style="font-size:14px; color:#8C2F51; line-height:1;">‹</span><span style="font-size:12px; font-weight:600; color:#454349;">Home</span></a>
+          <div style="display:flex; align-items:center; gap:8px; margin-left:4px;">
+            <svg width="11" height="11" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63"></rect></svg>
+            <span style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:600; color:#232227;">The study — Term 1 · Reading the Room</span>
+            <span style="font-size:10px; font-weight:600; color:#8C2F51; background:#F6E3EB; border-radius:99px; padding:3px 9px;">study 5 of 8 · wk 3</span>
+          </div>
+          <span style="flex:1;"></span>
+          <div onClick="{{ penTap }}" style="display:flex; align-items:center; gap:7px; background: {{ penChipBg }}; border:1px solid {{ penChipBrd }}; border-radius:99px; padding:6px 12px; cursor:pointer;" style-hover="background:#F6E3EB;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#454349" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7-4-4-7 7-1.5 5.5L12 19Z"></path><path d="M15 8l1.5-1.5a2.4 2.4 0 0 1 3.4 3.4L18.5 11.5"></path></svg>
+            <span style="font-size:11px; font-weight:600; color:#454349;">{{ penName }}</span>
+            <span style="width:9px; height:9px; border-radius:50%; background: {{ inkDot }}; transition:background .2s;"></span>
+            <span style="font-size:9px; color:#A9A7AE;">⌄</span>
+          </div>
+          <sc-if value="{{ penOpen }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ penTap }}" style="position:absolute; inset:0; z-index:8;"></div>
+            <div style="position:absolute; top:82px; right:96px; z-index:9; width:296px; background:#FFFFFF; border-radius:14px; box-shadow:0 16px 48px rgba(20,15,18,0.28); padding:13px; animation:fadeUp .22s ease both;">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B;">PEN · PENCIL PRO</span>
+                <span style="font-size:9px; color:#A9A7AE;">or squeeze to open</span>
+              </div>
+              <div style="display:flex; gap:5px; margin-top:10px;">
+                <sc-for list="{{ penTools }}" as="t" hint-placeholder-count="6">
+                  <div onClick="{{ t.tap }}" style="flex:1; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; background: {{ t.bg }}; box-shadow: {{ t.ring }};" style-hover="background:#F6E3EB;">{{ t.icon }}</div>
+                </sc-for>
+              </div>
+              <div style="font-size:10px; color:#66646C; margin-top:5px; text-align:center;">{{ penToolLab }}</div>
+              <div style="display:flex; align-items:center; gap:8px; margin-top:11px;">
+                <span style="font-size:9px; letter-spacing:0.12em; font-weight:700; color:#A9A7AE; width:38px;">COLOR</span>
+                <sc-for list="{{ penInks }}" as="c" hint-placeholder-count="5">
+                  <span onClick="{{ c.tap }}" style="width:17px; height:17px; border-radius:50%; cursor:pointer; background: {{ c.col }}; box-shadow: {{ c.ring }};"></span>
+                </sc-for>
+                <span style="font-size:11px; color:#96949B; margin-left:2px; cursor:pointer;">⌄ palette</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+                <span style="font-size:9px; letter-spacing:0.12em; font-weight:700; color:#A9A7AE; width:38px;">WIDTH</span>
+                <span style="width:5px; height:5px; border-radius:50%; background:#454349; cursor:pointer;"></span>
+                <span style="width:8px; height:8px; border-radius:50%; background:#454349; box-shadow:0 0 0 2px #FFFFFF, 0 0 0 3px #A63D63; cursor:pointer;"></span>
+                <span style="width:12px; height:12px; border-radius:50%; background:#D9D7DC; cursor:pointer;"></span>
+                <span style="flex:1;"></span>
+                <span style="font-size:10px; color:#96949B;">0.4 mm</span>
+              </div>
+              <div style="height:1px; background:#EDEBEE; margin:11px 0;"></div>
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-size:9px; letter-spacing:0.12em; font-weight:700; color:#A9A7AE;">BIBLE MODE</span>
+                <div style="display:flex; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:2.5px;">
+                  <span style="font-size:9px; letter-spacing:0.08em; font-weight:700; color:#FFFFFF; background:#A63D63; border-radius:99px; padding:3.5px 12px;">STUDY</span>
+                  <span style="font-size:9px; letter-spacing:0.08em; font-weight:700; color:#96949B; border-radius:99px; padding:3.5px 12px; cursor:pointer;">SCRATCH</span>
+                </div>
+              </div>
+              <div style="font-size:10px; color:#96949B; line-height:1.6; margin-top:10px; background:#FAF9FA; border-radius:10px; padding:9px 11px;"><span style="color:#454349; font-weight:600;">double-tap</span> — pen ⇄ eraser · <span style="color:#454349; font-weight:600;">barrel roll</span> — nib angle · <span style="color:#454349; font-weight:600;">hover</span> — rail + tool chip</div>
+              <div style="margin-top:8px; display:flex; justify-content:flex-end;"><a href="pitaya-ipad-11-settings.dc.html" style="font-size:10.5px; font-weight:600; color:#8C2F51;">All pen settings →</a></div>
+            </div>
+          </sc-if>
+          <div style="width:34px; height:34px; border-radius:10px; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F6E3EB;">
+            <svg width="15" height="15" viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1.4" fill="none" stroke="#454349" stroke-width="1.5"></rect><rect x="9" y="1" width="6" height="6" rx="1.4" fill="none" stroke="#454349" stroke-width="1.5"></rect><rect x="1" y="9" width="6" height="6" rx="1.4" fill="none" stroke="#454349" stroke-width="1.5"></rect><rect x="9" y="9" width="6" height="6" rx="1.4" fill="none" stroke="#454349" stroke-width="1.5"></rect></svg>
+          </div>
+          <div style="width:34px; height:34px; border-radius:10px; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F6E3EB;">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#454349" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3 2 5.5 4.5 8M2 5.5h9M11.5 8 14 10.5 11.5 13M14 10.5H5"></path></svg>
+          </div>
+        </div>
+
+        <div style="position:absolute; top:80px; left:12px; right:12px; bottom:12px; display:flex;">
+
+          <div style="flex:1.08; min-width:0; background:#FFFFFF; border-radius:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden; display:flex;">
+            <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+              <div style="height:40px; flex:none; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid #EDEBEE;">
+                <span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B; cursor:pointer;">NOTEBOOK ⌄</span>
+                <span style="font-size:11px; color:#C9C7CD;">·</span>
+                <span style="font-size:12px; font-weight:600; color:#232227;">Term 1 — Reading the Room</span>
+                <span style="font-size:10.5px; color:#96949B;">p. 8</span>
+                <span style="flex:1;"></span>
+                <span style="font-size:10px; color:#A9A7AE;">strokes timestamp against the lesson</span>
+              </div>
+              <div style="flex:1; position:relative; overflow:hidden; background:#FFFDF9; background-image:radial-gradient(#EBE6E1 1px, transparent 1.2px); background-size:22px 22px; padding:18px 22px; box-sizing:border-box;">
+                <div style="font-size:9px; letter-spacing:0.13em; font-weight:700; color:#A9A7AE;">TERM 1 · READING THE ROOM · STUDY 5 · WK 3</div>
+                <div style="display:flex; align-items:center; gap:9px; margin-top:5px;">
+                  <span style="font-family:'Familjen Grotesk',sans-serif; font-size:17px; font-weight:700; color:#232227; letter-spacing:-0.01em;">The question behind Romans 9</span>
+                  <span style="font-size:10px; font-weight:700; color:#8C2F51; background:#F6E3EB; border-radius:99px; padding:2.5px 9px;">RO 9:1–5</span>
+                </div>
+                <div style="font-size:10.5px; color:#96949B; margin-top:3px;">aim — hear the question Paul was answering before you make him answer yours</div>
+                <div style="height:1px; background:#EDE7E0; margin:12px 0 0;"></div>
+
+                <div style="font-family:'Caveat',cursive; font-size:23px; line-height:1.3; color:#5F4B8B; transform:rotate(-0.4deg); margin-top:14px;">he weeps <span style="position:relative; display:inline-block;">before<svg width="58" height="9" viewBox="0 0 58 9" style="position:absolute; left:0; bottom:-4px;"><path d="M2 6 C 16 2, 34 8, 55 4" fill="none" stroke="#5F4B8B" stroke-width="2.1" stroke-linecap="round" opacity="0.85"></path></svg></span> he argues (9:2)</div>
+                <div style="font-family:'Caveat',cursive; font-size:21px; line-height:1.3; color:#5E7FA6; transform:rotate(0.2deg); margin-top:6px;">"accursed for my brothers" — who talks like that??</div>
+
+                <div style="display:flex; align-items:flex-start; gap:10px; margin-top:12px;">
+                  <div style="width:186px; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:12px; padding:9px 11px; box-shadow:0 1px 6px rgba(35,34,39,0.05); cursor:pointer;" style-hover="border-color:#D9B9C8;">
+                    <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:700; color:#8C2F51;">Ro 9:6</span><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#C9C7CD" stroke-width="1.6" stroke-linecap="round"><path d="M3 9 9 3M4.5 3H9v4.5"></path></svg></div>
+                    <div style="font-family:'Literata',serif; font-style:italic; font-size:11px; color:#66646C; line-height:1.5; margin-top:4px;">“But it is not as though the word of God has failed…”</div>
+                  </div>
+                  <div style="font-family:'Caveat',cursive; font-size:19px; color:#B85C8A; transform:rotate(-2deg); margin-top:8px;">← the thesis</div>
+                </div>
+
+                <sc-if value="{{ ansOn }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:16px; animation:fadeUp .3s ease both;">
+                    <div style="display:flex; align-items:center; gap:6px;"><svg width="7" height="7" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63"></rect></svg><span style="font-size:9px; letter-spacing:0.15em; font-weight:700; color:#8C2F51;">THE QUESTION · CARRIED FROM STEP 5</span></div>
+                    <div style="border:1.5px dashed #E9CFDC; border-radius:14px; padding:12px 14px; margin-top:7px; background:rgba(255,255,255,0.6);">
+                      <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; line-height:1.45;">Where have I read a promise as wider than God wrote it — and who taught me to?</div>
+                      <div style="display:flex; gap:5px; margin-top:9px;">
+                        <span style="font-size:9.5px; font-weight:700; color:#FFFFFF; background:#A63D63; border-radius:99px; padding:3px 11px;">INK</span>
+                        <span style="font-size:9.5px; font-weight:600; color:#66646C; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:99px; padding:3px 11px; cursor:pointer;">TYPE</span>
+                        <span style="font-size:9.5px; font-weight:600; color:#66646C; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:99px; padding:3px 11px; cursor:pointer;">SPEAK</span>
+                        <span style="font-size:9px; color:#A9A7AE; align-self:center; margin-left:2px;">answer here — or leave it open</span>
+                      </div>
+                      <div style="height:64px; margin-top:9px; border-radius:9px; background:repeating-linear-gradient(#FFFFFF 0 27px, #F0EAE4 27px 28px); position:relative;">
+                        <sc-if value="{{ ansInk }}" hint-placeholder-val="{{ false }}"><span style="position:absolute; left:8px; top:2px; font-family:'Caveat',cursive; font-size:20px; color:#5F4B8B; transform:rotate(-0.5deg);">Romans 8:28 at the funeral — I made "good" mean comfortable…</span></sc-if>
+                      </div>
+                      <sc-if value="{{ ansFiled }}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; color:#3E7A54; background:#EAF3ED; border-radius:99px; padding:3.5px 10px; margin-top:8px;">✓ filed — an open Question on Romans 9:1</div></sc-if>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+            <div style="width:54px; flex:none; border-left:1px solid #EDEBEE; background:#FCFBFC; display:flex; flex-direction:column; align-items:center; padding:8px 0 10px; gap:4px;">
+              <div style="width:36px; height:36px; border-radius:10px; background:#F6E3EB; box-shadow:inset 0 0 0 1.5px #A63D63; display:flex; align-items:center; justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8C2F51" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7-4-4-7 7-1.5 5.5L12 19Z"></path><path d="M15 8l1.5-1.5a2.4 2.4 0 0 1 3.4 3.4L18.5 11.5"></path></svg></div>
+              <div style="width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F6E3EB;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#66646C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 3 13l9-9 6 6-7 7H7Z"></path><path d="M14 17h7"></path></svg></div>
+              <div style="width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F6E3EB;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#66646C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20l1-4L17.5 5.5a2 2 0 0 1 3 3L10 19l-4 1Z"></path><path d="M14 7l3 3"></path></svg></div>
+              <div style="width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F6E3EB;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#66646C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 3 13l9-9 6 6-7 7H7Z"></path><path d="M5 15l4 4"></path></svg></div>
+              <div style="width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F6E3EB;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#66646C" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="2.6 3"><ellipse cx="11" cy="11" rx="8" ry="6.5"></ellipse><path d="M17 16l3 4" stroke-dasharray="none"></path></svg></div>
+              <div style="width:26px; height:1px; background:#E4E2E6; margin:2px 0;"></div>
+              <div style="width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F6E3EB;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:700; color:#66646C;">T</span></div>
+              <div style="width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F6E3EB;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#66646C" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="6" width="18" height="13" rx="2.5"></rect><path d="M7 10.5h7M7 14h4"></path></svg></div>
+              <div style="width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F6E3EB;"><svg width="16" height="16" viewBox="0 0 20 20"><rect x="7" y="1.5" width="6" height="10.5" rx="3" fill="none" stroke="#66646C" stroke-width="1.7"></rect><path d="M4 8.5a6 6 0 0 0 12 0M10 14.5v3" stroke="#66646C" stroke-width="1.7" fill="none" stroke-linecap="round"></path></svg></div>
+              <span style="flex:1;"></span>
+              <div style="width:8px; height:56px; border-radius:99px; background:#EDEBEE; position:relative;"><span style="position:absolute; left:50%; transform:translateX(-50%); top:18px; width:16px; height:16px; border-radius:50%; background:#FFFFFF; border:1px solid #D9D7DC; box-shadow:0 1px 4px rgba(35,34,39,0.15);"></span></div>
+              <div style="width:22px; height:22px; border-radius:50%; background:#5F4B8B; box-shadow:inset 0 0 0 2px #FFFFFF, 0 0 0 1px #D9D7DC; margin-top:6px; cursor:pointer;"></div>
+            </div>
+          </div>
+
+          <div style="width:14px; flex:none; display:flex; align-items:center; justify-content:center; cursor:col-resize;"><div style="display:flex; flex-direction:column; gap:3px;"><span style="width:4px; height:4px; border-radius:50%; background:#C9C7CD;"></span><span style="width:4px; height:4px; border-radius:50%; background:#C9C7CD;"></span><span style="width:4px; height:4px; border-radius:50%; background:#C9C7CD;"></span></div></div>
+
+          <div style="flex:1; min-width:0; background:#FFFFFF; border-radius:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden; display:flex; flex-direction:column;">
+            <div style="height:40px; flex:none; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid #EDEBEE;">
+              <span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B; cursor:pointer;">TEACHING ⌄</span>
+              <span style="font-size:11px; color:#C9C7CD;">·</span>
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#232227;">The question behind Romans 9</span>
+              <span style="flex:1;"></span>
+              <span style="font-size:10px; font-weight:600; color:#8C2F51; background:#F6E3EB; border-radius:99px; padding:3px 9px;">≈ 9 min</span>
+            </div>
+
+            <div style="flex:none; padding:10px 14px 0;">
+              <div style="display:flex; align-items:flex-start; gap:4px;">
+                <sc-for list="{{ rail }}" as="r" hint-placeholder-count="6">
+                  <div onClick="{{ r.tap }}" style="flex:1; cursor:pointer; text-align:center; padding-bottom:7px;">
+                    <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+                      <span style="width:15px; height:15px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:8.5px; font-weight:700; background: {{ r.numBg }}; color: {{ r.numCol }}; transition:background .25s;">{{ r.num }}</span>
+                      <span style="font-size:8.5px; letter-spacing:0.06em; font-weight:700; color: {{ r.labCol }}; transition:color .25s;">{{ r.lab }}</span>
+                    </div>
+                    <div style="height:4px; border-radius:99px; margin-top:6px; background: {{ r.barBg }}; transition:background .25s;"></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="flex:1; min-height:0; overflow:hidden; padding:10px 16px 8px; box-sizing:border-box; position:relative;">
+
+              <sc-if value="{{ celOn }}" hint-placeholder-val="{{ false }}">
+                <div style="animation:fadeUp .35s ease both;">
+                  <div style="background:#232227; border-radius:18px; padding:18px;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                      <span style="width:42px; height:42px; flex:none; border-radius:50%; background:#3E7A54; color:#FFFFFF; font-size:17px; display:flex; align-items:center; justify-content:center;">✓</span>
+                      <div>
+                        <div style="font-family:'Familjen Grotesk',sans-serif; font-size:16px; font-weight:600; color:#FFFFFF;">Study 5 of 8 — kept.</div>
+                        <div style="font-size:11.5px; color:#C9C7CD; margin-top:2px;">the next one is unlocked — no calendar owns it</div>
+                      </div>
+                    </div>
+                    <div style="background:#2A272E; border-radius:12px; padding:12px 14px; margin-top:14px;">
+                      <div style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#DCA8BE;">CARRY THIS INTO THE DAY</div>
+                      <div style="font-size:12.5px; color:#F2F1F2; line-height:1.6; margin-top:4px;">Tonight, Romans 11:1–14 — the olive tree. One line before bed: what does the remnant complicate?</div>
+                    </div>
+                    <div style="display:flex; gap:9px; margin-top:14px;">
+                      <div onClick="{{ eagerTap }}" style="flex:1.7; background:#A63D63; border-radius:11px; padding:10px 13px; cursor:pointer;" style-hover="background:#8C2F51;">
+                        <div style="font-size:9px; letter-spacing:0.1em; font-weight:700; color:#F0D3E0;">EAGER? WK 3 · DAY 2 WAITS</div>
+                        <div style="font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#FFFFFF; margin-top:2px;">History that argues — Ruth 4 →</div>
+                      </div>
+                      <div style="flex:1; border:1px solid #4A4550; border-radius:11px; display:flex; align-items:center; justify-content:center; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#F2F1F2; cursor:pointer;">Done for today</div>
+                    </div>
+                  </div>
+                  <div style="font-size:10px; color:#A9A7AE; margin-top:10px; text-align:center;">the notebook page files itself — the answer (if any) becomes an open Question on Ro 9:1</div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ s1 }}" hint-placeholder-val="{{ true }}">
+                <div style="animation:fadeUp .3s ease both;">
+                  <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#96949B;">STEP ONE · READ IT COLD</div>
+                  <div style="display:flex; align-items:baseline; gap:9px; margin-top:7px;">
+                    <span style="font-family:'Familjen Grotesk',sans-serif; font-size:23px; font-weight:700; color:#232227; letter-spacing:-0.01em;">Romans 9:1–5</span>
+                    <span style="font-size:11px; color:#66646C;">5 verses · ≈ 2 min · part 2 tonight</span>
+                  </div>
+                  <div style="font-size:12px; color:#454349; line-height:1.6; margin-top:6px;">Read it before the teaching — the writer had a question in mind, and this term is about hearing it before anyone explains it to you.</div>
+                  <div style="display:flex; gap:5px; margin-top:8px;">
+                    <span style="font-size:10px; font-weight:600; color:#8C2F51; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:3px 10px;">part 1 · Ro 9:1–5</span>
+                    <span style="font-size:10px; font-weight:600; color:#96949B; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:3px 10px;">part 2 · Ro 11:1–14 · homework</span>
+                  </div>
+                  <div style="background:#FAF9FA; border:1px solid #EDEBEE; border-radius:13px; padding:10px 14px; margin-top:10px; max-height:236px; overflow:hidden; -webkit-mask-image:linear-gradient(#000 78%, transparent); mask-image:linear-gradient(#000 78%, transparent);">
+                    <div style="font-family:'Literata',serif; font-size:14.5px; color:#232227; line-height:1.7;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:9.5px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">1</span>I am speaking the truth in Christ—I am not lying; my conscience bears me witness in the Holy Spirit—<span style="font-family:'Familjen Grotesk',sans-serif; font-size:9.5px; font-weight:700; color:#A63D63; vertical-align:super; margin:0 5px 0 9px;">2</span>that I have great sorrow and unceasing anguish in my heart.<span style="font-family:'Familjen Grotesk',sans-serif; font-size:9.5px; font-weight:700; color:#A63D63; vertical-align:super; margin:0 5px 0 9px;">3</span>For I could wish that I myself were accursed and cut off from Christ for the sake of my brothers, my kinsmen according to the flesh.<span style="font-family:'Familjen Grotesk',sans-serif; font-size:9.5px; font-weight:700; color:#A63D63; vertical-align:super; margin:0 5px 0 9px;">4</span>They are Israelites, and to them belong the adoption, the glory, the covenants, the giving of the law, the worship, and the promises.<span style="font-family:'Familjen Grotesk',sans-serif; font-size:9.5px; font-weight:700; color:#A63D63; vertical-align:super; margin:0 5px 0 9px;">5</span>To them belong the patriarchs, and from their race, according to the flesh, is the Christ…</div>
+                  </div>
+                  <div style="display:flex; gap:8px; margin-top:10px;">
+                    <div style="flex:1.4; background:#A63D63; border-radius:10px; padding:10px 0; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#FFFFFF; cursor:pointer;" style-hover="background:#8C2F51;">Open in the Bible pane →</div>
+                    <div onClick="{{ paperTap }}" style="flex:1.1; border:1px solid {{ paperBrd }}; background: {{ paperBg }}; color: {{ paperCol }}; border-radius:10px; padding:10px 0; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600; cursor:pointer; transition:background .25s;">{{ paperTxt }}</div>
+                  </div>
+                  <div style="font-size:10px; color:#A9A7AE; margin-top:7px;">{{ paperHint }}</div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ s2 }}" hint-placeholder-val="{{ false }}">
+                <div style="animation:fadeUp .3s ease both;">
+                  <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#96949B;">THE TEACHING · WRITTEN BEFORE YOU WOKE</div>
+                  <div style="font-family:'Familjen Grotesk',sans-serif; font-size:21px; font-weight:700; color:#232227; letter-spacing:-0.01em; line-height:1.25; margin-top:7px;">Paul answers grief, not curiosity</div>
+                  <div style="font-size:13px; color:#454349; line-height:1.7; margin-top:8px;">Paul opens the hardest chapter in the letter by weeping. Before a word about election he wishes himself accursed for his kinsmen — so the argument that follows is not a puzzle about who is chosen. It is an answer to a griever's question: <span style="font-style:italic;">has the word of God failed?</span> Read the chapter with that question in your ear and the furniture rearranges itself.</div>
+                  <div style="background:#F6E3EB; border-radius:12px; padding:12px 14px; margin-top:11px; cursor:pointer;" style-hover="background:#F0D3E0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#8C2F51;">ROMANS 9:6</span><span style="font-size:9px; font-weight:600; color:#8C2F51; background:#FFFFFF; border-radius:99px; padding:2px 8px;">ESV</span></div>
+                    <div style="font-family:'Literata',serif; font-style:italic; font-size:14px; color:#232227; line-height:1.65; margin-top:6px;">“But it is not as though the word of God has failed.”</div>
+                    <div style="font-size:10px; font-weight:600; color:#8C2F51; margin-top:6px;">open in the Bible pane →</div>
+                  </div>
+                  <div style="font-size:10px; color:#A9A7AE; margin-top:9px;">drag the pull-verse to the notebook → a reference card</div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ s3 }}" hint-placeholder-val="{{ false }}">
+                <div style="animation:fadeUp .3s ease both;">
+                  <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#4E7C8A;">THE WORLD BEHIND THE TEXT</div>
+                  <div style="background:#4E7C8A14; border-left:3px solid #4E7C8A; border-radius:0 13px 13px 0; padding:14px 16px; margin-top:8px;">
+                    <div style="font-size:13.5px; color:#454349; line-height:1.75;">Rome's church was Jewish and Gentile in one room, a generation after most of Israel said no to her Messiah. To a Roman ear that looked like a god who lost — and Paul writes with the synagogue across the street. Chapters 9–11 are one argument, not three; the olive tree of chapter 11 is where the grief of chapter 9 is finally planted.</div>
+                    <div style="font-size:10.5px; color:#96949B; margin-top:10px;">History, custom, and setting — the room the writer was standing in.</div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-top:12px; background:#FAF9FA; border:1px solid #EDEBEE; border-radius:11px; padding:9px 12px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#96949B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9 9 0 1 0-9-9"></path><path d="M3 12h9V3"></path></svg>
+                    <span style="font-size:11px; color:#66646C;">A map or timeline here becomes a <span style="font-weight:600;">sketch prompt</span> on the notebook page — research homework feeds it.</span>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ s4 }}" hint-placeholder-val="{{ false }}">
+                <div style="animation:fadeUp .3s ease both;">
+                  <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#96949B;">THE DOCTRINE · THE PRACTICE</div>
+                  <div style="background:#FAF9FA; border:1px solid #EDEBEE; border-radius:13px; padding:13px 15px; margin-top:8px;">
+                    <div style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B;">THE DOCTRINE</div>
+                    <div style="font-size:13px; color:#454349; line-height:1.7; margin-top:5px;">The promise never ran to every descendant — it ran through a chosen line inside Israel: Isaac, not Ishmael; Jacob, not Esau. The remnant is not the word failing; the remnant is the shape the word always had.</div>
+                    <div style="display:flex; gap:5px; margin-top:9px;">
+                      <span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:600; color:#8C2F51; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:99px; padding:3.5px 11px; cursor:pointer;" style-hover="background:#F6E3EB;">Calvin — Romans 9 ›</span>
+                      <span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:600; color:#8C2F51; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:99px; padding:3.5px 11px; cursor:pointer;" style-hover="background:#F6E3EB;">Henry — Romans 9 ›</span>
+                    </div>
+                    <div style="font-size:9.5px; color:#A9A7AE; margin-top:8px;">Every quotation retrieved from a stored source — never recalled, never invented.</div>
+                  </div>
+                  <div style="background:#FAF9FA; border:1px solid #EDEBEE; border-radius:13px; padding:13px 15px; margin-top:9px;">
+                    <div style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B;">THE PRACTICE</div>
+                    <div style="font-size:13px; color:#454349; line-height:1.7; margin-top:5px;">This week, when a verse seems to have failed someone you love, ask first what it actually promised. Precision is a mercy — to them and to the text.</div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ s5 }}" hint-placeholder-val="{{ false }}">
+                <div style="animation:fadeUp .3s ease both;">
+                  <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#96949B;">CARRY THIS ONE</div>
+                  <div style="background:#232227; border-radius:16px; padding:17px 18px; margin-top:8px;">
+                    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:18px; font-weight:600; color:#FFFFFF; line-height:1.45;">Where have I read a promise as wider than God wrote it — and who taught me to?</div>
+                    <div style="font-size:11.5px; color:#C9C7CD; line-height:1.6; margin-top:9px;">No answer is required today. The desk has already opened an answer box on your study page — ink, typed or spoken — and saving files it as an open Question that resurfaces at this passage.</div>
+                    <div onClick="{{ qTap }}" style="margin-top:12px; border-radius:10px; padding:11px 0; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; cursor:pointer; transition:background .25s; background: {{ qBg }}; color: {{ qCol }};">{{ qTxt }}</div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:7px; margin-top:10px;">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#A63D63" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8H5M8 4 4 8l4 4"></path></svg>
+                    <span style="font-size:10.5px; color:#96949B;">the answer box is live in the notebook, left — write there and this step watches</span>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ s6 }}" hint-placeholder-val="{{ false }}">
+                <div style="animation:fadeUp .3s ease both;">
+                  <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#96949B;">BEFORE YOU CLOSE IT</div>
+                  <div style="background:#232227; border-radius:16px; padding:15px 17px; margin-top:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#DCA8BE;">THE HOMEWORK · READ</span>
+                      <span style="font-size:9px; font-weight:600; color:#C4C0C9; background:#3A3239; border-radius:99px; padding:2.5px 9px;">≤ 15 min</span>
+                    </div>
+                    <div style="font-size:14px; color:#F2F1F2; line-height:1.65; margin-top:8px;">Tonight, Romans 11:1–14 — the olive tree. One line before bed: <span style="font-style:italic;">what does the remnant complicate?</span> It opens as a worksheet with the passage in the Bible pane.</div>
+                    <div style="font-size:10px; color:#837F8B; line-height:1.6; margin-top:10px; border-top:1px solid #3A3239; padding-top:9px;"><span style="font-weight:700; letter-spacing:0.08em; color:#DCA8BE;">THE ARC · </span>Keep one page. Every time you catch yourself wanting a verse to say something, write the verse down.</div>
+                    <div style="font-size:10px; color:#837F8B; margin-top:7px;">it waits on your Spirit home until you tick it · the next study opens by naming it</div>
+                    <a href="pitaya-ipad-09-worksheets.dc.html" style="display:block; margin-top:11px; background:#A63D63; color:#FFFFFF; border-radius:10px; padding:10px 0; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600;">Open the worksheet →</a>
+                  </div>
+                  <div style="background:#FFFFFF; border:1px solid #EDEBEE; border-radius:13px; padding:12px 14px; margin-top:9px;">
+                    <div style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B;">ONE MORE THING</div>
+                    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227; margin-top:5px;">The weeping apostle</div>
+                    <div style="font-size:12px; color:#454349; line-height:1.65; margin-top:3px;">Spurgeon told his students that Romans 9 must be preached with tears or not at all — doctrine without Paul's anguish is a different doctrine.</div>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{ barOn }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:none; border-top:1px solid #EDEBEE; background:rgba(250,249,250,0.9); padding:10px 14px; display:flex; gap:9px; align-items:center;">
+                <sc-if value="{{ backOn }}" hint-placeholder-val="{{ false }}">
+                  <div onClick="{{ backTap }}" style="width:44px; border:1px solid #DFDDE2; background:#FFFFFF; border-radius:11px; padding:11px 0; text-align:center; font-size:14px; color:#454349; cursor:pointer; line-height:1;" style-hover="background:#F6E3EB;">‹</div>
+                </sc-if>
+                <div onClick="{{ nextTap }}" style="flex:1; border-radius:11px; padding:12px 0; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:13.5px; font-weight:600; color:#FFFFFF; cursor:pointer; transition:background .25s; background: {{ nextBg }};" style-hover="opacity:0.92;">{{ nextTxt }}</div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ annOn }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:22px; max-width:1224px;">
+        <div style="flex:1; min-width:230px; background:#1B1A1F; border:1px solid #2A292E; border-radius:14px; padding:14px 16px;">
+          <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#DC74A0;">THE OPINIONATED ORDER</div>
+          <div style="font-size:12px; color:#96949B; line-height:1.6; margin-top:6px;">Ported from main (2026-08-20): read it cold → teaching → behind the text → what it means → the question → the homework. Nothing is gated — Next always advances, the rail is tappable — but the app has an opinion about order instead of leaving it to him.</div>
+        </div>
+        <div style="flex:1; min-width:230px; background:#1B1A1F; border:1px solid #2A292E; border-radius:14px; padding:14px 16px;">
+          <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#DC74A0;">ONE BUTTON, ALWAYS NAMED</div>
+          <div style="font-size:12px; color:#96949B; line-height:1.6; margin-top:6px;">The footer button names what comes next; on the last step it becomes Mark this study complete ✓ — the fix for the day he did the whole lesson and the term still read "not started". Completion is docked in the pane, never floating over text.</div>
+        </div>
+        <div style="flex:1; min-width:230px; background:#1B1A1F; border:1px solid #2A292E; border-radius:14px; padding:14px 16px;">
+          <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#DC74A0;">WHAT THE DESK ADDS</div>
+          <div style="font-size:12px; color:#96949B; line-height:1.6; margin-top:6px;">The Notebook rides alongside the whole lesson (phone shows one thing at a time). Step 1 embeds the passage — or takes the full Bible pane. Step 5 opens the answer box on the study page: ink, typed or spoken, filed as an open Question only when he says so.</div>
+        </div>
+        <div style="flex:1; min-width:230px; background:#1B1A1F; border:1px solid #2A292E; border-radius:14px; padding:14px 16px;">
+          <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#DC74A0;">IT RESUMES WHERE HE STOPPED</div>
+          <div style="font-size:12px; color:#96949B; line-height:1.6; margin-top:6px;">On the phone the step lives in the URL and localStorage; on the desk it persists per device with the layout. ‹ walks the lesson backwards before it leaves the lesson. Labels on the rail are the desk's luxury — the phone keeps bare segments.</div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;annotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Canvas&quot;}}">
+class Component extends DCLogic {
+  state = { step: 1, q: false, paper: false, cel: false, ink: false, pen: false, tool: 0, penInk: '#5F4B8B' };
+  renderVals() {
+    const s = this.state, p = this.props;
+    const TOOLN = ['Fountain', 'Highlighter', 'Pencil', 'Marker', 'Eraser', 'Lasso'];
+    const TOOLD = ['Fountain pen — pressure shapes the line', 'Highlighter — the six categories', 'Pencil — soft, tilt shades', 'Marker — flat, opaque', 'Eraser — stroke or pixel', 'Lasso — select ink'];
+    const PATHS = [
+      ['M12 19l7-7-4-4-7 7-1.5 5.5L12 19Z', 'M15 8l1.5-1.5a2.4 2.4 0 0 1 3.4 3.4L18.5 11.5'],
+      ['M7 17 3 13l9-9 6 6-7 7H7Z', 'M14 17h7'],
+      ['M6 20l1-4L17.5 5.5a2 2 0 0 1 3 3L10 19l-4 1Z', 'M14 7l3 3'],
+      ['M9 3h6v6l3 3v9H6v-9l3-3V3Z', 'M9 9h6'],
+      ['M7 17 3 13l9-9 6 6-7 7H7Z', 'M5 15l4 4'],
+      ['M4 11a8 6 0 1 1 8 6', 'M14 15l4 5']
+    ];
+    const ic = (d, k) => React.createElement('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: s.tool === k ? '#8C2F51' : '#66646C', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', key: k }, d.map((p2, j) => React.createElement('path', { d: p2, key: j })));
+    const INKS = ['#5F4B8B', '#B85C8A', '#5E7FA6', '#44414B', '#C99A3B'];
+    const T = ['Read the passage', 'The teaching', 'Behind the text', 'What it means', 'The question', 'The homework'];
+    const L = ['READ', 'TEACHING', 'BEHIND', 'MEANING', 'QUESTION', 'HOMEWORK'];
+    const i = s.step, last = i >= 6;
+    const rail = T.map((t, k) => {
+      const n = k + 1, done = n < i || s.cel, cur = n === i && !s.cel;
+      return {
+        num: done ? '✓' : String(n), lab: L[k],
+        numBg: done ? '#A63D63' : (cur ? '#232227' : '#E4E2E6'),
+        numCol: (done || cur) ? '#FFFFFF' : '#96949B',
+        labCol: cur ? '#232227' : (done ? '#8C2F51' : '#A9A7AE'),
+        barBg: (done || cur) ? '#A63D63' : '#DFDDE2',
+        tap: () => this.setState({ step: n, cel: false })
+      };
+    });
+    return {
+      annOn: (p.annotations ?? true),
+      penOpen: s.pen, penTap: () => this.setState(st => ({ pen: !st.pen })),
+      penName: TOOLN[s.tool], inkDot: s.penInk,
+      penChipBg: s.pen ? '#F6E3EB' : '#FFFFFF', penChipBrd: s.pen ? '#A63D63' : '#E4E2E6',
+      penToolLab: TOOLD[s.tool],
+      penTools: PATHS.map((d, k) => ({
+        icon: ic(d, k),
+        bg: s.tool === k ? '#F6E3EB' : '#FAF9FA',
+        ring: s.tool === k ? 'inset 0 0 0 1.5px #A63D63' : 'inset 0 0 0 1px #EDEBEE',
+        tap: () => this.setState({ tool: k })
+      })),
+      penInks: INKS.map(c => ({
+        col: c,
+        ring: c === s.penInk ? '0 0 0 2px #FFFFFF, 0 0 0 3.5px #A63D63' : 'inset 0 0 0 1px rgba(35,34,39,0.08)',
+        tap: () => this.setState({ penInk: c })
+      })),
+      rail,
+      s1: !s.cel && i === 1, s2: !s.cel && i === 2, s3: !s.cel && i === 3,
+      s4: !s.cel && i === 4, s5: !s.cel && i === 5, s6: !s.cel && i === 6,
+      celOn: s.cel, barOn: !s.cel,
+      backOn: i > 1,
+      backTap: () => this.setState({ step: Math.max(1, i - 1) }),
+      nextTxt: last ? 'Mark this study complete ✓' : ('Next · ' + T[i] + ' →'),
+      nextBg: last ? '#232227' : '#A63D63',
+      nextTap: () => last ? this.setState({ cel: true, ink: true }) : this.setState({ step: i + 1 }),
+      eagerTap: () => this.setState({ step: 1, q: false, paper: false, cel: false, ink: false }),
+      qTap: () => this.setState(st => ({ q: !st.q, ink: true })),
+      qBg: s.q ? '#2A3E31' : '#A63D63', qCol: s.q ? '#8FCFA6' : '#FFFFFF',
+      qTxt: s.q ? '✓ In your notebook' : 'Save to open questions',
+      paperTap: () => this.setState(st => ({ paper: !st.paper })),
+      paperBrd: s.paper ? '#BFDCC9' : '#E4E2E6', paperBg: s.paper ? '#EAF3ED' : '#FFFFFF',
+      paperCol: s.paper ? '#3E7A54' : '#232227',
+      paperTxt: s.paper ? '✓ Counted' : 'Read on paper',
+      paperHint: s.paper ? 'Counted in the lifetime map — tap again to undo.' : 'Reading the paper RSB instead? One tap and the map stays honest.',
+      ansOn: s.step >= 5 || s.cel, ansInk: s.ink, ansFiled: s.q
+    };
+  }
+}
+</script>
+</body>
+</html>

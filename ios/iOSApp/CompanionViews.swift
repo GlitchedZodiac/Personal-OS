@@ -66,6 +66,8 @@ struct CompanionPairingView: View {
             }
         }
         .padding(.horizontal, 44)
+        // the keypad is a phone-width instrument; on the iPad it stays one, centered
+        .frame(maxWidth: 440)
     }
 
     private func keyButton(_ key: String) -> some View {

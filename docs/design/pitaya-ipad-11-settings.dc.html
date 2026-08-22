@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400..700;1,7..72,400..700&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#131216; -webkit-font-smoothing:antialiased; }
+    a { color:#DC74A0; text-decoration:none; } a:hover { color:#E795B4; }
+  </style>
+</helmet>
+<section data-screen-label="11 — Settings" style="min-height:100vh; box-sizing:border-box; padding:56px 64px 90px; font-family:'Instrument Sans',sans-serif; background:#131216;">
+  <div style="max-width:1320px;">
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:10px; font-size:12px; letter-spacing:0.2em; font-weight:600; color:#DC74A0;"><svg width="11" height="11" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#DC74A0"></rect></svg> PITAYA · SPIRIT ON IPAD — ROUND 2</div>
+      <span style="flex:1;"></span>
+      <div style="display:flex; gap:6px; font-size:11.5px; font-weight:600; flex-wrap:wrap; justify-content:flex-end; max-width:780px;">
+        <a href="pitaya-ipad-00-home.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">00 · Home</a>
+        <a href="pitaya-ipad-01-sermon-desk.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">01 · Sermon Desk</a>
+        <a href="pitaya-ipad-02-bible-modes.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">02 · Bible modes</a>
+        <a href="pitaya-ipad-03-notebook-rail.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">03 · Notebook rail</a>
+        <a href="pitaya-ipad-04-guided-study.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">04 · Guided study</a>
+        <a href="pitaya-ipad-05-bible-overlay.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">05 · Overlay</a>
+        <a href="pitaya-ipad-06-sunday-replay.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">06 · Sunday replay</a>
+        <a href="pitaya-ipad-07-bible-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">07 · Bible states</a>
+        <a href="pitaya-ipad-08-notebook-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">08 · Notebook states</a>
+        <a href="pitaya-ipad-09-worksheets.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">09 · Worksheets</a>
+        <a href="pitaya-ipad-10-desk-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">10 · Desk states</a>
+        <span style="background:#F2F1F2; color:#131216; border-radius:99px; padding:5px 13px;">11 · Settings</span>
+      </div>
+    </div>
+    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:36px; font-weight:700; color:#F2F1F2; letter-spacing:-0.02em; margin-top:12px;">Settings additions — small, inside Spirit settings</div>
+    <div style="font-size:14px; color:#96949B; margin-top:8px; line-height:1.65; max-width:860px;">Six new cards in the existing Spirit settings grammar. Reachable from the Home rail and from the pen popover's "All pen settings →". Handedness and the recording consent are the two the build reads first. <span style="color:#A5A3AA;">Handedness and consent are live below.</span></div>
+
+    <div data-screen-label="Settings · iPad additions" style="margin-top:24px; display:inline-block; background:#0B0A0D; border:1px solid #2A292E; border-radius:38px; padding:21px; box-shadow:0 24px 80px rgba(0,0,0,0.5);">
+      <div style="width:1180px; height:820px; background:#F2F1F2; border-radius:20px; position:relative; overflow:hidden; font-family:'Instrument Sans',sans-serif;">
+        <div style="position:absolute; top:0; left:0; right:0; height:26px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; box-sizing:border-box;">
+          <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:12px; font-weight:600; color:#454349;">7:31</span><span style="font-size:11.5px; color:#96949B;">Tue Aug 25</span></div>
+          <div style="display:flex; align-items:center; gap:7px;"><svg width="15" height="11" viewBox="0 0 16 12" fill="none" stroke="#454349" stroke-width="1.6" stroke-linecap="round"><path d="M2 4.5a9 9 0 0 1 12 0M4.4 7a5.6 5.6 0 0 1 7.2 0"></path><circle cx="8" cy="9.8" r="1.15" fill="#454349" stroke="none"></circle></svg><svg width="24" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3" fill="none" stroke="#96949B"></rect><rect x="2" y="2" width="14" height="8" rx="1.6" fill="#454349"></rect><path d="M23.5 4v4a2 2 0 0 0 0-4Z" fill="#96949B"></path></svg></div>
+        </div>
+        <div style="position:absolute; top:44px; left:36px; display:flex; align-items:center; gap:12px;">
+          <a href="pitaya-ipad-00-home.dc.html" style="width:36px; height:36px; border-radius:50%; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center;"><span style="font-size:17px; color:#232227; line-height:1; margin-top:-2px;">‹</span></a>
+          <div>
+            <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">SPIRIT · THE DESK'S SETTINGS</div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#232227; letter-spacing:-0.02em;">Settings — iPad</div>
+          </div>
+        </div>
+
+        <div style="position:absolute; top:118px; left:36px; right:36px; bottom:24px; display:grid; grid-template-columns:1fr 1fr; gap:14px; align-content:start;">
+
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px 18px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">HANDEDNESS — THE DESK MIRRORS</div>
+            <div style="display:flex; gap:10px; margin-top:11px;">
+              <div onClick="{{ setL }}" style="flex:1; border-radius:12px; padding:11px 12px; cursor:pointer; background: {{ lBg }}; box-shadow: {{ lRing }};">
+                <div style="width:64px; height:40px; border:1px solid #E4E2E6; border-radius:7px; display:flex; gap:2px; padding:3px; box-sizing:border-box; background:#FFFFFF;"><span style="flex:1.2; background:#F0D3E0; border-radius:3px;"></span><span style="flex:1; background:#E4E2E6; border-radius:3px;"></span></div>
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#232227; margin-top:7px;">Left-handed {{ lTag }}</div>
+                <div style="font-size:10px; color:#96949B; margin-top:1px;">notebook left · rail by the seam · Bible margin left</div>
+              </div>
+              <div onClick="{{ setR }}" style="flex:1; border-radius:12px; padding:11px 12px; cursor:pointer; background: {{ rBg }}; box-shadow: {{ rRing }};">
+                <div style="width:64px; height:40px; border:1px solid #E4E2E6; border-radius:7px; display:flex; gap:2px; padding:3px; box-sizing:border-box; background:#FFFFFF;"><span style="flex:1; background:#E4E2E6; border-radius:3px;"></span><span style="flex:1.2; background:#F0D3E0; border-radius:3px;"></span></div>
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:12.5px; font-weight:600; color:#232227; margin-top:7px;">Right-handed {{ rTag }}</div>
+                <div style="font-size:10px; color:#96949B; margin-top:1px;">everything mirrors — never hardcoded</div>
+              </div>
+            </div>
+            <div style="font-size:10.5px; color:#96949B; margin-top:10px;">Flips the desk, the tool rail, the overlay's writing margin and the pen-positioned action bar. He may share the app one day.</div>
+          </div>
+
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px 18px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">BIBLE DEFAULTS — MODE &amp; OVERLAY</div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:11px;">
+              <span style="font-size:12px; color:#454349; width:104px;">Default mode</span>
+              <div style="display:flex; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:2.5px;">
+                <span style="font-size:10px; letter-spacing:0.08em; font-weight:700; color:#FFFFFF; background:#A63D63; border-radius:99px; padding:4px 14px;">STUDY</span>
+                <span style="font-size:10px; letter-spacing:0.08em; font-weight:700; color:#96949B; border-radius:99px; padding:4px 14px; cursor:pointer;">SCRATCH</span>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:9px;">
+              <span style="font-size:12px; color:#454349; width:104px;">Overlay margin</span>
+              <div style="display:flex; gap:5px;">
+                <span style="font-size:10.5px; font-weight:600; color:#66646C; border:1px solid #E4E2E6; border-radius:99px; padding:4px 12px; cursor:pointer;">none</span>
+                <span style="font-size:10.5px; font-weight:600; color:#FFFFFF; background:#A63D63; border-radius:99px; padding:4px 12px;">wide</span>
+                <span style="font-size:10.5px; font-weight:600; color:#66646C; border:1px solid #E4E2E6; border-radius:99px; padding:4px 12px; cursor:pointer;">wider</span>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:9px;">
+              <span style="font-size:12px; color:#454349; width:104px;">Overlay opens</span>
+              <div style="display:flex; gap:5px;">
+                <span style="font-size:10.5px; font-weight:600; color:#FFFFFF; background:#A63D63; border-radius:99px; padding:4px 12px;">shown</span>
+                <span style="font-size:10.5px; font-weight:600; color:#66646C; border:1px solid #E4E2E6; border-radius:99px; padding:4px 12px; cursor:pointer;">dimmed</span>
+                <span style="font-size:10.5px; font-weight:600; color:#66646C; border:1px solid #E4E2E6; border-radius:99px; padding:4px 12px; cursor:pointer;">hidden</span>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:9px;">
+              <span style="font-size:12px; color:#454349; width:104px;">Default layer</span>
+              <span style="font-size:11px; font-weight:600; color:#8C2F51; background:#F6E3EB; border-radius:99px; padding:4px 12px;">My layer ⌄</span>
+              <span style="font-size:10px; color:#96949B;">study/sermon layers arm themselves in context</span>
+            </div>
+          </div>
+
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px 18px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <span style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">PEN — DEFAULTS &amp; SAVED PALETTES</span>
+              <span style="font-size:10.5px; font-weight:600; color:#8C2F51; cursor:pointer;">edit in the rail ›</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:11px;">
+              <span style="font-size:12px; color:#454349; width:104px;">Default brush</span>
+              <span style="display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:#232227; border:1px solid #E4E2E6; border-radius:99px; padding:4px 12px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#454349" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7-4-4-7 7-1.5 5.5L12 19Z"></path></svg>Fountain · 0.4 mm</span>
+              <span style="font-size:10px; color:#96949B;">double-tap → eraser · squeeze → settings</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+              <span style="font-size:12px; color:#454349; width:104px;">Sketch purples</span>
+              <span style="display:flex; gap:5px;"><span style="width:16px; height:16px; border-radius:50%; background:#3E3357;"></span><span style="width:16px; height:16px; border-radius:50%; background:#5F4B8B;"></span><span style="width:16px; height:16px; border-radius:50%; background:#8A76B8;"></span><span style="width:16px; height:16px; border-radius:50%; background:#B85C8A;"></span><span style="width:16px; height:16px; border-radius:50%; background:#D9A9C4;"></span></span>
+              <span style="font-size:10px; color:#96949B;">default</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+              <span style="font-size:12px; color:#454349; width:104px;">Sunday ink</span>
+              <span style="display:flex; gap:5px;"><span style="width:16px; height:16px; border-radius:50%; background:#5F4B8B;"></span><span style="width:16px; height:16px; border-radius:50%; background:#5E7FA6;"></span><span style="width:16px; height:16px; border-radius:50%; background:#B85C8A;"></span><span style="width:16px; height:16px; border-radius:50%; background:#44414B;"></span></span>
+              <span style="font-size:10.5px; font-weight:600; color:#8C2F51; cursor:pointer; margin-left:4px;">+ new palette</span>
+            </div>
+          </div>
+
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px 18px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">RECOGNITION — PER NOTEBOOK</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 0 8px; border-bottom:1px solid #F2F1F2; margin-top:4px;">
+              <span style="font-size:12.5px; color:#232227; font-weight:600;">Sermons</span>
+              <span style="font-size:11px; color:#66646C;">audio <span style="font-weight:700; color:#8C2F51;">español</span> · ink <span style="font-weight:700; color:#8C2F51;">english</span> ⌄</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 0 8px; border-bottom:1px solid #F2F1F2;">
+              <span style="font-size:12.5px; color:#232227; font-weight:600;">Term 1 — Reading the Room</span>
+              <span style="font-size:11px; color:#66646C;">ink <span style="font-weight:700; color:#8C2F51;">english</span> ⌄</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 0 2px;">
+              <span style="font-size:12.5px; color:#232227; font-weight:600;">Free · Worksheets</span>
+              <span style="font-size:11px; color:#66646C;">ink <span style="font-weight:700; color:#8C2F51;">english</span> ⌄</span>
+            </div>
+            <div style="font-size:10.5px; color:#96949B; margin-top:9px;">Recognition writes the hidden text layer only — "show text" stays off by default. References he writes go live in any language he lists.</div>
+          </div>
+
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px 18px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <span style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">RECORDING — CONSENT &amp; STORAGE</span>
+              <div onClick="{{ conTap }}" style="width:44px; height:26px; border-radius:99px; position:relative; cursor:pointer; transition:background .25s; background: {{ conBg }};"><span style="position:absolute; top:2px; width:22px; height:22px; border-radius:50%; background:#FFFFFF; box-shadow:0 1px 4px rgba(0,0,0,0.2); transition:left .25s; left: {{ conX }};"></span></div>
+            </div>
+            <div style="font-size:12px; color:#454349; line-height:1.6; margin-top:9px;">{{ conLine }}</div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+              <span style="font-size:12px; color:#454349; width:104px;">Keep audio</span>
+              <div style="display:flex; gap:5px;">
+                <span style="font-size:10.5px; font-weight:600; color:#66646C; border:1px solid #E4E2E6; border-radius:99px; padding:4px 12px; cursor:pointer;">90 days</span>
+                <span style="font-size:10.5px; font-weight:600; color:#FFFFFF; background:#A63D63; border-radius:99px; padding:4px 12px;">until I delete</span>
+                <span style="font-size:10.5px; font-weight:600; color:#66646C; border:1px solid #E4E2E6; border-radius:99px; padding:4px 12px; cursor:pointer;">drop after transcript</span>
+              </div>
+            </div>
+            <div style="font-size:10.5px; color:#96949B; margin-top:9px;">Stroke timestamps and the text layer survive audio deletion — replay degrades to the transcript line.</div>
+          </div>
+
+          <div style="background:#FFFFFF; border-radius:16px; padding:16px 18px; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <span style="font-size:10px; letter-spacing:0.16em; font-weight:700; color:#96949B;">LAYOUTS — THE DESK REMEMBERS</span>
+              <span style="font-size:10.5px; color:#96949B;">per context, per device</span>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:11px;">
+              <div style="flex:1; border:1px solid #E4E2E6; border-radius:11px; padding:9px 11px;">
+                <div style="width:56px; height:36px; border:1px solid #E4E2E6; border-radius:6px; display:flex; gap:2px; padding:3px; box-sizing:border-box; background:#FAF9FA;"><span style="flex:1.2; background:#F0D3E0; border-radius:3px;"></span><span style="flex:1; background:#E4E2E6; border-radius:3px;"></span></div>
+                <div style="font-size:11px; font-weight:600; color:#232227; margin-top:6px;">Study</div><div style="font-size:9.5px; color:#96949B;">Notebook | Teaching</div>
+              </div>
+              <div style="flex:1; border:1px solid #E4E2E6; border-radius:11px; padding:9px 11px;">
+                <div style="width:56px; height:36px; border:1px solid #E4E2E6; border-radius:6px; display:flex; gap:2px; padding:3px; box-sizing:border-box; background:#FAF9FA;"><span style="flex:1.2; background:#F0D3E0; border-radius:3px;"></span><span style="flex:1; display:flex; flex-direction:column; gap:2px;"><span style="flex:1.3; background:#E4E2E6; border-radius:3px;"></span><span style="flex:1; background:#E4E2E6; border-radius:3px;"></span></span></div>
+                <div style="font-size:11px; font-weight:600; color:#232227; margin-top:6px;">Sermon</div><div style="font-size:9.5px; color:#96949B;">Notebook | Bible over Ref</div>
+              </div>
+              <div style="flex:1; border:1px solid #E4E2E6; border-radius:11px; padding:9px 11px;">
+                <div style="width:56px; height:36px; border:1px solid #E4E2E6; border-radius:6px; padding:3px; box-sizing:border-box; background:#FAF9FA;"><span style="display:block; height:100%; background:#E4E2E6; border-radius:3px;"></span></div>
+                <div style="font-size:11px; font-weight:600; color:#232227; margin-top:6px;">Free reading</div><div style="font-size:9.5px; color:#96949B;">one text, wide margins</div>
+              </div>
+            </div>
+            <div style="font-size:10.5px; color:#96949B; margin-top:10px;">Tool, color, layout and last position persist per context — opening a study page reopens the Bible at the assignment.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { hand: 'L', consent: true };
+  renderVals() {
+    const s = this.state, L = s.hand === 'L';
+    return {
+      setL: () => this.setState({ hand: 'L' }), setR: () => this.setState({ hand: 'R' }),
+      lBg: L ? '#F6E3EB' : '#FAF9FA', lRing: L ? 'inset 0 0 0 1.5px #A63D63' : 'inset 0 0 0 1px #EDEBEE',
+      rBg: !L ? '#F6E3EB' : '#FAF9FA', rRing: !L ? 'inset 0 0 0 1.5px #A63D63' : 'inset 0 0 0 1px #EDEBEE',
+      lTag: L ? '· his default' : '', rTag: !L ? '· active' : '',
+      conTap: () => this.setState(st => ({ consent: !st.consent })),
+      conBg: s.consent ? '#A63D63' : '#D9D7DC',
+      conX: s.consent ? '20px' : '2px',
+      conLine: s.consent
+        ? 'One-time note, shown once: recordings are for your own study. Where you are, one-party consent covers this — check locally if you travel. Never uploaded anywhere you haven\u2019t chosen.'
+        : 'Recording is off. The Sermon page still works — strokes timestamp against the clock instead, and replay is unavailable.'
+    };
+  }
+}
+</script>
+</body>
+</html>

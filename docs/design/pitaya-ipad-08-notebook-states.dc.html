@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400..700;1,7..72,400..700&family=Caveat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#131216; -webkit-font-smoothing:antialiased; }
+    a { color:#DC74A0; text-decoration:none; } a:hover { color:#E795B4; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    @keyframes vu { 0%,100% { transform:scaleY(0.3); } 50% { transform:scaleY(1); } }
+    @keyframes blinkC { 0%,55% { opacity:1; } 56%,100% { opacity:0; } }
+    @keyframes march { to { stroke-dashoffset:-14; } }
+  </style>
+</helmet>
+<section data-screen-label="08 — Notebook states" style="min-height:100vh; box-sizing:border-box; padding:56px 64px 90px; font-family:'Instrument Sans',sans-serif; background:#131216;">
+  <div style="max-width:1360px;">
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:10px; font-size:12px; letter-spacing:0.2em; font-weight:600; color:#DC74A0;"><svg width="11" height="11" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#DC74A0"></rect></svg> PITAYA · SPIRIT ON IPAD — ROUND 2</div>
+      <span style="flex:1;"></span>
+      <div style="display:flex; gap:6px; font-size:11.5px; font-weight:600; flex-wrap:wrap; justify-content:flex-end; max-width:780px;">
+        <a href="pitaya-ipad-00-home.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">00 · Home</a>
+        <a href="pitaya-ipad-01-sermon-desk.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">01 · Sermon Desk</a>
+        <a href="pitaya-ipad-02-bible-modes.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">02 · Bible modes</a>
+        <a href="pitaya-ipad-03-notebook-rail.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">03 · Notebook rail</a>
+        <a href="pitaya-ipad-04-guided-study.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">04 · Guided study</a>
+        <a href="pitaya-ipad-05-bible-overlay.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">05 · Overlay</a>
+        <a href="pitaya-ipad-06-sunday-replay.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">06 · Sunday replay</a>
+        <a href="pitaya-ipad-07-bible-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">07 · Bible states</a>
+        <span style="background:#F2F1F2; color:#131216; border-radius:99px; padding:5px 13px;">08 · Notebook states</span>
+        <a href="pitaya-ipad-09-worksheets.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">09 · Worksheets</a>
+        <a href="pitaya-ipad-10-desk-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">10 · Desk states</a>
+        <a href="pitaya-ipad-11-settings.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">11 · Settings</a>
+      </div>
+    </div>
+    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:36px; font-weight:700; color:#F2F1F2; letter-spacing:-0.02em; margin-top:12px;">Notebook states — page list, lasso, transcribe, dictation, phone</div>
+    <div style="font-size:14px; color:#96949B; margin-top:8px; line-height:1.65; max-width:880px;">The states around the sketchbook: a notebook's page list with real thumbnails; the lasso's menu; the small transcribe card (same proposal shape as Sunday's, smaller); dictation landing at the cursor from the rail's mic; and the page read back on the phone.</div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:36px; margin-top:26px; align-items:flex-start;">
+
+      <div data-screen-label="8a Page list — Sermons" style="flex:none; width:400px;">
+        <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:11px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">8a</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">A notebook's pages — Sermons</span></div>
+        <div style="background:#FFFFFF; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.35); overflow:hidden;">
+          <div style="height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid #EDEBEE;">
+            <span style="font-size:13px; color:#8C2F51;">‹</span>
+            <span style="font-family:'Familjen Grotesk',sans-serif; font-size:13.5px; font-weight:700; color:#232227;">Sermons</span>
+            <span style="font-size:10px; color:#96949B;">12 pages</span>
+            <span style="flex:1;"></span>
+            <span style="font-size:10px; font-weight:600; color:#8C2F51; cursor:pointer;">+ page</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:14px;">
+            <div style="border:1px solid #E4E2E6; border-radius:12px; overflow:hidden; cursor:pointer;" style-hover="border-color:#D9B9C8;">
+              <div style="height:86px; background:#FFFDF9; background-image:radial-gradient(#EBE6E1 1px, transparent 1.2px); background-size:14px 14px; position:relative; padding:8px 10px; box-sizing:border-box;">
+                <svg width="100%" height="100%" viewBox="0 0 160 70" preserveAspectRatio="none"><path d="M8 14 C 40 8, 80 18, 130 10" stroke="#5F4B8B" stroke-width="2.4" fill="none" stroke-linecap="round"></path><path d="M8 30 C 36 26, 66 34, 100 28" stroke="#5E7FA6" stroke-width="2" fill="none" stroke-linecap="round"></path><rect x="8" y="42" width="52" height="18" rx="4" fill="none" stroke="#D9B9C8" stroke-width="1.6"></rect><path d="M72 50 C 90 44, 112 54, 140 46" stroke="#B85C8A" stroke-width="2" fill="none" stroke-linecap="round"></path></svg>
+                <span style="position:absolute; top:6px; right:7px; width:7px; height:7px; border-radius:50%; background:#C24040;"></span>
+              </div>
+              <div style="padding:8px 10px 9px; border-top:1px solid #F2F1F2;">
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; color:#232227;">Aug 23 · wk 2</div>
+                <div style="font-size:9.5px; color:#96949B; margin-top:1px;">Gal 3:1–14 · 41:12 rec · transcribed ✓</div>
+              </div>
+            </div>
+            <div style="border:1px solid #E4E2E6; border-radius:12px; overflow:hidden; cursor:pointer;" style-hover="border-color:#D9B9C8;">
+              <div style="height:86px; background:#FFFDF9; background-image:radial-gradient(#EBE6E1 1px, transparent 1.2px); background-size:14px 14px; position:relative; padding:8px 10px; box-sizing:border-box;">
+                <svg width="100%" height="100%" viewBox="0 0 160 70" preserveAspectRatio="none"><path d="M8 12 C 50 6, 90 16, 150 9" stroke="#5F4B8B" stroke-width="2.2" fill="none" stroke-linecap="round"></path><path d="M8 26 C 30 22, 60 30, 84 24 M8 40 C 40 36, 70 44, 110 38" stroke="#44414B" stroke-width="1.8" fill="none" stroke-linecap="round"></path><path d="M8 56 C 26 52, 46 58, 66 54" stroke="#B85C8A" stroke-width="2" fill="none" stroke-linecap="round"></path></svg>
+                <span style="position:absolute; top:6px; right:7px; width:7px; height:7px; border-radius:50%; background:#C24040;"></span>
+              </div>
+              <div style="padding:8px 10px 9px; border-top:1px solid #F2F1F2;">
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; color:#232227;">Aug 16 · wk 1</div>
+                <div style="font-size:9.5px; color:#96949B; margin-top:1px;">Gal 1–2 · 38:04 rec · transcribed ✓</div>
+              </div>
+            </div>
+            <div style="border:1px solid #E4E2E6; border-radius:12px; overflow:hidden; cursor:pointer;" style-hover="border-color:#D9B9C8;">
+              <div style="height:86px; background:#FFFDF9; background-image:radial-gradient(#EBE6E1 1px, transparent 1.2px); background-size:14px 14px; padding:8px 10px; box-sizing:border-box;">
+                <svg width="100%" height="100%" viewBox="0 0 160 70" preserveAspectRatio="none"><path d="M8 16 C 44 10, 84 20, 132 12" stroke="#5E7FA6" stroke-width="2.2" fill="none" stroke-linecap="round"></path><circle cx="34" cy="42" r="14" fill="none" stroke="#B85C8A" stroke-width="1.8"></circle><path d="M58 44 C 84 38, 116 50, 148 42" stroke="#5F4B8B" stroke-width="2" fill="none" stroke-linecap="round"></path></svg>
+              </div>
+              <div style="padding:8px 10px 9px; border-top:1px solid #F2F1F2;">
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; color:#232227;">Aug 9 · men's study</div>
+                <div style="font-size:9.5px; color:#96949B; margin-top:1px;">Ro 12 · no recording</div>
+              </div>
+            </div>
+            <div style="border:1.5px dashed #D9D7DC; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; cursor:pointer; min-height:128px;" style-hover="border-color:#A63D63;">
+              <span style="font-size:20px; color:#96949B; line-height:1;">+</span>
+              <span style="font-size:10px; color:#96949B;">new sermon page</span>
+            </div>
+          </div>
+          <div style="font-size:9.5px; color:#A9A7AE; padding:0 14px 12px;">thumbnails are the real ink, shrunk · the red dot marks an attached recording</div>
+        </div>
+      </div>
+
+      <div style="flex:none; width:430px; display:flex; flex-direction:column; gap:22px;">
+        <div data-screen-label="8b Lasso menu">
+          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:11px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">8b</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Lasso → the menu</span></div>
+          <div style="background:#FFFDF9; background-image:radial-gradient(#EBE6E1 1px, transparent 1.2px); background-size:18px 18px; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.35); padding:18px 20px; position:relative;">
+            <div style="position:relative; display:inline-block; padding:10px 14px;">
+              <div style="font-family:'Caveat',cursive; font-size:22px; line-height:1.3; color:#5F4B8B; transform:rotate(-0.4deg);">grace runs downhill —<br>it finds the low place</div>
+              <svg style="position:absolute; inset:0; width:100%; height:100%;" preserveAspectRatio="none" viewBox="0 0 100 100"><rect x="2" y="2" width="96" height="96" rx="8" fill="#A63D6308" stroke="#A63D63" stroke-width="1.2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" style="animation:march 1s linear infinite;"></rect></svg>
+              <span style="position:absolute; left:-4px; top:-4px; width:8px; height:8px; border-radius:2px; background:#FFFFFF; border:1.5px solid #A63D63;"></span>
+              <span style="position:absolute; right:-4px; top:-4px; width:8px; height:8px; border-radius:2px; background:#FFFFFF; border:1.5px solid #A63D63;"></span>
+              <span style="position:absolute; left:-4px; bottom:-4px; width:8px; height:8px; border-radius:2px; background:#FFFFFF; border:1.5px solid #A63D63;"></span>
+              <span style="position:absolute; right:-4px; bottom:-4px; width:8px; height:8px; border-radius:2px; background:#FFFFFF; border:1.5px solid #A63D63;"></span>
+            </div>
+            <div style="display:inline-flex; align-items:center; gap:2px; background:#232227; border-radius:12px; padding:5px 7px; box-shadow:0 10px 28px rgba(20,15,18,0.35); margin-left:10px; vertical-align:top;">
+              <span style="padding:6px 9px; border-radius:8px; font-size:10px; font-weight:600; color:#F2F1F2; cursor:pointer;" style-hover="background:#38343C;">Move / resize</span>
+              <span style="padding:6px 9px; border-radius:8px; font-size:10px; font-weight:600; color:#F2F1F2; cursor:pointer;" style-hover="background:#38343C;">Convert to text</span>
+              <span style="padding:6px 9px; border-radius:8px; font-size:10px; font-weight:600; color:#F2F1F2; cursor:pointer;" style-hover="background:#38343C;">Make this a note</span>
+              <span style="padding:6px 9px; border-radius:8px; font-size:10px; font-weight:600; color:#F2F1F2; cursor:pointer;" style-hover="background:#38343C;">Copy as image</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:7px; margin-top:12px; background:#FFFFFF; border:1px solid #EDEBEE; border-radius:10px; padding:8px 11px; max-width:360px;">
+              <span style="font-size:9px; letter-spacing:0.1em; font-weight:700; color:#96949B; flex:none;">MAKE THIS A NOTE →</span>
+              <span style="font-size:10.5px; color:#66646C;">anchor: <span style="font-weight:700; color:#8C2F51;">Ro 9:6 (nearest card)</span> · or pick a verse</span>
+            </div>
+          </div>
+        </div>
+
+        <div data-screen-label="8c Transcribe confirm card">
+          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:11px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">8c</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Page-close transcribe card — Sunday's, smaller</span></div>
+          <div style="background:#FFFFFF; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,0.4); padding:15px 17px;">
+            <div style="display:flex; align-items:center; gap:9px;">
+              <div style="width:30px; height:30px; border-radius:50%; background:#F6E3EB; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A63D63" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></div>
+              <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:700; color:#232227;">Here is what I read</div><div style="font-size:10px; color:#96949B;">study page · Term 1 p. 8 — keep, edit or discard</div></div>
+            </div>
+            <div style="background:#FAF9FA; border:1px solid #EDEBEE; border-radius:10px; padding:9px 11px; margin-top:10px; font-size:11px; color:#66646C; line-height:1.55;">"he weeps before he argues (9:2) · accursed for my brothers — who talks like that?? · so Ro 9:6 is the thesis — everything after is evidence"</div>
+            <div style="display:flex; align-items:center; gap:7px; margin-top:8px; border:1px solid #EDEBEE; border-radius:10px; padding:8px 11px;">
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:700; color:#8C2F51; flex:none;">Ro 9:6</span>
+              <span style="font-size:10.5px; color:#66646C; flex:1;">found in ink → live link + reference card?</span>
+              <span style="font-size:9.5px; font-weight:700; color:#3E7A54; background:#EAF3ED; border-radius:99px; padding:3px 10px; cursor:pointer;">✓ keep</span>
+              <span style="font-size:9.5px; font-weight:600; color:#96949B; border:1px solid #E4E2E6; border-radius:99px; padding:3px 10px; cursor:pointer;">discard</span>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
+              <span style="font-size:9.5px; color:#A9A7AE;">"show text" stays off — handwriting remains handwriting</span>
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:11px; font-weight:600; color:#FFFFFF; background:#A63D63; border-radius:9px; padding:7px 14px; cursor:pointer;" style-hover="background:#8C2F51;">Keep 1 · close</span>
+            </div>
+          </div>
+        </div>
+
+        <div data-screen-label="8d Dictation at the cursor + recording chip">
+          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:11px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">8d</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Dictation lands at the cursor · the chip's two states</span></div>
+          <div style="background:#FFFFFF; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.35); padding:15px 17px;">
+            <div style="display:flex; align-items:flex-start; gap:10px;">
+              <div style="flex:1; background:#FFFFFF; border:1px solid #EDEBEE; border-radius:11px; padding:10px 12px;">
+                <div style="font-size:8.5px; letter-spacing:0.12em; font-weight:700; color:#C9C7CD;">TYPED BLOCK</div>
+                <div style="font-size:12.5px; color:#454349; line-height:1.6; margin-top:4px;">Paul answers grief, not curiosity — the anguish of 9:2 sets the question<span style="display:inline-block; width:1.5px; height:13px; background:#A63D63; vertical-align:-2px; margin-left:1px; animation:blinkC 1.1s step-end infinite;"></span><span style="color:#B07A93;"> and verse six answers it before the hard part begins…</span></div>
+              </div>
+              <div style="width:118px; flex:none; background:#F6E3EB; border-radius:11px; padding:9px 11px;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <svg width="12" height="12" viewBox="0 0 20 20"><rect x="7" y="1.5" width="6" height="10.5" rx="3" fill="#8C2F51"></rect><path d="M4 8.5a6 6 0 0 0 12 0M10 14.5v3" stroke="#8C2F51" stroke-width="1.7" fill="none" stroke-linecap="round"></path></svg>
+                  <span style="display:flex; align-items:flex-end; gap:1.5px; height:11px;"><span style="width:2.5px; background:#A63D63; border-radius:2px; height:100%; transform-origin:bottom; animation:vu .7s ease-in-out infinite;"></span><span style="width:2.5px; background:#A63D63; border-radius:2px; height:100%; transform-origin:bottom; animation:vu .7s ease-in-out infinite .14s;"></span><span style="width:2.5px; background:#A63D63; border-radius:2px; height:100%; transform-origin:bottom; animation:vu .7s ease-in-out infinite .28s;"></span></span>
+                </div>
+                <div style="font-size:9px; color:#8C2F51; font-weight:600; margin-top:5px; line-height:1.4;">from the rail's mic — lands at the cursor, pink until he confirms</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:9px; margin-top:12px;">
+              <div style="flex:1; display:flex; align-items:center; gap:8px; background:#FAF9FA; border:1px solid #EDEBEE; border-radius:99px; padding:6px 12px;">
+                <svg width="11" height="11" viewBox="0 0 10 11"><path d="M1.5 1l7.5 4.5-7.5 4.5Z" fill="#8C2F51"></path></svg>
+                <span style="font-size:10.5px; font-weight:600; color:#232227;">41:12</span>
+                <span style="font-size:9px; color:#96949B;">recording attached</span>
+              </div>
+              <div style="flex:1.3; display:flex; align-items:center; gap:8px; background:#F6E3EB; border:1px solid #E9CFDC; border-radius:99px; padding:6px 12px;">
+                <svg width="9" height="10" viewBox="0 0 8 9"><rect x="0.5" y="0.5" width="2.4" height="8" rx="1" fill="#8C2F51"></rect><rect x="5" y="0.5" width="2.4" height="8" rx="1" fill="#8C2F51"></rect></svg>
+                <span style="flex:1; height:3.5px; border-radius:99px; background:#E9CFDC; position:relative;"><span style="position:absolute; left:0; top:0; bottom:0; width:57%; border-radius:99px; background:#A63D63;"></span></span>
+                <span style="font-size:10.5px; font-weight:600; color:#8C2F51; font-variant-numeric:tabular-nums;">23:38</span>
+              </div>
+            </div>
+            <div style="font-size:9.5px; color:#A9A7AE; margin-top:8px;">the chip on a page: attached (quiet) · playing (progress) — tap ink to jump it (see <a href="pitaya-ipad-06-sunday-replay.dc.html">06</a>)</div>
+          </div>
+        </div>
+      </div>
+
+      <div data-screen-label="8e Phone — read-only page" style="flex:none; width:270px;">
+        <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:11px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">8e</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Read back on the phone</span></div>
+        <div style="width:250px; background:#0B0A0D; border:1px solid #2A292E; border-radius:32px; padding:10px;">
+          <div style="background:#F2F1F2; border-radius:24px; overflow:hidden;">
+            <div style="background:#FFFFFF; padding:12px 14px 10px; border-bottom:1px solid #EDEBEE;">
+              <div style="display:flex; align-items:center; gap:6px;"><span style="font-size:11px; color:#8C2F51;">‹</span><span style="font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:700; color:#232227;">Sermons · Aug 23</span></div>
+              <div style="display:flex; align-items:center; gap:5px; margin-top:5px;"><span style="font-size:8px; font-weight:700; color:#66646C; background:#F2F1F2; border-radius:99px; padding:2.5px 8px;">READ-ONLY</span><span style="font-size:8px; color:#A9A7AE;">the pen lives on the iPad</span></div>
+            </div>
+            <div style="background:#FFFDF9; background-image:radial-gradient(#EBE6E1 1px, transparent 1.2px); background-size:16px 16px; padding:12px 14px 14px;">
+              <div style="font-size:7.5px; letter-spacing:0.12em; font-weight:700; color:#A9A7AE;">SUN · AUG 23 · GAL 3:1–14</div>
+              <div style="font-family:'Caveat',cursive; font-size:17px; line-height:1.25; color:#5F4B8B; margin-top:8px; transform:rotate(-0.5deg);">faith doesn't graduate into law — the Spirit runs on hearing</div>
+              <div style="font-family:'Caveat',cursive; font-size:15px; color:#5E7FA6; margin-top:5px;">II. works vs hearing (v.2)</div>
+              <div style="display:inline-block; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:9px; padding:6px 9px; margin-top:8px;">
+                <span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#8C2F51;">Gen 15:6</span>
+                <div style="font-family:'Literata',serif; font-style:italic; font-size:9px; color:#66646C; margin-top:2px;">"And he believed the LORD…"</div>
+              </div>
+              <div style="font-family:'Caveat',cursive; font-size:15px; color:#B85C8A; margin-top:8px;">abraham believed first → <span style="border-bottom:1.5px dashed #A63D63;">Ro 4:3</span></div>
+              <div style="display:flex; align-items:center; gap:6px; background:#FFFFFF; border:1px solid #EDEBEE; border-radius:99px; padding:5px 10px; margin-top:10px;">
+                <svg width="9" height="9" viewBox="0 0 10 11"><path d="M1.5 1l7.5 4.5-7.5 4.5Z" fill="#8C2F51"></path></svg>
+                <span style="font-size:9px; font-weight:600; color:#232227;">41:12</span>
+                <span style="font-size:7.5px; color:#96949B;">tap ink → replay works here too</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="background:#1B1A1F; border:1px solid #2A292E; border-radius:12px; padding:11px 13px; margin-top:14px; width:250px; box-sizing:border-box;">
+          <div style="font-size:9px; letter-spacing:0.14em; font-weight:700; color:#DC74A0;">RENDERED, NOT EDITABLE</div>
+          <div style="font-size:11.5px; color:#96949B; line-height:1.55; margin-top:5px;">The page ships to the phone as a rendered view — live refs still tap, replay still works, ink never edits. Writing waits for the iPad.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+</body>
+</html>

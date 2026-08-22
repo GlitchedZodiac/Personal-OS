@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-20b (WRIST IA + measurement cards — web DEPLOYED)
+**Last updated:** 2026-08-22 (SPIRIT ON IPAD — V1 BUILT from the 12 design screens: the desk, Bible modes + overlay, notebook + ink engine, Sunday recording/transcribe/replay, worksheets, Home hub, settings, phone read-back, iPad companion target; on branch `claude/spirit-app-ipad-redesign-79442c`, NOT merged)
 **Current phase:** both lanes are merged into `claude/watchos-workout-ui-ba4448`
 (2026-08-20) — the web tree from `main` plus the watch lane's Round 1+2 +
 Freestyle work. The watch is a designed instrument: Settings + bell rack, a
@@ -15,6 +15,254 @@ of truth as of 08-14d.
 **Branch in flight:** `claude/watchos-workout-ui-ba4448` (BOTH lanes — see
 below) · `claude/phase1-modernization` (web) · `claude/watch-app` (watch,
 worktree ~/VibeCoding/personal-os-watch).
+
+## 2026-08-22 — SPIRIT ON IPAD · V1 BUILT (web desk + API + iPad companion target) — branch `claude/spirit-app-ipad-redesign-79442c`, local commit, not merged
+
+His call after round 2: "fully functional V1 — don't skimp out on anything —
+run it through to completion." Built against the 12 Claude-Design screens
+(`docs/design/pitaya-ipad-00…11*.dc.html`, archived from his export; PORT
+GATE read in full). Everything below is driven in the Browser pane at
+1180×820 (+820×1180 portrait, +390 phone), the APIs curled with a minted
+cookie, and the iOS target built + launched on the iPad Air 11" simulator.
+
+**Routes (iPad, under the new full-bleed `app/(desk)` layout):**
+`/home` (00 — Spirit front door + mini-hub + rail + compact phone pane) ·
+`/spirit/desk?ctx=study|sermon|free&page=&q=` (01–05, 07, 08, 10 — the
+desk) · `/spirit/recordings` (06c) · `/spirit/notebooks` (shelf → pages) ·
+`/spirit/desk-settings` (11). Phone: `/spirit/notebook/page/[id]` (8e,
+read-only), the Reader's INK ON/OFF overlay toggle (5d), a "From the iPad"
+strip on the phone Notebook, a Sunday "takes notes on the iPad" hint, a Desk
+link in the desktop rail. Widths < 700 redirect to the phone routes (the
+"compact = phone layout untouched" law).
+
+**The desk (components/spirit/desk/):** Logos-style panes — presets Study
+(Notebook | Teaching), Sermon (Notebook | Bible over Reference), Free (one
+Bible, wide margins), Source; seams snap at ⅓·½·⅔ (finger only, pen ignored);
+handedness mirrors everything (lefty default; rail by the seam on the
+writing side); portrait stacks; the desk remembers layout per context;
+layout picker + flip. **Bible pane:** the phone Reader extracted to
+`components/spirit/reader.tsx` (forwardRef handle; phone route is a thin
+wrapper) and hosted embedded; STUDY (loop→select, tick/strike on
+suggestions, underline→select, taps route through the ink layer) vs
+SCRATCH (frozen page, ink stays); **only the highlighter highlights** (tap a
+verse number = whole verse, drag = span, six categories); **overlay**
+orthogonal to mode — margin none/wide/wider (26/122/170 on the writing
+side), HIDE|DIM|SHOW, layers = contexts (My layer / this study / Sunday),
+aA locks while inked ("PAGE PINNED"), ink anchored per verse `{ref,dx,dy}`
+so it re-flows with type; action bar A (pen-positioned, free-hand side) /
+B (fixed) behind a setting; send-to-notes, note, link, memorize, ask, copy;
+hold-a-verse → drag a ref card into the notebook (pen gesture only — the
+highlighter/eraser/lasso never hand off); opening a study reopens the Bible
+AT the assignment. **Notebook pane:** the ink engine (`lib/ink.ts`:
+pressure/tilt, coalesced events, streamline, variable-width ribbon, palm
+rejection, finger pan/pinch, 2-finger undo / 3-finger redo, QuickShape
+hold-snap, lasso), tool rail (fountain/G-pen/pencil/marker/highlighter/
+eraser/lasso/text/ref-card/photo/mic/undo/redo/size/opacity/palette), pen
++ brush + palette popovers (Sketch purples, Sunday ink, recents, saved
+palettes), page objects (header, sections, ref cards, typed blocks, dictation
+pink-until-confirmed, photos, answer boxes with ink/type/speak, compare
+ESV|BSB), delta saves (append/remove strokes) with offline retry, history,
+thumbnails, page list + notebooks menu (Sermons · Term N · Free ·
+Worksheets · custom), handwriting → hidden text layer via vision recognition
+(refs go live; "show text" off by default). **Teaching pane:** the guided
+study's six steps ported (answer box → notebook, "Open in the Bible pane",
+sources, step 6 homework card with the written assignment + "Open the
+worksheet"). **Sunday:** sermon page template (BIG IDEA · OUTLINE · VERSES
+READ · QUOTES WORTH KEEPING · APPLICATION · QUESTIONS TO BRING BACK),
+Record in the page header → 2-minute segments uploaded raw to Postgres
+(`RecordingSegment.bytes` — no storage bucket key exists), per-stroke
+`recT` → tap-a-stroke replay (ReplayBar, waveform, transcript line follows
+the playhead), transcription per segment (`verbose_json` timestamps, whisper
+fallback) + one EN gloss pass for Spanish, retention 90d/forever/after-
+transcript, closing card (keep/edit/discard per ref → VerseLink/SpiritNote),
+recordings library (rename · label · delete audio keeps the page). **Written
+assignment on every study:** `DevotionalDay.writtenPrompt` (generator +
+backfill route; the active term's 8 studies backfilled today) → worksheet
+template with the written line; Submit → `HomeworkCheck`, never auto-ticked;
+open → submitted → reopened (edits after submit are recorded) → resubmit.
+**Home hub:** resume cards (study at its step, Sunday's page, free reading),
+shelf, exactly three widgets (Training · Eating · Measurements — 7-day avg
+or the latest weigh-in), the rail (Today, Chat, Food, Health [round 2],
+Trends, Settings, Journal [deferred]) opening the phone layout in a ~500pt
+compact pane with Done.
+
+**Data:** `SpiritNotebook`, `InkPage` (kinds study/sermon/worksheet/free/
+reflection/overlay; strokes + objects JSON; status open/submitted/reopened;
+refs; textLayer; thumbnail), `Recording` + `RecordingSegment`,
+`SpiritPref.desk`, `DevotionalDay.writtenPrompt` — migration
+`20260822190739_spirit_ipad_desk` applied to the shared DB. 18 new API routes
+under `app/api/spirit/` (ink, notebooks, recordings + segments + transcribe,
+sermon, worksheet, hub, desk-prefs, bsb, curriculum/written) — all behind the
+cookie, no new self-authenticating routes.
+
+**iPad companion (`ios/`, Q23 lane permission):** `TARGETED_DEVICE_FAMILY
+"1,2"`, all iPad orientations, `UIRequiresFullScreen false` (Split View beside
+Logos), ATS local-networking for the DEBUG origin override
+(`pitaya.devOrigin`), iPad idiom lands on `/home`, pairing keypad capped at
+440pt. Built for the iPad Air 11" (M4) simulator and launched — it reaches
+the PIN pairing screen (I did not enter his PIN; pairing is his one-time
+tap). Apple Pencil reaches the web ink engine as pointer events with
+pressure + tilt.
+
+**DESIGN DEVIATION, surfaced (PORT GATE rule 3):** his Q1 was "C-first —
+a native PencilKit pane first". V1 ships the **web ink engine inside the
+companion's WKWebView** instead: one engine renders the notebook, the Bible
+overlay (which has to sit over the web Reader) and the phone's read-back;
+stroke JSON is PencilKit-shaped (`PKDrawing` ⇄ strokes is the upgrade path,
+deferred item). If the Pencil feel in WKWebView isn't good enough on his
+iPad, the PencilKit pane is the next build — nothing in the data model
+changes.
+
+**Self-smoke (caught → fixed):** taps/highlighter over the Bible hit the ink
+wrapper, not the verse (`elementsFromPoint` now looks through
+`[data-ink-canvas]`); the hold→drag handoff hijacked highlighter strokes
+(gated to drawing tools); the debounced save PATCHed a stale object list —
+ref cards vanished on reload (flush reads the latest state through refs);
+dev double-mount created duplicate study/Sunday pages (client in-flight
+dedupe + server `canonicalPage`); `glossLang` wasn't a column (transcript
+lines carry the gloss); transcript lines could be lost if the save after the
+segment mark failed (per-segment transaction); hub weight was null outside a
+7-day window (falls back to the latest weigh-in); page-object type was too
+small at the 800-unit page scale (×1.3); the stacked Bible header clipped
+(compact header < 600px); scroll-to-assignment used rAF (starves when not
+compositing) and got clamped by the pinned/overlay loads (timer + re-apply);
+the phone strip listed overlay pages; the no-series Sunday page said
+"week 0". Verified end to end: stroke → PATCH → reload; highlighter drag →
+`/api/spirit/layer` (God · 1 Cor 1:1); tap-select → pen-positioned bar →
+Send to notes → ref card persisted; worksheet open → written line → Submit
+→ `HomeworkCheck` (then unticked); sermon desk + recordings library with a
+13 s synthesised Spanish clip → 3 transcript lines + EN gloss + audio bytes
+served; Home hub numbers match the dashboard; compact pane; portrait; phone
+INK ON overlay + read-only page; settings. Build green, 149/149 tests,
+tsc + lint clean on the desk scope. All smoke rows deleted afterwards (no
+ink pages, no recordings, homework unticked); the system notebooks and the
+written prompts stay.
+
+**Not in V1 (deferred, see deferred-items):** native PencilKit pane; Supabase
+Storage for audio; native (background) recording in the companion; Health
+on iPad (round 2); Journal; trails. **Michael's actions:** enroll the $99
+program (deferred item), pair the companion on the iPad, try the pen.
+
+## 2026-08-22 — SPIRIT ON IPAD: answers in, the design prompt is ready (no code)
+
+He answered all 25 questions in the Google Doc (left the idea menu mostly
+blank on purpose: "I think I answered what we wanted in your questions").
+Read back via the Drive connector; folded into
+`docs/spirit-ipad-brainstorm.md` **§15** (answer → decision table + the
+build-facing decisions).
+
+**What he decided:** native ink first ("C first" — Apple Pencil Pro on an
+iPad Air 11", Developer Mode already on, he'll buy the $99 program);
+landscape-first; **left-handed default with a handedness setting**; a
+**pane system like Logos** (2–3 panes, two Bible instances — a main text
+and a reference Bible that follows links); the Bible pane in **two modes**
+— Study (marks evaporate, hover rail) and **Scratch** (frozen printed page,
+his ink stays: "a Bible I can write on"); **the highlighter tool is what
+highlights, an underline is an underline**; action bar → two options for
+Design (pen-positioned vs upper-right); free palette + recents + saved
+palettes, brush styles (fountain pen, G-pen…), **multiple notebooks**;
+handwriting stays handwriting with a hidden text layer, references he
+writes become live (Logos-style popover); **Sunday is the pilot** — sermon
+page + recording in the corner + tap-a-stroke replay + a **recordings
+library**; **every study gets a written assignment**, worksheets with a
+Submit button, never auto-ticked; AI never responds to written answers;
+Journal deferred (maybe scrapped); Health on iPad is round 2 as
+scorecards; one chat may own web + ios for this project (his reading of
+the lanes).
+
+**Written:** `docs/spirit-ipad-design-prompt.md` (round-5 format, meta +
+PASTE markers) and the clean `docs/spirit-ipad-design-prompt-PASTE.md` —
+frame 1180×820 pt, Pencil Pro, §0 his bar verbatim, §1 the Desk/panes, §2
+the Bible pane's two modes + highlighter + both action bars + popovers,
+§3 the Notebook (shelf, brushes, palette, lasso, text layer), §4 Sunday
+(sermon page, recording, replay, closing card, recordings library), §5
+worksheets for all six kinds + Submit, §6 settings, §7 AI unchanged, §8
+do-not-design, §9 deliverables in pilot order + the three screens to
+start with + per-screen export ask.
+
+Deferred-items: the MICHAEL pointer annotated ANSWERED; new items for the
+$99 enrollment (his), the curriculum "written assignment per study"
+change, sermon recordings + library, and the one-chat-owns-both-lanes
+note. Nothing built, no schema touched.
+
+**Later the same day — design round 1 came back** (five DC screens in the
+Claude Design project "Health app design system": 00 Home · 01 Sermon
+Desk · 02 Bible Modes · 03 Notebook Rail · 04 Guided Study, plus a
+build-round-1 hand-back). Saved verbatim with the main lane's review in
+**`docs/spirit-ipad-build-round1-from-design.md`**: faithful to the prompt
+and his answers (Scratch = frozen layout + per-verse anchoring, aA locked;
+highlighter-only; guided-study state machine reused verbatim — checked),
+but five screens vs ~35 asked states — missing or unmentioned: replay
+state, closing confirm card, recordings library, circle→multi-verse,
+the two action-bar options, reference popover, margin ink glyph, lasso /
+transcribe card / page list / phone view, portrait + compact, dark/night,
+and **the whole worksheet family + Submit** (his Q18/Q19). The project is
+not reachable from the repo (DesignSync sees only design-system projects)
+→ **export the five .dc.html files into docs/design/** (PORT GATE), then a
+round-2 gap pass, while the Sunday build starts on what IS designed with
+the undesigned Sunday states built from existing components and flagged.
+**Ratified by him the same evening:** Spirit is the iPad's front door, as a
+**mini-hub** (desk resume cards + 3–4 glance widgets — training · eating ·
+measurements · journal-if-kept — + the right-hand rail to the other
+sections); and he named a real gap round 1 missed: **the Bible ink overlay**
+(freely scribble on the Bible — margin notes, arrows, brackets — show/hide
+the layer; round 1's Scratch showed marks, not a notes layer). **Round-2
+gap-pass prompt written:** `docs/spirit-ipad-design-prompt-round2.md` (+
+`-PASTE.md`) — Fix 1 Home hub, Fix 2 action-bar two options + Settings in
+the rail, Gap 1 the overlay (wide-margin journaling layout with the margin
+on the writing hand's side, show/dim/hide, per-chapter + context layers,
+pinned layout, pen dot in the navigator, phone read-only), Gap 2 Sunday's
+second half, Gap 3 Bible states, Gap 4 Notebook states, Gap 5 worksheets +
+Submit, Gap 6 desk states, Gap 7 settings, Gap 8 the export ask (files or a
+design-system project — DesignSync can't see the current project).
+**Next:** he runs round 2 → files into `docs/design/` → build kickoff
+(spine + native list + preflight) → the iPad sequence, Sunday first.
+
+## 2026-08-21 — SPIRIT ON IPAD: the brainstorm and his decision sheet (no code)
+
+His 08-21 brief: bring Spirit — and the app generally — to the iPad with
+the Apple Pencil. A notebook beside the Bible; circle a verse → highlight
+or comment; hold-drag a verse into the notes; quick flip between the two;
+structured sermon notes; worksheets for the homework with colors and
+sketches; handwriting or handwriting→text, with a custom recognizer when
+Apple's "messes up"; Procreate-style pen interactions.
+
+**Written: `docs/spirit-ipad-brainstorm.md`** — §0 where we stand (facts),
+§1 the fork (web / native / hybrid — recommendation: **C staged, web desk
+first, native PencilKit pane second**), §2 the Study Desk, §3 Pencil
+gestures on the Bible (semantic, not free ink — circles evaporate, results
+persist in the existing six-category layer), §4 the Notebook (ink pages,
+ref-cards, tool rail, Procreate grammar, three recognition tiers), §5
+Sermon mode (template + closing confirm card + audio-synced replay), §6
+worksheets mapped to the six homework kinds + the Question step, §7 the
+honest recognition table (Scribble · Vision · ML Kit · MyScript ·
+vision-LLM), §8 Procreate reality (no API), §9 the `InkPage` data sketch,
+§10 Health on iPad, §11 the design-round screen list, **§12 24 questions
+for him, §13 30-idea greenlight menu**, §14 staging.
+
+**Findings that shape it (traced in the repo):** every Spirit screen is a
+single phone column (`max-w-lg`, one `lg:px-8`); the design canvas is 17
+screens in 440 px frames — no tablet artboards exist, so this is a real
+design round under the PORT GATE; the iPhone companion is a WKWebView
+shell with `TARGETED_DEVICE_FAMILY: "1"` + portrait only; free-team
+installs expire weekly and the $99 program is still open; the study layer
+is canonical-ref anchored (everything the Pencil makes should land in
+Highlight/SpiritNote/VerseLink, never a parallel system); homework is a
+card + tick with nowhere to *do* it; the Church track has no live
+note-taking surface; Journal is still the coming-soon placeholder; ESV
+licensing means dragged verses must be reference cards (ref stored, text
+rendered live), not frozen text.
+
+**The answering copy is a Google Doc** (his ask — "a google doc I can
+engage with"): the markdown converted to a native Doc with yellow
+answer boxes under every question and a tinted "Your call" column on the
+idea menu — https://docs.google.com/document/d/1DsC3kVawFygH0kfnKbdIce1clIz2wq1GObD8SxmZMh0/edit
+(Drive file id `1DsC3kVawFygH0kfnKbdIce1clIz2wq1GObD8SxmZMh0`; the next session reads it back via the Drive
+connector's `read_file_content`).
+
+Nothing built, nothing deployed, no schema touched. Next: his answers in
+the Doc → `docs/spirit-ipad-design-prompt.md` (paste-ready) → Claude
+Design → kickoff. Deferred-items carries the MICHAEL pointer + the link.
 
 ## 2026-08-20b — THE WRIST'S IA, AND CARDS THAT SHOW WHAT HE MEASURED
 
