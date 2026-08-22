@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-22 (SPIRIT ON IPAD — V1 BUILT from the 12 design screens: the desk, Bible modes + overlay, notebook + ink engine, Sunday recording/transcribe/replay, worksheets, Home hub, settings, phone read-back, iPad companion target; on branch `claude/spirit-app-ipad-redesign-79442c`, NOT merged)
+**Last updated:** 2026-08-22 (SPIRIT ON IPAD — V1 **MERGED TO MAIN AND DEPLOYED TO PROD** on his go: merge `e1a10e8`; prod verified — `/home`, the desk, recordings, settings, shelf, phone pages all 200, hub/notebooks/desk-prefs/ink/recordings APIs live; `main` is the source of truth again)
 **Current phase:** both lanes are merged into `claude/watchos-workout-ui-ba4448`
 (2026-08-20) — the web tree from `main` plus the watch lane's Round 1+2 +
 Freestyle work. The watch is a designed instrument: Settings + bell rack, a
@@ -16,7 +16,9 @@ of truth as of 08-14d.
 below) · `claude/phase1-modernization` (web) · `claude/watch-app` (watch,
 worktree ~/VibeCoding/personal-os-watch).
 
-## 2026-08-22 — SPIRIT ON IPAD · V1 BUILT (web desk + API + iPad companion target) — branch `claude/spirit-app-ipad-redesign-79442c`, local commit, not merged
+## 2026-08-22 — SPIRIT ON IPAD · V1 BUILT (web desk + API + iPad companion target) — branch `claude/spirit-app-ipad-redesign-79442c`, merged to `main` as `e1a10e8` and deployed to prod 2026-08-22 on his go ("merge it … push it so I can review")
+
+**Deployed 2026-08-22:** Vercel production build from `main` `e1a10e8`. Verified on https://personal-os-plum.vercel.app with a minted cookie: `/home`, `/spirit/desk?ctx=study`, `/spirit/recordings`, `/spirit/desk-settings`, `/spirit/notebooks`, `/spirit/read`, `/spirit/notebook` → 200; `/api/spirit/{hub,notebooks,desk-prefs,recordings,ink,today}` → real data (hub 7 sessions · 81.5 kg; system notebooks present, 0 pages; today's study carries its written prompt). **On the iPad:** Safari → `/home` works today (Pencil reaches the web ink); the companion installed before this build is iPhone-only in compat mode and lands on `/` — run the new target from Xcode (`ios/PersonalOS.xcodeproj`, scheme PersonalOS, his iPad) for the iPad-native app that lands on `/home`, all orientations, Split View.
 
 His call after round 2: "fully functional V1 — don't skimp out on anything —
 run it through to completion." Built against the 12 Claude-Design screens
