@@ -283,9 +283,31 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     }
   }, [strokes, viewport, scale, dpr, selectedIds, highlightStrokeId, alpha, offsetFor]);
 
+  // what the base canvas currently shows: the ids in order + the viewport/scale it was drawn for
+  const drawn = useRef<{ ids: string[]; key: string } | null>(null);
+  const baseKey = `${viewport.left}|${viewport.top}|${viewport.w}|${viewport.h}|${scale}|${dpr}|${alpha}|${highlightStrokeId ?? ""}|${selectedIds ? Array.from(selectedIds).join(",") : ""}`;
   useEffect(() => {
+    const prev = drawn.current;
+    const c = baseRef.current;
+    // append-only change with the same viewport → paint just the new strokes
+    if (prev && c && prev.key === baseKey && strokes.length > prev.ids.length && prev.ids.every((id, i) => strokes[i]?.id === id)) {
+      const ctx = c.getContext("2d");
+      if (ctx) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr * scale, dpr * scale);
+        ctx.translate(-viewport.left / scale, -viewport.top / scale);
+        for (let i = prev.ids.length; i < strokes.length; i++) {
+          const s = strokes[i];
+          const off = offsetFor ? offsetFor(s) : null;
+          drawStroke(ctx, s, { offsetX: off?.x ?? 0, offsetY: off?.y ?? 0, alphaScale: alpha });
+        }
+        drawn.current = { ids: strokes.map((s) => s.id), key: baseKey };
+        return;
+      }
+    }
     redrawBase();
-  }, [redrawBase]);
+    drawn.current = { ids: strokes.map((s) => s.id), key: baseKey };
+  }, [redrawBase, strokes, baseKey, dpr, scale, viewport, alpha, offsetFor]);
 
   const redrawRef = useRef<(() => void) | null>(null);
   const redrawLive = useCallback(() => {
@@ -475,6 +497,12 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     redrawLive();
   };
 
+  /** end the open stroke using its own last point — for a lost capture or an overlapping contact */
+  const closeStroke = (st: NonNullable<typeof cur.current>) => {
+    const last = st.clientPts[st.clientPts.length - 1] ?? { x: 0, y: 0 };
+    finishStroke({ pointerId: st.pointerId, clientX: last.x, clientY: last.y, pointerType: st.pointerType } as unknown as React.PointerEvent, false);
+  };
+
   const finishStroke = (e: React.PointerEvent, cancelled = false) => {
     const st = cur.current;
     if (!st || e.pointerId !== st.pointerId) return;
@@ -584,9 +612,19 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       return;
     }
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (cur.current) return; // one stroke at a time
+    if (cur.current) {
+      // a new contact while the last stroke is still open — iPadOS can deliver the next
+      // pointerdown before the previous pointerup when he writes letter by letter. The old
+      // stroke ends where it was; the new one starts now. Never drop a contact.
+      if (cur.current.pointerId === e.pointerId) return;
+      closeStroke(cur.current);
+    }
     if (e.pointerType === "pen") penActive.current = true;
-    wrap?.setPointerCapture(e.pointerId);
+    try {
+      wrap?.setPointerCapture(e.pointerId);
+    } catch {
+      // a contact that already ended — the events still arrive
+    }
     beginStroke(e);
     e.preventDefault();
   };
@@ -685,6 +723,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       onPointerMove={onPointerMove}
       onPointerUp={(e) => onPointerUp(e)}
       onPointerCancel={(e) => onPointerUp(e, true)}
+      onLostPointerCapture={(e) => { const st = cur.current; if (st && st.pointerId === e.pointerId) closeStroke(st); }}
       onPointerLeave={onPointerLeave}
       onContextMenu={(e) => e.preventDefault()}
     >

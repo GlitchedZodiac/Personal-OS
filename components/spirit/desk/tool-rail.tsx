@@ -7,6 +7,7 @@
 
 import { useRef } from "react";
 import { useDesk, type PenTool } from "./desk-state";
+import { haptic } from "@/lib/haptics";
 import {
   EraserIcon,
   GPenIcon,
@@ -96,6 +97,7 @@ export function ToolRail({
   const tool = (t: PenTool) => {
     const on = pen.tool === t;
     return {
+      className: on ? "desk-tool-pop" : undefined,
       onPointerDown: () => {
         holdTimer.current = setTimeout(() => {
           if (t === "fountain" || t === "gpen" || t === "pencil" || t === "marker") {
@@ -111,6 +113,7 @@ export function ToolRail({
         if (holdTimer.current) clearTimeout(holdTimer.current);
       },
       onClick: () => {
+        haptic("selection");
         if (t === "fountain" || t === "gpen" || t === "pencil" || t === "marker") setPen({ tool: t, brush: t });
         else setPen({ tool: t });
       },
@@ -170,8 +173,8 @@ export function ToolRail({
       <button type="button" aria-label="Photo" onClick={onPhoto} style={{ ...penBtn.style, background: "transparent", boxShadow: "none" }}><PhotoIcon size={iconSize} color="#66646C" /></button>
       <button type="button" aria-label="Dictate" onClick={onMic} style={{ ...penBtn.style, background: micActive ? "#F6E3EB" : "transparent", boxShadow: micActive ? "inset 0 0 0 1.5px #A63D63" : "none" }}><MicIcon size={16} color={micActive ? "#8C2F51" : "#66646C"} /></button>
       <Rule />
-      <button type="button" aria-label="Undo" onClick={onUndo} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canUndo ? 1 : 0.4 }}><UndoIcon /></button>
-      <button type="button" aria-label="Redo" onClick={onRedo} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canRedo ? 1 : 0.4 }}><RedoIcon /></button>
+      <button type="button" aria-label="Undo" onClick={() => { haptic("light"); onUndo?.(); }} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canUndo ? 1 : 0.4 }}><UndoIcon /></button>
+      <button type="button" aria-label="Redo" onClick={() => { haptic("light"); onRedo?.(); }} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canRedo ? 1 : 0.4 }}><RedoIcon /></button>
       <span style={{ flex: 1 }} />
       <Slider label="SIZE" value={(pen.widthMul - 0.5) / 1.7} onChange={(f) => setPen({ widthMul: Math.round((0.5 + f * 1.7) * 100) / 100 })} />
       <Slider label="OPAC" value={(pen.opacity - 0.15) / 0.85} onChange={(f) => setPen({ opacity: Math.round((0.15 + f * 0.85) * 100) / 100 })} />

@@ -6,6 +6,7 @@
 
 import Link from "next/link";
 import { BRUSHES, type InkTool, WIDTH_STEPS } from "@/lib/ink";
+import { askPrompt } from "./dialog";
 import { INK_NAMES } from "@/lib/desk-prefs";
 import { useDesk, HL_CATEGORIES } from "./desk-state";
 import { Popover, Kicker, Segmented } from "./ui";
@@ -178,8 +179,8 @@ export function PalettePopover({ style, onClose }: { style?: React.CSSProperties
       style={{ width: 22, height: 22, borderRadius: "50%", cursor: "pointer", background: c, border: 0, boxShadow: c === pen.color ? "0 0 0 2px #FFFFFF, 0 0 0 3.5px #A63D63" : "inset 0 0 0 1px rgba(35,34,39,0.08)" }}
     />
   );
-  const addPalette = () => {
-    const nm = window.prompt("Name the palette", "My palette");
+  const addPalette = async () => {
+    const nm = await askPrompt({ title: "Name the palette", value: "My palette" });
     if (!nm) return;
     updatePrefs((p) => ({ ...p, palettes: [...p.palettes, { id: `p-${Date.now()}`, name: nm, colors: [...p.pen.recents].slice(0, 6) }] }));
   };

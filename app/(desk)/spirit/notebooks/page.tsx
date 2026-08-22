@@ -9,6 +9,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DISPLAY, cardShadow } from "@/components/spirit/desk/ui";
 import { RecDot } from "@/components/spirit/desk/desk-icons";
 import { fmtSeconds } from "@/lib/ink";
+import { askConfirm } from "@/components/spirit/desk/dialog";
+import { haptic } from "@/lib/haptics";
 import { formatRef } from "@/lib/bible-refs";
 
 interface Nb { id: string; title: string; kind: string; accent: string; pageCount: number; recordingCount: number }
@@ -40,11 +42,26 @@ function Inner() {
     const r = await fetch("/api/spirit/ink", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "free", notebookId: nb.id, title: `${nb.title} · page ${nb.pageCount + 1}`, objects: [] }) });
     if (r.ok) router.push(`/spirit/desk?ctx=free&page=${(await r.json()).page.id}`);
   };
-  const deletePage = async (p: Pg) => {
-    if (!window.confirm(`Delete "${p.title || p.kind}"? Its ink is gone for good${p.recordingId ? " (the recording stays in the library)" : ""}.`)) return;
-    await fetch(`/api/spirit/ink/${p.id}`, { method: "DELETE" });
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleSelect = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const deletePages = async (ids: string[]) => {
+    if (!ids.length) return;
+    const titles = pages.filter((p) => ids.includes(p.id)).map((p) => p.title || p.kind);
+    const ok = await askConfirm({
+      title: ids.length === 1 ? `Delete "${titles[0]}"?` : `Delete ${ids.length} pages?`,
+      body: ids.length === 1 ? "Its ink is gone for good. A recording attached to it stays in the library." : `${titles.slice(0, 3).join(" · ")}${ids.length > 3 ? ` · +${ids.length - 3} more` : ""}. Their ink is gone for good; recordings stay in the library.`,
+      confirmLabel: ids.length === 1 ? "Delete page" : `Delete ${ids.length} pages`,
+      danger: true,
+    });
+    if (!ok) return;
+    haptic("warning");
+    await Promise.all(ids.map((id) => fetch(`/api/spirit/ink/${id}`, { method: "DELETE" })));
+    setSelected(new Set());
+    setSelectMode(false);
     await reload();
   };
+  const deletePage = (p: Pg) => deletePages([p.id]);
   const ctxFor = (p: Pg) => (p.kind === "sermon" ? "sermon" : p.kind === "worksheet" || p.kind === "study" ? "study" : "free");
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "auto", fontFamily: "var(--font-body)" }}>
@@ -56,12 +73,18 @@ function Inner() {
             <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700, color: "#232227", letterSpacing: "-0.02em" }}>{nb ? nb.title : "All notebooks"}</div>
           </div>
           <span style={{ flex: 1 }} />
-          {nb && (
+          {nb && selectMode && selected.size > 0 && (
+            <button type="button" onClick={() => void deletePages(Array.from(selected))} style={{ fontFamily: DISPLAY, fontSize: 12.5, fontWeight: 600, color: "#FFFFFF", background: "#B4533F", borderRadius: 99, padding: "9px 16px", border: 0, cursor: "pointer", marginRight: 8 }}>Delete {selected.size}</button>
+          )}
+          {nb && shown.length > 0 && (
+            <button type="button" onClick={() => { setSelectMode((v) => !v); setSelected(new Set()); haptic("selection"); }} style={{ fontFamily: DISPLAY, fontSize: 12.5, fontWeight: 600, color: selectMode ? "#FFFFFF" : "#454349", background: selectMode ? "#232227" : "#FFFFFF", border: selectMode ? 0 : "1px solid #E4E2E6", borderRadius: 99, padding: "9px 16px", cursor: "pointer", marginRight: 8 }}>{selectMode ? "Done" : "Select"}</button>
+          )}
+          {nb && !selectMode && (
             <button type="button" onClick={() => void newPage()} style={{ fontFamily: DISPLAY, fontSize: 12.5, fontWeight: 600, color: "#FFFFFF", background: "#A63D63", borderRadius: 99, padding: "9px 16px", border: 0, cursor: "pointer" }}>+ New {nb.kind === "sermons" ? "sermon " : ""}page</button>
           )}
         </div>
         {!nb && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12, marginTop: 22 }}>
+          <div className="desk-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12, marginTop: 22 }}>
             {nbs.map((n) => (
               <Link key={n.id} href={`/spirit/notebooks?nb=${n.id}`} style={{ background: "#FFFFFF", border: "1px solid #E4E2E6", borderLeft: `4px solid ${n.accent}`, borderRadius: 12, padding: "14px 16px", textDecoration: "none", boxShadow: cardShadow }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 600, color: "#232227" }}>{n.title}</span>{n.recordingCount > 0 && <RecDot size={6} live={false} />}</div>
@@ -72,10 +95,14 @@ function Inner() {
         )}
         {nb && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12, marginTop: 22 }}>
-            {shown.map((p) => (
-              <div key={p.id} style={{ position: "relative" }}>
-              <button type="button" aria-label="Delete page" onClick={() => void deletePage(p)} style={{ position: "absolute", top: 6, left: 7, zIndex: 2, width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.92)", border: "1px solid #E4E2E6", color: "#B4533F", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-              <Link href={`/spirit/desk?ctx=${ctxFor(p)}&page=${p.id}`} style={{ display: "block", background: "#FFFFFF", border: "1px solid #E4E2E6", borderRadius: 12, overflow: "hidden", textDecoration: "none" }}>
+            {shown.map((p, idx) => (
+              <div key={p.id} className="desk-lift" style={{ position: "relative", animation: "deskStaggerIn .42s cubic-bezier(.2,.9,.25,1) both", animationDelay: `${Math.min(idx, 9) * 40}ms` }}>
+              {selectMode ? (
+                <span aria-hidden style={{ position: "absolute", top: 6, left: 7, zIndex: 2, width: 24, height: 24, borderRadius: "50%", background: selected.has(p.id) ? "#A63D63" : "rgba(255,255,255,0.92)", border: `1.5px solid ${selected.has(p.id) ? "#A63D63" : "#C9C7CD"}`, color: "#FFFFFF", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", transition: "background .18s, border-color .18s" }}>{selected.has(p.id) ? "✓" : ""}</span>
+              ) : (
+                <button type="button" aria-label="Delete page" onClick={() => void deletePage(p)} style={{ position: "absolute", top: 6, left: 7, zIndex: 2, width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.92)", border: "1px solid #E4E2E6", color: "#B4533F", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+              )}
+              <Link href={selectMode ? "#" : `/spirit/desk?ctx=${ctxFor(p)}&page=${p.id}`} onClick={(e) => { if (selectMode) { e.preventDefault(); toggleSelect(p.id); } }} style={{ display: "block", background: "#FFFFFF", border: `1px solid ${selectMode && selected.has(p.id) ? "#A63D63" : "#E4E2E6"}`, boxShadow: selectMode && selected.has(p.id) ? "inset 0 0 0 1px #A63D63" : "none", borderRadius: 12, overflow: "hidden", textDecoration: "none" }}>
                 <div style={{ height: 110, background: "#FFFDF9", backgroundImage: "radial-gradient(#EBE6E1 1px, transparent 1.2px)", backgroundSize: "14px 14px", position: "relative" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {p.thumbnail && <img src={p.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} />}

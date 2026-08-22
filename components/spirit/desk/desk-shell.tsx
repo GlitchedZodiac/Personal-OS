@@ -22,6 +22,8 @@ import { Popover, Kicker, IconButton, DISPLAY } from "./ui";
 import { Diamond, FlipIcon, LayoutGridIcon, PenIcon, GPenIcon, HighlighterIcon, PencilIcon, MarkerIcon, EraserIcon, LassoIcon } from "./desk-icons";
 import { SEAM_STOPS_H, SEAM_STOPS_V, nearestStop, type DeskContext } from "@/lib/desk-prefs";
 import { hlColor } from "./desk-state";
+import { askPrompt } from "./dialog";
+import { haptic } from "@/lib/haptics";
 
 export type DocKind = "bible" | "reference" | "teaching" | "notebook" | "source" | "sunday";
 
@@ -178,6 +180,7 @@ export function DeskShell(props: DeskShellProps) {
     setTabs((ts) => [...ts, { id, label: tpl.label, ...tpl.make() }]);
     setActiveTab(id);
     setPopover(null);
+    haptic("medium");
   };
   const removeTab = (id: string) => {
     setTabs((ts) => {
@@ -188,16 +191,19 @@ export function DeskShell(props: DeskShellProps) {
     });
     setTabMenu(null);
   };
-  const renameTab = (id: string) => {
+  const renameTab = async (id: string) => {
     const cur = tabs.find((t) => t.id === id);
-    const name = window.prompt("Name this tab", cur?.label ?? "");
-    if (name) setTabs((ts) => ts.map((t) => (t.id === id ? { ...t, label: name } : t)));
     setTabMenu(null);
+    const name = await askPrompt({ title: "Name this tab", value: cur?.label ?? "", placeholder: "e.g. Sunday · three texts" });
+    if (name) setTabs((ts) => ts.map((t) => (t.id === id ? { ...t, label: name } : t)));
   };
   const stepTab = (dir: 1 | -1) => {
     const i = tabs.findIndex((t) => t.id === activeTab);
     const n = tabs[(i + dir + tabs.length) % tabs.length];
-    if (n) setActiveTab(n.id);
+    if (n) {
+      setActiveTab(n.id);
+      haptic("selection");
+    }
   };
   // finger swipe on the tab strip → previous / next tab
   const swipe = useRef<{ x: number; t: number } | null>(null);
@@ -213,6 +219,7 @@ export function DeskShell(props: DeskShellProps) {
     if (Math.abs(dx) > 60 && Date.now() - sw.t < 700) stepTab(dx < 0 ? 1 : -1);
   };
   const doFlip = () => {
+    haptic("medium");
     flip.current = !flip.current;
     updatePrefs((p) => ({ ...p, handedness: p.handedness === "left" ? "right" : "left" }));
   };
@@ -242,6 +249,7 @@ export function DeskShell(props: DeskShellProps) {
       window.removeEventListener("pointermove", mv);
       window.removeEventListener("pointerup", up);
       setDragging(null);
+      haptic("rigid");
       if (axis === "v") setNbFrac((f) => { const s = nearestStop(f, stops); saveLayout({ nbFrac: s }); return s; });
       else setStackFrac((f) => { const s = nearestStop(f, stops); saveLayout({ stackFrac: s }); return s; });
     };
@@ -287,7 +295,7 @@ export function DeskShell(props: DeskShellProps) {
   const textEmpty = layout.text.length === 0;
   const cols = Boolean(layout.cols) && layout.text.length > 1 && !portrait;
   const writingCol = layout.writing.length ? (
-    <div style={{ ...paneBox, flex: textEmpty ? 1 : "none", width: textEmpty || portrait ? "auto" : `calc(${(nbFrac * (cols ? 0.72 : 1) * 100).toFixed(2)}% - 7px)`, transition: dragging === "v" ? "none" : "width .28s cubic-bezier(.3,.9,.3,1)", height: portrait && !textEmpty ? `calc(${((1 - stackFrac) * 100).toFixed(2)}% - 7px)` : undefined }}>
+    <div style={{ ...paneBox, flex: textEmpty ? 1 : "none", width: textEmpty || portrait ? "auto" : `calc(${(nbFrac * (cols ? 0.72 : 1) * 100).toFixed(2)}% - 7px)`, transition: dragging === "v" ? "none" : "width .36s cubic-bezier(.25,1.15,.3,1)", height: portrait && !textEmpty ? `calc(${((1 - stackFrac) * 100).toFixed(2)}% - 7px)` : undefined }}>
       {renderDoc(layout.writing[0], "writing", 0)}
       {slotMenuEl("writing", 0)}
     </div>
@@ -302,7 +310,7 @@ export function DeskShell(props: DeskShellProps) {
             </div>
           )}
           {i > 0 && cols && <div style={{ width: 14, flex: "none" }} />}
-          <div style={{ ...paneBox, flex: cols ? 1 : layout.text.length > 1 ? (i === 0 ? `0 0 calc(${(stackFrac * 100).toFixed(2)}% - 7px)` : 1) : 1, transition: dragging === "h" ? "none" : "flex-basis .28s cubic-bezier(.3,.9,.3,1)" }}>
+          <div style={{ ...paneBox, flex: cols ? 1 : layout.text.length > 1 ? (i === 0 ? `0 0 calc(${(stackFrac * 100).toFixed(2)}% - 7px)` : 1) : 1, transition: dragging === "h" ? "none" : "flex-basis .36s cubic-bezier(.25,1.15,.3,1)" }}>
             {renderDoc(d, "text", i)}
             {slotMenuEl("text", i)}
           </div>
@@ -342,7 +350,7 @@ export function DeskShell(props: DeskShellProps) {
   return (
     <div style={{ position: "absolute", inset: 0, background: "#F2F1F2", fontFamily: "var(--font-body)", overflow: "hidden", ["--desk-top" as string]: "env(safe-area-inset-top, 0px)" }}>
       {/* the desk bar — below the iPad's status bar */}
-      <div style={{ position: "absolute", top: "var(--desk-top)", left: 0, right: 0, height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", boxSizing: "border-box", zIndex: 20 }}>
+      <div style={{ position: "absolute", top: "var(--desk-top)", left: 0, right: 0, height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", boxSizing: "border-box", zIndex: 20, animation: "deskFadeIn .3s ease both" }}>
         <Link href="/home" style={{ display: "flex", alignItems: "center", gap: 6, background: "#FFFFFF", border: "1px solid #E4E2E6", borderRadius: 99, padding: "6px 13px 6px 10px", textDecoration: "none" }}>
           <span style={{ fontSize: 14, color: "#8C2F51", lineHeight: 1 }}>‹</span>
           <span style={{ fontSize: 12, fontWeight: 600, color: "#454349" }}>Home</span>
@@ -368,9 +376,9 @@ export function DeskShell(props: DeskShellProps) {
             <LayoutGridIcon color={popover === "layout" ? "#8C2F51" : "#454349"} />
           </IconButton>
           {popover === "layout" && (
-            <Popover width={300} onClose={() => setPopover(null)} style={{ right: 0, top: 40 }}>
+            <Popover width={324} onClose={() => setPopover(null)} style={{ right: 0, top: 40, maxHeight: "calc(100vh - 120px)", overflowY: "auto" }}>
               <Kicker>NEW TAB · PICK AN ARRANGEMENT</Kicker>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 5, marginTop: 10 }}>
                 {TAB_TEMPLATES.map((t) => {
                   const l = t.make();
                   const thumb = (
@@ -385,9 +393,9 @@ export function DeskShell(props: DeskShellProps) {
                     </div>
                   );
                   return (
-                    <button key={t.key} type="button" onClick={() => addTab(t.key)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 10, cursor: "pointer", background: "transparent", border: "1px solid #EDEBEE", textAlign: "left" }}>
+                    <button key={t.key} type="button" onClick={() => addTab(t.key)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 10, cursor: "pointer", background: "transparent", border: "1px solid #EDEBEE", textAlign: "left", minWidth: 0, overflow: "hidden" }}>
                       {thumb}
-                      <div style={{ minWidth: 0 }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontSize: 11, fontWeight: 600, color: "#232227", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.label}</div>
                         <div style={{ fontSize: 9.5, color: "#96949B" }}>{t.sub}</div>
                       </div>
@@ -411,7 +419,7 @@ export function DeskShell(props: DeskShellProps) {
           const on = t.id === activeTab;
           return (
             <div key={t.id} style={{ position: "relative", flex: "none" }}>
-              <button type="button" onClick={() => (on ? setTabMenu(tabMenu === t.id ? null : t.id) : setActiveTab(t.id))} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: on ? "#FFFFFF" : "#66646C", background: on ? "#232227" : "#FFFFFF", border: `1px solid ${on ? "#232227" : "#E4E2E6"}`, borderRadius: 99, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
+              <button type="button" onClick={() => { if (on) setTabMenu(tabMenu === t.id ? null : t.id); else { setActiveTab(t.id); haptic("selection"); } }} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: on ? "#FFFFFF" : "#66646C", background: on ? "#232227" : "#FFFFFF", border: `1px solid ${on ? "#232227" : "#E4E2E6"}`, borderRadius: 99, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
                 {t.label}
                 {on && <span style={{ fontSize: 9, opacity: 0.7 }}>⌄</span>}
               </button>
@@ -428,11 +436,11 @@ export function DeskShell(props: DeskShellProps) {
         })}
         <button type="button" title="New tab" onClick={() => setPopover(popover === "layout" ? null : "layout")} style={{ flex: "none", width: 26, height: 26, borderRadius: "50%", background: "#FFFFFF", border: "1px solid #E4E2E6", color: "#8C2F51", fontSize: 15, lineHeight: 1, cursor: "pointer" }}>+</button>
         <span style={{ flex: 1 }} />
-        <span style={{ flex: "none", fontSize: 9.5, color: "#A9A7AE", whiteSpace: "nowrap" }}>swipe the strip · tap a pane&apos;s kicker to change it</span>
+        {size.w > 900 && <span style={{ flex: "none", fontSize: 9.5, color: "#A9A7AE", whiteSpace: "nowrap" }}>swipe the strip · tap a pane&apos;s kicker to change it</span>}
       </div>
 
       {/* the desk */}
-      <div ref={deskRef} style={{ position: "absolute", top: "calc(88px + var(--desk-top))", left: 12, right: 12, bottom: 12, display: "flex", flexDirection: portrait ? "column" : writingLeft ? "row" : "row-reverse", userSelect: dragging ? "none" : "auto" }}>
+      <div ref={deskRef} key={activeTab} className="desk-page-in" style={{ position: "absolute", top: "calc(88px + var(--desk-top))", left: 12, right: 12, bottom: 12, display: "flex", flexDirection: portrait ? "column" : writingLeft ? "row" : "row-reverse", userSelect: dragging ? "none" : "auto" }}>
         {portrait ? (
           <>
             {textCol}

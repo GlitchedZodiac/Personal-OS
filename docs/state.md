@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-22 (SPIRIT ON IPAD — round 2 from his first hour on the real iPad: tabs + layouts, growing sections, highlighter-as-ink, multi-verse select, smooth pinch zoom, continuous sliders, new/delete pages, no system text-selection menu, margin collapses, status-bar safe area — merged to main + deployed)
+**Last updated:** 2026-08-22 (SPIRIT ON IPAD — round 3: the Pencil drop-out between contacts, in-app warning dialogs (WKWebView swallowed confirm/prompt), multi-select delete, the new-tab picker, portrait fixes, and a motion + haptics sweep with a native haptic bridge — merged + deployed; companion re-installed on his iPad)
 **Current phase:** both lanes are merged into `claude/watchos-workout-ui-ba4448`
 (2026-08-20) — the web tree from `main` plus the watch lane's Round 1+2 +
 Freestyle work. The watch is a designed instrument: Settings + bell rack, a
@@ -15,6 +15,55 @@ of truth as of 08-14d.
 **Branch in flight:** `claude/watchos-workout-ui-ba4448` (BOTH lanes — see
 below) · `claude/phase1-modernization` (web) · `claude/watch-app` (watch,
 worktree ~/VibeCoding/personal-os-watch).
+
+## 2026-08-22 — SPIRIT ON IPAD · round 3: Pencil drop-outs, dialogs that work, multi-select, portrait, motion + haptics
+
+His second hour: "the pencil becomes unresponsive when I lift it and write letter by
+letter", "no animations anywhere, no haptics — go nuts", then mid-build: "the new tab
+section is weird and offset", "the ✕ to delete doesn't work — and it should warn me;
+multi-select for notebooks", "portrait was neglected: Bible whitespace, home overlapping".
+
+**The Pencil drop-out (the major one).** Two causes in `ink-canvas.tsx`: (1) `onPointerDown`
+returned early whenever a stroke was still "current" — iPadOS delivers the next pen contact's
+`pointerdown` before the previous `pointerup` when you write fast, so the new letter was
+dropped wholesale; now a new contact **closes the open stroke where it was and starts the new
+one** (never drop a contact), and a lost pointer capture closes it too. (2) every committed
+stroke repainted the whole base canvas; appended strokes are now **painted incrementally**
+(full repaint only on scroll/zoom/removal), so letter-by-letter writing stays cheap as the page
+fills. The hold→drag handoff already needs a stiller 600 ms rest. *Not verifiable in the
+browser — this one is his to feel.*
+
+**Dialogs.** `window.confirm`/`prompt` are silently answered "no" inside WKWebView without a
+UI delegate — that is why the ✕ "did nothing" and tab rename never asked. Both fixed: a native
+`WKUIDelegate` alert/confirm/prompt safety net in `WebShellView.swift`, and an in-app
+`DialogHost` (`components/spirit/desk/dialog.tsx`: `askConfirm` / `askPrompt`, blurred
+backdrop, "THIS CANNOT BE UNDONE", Enter/Escape, danger haptic) that now fronts every
+delete/clear/rename/new-layer/new-palette/reference-card/sermon-header flow — zero `window.*`
+dialogs left on the desk.
+
+**Multi-select.** Page lists (desk + shelf): *Select* → tick cards → *Delete n* (one warning,
+all gone, recordings stay in the library) → *Done*.
+
+**Tab picker.** The two-column grid overflowed its popover (long labels); now one readable
+column, 324 px, scrolls if needed. The strip hint hides under 900 px.
+
+**Portrait.** Margin "none" is now 0 px (was 26 — the Bible's phantom left gutter); Home under
+900 pt stacks to one column with the rail as a 2-column grid and the three widgets wrapping
+(the Measurements card no longer slides under the rail).
+
+**Motion + haptics.** `lib/haptics.ts` posts to `window.webkit.messageHandlers.haptic`; the
+companion's `HapticBridge` plays prepared UIKit generators (light/medium/heavy/rigid/soft/
+selection/success/warning/error). Ticks: tool change, tab switch/add, flip, seam snap,
+open/new page, ref-card drop (success), + room, lasso, highlighter, span select, action bar,
+Bible mode/eye/margin, submit (success), record start, delete (warning), dialogs. Motion:
+global button press-scale + spring transitions on the desk, `deskPopIn` popovers/pills/action
+bar, the desk body animates on tab switch, notebook page-in, page-list + shelf + settings +
+recordings stagger-in, ref-card drop, tool pop, play-button pulse, compact pane spring, Home
+stagger; `prefers-reduced-motion` honoured. **Companion rebuilt and installed on his iPad**
+(haptics need the native bridge).
+
+Verified on the dev server: the picker fits · the warning dialog over his real page (cancelled)
+· ··· menu · tab animations. Build green, 149/149, tsc + lint clean.
 
 ## 2026-08-22 — SPIRIT ON IPAD · round 2: his first hour on the iPad Air → eleven fixes, merged + deployed
 

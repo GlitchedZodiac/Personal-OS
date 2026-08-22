@@ -54,9 +54,10 @@ export default function HomePage() {
   const [readerTheme, setReaderTheme] = useState<string>("light");
   const [compact, setCompact] = useState<{ href: string; title: string } | null>(null);
   const [narrow, setNarrow] = useState(false);
+  const [stacked, setStacked] = useState(false); // portrait / under ~900pt: one column, the rail below
 
   useEffect(() => {
-    const check = () => setNarrow(window.innerWidth < 700);
+    const check = () => { setNarrow(window.innerWidth < 700); setStacked(window.innerWidth < 900); };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
@@ -128,9 +129,9 @@ export default function HomePage() {
           <Link href="/spirit/desk-settings" aria-label="Settings" style={{ width: 36, height: 36, borderRadius: "50%", background: "#FFFFFF", border: "1px solid #E4E2E6", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 1 }}><GearIcon size={16} /></Link>
         </div>
 
-        <div style={{ display: "flex", gap: 28, marginTop: 30, flex: 1, minHeight: 0 }}>
+        <div style={{ display: "flex", flexDirection: stacked ? "column" : "row", gap: stacked ? 22 : 28, marginTop: 30, flex: 1, minHeight: 0 }}>
           {/* left: the desk */}
-          <div style={{ flex: 1.83, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="desk-stagger" style={{ flex: stacked ? "none" : 1.83, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Diamond size={9} /><span style={{ fontSize: 10.5, letterSpacing: "0.16em", fontWeight: 700, color: "#8C2F51" }}>SPIRIT · THE DESK</span><span style={{ flex: 1, height: 1, background: "#E4E2E6" }} /><span style={{ fontSize: 10, color: "#96949B" }}>the desk remembers each context</span></div>
 
             <div style={{ ...card, borderRadius: 18, padding: "18px 20px", display: "flex", alignItems: "center", gap: 18 }}>
@@ -153,8 +154,8 @@ export default function HomePage() {
               </Link>
             </div>
 
-            <div style={{ display: "flex", gap: 12 }}>
-              <div style={{ ...card, flex: 1.15 }}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ ...card, flex: "1.15 1 260px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>SUNDAY{sunday ? ` · ${sunday.title.split("—")[0].trim().toUpperCase()}` : ""}</span>
                   {sunday && <span style={{ fontSize: 9, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", borderRadius: 99, padding: "2.5px 8px" }}>wk {sunday.currentWeek}{sunday.expectedWeeks ? ` of ≈${sunday.expectedWeeks}` : ""}</span>}
@@ -163,7 +164,7 @@ export default function HomePage() {
                 <div style={{ fontSize: 11, color: "#66646C", lineHeight: 1.55, marginTop: 3 }}>{sundayLine}</div>
                 <Link href="/spirit/desk?ctx=sermon" style={{ display: "inline-block", marginTop: 10, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: sunday?.isSunday ? "#FFFFFF" : "#8C2F51", background: sunday?.isSunday ? "#A63D63" : "#F6E3EB", borderRadius: 9, padding: "8px 14px", textDecoration: "none" }}>{sunday?.isSunday ? "Take notes →" : "Open the sermon page →"}</Link>
               </div>
-              <div style={{ ...card, flex: 1 }}>
+              <div style={{ ...card, flex: "1 1 240px" }}>
                 <div style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>FREE READING</div>
                 <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 600, color: "#232227", marginTop: 6 }}>{freeRead ?? "Pick up anywhere"}{readerTheme !== "light" ? ` · ${readerTheme} surface` : ""}</div>
                 <div style={{ fontSize: 11, color: "#66646C", lineHeight: 1.55, marginTop: 3 }}>{freeRead ? "where you left the shelf" : "the whole Bible, no term coupling"}</div>
@@ -187,16 +188,16 @@ export default function HomePage() {
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}><span style={{ fontSize: 10.5, letterSpacing: "0.16em", fontWeight: 700, color: "#96949B" }}>MINI-HUB</span><span style={{ flex: 1, height: 1, background: "#E4E2E6" }} /><span style={{ fontSize: 10, color: "#96949B" }}>tap → that section&apos;s app · phone layout, compact pane</span></div>
-            <div style={{ display: "flex", gap: 12 }}>
-              <button type="button" onClick={() => setCompact({ href: "/health/workouts", title: "Training" })} style={{ ...card, flex: 1, borderRadius: 14, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <button type="button" onClick={() => setCompact({ href: "/health/workouts", title: "Training" })} className="desk-lift" style={{ ...card, flex: "1 1 200px", minWidth: 200, borderRadius: 14, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 9, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>TRAINING</div><div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, color: "#232227", marginTop: 3 }}>{hub ? hub.training.sessionsThisWeek : "…"}</div><div style={{ fontSize: 10, color: "#66646C", marginTop: 1 }}>session{hub?.training.sessionsThisWeek === 1 ? "" : "s"} this week{hub?.training.prsThisWeek ? ` · ${hub.training.prsThisWeek} PR` : ""}</div></div>
                 <Spark points={hub?.training.spark ?? []} color="#A63D63" />
               </button>
-              <button type="button" onClick={() => setCompact({ href: "/health/food", title: "Eating" })} style={{ ...card, flex: 1, borderRadius: 14, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
+              <button type="button" onClick={() => setCompact({ href: "/health/food", title: "Eating" })} className="desk-lift" style={{ ...card, flex: "1 1 200px", minWidth: 200, borderRadius: 14, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 9, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>EATING</div><div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, color: "#232227", marginTop: 3 }}>{hub ? hub.eating.kcalToday.toLocaleString() : "…"}</div><div style={{ fontSize: 10, color: "#66646C", marginTop: 1 }}>kcal today · {hub ? `${hub.eating.loggedDays} of 7 days logged` : ""}</div></div>
                 <Spark points={hub?.eating.spark ?? []} color="#232227" />
               </button>
-              <button type="button" onClick={() => setCompact({ href: "/health/body", title: "Measurements" })} style={{ ...card, flex: 1, borderRadius: 14, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
+              <button type="button" onClick={() => setCompact({ href: "/health/body", title: "Measurements" })} className="desk-lift" style={{ ...card, flex: "1 1 200px", minWidth: 200, borderRadius: 14, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 9, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>MEASUREMENTS</div><div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, color: "#232227", marginTop: 3 }}>{hub?.measurements.weight7dAvg ?? "—"} {hub?.measurements.delta !== null && hub?.measurements.delta !== undefined && <span style={{ fontSize: 11, fontWeight: 600, color: hub.measurements.delta <= 0 ? "#5E9B72" : "#B4533F" }}>{hub.measurements.delta > 0 ? "+" : ""}{hub.measurements.delta}</span>}</div><div style={{ fontSize: 10, color: "#66646C", marginTop: 1 }}>kg · 7-day avg{hub?.measurements.lastMeasuredAt ? ` · checked ${new Date(hub.measurements.lastMeasuredAt).toLocaleDateString("en-US", { weekday: "short" })}` : ""}</div></div>
                 <Spark points={hub?.measurements.spark ?? []} color="#A9A7AE" />
               </button>
@@ -206,9 +207,9 @@ export default function HomePage() {
           </div>
 
           {/* right: the rest of the OS */}
-          <div style={{ flex: 1, minWidth: 0, maxWidth: 392, display: "flex", flexDirection: "column" }}>
+          <div className="desk-page-in" style={{ flex: stacked ? "none" : 1, minWidth: 0, maxWidth: stacked ? "none" : 392, display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 10.5, letterSpacing: "0.16em", fontWeight: 700, color: "#96949B" }}>THE REST OF THE OS</span><span style={{ flex: 1, height: 1, background: "#E4E2E6" }} /></div>
-            <div style={{ background: "#FFFFFF", borderRadius: 16, marginTop: 12, boxShadow: cardShadow, overflow: "hidden", flex: 1, display: "flex", flexDirection: "column" }}>
+            <div style={{ background: "#FFFFFF", borderRadius: 16, marginTop: 12, boxShadow: cardShadow, overflow: "hidden", flex: stacked ? "none" : 1, display: stacked ? "grid" : "flex", gridTemplateColumns: stacked ? "1fr 1fr" : undefined, flexDirection: "column" }}>
               {railRows.map((r, i) => {
                 const inner = (
                   <>
@@ -220,7 +221,7 @@ export default function HomePage() {
                     {!r.dim && <span style={{ fontSize: 13, color: "#C9C7CD" }}>›</span>}
                   </>
                 );
-                const style: React.CSSProperties = { flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "0 16px", borderBottom: i < railRows.length - 1 ? "1px solid #F2F1F2" : "none", cursor: r.dim ? "default" : "pointer", opacity: r.dim ? 0.62 : 1, textDecoration: "none", background: "transparent", border: 0, borderBottomStyle: "solid", width: "100%", textAlign: "left" };
+                const style: React.CSSProperties = { flex: 1, minHeight: stacked ? 64 : undefined, display: "flex", alignItems: "center", gap: 12, padding: stacked ? "8px 16px" : "0 16px", borderBottom: i < railRows.length - 1 ? "1px solid #F2F1F2" : "none", cursor: r.dim ? "default" : "pointer", opacity: r.dim ? 0.62 : 1, textDecoration: "none", background: "transparent", border: 0, borderBottomStyle: "solid", width: "100%", textAlign: "left" };
                 if (r.dim) return <div key={r.key} style={style}>{inner}</div>;
                 if (r.desk) return <Link key={r.key} href={r.href!} style={style}>{inner}</Link>;
                 return <button key={r.key} type="button" onClick={() => setCompact({ href: r.href!, title: r.label })} style={style}>{inner}</button>;
@@ -235,7 +236,7 @@ export default function HomePage() {
       {compact && (
         <>
           <div onClick={() => setCompact(null)} style={{ position: "fixed", inset: 0, background: "rgba(35,34,39,0.18)", zIndex: 70 }} />
-          <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 500, maxWidth: "100vw", background: "#F2F1F2", zIndex: 71, boxShadow: "-16px 0 48px rgba(20,15,18,0.25)", display: "flex", flexDirection: "column", animation: "slideIn .28s cubic-bezier(.3,.9,.3,1) both" }}>
+          <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 500, maxWidth: "100vw", background: "#F2F1F2", zIndex: 71, boxShadow: "-16px 0 48px rgba(20,15,18,0.25)", display: "flex", flexDirection: "column", animation: "deskSlideInRight .34s cubic-bezier(.2,.9,.25,1.05) both" }}>
             <div style={{ height: 44, display: "flex", alignItems: "center", gap: 10, padding: "0 14px", borderBottom: "1px solid #E4E2E6", background: "#FFFFFF" }}>
               <span style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>COMPACT · {compact.title.toUpperCase()}</span>
               <span style={{ fontSize: 10, color: "#A9A7AE" }}>the phone layout, untouched</span>

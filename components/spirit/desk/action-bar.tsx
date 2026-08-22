@@ -29,7 +29,7 @@ export function ActionBarA({
   const left = hand === "left" ? x + 16 : x - 290;
   const top = Math.max(8, y - 52);
   return (
-    <div style={{ position: "fixed", left: Math.max(8, Math.min(left, (typeof window !== "undefined" ? window.innerWidth : 1180) - 300)), top, zIndex: 55, animation: "fadeUp .2s ease both" }}>
+    <div style={{ position: "fixed", left: Math.max(8, Math.min(left, (typeof window !== "undefined" ? window.innerWidth : 1180) - 300)), top, zIndex: 55, animation: "deskPopIn .26s cubic-bezier(.2,.9,.3,1.2) both" }}>
       <DarkPill>
         <PillItem title="Highlight — six categories" onClick={() => onAction("hl")}>
           <span style={{ display: "flex", gap: 2 }}>
