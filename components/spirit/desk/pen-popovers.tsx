@@ -5,7 +5,7 @@
 // "All pen settings →"), the brush library (3b) and the free palette (3c).
 
 import Link from "next/link";
-import { BRUSHES, type InkTool } from "@/lib/ink";
+import { BRUSHES, type InkTool, WIDTH_STEPS } from "@/lib/ink";
 import { INK_NAMES } from "@/lib/desk-prefs";
 import { useDesk, HL_CATEGORIES } from "./desk-state";
 import { Popover, Kicker, Segmented } from "./ui";
@@ -42,7 +42,7 @@ export function PenPopover({ style, onClose, showBibleMode = true }: { style?: R
     }
   };
   const inks = prefs.pen.recents.slice(0, 5);
-  const widthMm = ["0.25 mm", "0.4 mm", "0.7 mm"][pen.widthStep];
+  const widthMm = `${(0.4 * pen.widthMul).toFixed(2).replace(/0$/, "")} mm`;
   return (
     <Popover style={style} onClose={onClose} width={296}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -96,7 +96,7 @@ export function PenPopover({ style, onClose, showBibleMode = true }: { style?: R
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
         <span style={{ fontSize: 9, letterSpacing: "0.12em", fontWeight: 700, color: "#A9A7AE", width: 38 }}>WIDTH</span>
         {[5, 8, 12].map((d, i) => (
-          <button key={d} type="button" aria-label={`width ${i}`} onClick={() => setPen({ widthStep: i as 0 | 1 | 2 })} style={{ width: d, height: d, borderRadius: "50%", background: i === 2 && pen.widthStep !== 2 ? "#D9D7DC" : "#454349", cursor: "pointer", border: 0, padding: 0, boxShadow: pen.widthStep === i ? "0 0 0 2px #FFFFFF, 0 0 0 3px #A63D63" : "none" }} />
+          <button key={d} type="button" aria-label={`width ${i}`} onClick={() => setPen({ widthStep: i as 0 | 1 | 2, widthMul: WIDTH_STEPS[i] })} style={{ width: d, height: d, borderRadius: "50%", background: i === 2 && Math.abs(pen.widthMul - WIDTH_STEPS[2]) >= 0.05 ? "#D9D7DC" : "#454349", cursor: "pointer", border: 0, padding: 0, boxShadow: Math.abs(pen.widthMul - WIDTH_STEPS[i]) < 0.05 ? "0 0 0 2px #FFFFFF, 0 0 0 3px #A63D63" : "none" }} />
         ))}
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 10, color: "#96949B" }}>{widthMm}</span>

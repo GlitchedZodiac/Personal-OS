@@ -47,7 +47,10 @@ export async function POST(request: NextRequest) {
       const nbs = await ensureSystemNotebooks();
       const prefs = mergeDeskPrefs((await prisma.spiritPref.findUnique({ where: { id: "main" } }))?.desk ?? null);
       const weekIndex = series ? series.currentWeek : 0;
-      let page = series
+      // fresh: "New page" in the Sermons notebook — a second page today (evening service, a
+      // different preacher) must not collapse into the morning's page
+      const fresh = body.fresh === true;
+      let page = series && !fresh
         ? await prisma.inkPage.findFirst({ where: { kind: "sermon", seriesId: series.id, weekIndex } })
         : null;
       const week = series ? weekOf(series, weekIndex) : null;
@@ -87,7 +90,7 @@ export async function POST(request: NextRequest) {
         }
       }
       const recording = page.recordingId ? await prisma.recording.findUnique({ where: { id: page.recordingId } }) : null;
-      {
+      if (!fresh) {
         const dayStart = new Date();
         dayStart.setHours(0, 0, 0, 0);
         page = await canonicalPage(series ? { kind: "sermon", seriesId: series.id, weekIndex } : { kind: "sermon", seriesId: null, createdAt: { gte: dayStart } }, page);

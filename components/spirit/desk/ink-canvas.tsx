@@ -32,7 +32,7 @@ import {
   type InkTool,
   type Stroke,
 } from "@/lib/ink";
-import { useDesk } from "./desk-state";
+import { useDesk, hlColor } from "./desk-state";
 
 // performance.now behind a helper — handlers call it, the compiler lint otherwise flags it as render-impure
 const nowMs = () => performance.now();
@@ -71,7 +71,7 @@ export interface InkCanvasProps {
   alpha?: number;
   /** who owns the meaning: return "discard" to evaporate the stroke (gesture consumed) */
   onStrokeEnd?: (stroke: Stroke, info: StrokeEndInfo) => "keep" | "discard" | void;
-  onHighlighterStroke?: (info: StrokeEndInfo) => void;
+  onHighlighterStroke?: (stroke: Stroke, info: StrokeEndInfo) => "keep" | "discard" | void;
   onHover?: (pt: { x: number; y: number; clientX: number; clientY: number } | null) => void;
   /** return true when the tap hit something (a pen tap then makes no dot) */
   onTap?: (pt: { x: number; y: number; clientX: number; clientY: number; pointerType: string }) => boolean | void;
@@ -79,6 +79,8 @@ export interface InkCanvasProps {
   onUndoGesture?: () => void;
   onRedoGesture?: () => void;
   onZoom?: (factor: number, center: { x: number; y: number }) => void;
+  /** the pinch lifted — commit the live zoom */
+  onZoomEnd?: () => void;
   selectedIds?: Set<string> | null;
   highlightStrokeId?: string | null;
   /** overlay: anchor a finished stroke to a verse (page coords in) */
@@ -121,6 +123,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     onUndoGesture,
     onRedoGesture,
     onZoom,
+    onZoomEnd,
     selectedIds,
     highlightStrokeId,
     anchorFor,
@@ -366,7 +369,8 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     if (pen.tool === "highlighter") return "marker";
     return null;
   };
-  const strokeWidthFor = (tool: InkTool) => BRUSHES[tool].base * WIDTH_STEPS[pen.widthStep] * (tool === "marker" && pen.tool === "highlighter" ? 2.2 : 1);
+  const widthMul = pen.widthMul ?? WIDTH_STEPS[pen.widthStep];
+  const strokeWidthFor = (tool: InkTool) => BRUSHES[tool].base * widthMul * (tool === "marker" && pen.tool === "highlighter" ? 2.2 : 1);
 
   const pressureOf = (e: React.PointerEvent | PointerEvent) => {
     if (e.pointerType === "pen") return Number.isFinite(e.pressure) && e.pressure > 0 ? e.pressure : 0.5;
@@ -382,7 +386,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     const stroke: Stroke = {
       id: newId(),
       tool,
-      color: pen.tool === "highlighter" ? desk.pen.color : pen.color,
+      color: pen.tool === "highlighter" ? hlColor(pen.hlCategory) : pen.color,
       width: mode === "lasso" ? 1 : strokeWidthFor(tool),
       opacity: pen.opacity,
       t0,
@@ -413,14 +417,14 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       const client = { x: e.clientX, y: e.clientY };
       holdTimer.current = setTimeout(() => {
         const st = cur.current;
-        if (!st || st.pointerId !== pid || st.movedPx > 6) return;
+        if (!st || st.pointerId !== pid || st.movedPx > 4) return; // a resting pen, not a slow start
         const took = onHold({ x: st.stroke.pts[0].x, y: st.stroke.pts[0].y, clientX: client.x, clientY: client.y, pointerType: st.pointerType });
         if (took) {
           st.dragging = true;
           st.stroke.pts = [st.stroke.pts[0]];
           redrawLive();
         }
-      }, 460);
+      }, 600);
     }
   };
 
@@ -460,7 +464,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       }
       st.lastMoveAt = now;
       if (st.mode === "erase") {
-        const radius = (8 + pen.widthStep * 4) / scale;
+        const radius = (8 + widthMul * 5) / scale;
         for (const s of strokes) {
           if (st.erased.has(s.id)) continue;
           const off = offsetFor ? offsetFor(s) : null;
@@ -538,8 +542,13 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     else if (isStrike(pts)) kind = "strike";
     const info: StrokeEndInfo = { kind, pts, bounds: strokeBoundsOf(pts), tool: pen.tool, clientStart, clientEnd, clientPts: st.clientPts };
     if (pen.tool === "highlighter" && onHighlighterStroke) {
-      onHighlighterStroke(info);
-      ghosts.current.push({ stroke: { ...stroke, width: stroke.width }, born: nowMs() });
+      const verdict = onHighlighterStroke(stroke, info);
+      if (verdict === "keep") {
+        // the highlighter is real ink now: a translucent band in the category colour that stays
+        commit(stroke, info);
+      } else {
+        ghosts.current.push({ stroke: { ...stroke, width: stroke.width }, born: nowMs() });
+      }
       redrawLive();
       return;
     }
@@ -620,7 +629,10 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     if (e.pointerType === "touch" && !fingerDraws) {
       const t = touches.current.get(e.pointerId);
       touches.current.delete(e.pointerId);
-      if (touches.current.size < 2) pinch.current = null;
+      if (touches.current.size < 2 && pinch.current) {
+        pinch.current = null;
+        onZoomEnd?.();
+      }
       if (t && touches.current.size === 0) {
         const quick = nowMs() - t.t < 260 && t.moved < 10;
         const n = maxTouches.current;

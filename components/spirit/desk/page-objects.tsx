@@ -48,8 +48,10 @@ export function PageHeaderObject({ o }: { o: PageObject }) {
 export function SectionObject({ o }: { o: PageObject }) {
   const d = o.data as { label: string };
   return (
-    <div style={{ position: "absolute", left: o.x, top: o.y }}>
+    <div style={{ position: "absolute", left: o.x, top: o.y, width: o.w ?? 752, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
       <SectionHead label={d.label} />
+      {/* profuse notes: grow this section — pushes everything below it down (auto-grows as he writes, too) */}
+      <span data-section-grow={o.id} style={{ fontSize: 10.5, letterSpacing: "0.06em", fontWeight: 700, color: "#B7A2AC", border: "1px dashed #E4D6DC", borderRadius: 99, padding: "2px 10px", marginLeft: 8, whiteSpace: "nowrap", pointerEvents: "auto" }}>+ room</span>
     </div>
   );
 }

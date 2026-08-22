@@ -40,20 +40,42 @@ export interface DeskShellProps {
 
 interface Layout {
   preset: "study" | "sermon" | "free" | "source" | "custom";
-  writing: DocKind[]; // the writing column (usually [notebook])
-  text: DocKind[]; // the text column, 1–2 stacked
+  writing: DocKind[]; // the writing column (usually [notebook]) — or [] for a text-only tab
+  text: DocKind[]; // the text column, 1–2 docs — stacked, or side by side when cols
+  cols?: boolean;
 }
+/** A tab is a saved arrangement (Logos-style): swipe or tap between them; each remembers its docs. */
+interface DeskTab extends Layout {
+  id: string;
+  label: string;
+}
+const TAB_TEMPLATES: { key: string; label: string; sub: string; make: () => Layout }[] = [
+  { key: "notebook", label: "Notebook", sub: "one full page", make: () => ({ preset: "custom", writing: ["notebook"], text: [] }) },
+  { key: "bible", label: "Bible", sub: "one text, full width", make: () => ({ preset: "free", writing: [], text: ["bible"] }) },
+  { key: "reference", label: "Reference", sub: "the Bible that follows links", make: () => ({ preset: "custom", writing: [], text: ["reference"] }) },
+  { key: "nb-bible", label: "Notebook | Bible", sub: "two panes", make: () => ({ preset: "custom", writing: ["notebook"], text: ["bible"] }) },
+  { key: "nb-ref", label: "Notebook | Reference", sub: "two panes", make: () => ({ preset: "custom", writing: ["notebook"], text: ["reference"] }) },
+  { key: "bible-ref", label: "Bible | Reference", sub: "two texts side by side", make: () => ({ preset: "custom", writing: [], text: ["bible", "reference"], cols: true }) },
+  { key: "sermon", label: "Notebook | Bible ⁄ Reference", sub: "the Sunday desk — stacked", make: () => ({ preset: "sermon", writing: ["notebook"], text: ["bible", "reference"] }) },
+  { key: "three", label: "Notebook | Bible | Reference", sub: "three columns", make: () => ({ preset: "custom", writing: ["notebook"], text: ["bible", "reference"], cols: true }) },
+  { key: "study", label: "Notebook | Teaching", sub: "the study desk", make: () => ({ preset: "study", writing: ["notebook"], text: ["teaching"] }) },
+  { key: "source", label: "Notebook | Bible ⁄ Source", sub: "with the source open", make: () => ({ preset: "source", writing: ["notebook"], text: ["bible", "source"] }) },
+];
+const defaultTabsFor = (context: DeskContext): DeskTab[] => {
+  const t = (key: string, id: string, label?: string): DeskTab => {
+    const tpl = TAB_TEMPLATES.find((x) => x.key === key)!;
+    return { id, label: label ?? tpl.label, ...tpl.make() };
+  };
+  if (context === "sermon") return [t("sermon", "sermon", "Sunday"), t("notebook", "nb"), t("bible", "bible"), t("reference", "ref"), t("three", "three", "All three")];
+  if (context === "free") return [t("bible", "bible"), t("nb-bible", "nb-bible"), t("notebook", "nb"), t("bible-ref", "bible-ref")];
+  return [t("study", "study", "Study"), t("nb-bible", "nb-bible"), t("bible", "bible"), t("notebook", "nb"), t("three", "three", "All three")];
+};
+const newTabId = () => `t-${Math.random().toString(36).slice(2, 8)}`;
 const PRESETS: Record<"study" | "sermon" | "free" | "source", Layout> = {
   study: { preset: "study", writing: ["notebook"], text: ["teaching"] },
   sermon: { preset: "sermon", writing: ["notebook"], text: ["bible", "reference"] },
   free: { preset: "free", writing: [], text: ["bible"] },
   source: { preset: "source", writing: ["notebook"], text: ["bible", "source"] },
-};
-const PRESET_LABEL: Record<string, { name: string; sub: string }> = {
-  study: { name: "Study", sub: "Teaching | Notebook" },
-  sermon: { name: "Sermon", sub: "Notebook | Bible over Reference" },
-  free: { name: "Free reading", sub: "One text, margins wide" },
-  source: { name: "Source", sub: "Notebook | Bible over Source" },
 };
 const DOC_LABEL: Record<DocKind, string> = { bible: "Bible", reference: "Reference Bible", teaching: "Teaching", notebook: "Notebook", source: "Source", sunday: "Sunday" };
 
@@ -61,7 +83,19 @@ export function DeskShell(props: DeskShellProps) {
   const { context, title, chip, free, dayId, pageId, layerContext, onTakeNotes } = props;
   const desk = useDesk();
   const { hand, pen, prefs, updatePrefs, popover, setPopover, setContext } = desk;
-  const [layout, setLayout] = useState<Layout>(PRESETS[context === "free" ? "free" : context === "sermon" ? "sermon" : "study"]);
+  const [tabs, setTabs] = useState<DeskTab[]>(() => {
+    const saved = prefs.layouts[context]?.tabs as DeskTab[] | undefined;
+    return saved && saved.length ? saved : defaultTabsFor(context);
+  });
+  const [activeTab, setActiveTab] = useState<string>(() => prefs.layouts[context]?.activeTab ?? (prefs.layouts[context]?.tabs?.[0]?.id ?? defaultTabsFor(context)[0].id));
+  const tab = tabs.find((t) => t.id === activeTab) ?? tabs[0];
+  const layout: Layout = tab;
+  // edits always land on the active tab (slot menus, events, presets)
+  const setLayout = (next: Layout | ((l: Layout) => Layout)) => {
+    setTabs((ts) => ts.map((t) => (t.id === (activeTab ?? ts[0].id) ? { ...t, ...(typeof next === "function" ? next(t) : next) } : t)));
+  };
+  const [tabMenu, setTabMenu] = useState<string | null>(null);
+  const tabsLoaded = useRef(false);
   const [nbFrac, setNbFrac] = useState(prefs.layouts[context]?.nbFrac ?? 0.535);
   const [stackFrac, setStackFrac] = useState(prefs.layouts[context]?.stackFrac ?? 0.6);
   const [mainQ, setMainQ] = useState<string | null>(props.mainQ);
@@ -77,12 +111,24 @@ export function DeskShell(props: DeskShellProps) {
   useEffect(() => setContext(context), [context, setContext]);
   // the remembered preset per context
   useEffect(() => {
-    const p = prefs.layouts[context]?.preset as Layout["preset"] | undefined;
-    if (p && p !== "custom" && PRESETS[p]) setLayout(PRESETS[p]);
+    const saved = prefs.layouts[context]?.tabs as DeskTab[] | undefined;
+    if (saved && saved.length && !tabsLoaded.current) {
+      tabsLoaded.current = true;
+      setTabs(saved);
+      setActiveTab(prefs.layouts[context]?.activeTab ?? saved[0].id);
+    }
     setNbFrac(prefs.layouts[context]?.nbFrac ?? 0.535);
     setStackFrac(prefs.layouts[context]?.stackFrac ?? 0.6);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context, prefs.layouts[context]?.preset]);
+  }, [context, prefs.layouts[context]?.tabs]);
+  // persist the tab set whenever it changes (after the first paint)
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => saveLayout({ tabs, activeTab }), 600);
+    return () => { if (persistTimer.current) clearTimeout(persistTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs, activeTab]);
   useEffect(() => {
     setMainQ(props.mainQ);
     setRefQ(props.refQ ?? props.mainQ);
@@ -115,7 +161,7 @@ export function DeskShell(props: DeskShellProps) {
   }, [layout]);
 
   const saveLayout = useCallback(
-    (next: Partial<{ preset: string; nbFrac: number; stackFrac: number }>) => {
+    (next: Partial<{ preset: string; nbFrac: number; stackFrac: number; tabs: DeskTab[]; activeTab: string }>) => {
       updatePrefs((p) => ({ ...p, layouts: { ...p.layouts, [context]: { ...p.layouts[context], ...next } } }));
     },
     [context, updatePrefs],
@@ -124,6 +170,47 @@ export function DeskShell(props: DeskShellProps) {
     setLayout(PRESETS[k]);
     saveLayout({ preset: k });
     setPopover(null);
+  };
+  const addTab = (tplKey: string) => {
+    const tpl = TAB_TEMPLATES.find((x) => x.key === tplKey);
+    if (!tpl) return;
+    const id = newTabId();
+    setTabs((ts) => [...ts, { id, label: tpl.label, ...tpl.make() }]);
+    setActiveTab(id);
+    setPopover(null);
+  };
+  const removeTab = (id: string) => {
+    setTabs((ts) => {
+      if (ts.length <= 1) return ts;
+      const next = ts.filter((t) => t.id !== id);
+      if (activeTab === id) setActiveTab(next[Math.max(0, ts.findIndex((t) => t.id === id) - 1)].id);
+      return next;
+    });
+    setTabMenu(null);
+  };
+  const renameTab = (id: string) => {
+    const cur = tabs.find((t) => t.id === id);
+    const name = window.prompt("Name this tab", cur?.label ?? "");
+    if (name) setTabs((ts) => ts.map((t) => (t.id === id ? { ...t, label: name } : t)));
+    setTabMenu(null);
+  };
+  const stepTab = (dir: 1 | -1) => {
+    const i = tabs.findIndex((t) => t.id === activeTab);
+    const n = tabs[(i + dir + tabs.length) % tabs.length];
+    if (n) setActiveTab(n.id);
+  };
+  // finger swipe on the tab strip → previous / next tab
+  const swipe = useRef<{ x: number; t: number } | null>(null);
+  const onStripDown = (e: React.PointerEvent) => {
+    if (e.pointerType === "pen") return;
+    swipe.current = { x: e.clientX, t: Date.now() };
+  };
+  const onStripUp = (e: React.PointerEvent) => {
+    const sw = swipe.current;
+    swipe.current = null;
+    if (!sw || e.pointerType === "pen") return;
+    const dx = e.clientX - sw.x;
+    if (Math.abs(dx) > 60 && Date.now() - sw.t < 700) stepTab(dx < 0 ? 1 : -1);
   };
   const doFlip = () => {
     flip.current = !flip.current;
@@ -197,22 +284,25 @@ export function DeskShell(props: DeskShellProps) {
     ) : null;
 
   const paneBox: React.CSSProperties = { background: "#FFFFFF", borderRadius: 16, boxShadow: "0 2px 12px rgba(35,34,39,0.06)", overflow: "hidden", display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, position: "relative" };
+  const textEmpty = layout.text.length === 0;
+  const cols = Boolean(layout.cols) && layout.text.length > 1 && !portrait;
   const writingCol = layout.writing.length ? (
-    <div style={{ ...paneBox, flex: "none", width: portrait ? "auto" : `calc(${(nbFrac * 100).toFixed(2)}% - 7px)`, transition: dragging === "v" ? "none" : "width .28s cubic-bezier(.3,.9,.3,1)", height: portrait ? `calc(${((1 - stackFrac) * 100).toFixed(2)}% - 7px)` : undefined }}>
+    <div style={{ ...paneBox, flex: textEmpty ? 1 : "none", width: textEmpty || portrait ? "auto" : `calc(${(nbFrac * (cols ? 0.72 : 1) * 100).toFixed(2)}% - 7px)`, transition: dragging === "v" ? "none" : "width .28s cubic-bezier(.3,.9,.3,1)", height: portrait && !textEmpty ? `calc(${((1 - stackFrac) * 100).toFixed(2)}% - 7px)` : undefined }}>
       {renderDoc(layout.writing[0], "writing", 0)}
       {slotMenuEl("writing", 0)}
     </div>
   ) : null;
-  const textCol = (
-    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", height: portrait ? `calc(${(stackFrac * 100).toFixed(2)}% - 7px)` : undefined }}>
+  const textCol = textEmpty ? null : (
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: cols ? "row" : "column", height: portrait && writingCol ? `calc(${(stackFrac * 100).toFixed(2)}% - 7px)` : undefined }}>
       {layout.text.map((d, i) => (
         <div key={`${d}-${i}`} style={{ display: "contents" }}>
-          {i > 0 && (
+          {i > 0 && !cols && (
             <div onPointerDown={startDrag("h")} style={{ height: 14, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "row-resize", touchAction: "none" }}>
               <span style={{ width: 34, height: 4, borderRadius: 99, background: dragging === "h" ? "#A63D63" : "#C9C7CD" }} />
             </div>
           )}
-          <div style={{ ...paneBox, flex: layout.text.length > 1 ? (i === 0 ? `0 0 calc(${(stackFrac * 100).toFixed(2)}% - 7px)` : 1) : 1, transition: dragging === "h" ? "none" : "flex-basis .28s cubic-bezier(.3,.9,.3,1)" }}>
+          {i > 0 && cols && <div style={{ width: 14, flex: "none" }} />}
+          <div style={{ ...paneBox, flex: cols ? 1 : layout.text.length > 1 ? (i === 0 ? `0 0 calc(${(stackFrac * 100).toFixed(2)}% - 7px)` : 1) : 1, transition: dragging === "h" ? "none" : "flex-basis .28s cubic-bezier(.3,.9,.3,1)" }}>
             {renderDoc(d, "text", i)}
             {slotMenuEl("text", i)}
           </div>
@@ -220,7 +310,7 @@ export function DeskShell(props: DeskShellProps) {
       ))}
     </div>
   );
-  const seamV = writingCol ? (
+  const seamV = writingCol && !textEmpty ? (
     <div onPointerDown={startDrag("v")} style={{ width: 14, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "col-resize", touchAction: "none", position: "relative" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
         {[0, 1, 2].map((i) => <span key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: dragging === "v" ? "#A63D63" : "#C9C7CD" }} />)}
@@ -228,7 +318,7 @@ export function DeskShell(props: DeskShellProps) {
       {dragging === "v" && <span style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", fontSize: 9, fontWeight: 600, color: "#FFFFFF", background: "rgba(35,34,39,0.82)", borderRadius: 99, padding: "3px 9px", zIndex: 6 }}>snaps at ⅓ · ½ · ⅔ — finger only</span>}
     </div>
   ) : null;
-  const seamH = writingCol ? (
+  const seamH = writingCol && !textEmpty ? (
     <div onPointerDown={startDrag("h")} style={{ height: 14, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "row-resize", touchAction: "none" }}>
       <span style={{ width: 34, height: 4, borderRadius: 99, background: dragging === "h" ? "#A63D63" : "#C9C7CD" }} />
     </div>
@@ -250,9 +340,9 @@ export function DeskShell(props: DeskShellProps) {
   const inkDot = pen.tool === "highlighter" ? hlColor(pen.hlCategory) : pen.color;
 
   return (
-    <div style={{ position: "absolute", inset: 0, background: "#F2F1F2", fontFamily: "var(--font-body)", overflow: "hidden" }}>
-      {/* the desk bar */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", boxSizing: "border-box", zIndex: 20 }}>
+    <div style={{ position: "absolute", inset: 0, background: "#F2F1F2", fontFamily: "var(--font-body)", overflow: "hidden", ["--desk-top" as string]: "env(safe-area-inset-top, 0px)" }}>
+      {/* the desk bar — below the iPad's status bar */}
+      <div style={{ position: "absolute", top: "var(--desk-top)", left: 0, right: 0, height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", boxSizing: "border-box", zIndex: 20 }}>
         <Link href="/home" style={{ display: "flex", alignItems: "center", gap: 6, background: "#FFFFFF", border: "1px solid #E4E2E6", borderRadius: 99, padding: "6px 13px 6px 10px", textDecoration: "none" }}>
           <span style={{ fontSize: 14, color: "#8C2F51", lineHeight: 1 }}>‹</span>
           <span style={{ fontSize: 12, fontWeight: 600, color: "#454349" }}>Home</span>
@@ -278,45 +368,71 @@ export function DeskShell(props: DeskShellProps) {
             <LayoutGridIcon color={popover === "layout" ? "#8C2F51" : "#454349"} />
           </IconButton>
           {popover === "layout" && (
-            <Popover width={272} onClose={() => setPopover(null)} style={{ right: 0, top: 40 }}>
-              <Kicker>LAYOUTS · REMEMBERED PER CONTEXT</Kicker>
-              {(["study", "sermon", "free", "source"] as const).map((k, i) => {
-                const on = layout.preset === k;
-                const thumb = (
-                  <div style={{ width: 62, height: 42, flex: "none", border: `1px solid ${on ? "#E9CFDC" : "#E4E2E6"}`, borderRadius: 7, display: "flex", gap: 2, padding: 3, boxSizing: "border-box", background: on ? "#FFFFFF" : "#FAF9FA", flexDirection: writingLeft ? "row" : "row-reverse" }}>
-                    {k === "free" ? <span style={{ flex: 1, background: "#E4E2E6", borderRadius: 3 }} /> : (
-                      <>
-                        <span style={{ flex: 1.2, background: "#F0D3E0", borderRadius: 3 }} />
-                        {k === "study" ? <span style={{ flex: 1, background: "#E4E2E6", borderRadius: 3 }} /> : (
-                          <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                            <span style={{ flex: 1.3, background: "#E4E2E6", borderRadius: 3 }} />
-                            <span style={{ flex: 1, background: "#E4E2E6", borderRadius: 3 }} />
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                );
-                return (
-                  <button key={k} type="button" onClick={() => pickPreset(k)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, marginTop: i === 0 ? 11 : 4, padding: 8, borderRadius: 11, cursor: "pointer", background: on ? "#F6E3EB" : "transparent", boxShadow: on ? "inset 0 0 0 1.5px #A63D63" : "none", border: 0, textAlign: "left" }}>
-                    {thumb}
-                    <div>
-                      <div style={{ fontSize: 12.5, fontWeight: 600, color: on ? "#8C2F51" : "#232227" }}>{PRESET_LABEL[k].name}</div>
-                      <div style={{ fontSize: 10.5, color: on ? "#B07A93" : "#96949B" }}>{PRESET_LABEL[k].sub}</div>
+            <Popover width={300} onClose={() => setPopover(null)} style={{ right: 0, top: 40 }}>
+              <Kicker>NEW TAB · PICK AN ARRANGEMENT</Kicker>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 10 }}>
+                {TAB_TEMPLATES.map((t) => {
+                  const l = t.make();
+                  const thumb = (
+                    <div style={{ width: 54, height: 36, flex: "none", border: "1px solid #E4E2E6", borderRadius: 6, display: "flex", gap: 2, padding: 3, boxSizing: "border-box", background: "#FAF9FA", flexDirection: writingLeft ? "row" : "row-reverse" }}>
+                      {l.writing.length > 0 && <span style={{ flex: 1.15, background: "#F0D3E0", borderRadius: 3 }} />}
+                      {l.text.length > 0 && (l.cols && l.text.length > 1 ? l.text.map((d, i) => <span key={i} style={{ flex: 1, background: "#E4E2E6", borderRadius: 3 }} />) : l.text.length > 1 ? (
+                        <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                          <span style={{ flex: 1.3, background: "#E4E2E6", borderRadius: 3 }} />
+                          <span style={{ flex: 1, background: "#E4E2E6", borderRadius: 3 }} />
+                        </span>
+                      ) : <span style={{ flex: 1, background: "#E4E2E6", borderRadius: 3 }} />)}
                     </div>
-                    {on && <span style={{ marginLeft: "auto", color: "#A63D63", fontSize: 12 }}>✓</span>}
-                  </button>
-                );
-              })}
-              <div style={{ fontSize: 10, color: "#96949B", lineHeight: 1.55, marginTop: 10, borderTop: "1px solid #EDEBEE", paddingTop: 9 }}>⇄ Flip swaps sides · seams snap to thirds, finger-only. Thumbnails follow your handedness.</div>
+                  );
+                  return (
+                    <button key={t.key} type="button" onClick={() => addTab(t.key)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 10, cursor: "pointer", background: "transparent", border: "1px solid #EDEBEE", textAlign: "left" }}>
+                      {thumb}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#232227", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.label}</div>
+                        <div style={{ fontSize: 9.5, color: "#96949B" }}>{t.sub}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 10, borderTop: "1px solid #EDEBEE", paddingTop: 9 }}>
+                <button type="button" onClick={() => pickPreset(context === "free" ? "free" : context === "sermon" ? "sermon" : "study")} style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", border: 0, borderRadius: 99, padding: "5px 11px", cursor: "pointer" }}>Reset this tab to the {context} desk</button>
+              </div>
+              <div style={{ fontSize: 10, color: "#96949B", lineHeight: 1.55, marginTop: 9 }}>Tabs are yours: swipe the strip with a finger, tap a pane&apos;s kicker to swap what it shows, ⇄ flips sides. Seams snap to thirds, finger-only.</div>
             </Popover>
           )}
         </div>
         <IconButton title="Flip — swap sides" onClick={doFlip}><FlipIcon /></IconButton>
       </div>
 
+      {/* the tab strip — Logos-style arrangements; finger-swipe or tap */}
+      <div onPointerDown={onStripDown} onPointerUp={onStripUp} style={{ position: "absolute", top: "calc(50px + var(--desk-top))", left: 12, right: 12, height: 32, display: "flex", alignItems: "center", gap: 6, zIndex: 19, overflowX: "auto", scrollbarWidth: "none", touchAction: "pan-x" }}>
+        {tabs.map((t) => {
+          const on = t.id === activeTab;
+          return (
+            <div key={t.id} style={{ position: "relative", flex: "none" }}>
+              <button type="button" onClick={() => (on ? setTabMenu(tabMenu === t.id ? null : t.id) : setActiveTab(t.id))} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: on ? "#FFFFFF" : "#66646C", background: on ? "#232227" : "#FFFFFF", border: `1px solid ${on ? "#232227" : "#E4E2E6"}`, borderRadius: 99, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                {t.label}
+                {on && <span style={{ fontSize: 9, opacity: 0.7 }}>⌄</span>}
+              </button>
+              {tabMenu === t.id && (
+                <Popover width={200} onClose={() => setTabMenu(null)} style={{ left: 0, top: 34 }}>
+                  <Kicker>THIS TAB</Kicker>
+                  <button type="button" onClick={() => renameTab(t.id)} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 6, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#232227", background: "transparent", border: 0, cursor: "pointer" }}>Rename</button>
+                  <button type="button" onClick={() => { setTabs((ts) => { const i = ts.findIndex((x) => x.id === t.id); const copy = { ...t, id: newTabId(), label: `${t.label} 2` }; const next = ts.slice(); next.splice(i + 1, 0, copy); return next; }); setTabMenu(null); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 2, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#232227", background: "transparent", border: 0, cursor: "pointer" }}>Duplicate</button>
+                  {tabs.length > 1 && <button type="button" onClick={() => removeTab(t.id)} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 2, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#B4533F", background: "transparent", border: 0, cursor: "pointer" }}>Close tab</button>}
+                </Popover>
+              )}
+            </div>
+          );
+        })}
+        <button type="button" title="New tab" onClick={() => setPopover(popover === "layout" ? null : "layout")} style={{ flex: "none", width: 26, height: 26, borderRadius: "50%", background: "#FFFFFF", border: "1px solid #E4E2E6", color: "#8C2F51", fontSize: 15, lineHeight: 1, cursor: "pointer" }}>+</button>
+        <span style={{ flex: 1 }} />
+        <span style={{ flex: "none", fontSize: 9.5, color: "#A9A7AE", whiteSpace: "nowrap" }}>swipe the strip · tap a pane&apos;s kicker to change it</span>
+      </div>
+
       {/* the desk */}
-      <div ref={deskRef} style={{ position: "absolute", top: 54, left: 12, right: 12, bottom: 12, display: "flex", flexDirection: portrait ? "column" : writingLeft ? "row" : "row-reverse", userSelect: dragging ? "none" : "auto" }}>
+      <div ref={deskRef} style={{ position: "absolute", top: "calc(88px + var(--desk-top))", left: 12, right: 12, bottom: 12, display: "flex", flexDirection: portrait ? "column" : writingLeft ? "row" : "row-reverse", userSelect: dragging ? "none" : "auto" }}>
         {portrait ? (
           <>
             {textCol}

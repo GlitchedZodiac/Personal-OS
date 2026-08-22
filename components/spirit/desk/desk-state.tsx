@@ -29,6 +29,7 @@ export interface PenState {
   brush: InkTool;
   color: string;
   widthStep: 0 | 1 | 2;
+  widthMul: number; // continuous, 0.5–2.2
   opacity: number;
   streamline: number;
   hlCategory: string; // the highlighter's category (six, fixed)
@@ -102,6 +103,7 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
     brush: "fountain",
     color: DEFAULT_DESK_PREFS.pen.color,
     widthStep: 1,
+    widthMul: 1,
     opacity: 1,
     streamline: DEFAULT_DESK_PREFS.pen.streamline,
     hlCategory: "God",
@@ -126,6 +128,7 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
       brush: p.pen.brush,
       color: p.pen.color,
       widthStep: p.pen.widthStep,
+      widthMul: p.pen.widthMul ?? 1,
       opacity: p.pen.opacity,
       streamline: p.pen.streamline,
     }));
@@ -188,7 +191,7 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
               recents: [patch.color as string, ...p.pen.recents.filter((c) => c !== patch.color)].slice(0, 6),
             },
           }));
-        } else if (patch.tool || patch.brush || patch.widthStep !== undefined || patch.streamline !== undefined || patch.opacity !== undefined) {
+        } else if (patch.tool || patch.brush || patch.widthStep !== undefined || patch.widthMul !== undefined || patch.streamline !== undefined || patch.opacity !== undefined) {
           updatePrefs((p) => ({
             ...p,
             pen: {
@@ -196,6 +199,7 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
               tool: (next.tool === "text" ? p.pen.tool : next.tool) as DeskPrefs["pen"]["tool"],
               brush: next.brush,
               widthStep: next.widthStep,
+              widthMul: next.widthMul,
               streamline: next.streamline,
               opacity: next.opacity,
             },

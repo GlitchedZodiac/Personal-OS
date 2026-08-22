@@ -98,7 +98,10 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
   const creating = useRef<Promise<OverlayPage | null> | null>(null);
   const lastTapClient = useRef<{ x: number; y: number } | null>(null);
 
-  const marginPx = MARGIN_W[overlayMargin];
+  // the margin is not "random whitespace": it exists when he asked for one, or when margin
+  // ink is on the shown layer — and collapses entirely while the layer is hidden
+  const hasMarginInk = strokes.some((s) => s.region === "margin");
+  const marginPx = overlayVisibility === "hide" ? 0 : MARGIN_W[Math.max(overlayMargin, hasMarginInk ? 1 : 0) as 0 | 1 | 2];
   const marginSide: "left" | "right" = hand === "left" ? "left" : "right";
   const pinned = strokes.length > 0 && !unpinned;
   const alpha = overlayVisibility === "show" ? 1 : overlayVisibility === "dim" ? 0.22 : 0;
@@ -322,10 +325,16 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
     }
     return "discard";
   };
-  const onHighlighterStroke = (info: StrokeEndInfo) => {
+  const onHighlighterStroke = (stroke: Stroke, info: StrokeEndInfo): "keep" | "discard" => {
     const vs = versesAlong(info.clientPts);
-    if (!vs.length) return;
+    if (!vs.length) return "discard";
+    // the verse-level highlight (the data the phone, the notebook and the layer queries use) …
     void readerRef.current?.applyHighlight(pen.hlCategory, vs[0], vs[vs.length - 1]);
+    // … AND the band itself stays as ink in the category colour — a highlighter that feels like one
+    stroke.color = hlColor(pen.hlCategory);
+    stroke.opacity = 0.34;
+    stroke.tool = "marker";
+    return "keep";
   };
   const onTap = (pt: { x: number; y: number; clientX: number; clientY: number; pointerType: string }) => {
     lastTapClient.current = { x: pt.clientX, y: pt.clientY };
@@ -337,6 +346,14 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
       const ref = Number(num.getAttribute("data-verse-number"));
       void readerRef.current?.applyHighlight(pen.hlCategory, ref, ref);
       return true;
+    }
+    if (num && sel.start !== null) {
+      // a second verse number while one is selected → the span between them
+      const ref = Number(num.getAttribute("data-verse-number"));
+      if (ref !== sel.start && ref !== sel.end) {
+        readerRef.current?.select(Math.min(sel.start, ref), Math.max(sel.end ?? sel.start, ref));
+        return true;
+      }
     }
     const sup = first.closest?.("sup") as HTMLElement | null;
     const btn = first.closest?.("button") as HTMLElement | null;
@@ -432,6 +449,8 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
 
   // a narrow pane (stacked Bible, ~360px) keeps every control but drops the long labels
   const narrow = contentSize.w > 0 && contentSize.w < 600;
+  // a third-of-the-desk pane (~240px, three columns): one eye button that cycles, one mode chip that toggles
+  const tiny = contentSize.w > 0 && contentSize.w < 360;
   const layerLabel = narrow ? "" : layerKey === "my" ? "MY LAYER" : layerContext && layerContext.key === layerKey ? layerContext.label.toUpperCase() : layerKey.toUpperCase();
   const selectedLabel = sel.start !== null ? `${formatRef(sel.start, sel.end ?? sel.start).toUpperCase()} SELECTED` : null;
   const free2 = Boolean(free);
@@ -441,7 +460,7 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap" }}>
       {role === "reference" && (
         <>
-          <span style={{ fontSize: 10, color: "#A9A7AE" }}>follows links</span>
+          {!tiny && <span style={{ fontSize: 10, color: "#A9A7AE" }}>follows links</span>}
           <button type="button" onClick={() => { const prev = history[history.length - 1]; if (prev) { setHistory((h) => h.slice(0, -1)); onQueryChange(prev); } }} style={{ fontSize: 13, color: history.length ? "#96949B" : "#D9D7DC", background: "none", border: 0, cursor: history.length ? "pointer" : "default" }} aria-label="Back">‹</button>
         </>
       )}
@@ -482,6 +501,12 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
           </Popover>
         )}
       </div>
+      {tiny ? (
+        <button type="button" title={`overlay: ${overlayVisibility} — tap to cycle`} onClick={() => setOverlayVisibility(overlayVisibility === "show" ? "dim" : overlayVisibility === "dim" ? "hide" : "show")} style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid #E4E2E6", background: overlayVisibility === "hide" ? "#FFFFFF" : "#FAF9FA", borderRadius: 99, padding: "4px 8px", cursor: "pointer", opacity: overlayVisibility === "hide" ? 0.6 : 1 }}>
+          <EyeIcon />
+          <span style={{ fontSize: 8, letterSpacing: "0.06em", fontWeight: 700, color: "#8C2F51" }}>{overlayVisibility.toUpperCase()}</span>
+        </button>
+      ) : (
       <div style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid #E4E2E6", background: "#FAF9FA", borderRadius: 99, padding: "2.5px 3px 2.5px 9px" }}>
         <EyeIcon />
         <div style={{ display: "flex", gap: 2 }}>
@@ -492,11 +517,16 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
           ))}
         </div>
       </div>
+      )}
       <button type="button" onClick={() => setOverlayMargin(((overlayMargin + 1) % 3) as 0 | 1 | 2)} title="margin: none · wide · wider" style={{ display: "flex", alignItems: "center", gap: 5, border: "1px solid #E4E2E6", background: "#FFFFFF", borderRadius: 99, padding: "4px 10px", cursor: "pointer" }}>
         <MarginIcon />
         {!narrow && <span style={{ fontSize: 9, letterSpacing: "0.08em", fontWeight: 700, color: "#454349" }}>{MARGIN_LABEL[overlayMargin]}</span>}
       </button>
-      <Segmented value={bibleMode} onChange={setBibleMode} size="sm" options={[{ value: "study", label: "STUDY" }, { value: "scratch", label: "SCRATCH" }]} />
+      {tiny ? (
+        <button type="button" title="Study ↔ Scratch" onClick={() => setBibleMode(bibleMode === "study" ? "scratch" : "study")} style={{ fontSize: 8.5, letterSpacing: "0.08em", fontWeight: 700, color: "#FFFFFF", background: "#A63D63", border: 0, borderRadius: 99, padding: "5px 10px", cursor: "pointer" }}>{bibleMode === "study" ? "STUDY" : "SCRATCH"}</button>
+      ) : (
+        <Segmented value={bibleMode} onChange={setBibleMode} size="sm" options={[{ value: "study", label: "STUDY" }, { value: "scratch", label: "SCRATCH" }]} />
+      )}
       {headerExtra}
     </div>
   );
