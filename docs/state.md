@@ -70,6 +70,8 @@ page, and sent screenshots + eleven notes. Each one, what it was, what shipped:
   Pencil 2 can't do either; a native `UIPencilInteraction` bridge is the deferred way
   to make double-tap real).
 
+**Deployed 2026-08-22 (round 2):** `main` `65957d9` live on personal-os-plum.vercel.app — verified with a minted cookie: `/home`, the sermon desk, settings, shelf → 200; `POST /api/spirit/sermon {action:"open", fresh:true}` made a fresh page (round-2 code) and was deleted again; his Sunday page (25 strokes) untouched; desk prefs carry margin none + five sermon tabs. The companion needs no reinstall — this is the web layer.
+
 Verified on the dev server (Browser pane, 1180×820): tab strip · All-three columns ·
 Notebook single pane · Scratch stroke persisted · highlighter band + verse highlight
 recorded · tap-extend 1:1–3 · ⋯ New page (fresh Sunday page) · + room pushed the
