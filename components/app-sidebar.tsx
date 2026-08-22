@@ -14,6 +14,7 @@ import {
 
 // Desktop rail — same five surfaces as the tab bar, same design icons.
 const navItems = [
+  { label: "Desk", href: "/home", Icon: SpiritIcon },
   { label: "Today", href: "/dashboard", Icon: TodayIcon },
   { label: "Spirit", href: "/spirit", Icon: SpiritIcon },
   { label: "Food", href: "/health/food", Icon: FoodIcon },

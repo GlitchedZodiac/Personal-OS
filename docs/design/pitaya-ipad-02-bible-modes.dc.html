@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400..700;1,7..72,400..700&family=Caveat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#131216; -webkit-font-smoothing:antialiased; }
+    a { color:#DC74A0; text-decoration:none; } a:hover { color:#E795B4; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    @keyframes evap { 0%,60% { opacity:0.75; } 100% { opacity:0.28; } }
+    @keyframes hoverPulse { 0%,100% { opacity:0.3; } 50% { opacity:0.5; } }
+  </style>
+</helmet>
+<section data-screen-label="02 — Bible modes" style="min-height:100vh; box-sizing:border-box; padding:56px 64px 90px; font-family:'Instrument Sans',sans-serif; background:#131216;">
+  <div style="max-width:1320px;">
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:10px; font-size:12px; letter-spacing:0.2em; font-weight:600; color:#DC74A0;"><svg width="11" height="11" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#DC74A0"></rect></svg> PITAYA · SPIRIT ON IPAD — ROUND 1</div>
+      <span style="flex:1;"></span>
+      <div style="display:flex; gap:6px; font-size:11.5px; font-weight:600; flex-wrap:wrap; justify-content:flex-end; max-width:780px;">
+        <a href="pitaya-ipad-00-home.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">00 · Home</a>
+        <a href="pitaya-ipad-01-sermon-desk.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">01 · Sermon Desk</a>
+        <span style="background:#F2F1F2; color:#131216; border-radius:99px; padding:5px 13px;">02 · Bible modes</span>
+        <a href="pitaya-ipad-03-notebook-rail.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">03 · Notebook rail</a>
+        <a href="pitaya-ipad-04-guided-study.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">04 · Guided study</a>
+        <a href="pitaya-ipad-05-bible-overlay.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">05 · Overlay</a>
+        <a href="pitaya-ipad-06-sunday-replay.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">06 · Sunday replay</a>
+        <a href="pitaya-ipad-07-bible-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">07 · Bible states</a>
+        <a href="pitaya-ipad-08-notebook-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">08 · Notebook states</a>
+        <a href="pitaya-ipad-09-worksheets.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">09 · Worksheets</a>
+        <a href="pitaya-ipad-10-desk-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">10 · Desk states</a>
+        <a href="pitaya-ipad-11-settings.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">11 · Settings</a>
+      </div>
+    </div>
+    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:36px; font-weight:700; color:#F2F1F2; letter-spacing:-0.02em; margin-top:12px;">The Bible pane — Study and Scratch, one chapter</div>
+    <div style="font-size:14px; color:#96949B; margin-top:8px; line-height:1.65; max-width:840px;">Judges 4 twice. In <span style="color:#A5A3AA;">Study mode</span> pen marks are gestures that evaporate — their results persist in the highlight system. In <span style="color:#A5A3AA;">Scratch mode</span> the chapter freezes like a printed page and his ink stays where he put it. The highlighter tool is the only thing that highlights; an underline is an underline.</div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:40px; margin-top:26px; align-items:flex-start;">
+
+      <div data-screen-label="2a Study mode — highlighter in use" style="flex:none; width:524px;">
+        <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:11px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">2a</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Study mode — the highlighter in use, hover live</span></div>
+        <div style="background:#FFFFFF; border-radius:18px; box-shadow:0 8px 32px rgba(0,0,0,0.35); overflow:hidden;">
+          <div style="height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid #EDEBEE;">
+            <span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B;">BIBLE ⌄ · ESV</span>
+            <span style="font-size:11px; color:#C9C7CD;">·</span>
+            <span style="font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#232227;">Judges 4</span>
+            <span style="flex:1;"></span>
+            <div style="display:flex; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:2.5px;">
+              <span style="font-size:9px; letter-spacing:0.1em; font-weight:700; color:#FFFFFF; background:#A63D63; border-radius:99px; padding:3px 10px;">STUDY</span>
+              <span style="font-size:9px; letter-spacing:0.1em; font-weight:700; color:#96949B; border-radius:99px; padding:3px 10px; cursor:pointer;">SCRATCH</span>
+            </div>
+            <span style="font-size:12px; color:#96949B; cursor:pointer;"><span style="font-size:10px;">a</span>A</span>
+          </div>
+          <div style="padding:12px 18px 10px; position:relative;">
+            <div style="display:flex; gap:8px; padding:6px 8px 6px 0; border-radius:9px; background:#B4533F1F; border-left:3px solid #B4533F;">
+              <span style="width:12px; flex:none; display:flex; justify-content:center;"><span style="width:6px; height:6px; border-radius:50%; background:#B4533F; margin-top:9px;"></span></span>
+              <div style="font-family:'Literata',serif; font-size:16px; color:#232227; line-height:1.7;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">1</span>And the people of Israel again did what was evil in the sight of the LORD after Ehud died.</div>
+            </div>
+            <div style="display:flex; gap:8px; padding:6px 8px 6px 0; border-radius:9px; border-left:3px dashed #B4533FAA; position:relative;">
+              <span style="width:12px; flex:none;"></span>
+              <div>
+                <div style="font-family:'Literata',serif; font-size:16px; color:#232227; line-height:1.7;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">2</span>And the LORD sold them into the hand of Jabin king of Canaan, who reigned in Hazor.<sup style="font-size:10px; font-weight:700; color:#A63D63; cursor:pointer; margin-left:3px;">a</sup></div>
+                <div style="display:flex; align-items:center; gap:7px; margin-top:5px;">
+                  <span style="display:inline-flex; align-items:center; gap:5px; font-size:9.5px; font-weight:600; padding:2.5px 9px; border-radius:99px; border:1.5px dashed #B4533F; color:#B4533F; background:#FFFFFF;"><span style="width:6px; height:6px; border-radius:50%; border:1.5px solid #B4533F; box-sizing:border-box;"></span>Suggested · Sin &amp; Consequence</span>
+                  <span style="position:relative; width:34px; height:24px;"><svg width="34" height="24" viewBox="0 0 34 24" style="position:absolute; left:0; top:-2px; animation:evap 2.6s ease-in-out infinite alternate;"><path d="M4 13 C 9 17, 12 20, 14 19 C 17 17, 24 6, 31 3" fill="none" stroke="#5F4B8B" stroke-width="2.6" stroke-linecap="round"></path></svg></span>
+                  <span style="font-size:9px; color:#A9A7AE;">pen tick — accepted; the ink evaporates, the mark stays</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; padding:6px 8px 6px 0; border-left:3px solid transparent;">
+              <span style="width:12px; flex:none;"></span>
+              <div style="font-family:'Literata',serif; font-size:16px; color:#232227; line-height:1.7;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">3</span>Then the people of Israel cried out to the LORD for help, for he had 900 chariots of iron and he oppressed the people of Israel cruelly for twenty years.</div>
+            </div>
+            <div style="display:flex; gap:8px; padding:6px 8px 8px 0; border-left:3px solid transparent; position:relative;">
+              <span style="width:12px; flex:none;"></span>
+              <div style="position:relative;">
+                <div style="font-family:'Literata',serif; font-size:16px; color:#232227; line-height:1.7;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">4</span>Now Deborah, a prophetess, the wife of Lappidoth, was judging Israel at that time.</div>
+                <span style="position:absolute; left:0; right:8px; bottom:-3px; height:3px; border-radius:99px; background:#A63D63; animation:hoverPulse 1.8s ease-in-out infinite;"></span>
+                <div style="position:absolute; right:-6px; top:-24px; display:flex; align-items:center; gap:6px; background:rgba(35,34,39,0.82); border-radius:99px; padding:4px 10px; backdrop-filter:blur(4px);">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#F2F1F2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7-4-4-7 7-1.5 5.5L12 19Z"></path></svg>
+                  <span style="font-size:9.5px; font-weight:600; color:#F2F1F2;">hover — binds to v. 4</span>
+                  <span style="width:8px; height:8px; border-radius:50%; background:#5F4B8B; box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0.6);"></span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; padding:6px 8px 6px 0; border-left:3px solid transparent;">
+              <span style="width:12px; flex:none;"></span>
+              <div style="font-family:'Literata',serif; font-size:16px; color:#232227; line-height:1.7;"><span style="position:relative; display:inline-block; font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px; padding:1px 3px;">5<span style="position:absolute; inset:-5px -4px; border:1.5px dotted #A63D63; border-radius:50%;"></span></span>She used to sit under the palm of Deborah between Ramah and Bethel in the hill country of Ephraim, and the people of Israel came up to her for judgment.<span style="font-family:'Instrument Sans',sans-serif; font-size:9px; color:#A9A7AE; margin-left:8px;">← tap the number = whole verse</span></div>
+            </div>
+            <div style="display:flex; gap:8px; padding:6px 8px 6px 0; border-radius:9px; background:#3E7A541F; border-left:3px solid #3E7A54;">
+              <span style="width:12px; flex:none; display:flex; justify-content:center;"><span style="width:6px; height:6px; border-radius:50%; background:#3E7A54; margin-top:9px;"></span></span>
+              <div style="font-family:'Literata',serif; font-size:16px; color:#232227; line-height:1.7;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">6</span>She sent and summoned Barak the son of Abinoam from Kedesh-naphtali and said to him, “Has not the LORD, the God of Israel, commanded you, ‘Go, gather your men at Mount Tabor…’”</div>
+            </div>
+            <div style="display:flex; gap:8px; padding:6px 8px 6px 0; border-left:3px solid transparent; position:relative;">
+              <span style="width:12px; flex:none;"></span>
+              <div style="font-family:'Literata',serif; font-size:16px; color:#232227; line-height:1.7;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">7</span><span style="background: {{ dragBg }}; border-radius:4px; padding:1px 0; box-decoration-break:clone; -webkit-box-decoration-break:clone;">“And I will draw out Sisera, the general of Jabin’s army, to meet you by the river Kishon</span><span style="position:relative; display:inline-block; width:0;"><svg width="46" height="46" viewBox="0 0 46 46" style="position:absolute; left:-6px; top:-10px; filter:drop-shadow(0 3px 5px rgba(35,34,39,0.25)); pointer-events:none;"><g transform="rotate(-38 23 23)"><rect x="14" y="18" width="26" height="11" rx="3" fill="{{ dragTool }}" stroke="#FFFFFF" stroke-width="1.4"></rect><path d="M14 18 L6 21.5 L6 25.5 L14 29 Z" fill="{{ dragTool }}" opacity="0.65"></path><rect x="40" y="19.5" width="4" height="8" rx="1.5" fill="#D9D7DC"></rect></g></svg></span> with his chariots and his troops, and I will give him into your hand.”</div>
+            </div>
+            <div style="display:flex; gap:8px; padding:6px 8px 2px 0; border-left:3px solid transparent;">
+              <span style="width:12px; flex:none;"></span>
+              <div style="font-family:'Literata',serif; font-size:16px; color:#96949B; line-height:1.7;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#DCA8BE; vertical-align:super; margin-right:5px;">8</span>Barak said to her, “If you will go with me, I will go…”</div>
+            </div>
+          </div>
+          <div style="border-top:1px solid #EDEBEE; background:#FCFBFC; padding:10px 16px 12px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8C2F51" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 3 13l9-9 6 6-7 7H7Z"></path><path d="M14 17h7"></path></svg>
+              <span style="font-size:9.5px; letter-spacing:0.13em; font-weight:700; color:#8C2F51;">HIGHLIGHTER · MID-DRAG ON V. 7</span>
+              <span style="flex:1;"></span>
+              <span style="font-size:9px; color:#A9A7AE;">on lift → category stored · margin dot · notebook filters</span>
+            </div>
+            <div style="display:flex; gap:5px; margin-top:9px;">
+              <sc-for list="{{ hlChips }}" as="h" hint-placeholder-count="6">
+                <div onClick="{{ h.tap }}" style="flex:1; text-align:center; cursor:pointer; border-radius:10px; padding:6px 0 5px; background: {{ h.bg }}; box-shadow: {{ h.ring }};" style-hover="background:#F6E3EB;">
+                  <span style="display:block; width:14px; height:14px; border-radius:50%; background: {{ h.dot }}; margin:0 auto;"></span>
+                  <span style="display:block; font-size:8.5px; font-weight:600; color:#454349; margin-top:4px;">{{ h.lab }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div data-screen-label="2b Scratch mode — a week of ink" style="flex:none; width:524px;">
+        <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:11px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">2b</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Scratch mode — frozen page, a week of his ink</span></div>
+        <div style="background:#FFFEFB; border-radius:18px; box-shadow:0 8px 32px rgba(0,0,0,0.35); overflow:hidden;">
+          <div style="height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid #EDEBEE; background:#FFFFFF;">
+            <span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B;">BIBLE ⌄ · ESV</span>
+            <span style="font-size:11px; color:#C9C7CD;">·</span>
+            <span style="font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#232227;">Judges 4</span>
+            <span style="display:inline-flex; align-items:center; gap:5px; font-size:9px; font-weight:700; color:#8C2F51; background:#F6E3EB; border-radius:99px; padding:3px 9px;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#8C2F51" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5M5 17h14l-2-6V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v6l-2 6Z"></path></svg>PAGE PINNED</span>
+            <span style="flex:1;"></span>
+            <div style="display:flex; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:2.5px;">
+              <span style="font-size:9px; letter-spacing:0.1em; font-weight:700; color:#96949B; border-radius:99px; padding:3px 10px; cursor:pointer;">STUDY</span>
+              <span style="font-size:9px; letter-spacing:0.1em; font-weight:700; color:#FFFFFF; background:#A63D63; border-radius:99px; padding:3px 10px;">SCRATCH</span>
+            </div>
+            <span style="position:relative; font-size:12px; color:#D9D7DC;"><span style="font-size:10px;">a</span>A<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#A9A7AE" stroke-width="2.6" style="position:absolute; right:-7px; top:-2px;"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg></span>
+          </div>
+          <div style="padding:10px 18px 14px; position:relative;">
+            <div style="font-family:'Literata',serif; font-style:italic; font-size:10.5px; color:#A9A7AE; text-align:center; padding:2px 0 8px; border-bottom:1px solid #F0EDE8; margin-bottom:8px;">Judges 4 · Deborah and Barak <span style="font-style:normal; font-size:9px;">· p. 214</span></div>
+            <div style="display:flex; gap:8px; padding:5px 56px 5px 0; border-radius:9px; background:#B4533F1F; border-left:3px solid #B4533F; position:relative;">
+              <span style="width:12px; flex:none; display:flex; justify-content:center;"><span style="width:6px; height:6px; border-radius:50%; background:#B4533F; margin-top:8px;"></span></span>
+              <div style="font-family:'Literata',serif; font-size:15.5px; color:#232227; line-height:1.66;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">1</span>And the people of Israel again did what was evil in the sight of the LORD after Ehud died.</div>
+              <span style="position:absolute; right:4px; top:2px; font-family:'Caveat',cursive; font-size:16px; color:#B85C8A; transform:rotate(4deg); line-height:1;">again…</span>
+            </div>
+            <div style="display:flex; gap:8px; padding:5px 56px 5px 0; border-left:3px solid transparent; position:relative;">
+              <span style="width:12px; flex:none;"></span>
+              <div style="font-family:'Literata',serif; font-size:15.5px; color:#232227; line-height:1.66;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">2</span>And the LORD <span style="position:relative;">sold<svg width="52" height="30" viewBox="0 0 52 30" style="position:absolute; left:-11px; top:-5px; pointer-events:none;"><ellipse cx="26" cy="15" rx="23" ry="12" fill="none" stroke="#5F4B8B" stroke-width="2" opacity="0.8" transform="rotate(-3 26 15)"></ellipse></svg></span> them into the hand of Jabin king of Canaan, who reigned in Hazor.</div>
+              <span style="position:absolute; right:-2px; top:-4px; font-family:'Caveat',cursive; font-size:17px; color:#B85C8A; transform:rotate(-5deg); line-height:1.05; text-align:center;">refrain!<br><span style="font-size:13px;">2:14 · 3:8 · 10:7</span></span>
+              <svg width="30" height="18" viewBox="0 0 30 18" style="position:absolute; right:54px; top:6px;"><path d="M27 4 C 18 2, 10 8, 3 13 M8 10l-5 3 5.5 1.5" fill="none" stroke="#B85C8A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+            </div>
+            <div style="display:flex; gap:8px; padding:5px 56px 5px 0; border-left:3px solid transparent; position:relative;">
+              <span style="width:12px; flex:none;"></span>
+              <div style="font-family:'Literata',serif; font-size:15.5px; color:#232227; line-height:1.66;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">3</span>Then the people of Israel cried out to the LORD for help, for he had 900 chariots of iron and he oppressed the people of Israel cruelly for <span style="position:relative;">twenty years<svg width="96" height="10" viewBox="0 0 96 10" style="position:absolute; left:0; bottom:-6px;"><path d="M2 6 C 26 2, 52 9, 93 4" fill="none" stroke="#5E7FA6" stroke-width="2" stroke-linecap="round" opacity="0.85"></path></svg></span>.</div>
+              <span style="position:absolute; right:8px; top:8px; font-family:'Caveat',cursive; font-size:17px; color:#5E7FA6; transform:rotate(3deg);">20 yrs!!</span>
+            </div>
+            <div style="position:relative; padding-right:56px;">
+              <div style="display:flex; gap:8px; padding:5px 0 5px 0; border-left:3px solid transparent;">
+                <span style="width:12px; flex:none;"></span>
+                <div style="font-family:'Literata',serif; font-size:15.5px; color:#232227; line-height:1.66;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">4</span>Now Deborah, a prophetess, the wife of Lappidoth, was judging Israel at that time.</div>
+              </div>
+              <div style="display:flex; gap:8px; padding:5px 0 5px 0; border-left:3px solid transparent;">
+                <span style="width:12px; flex:none;"></span>
+                <div style="font-family:'Literata',serif; font-size:15.5px; color:#232227; line-height:1.66;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">5</span>She used to sit under the palm of Deborah between Ramah and Bethel in the hill country of Ephraim, and the people of Israel came up to her for judgment.</div>
+              </div>
+              <svg width="14" height="104" viewBox="0 0 14 104" style="position:absolute; right:40px; top:2px;"><path d="M4 3 C 11 3, 11 14, 11 50 C 11 88, 11 98, 4 101" fill="none" stroke="#5E7FA6" stroke-width="2" stroke-linecap="round" opacity="0.8"></path></svg>
+              <span style="position:absolute; right:-8px; top:26px; width:52px; font-family:'Caveat',cursive; font-size:15px; color:#5E7FA6; line-height:1.05; transform:rotate(2deg);">the word was already there</span>
+            </div>
+            <div style="display:flex; gap:8px; padding:5px 56px 5px 0; border-radius:9px; background:#3E7A541F; border-left:3px solid #3E7A54; position:relative;">
+              <span style="width:12px; flex:none; display:flex; justify-content:center;"><span style="width:6px; height:6px; border-radius:50%; background:#3E7A54; margin-top:8px;"></span></span>
+              <div style="font-family:'Literata',serif; font-size:15.5px; color:#232227; line-height:1.66;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">6</span>She sent and summoned Barak the son of Abinoam from Kedesh-naphtali and said to him, “Has not the LORD, the God of Israel, <span style="position:relative;">commanded you<svg width="112" height="13" viewBox="0 0 112 13" style="position:absolute; left:0; bottom:-8px;"><path d="M2 4 C 30 1, 62 7, 109 3" fill="none" stroke="#5F4B8B" stroke-width="2" stroke-linecap="round" opacity="0.85"></path><path d="M4 9 C 32 6, 64 12, 108 8" fill="none" stroke="#5F4B8B" stroke-width="2" stroke-linecap="round" opacity="0.85"></path></svg></span>, ‘Go, gather your men at Mount Tabor…’”</div>
+              <svg width="26" height="26" viewBox="0 0 26 26" style="position:absolute; right:14px; top:4px;"><path d="M13 2l2.6 7.4 7.4.3-5.9 4.8 2.1 7.5L13 17.6 6.8 22l2.1-7.5L3 9.7l7.4-.3Z" fill="none" stroke="#B85C8A" stroke-width="1.8" stroke-linejoin="round" opacity="0.85" transform="rotate(-8 13 13)"></path></svg>
+            </div>
+            <div style="display:flex; gap:8px; padding:5px 56px 5px 0; border-left:3px solid transparent;">
+              <span style="width:12px; flex:none;"></span>
+              <div style="font-family:'Literata',serif; font-size:15.5px; color:#232227; line-height:1.66;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">7</span>“And I will draw out Sisera, the general of Jabin’s army, to meet you by the river Kishon with his chariots and his troops, and I will give him into your hand.”</div>
+            </div>
+            <div style="display:flex; gap:8px; padding:5px 56px 3px 0; border-left:3px solid transparent; position:relative;">
+              <span style="width:12px; flex:none;"></span>
+              <div style="font-family:'Literata',serif; font-size:15.5px; color:#232227; line-height:1.66;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">8</span>Barak said to her, <span style="position:relative;">“If you will go with me, I will go,”<svg width="238" height="10" viewBox="0 0 238 10" style="position:absolute; left:0; bottom:-5px;"><path d="M2 6 C 58 2, 122 9, 178 4 S 226 6, 235 5" fill="none" stroke="#5F4B8B" stroke-width="2.1" stroke-linecap="round" opacity="0.85"></path></svg></span> but if you will not go with me, I will not go.</div>
+              <span style="position:absolute; right:2px; top:0px; font-family:'Caveat',cursive; font-size:16px; color:#5F4B8B; transform:rotate(-4deg); line-height:1.05; text-align:center;">Heb 11:32<br><span style="font-size:12px;">still lists him</span></span>
+            </div>
+          </div>
+          <div style="border-top:1px solid #F0EDE8; background:#FCFAF6; padding:9px 16px; display:flex; align-items:center; gap:8px;">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#A9A7AE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5M5 17h14l-2-6V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v6l-2 6Z"></path></svg>
+            <span style="font-size:10px; color:#96949B;">Frozen like print — type size was set when the page was pinned; unpin to reflow (ink re-anchors by verse).</span>
+            <span style="flex:1;"></span>
+            <span style="font-size:10px; font-weight:600; color:#8C2F51; cursor:pointer;">Unpin</span>
+          </div>
+        </div>
+      </div>
+
+      <div data-screen-label="2c Pen settings popover" style="flex:none; width:300px;">
+        <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:11px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">2c</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Pen settings — Pencil squeeze opens it</span></div>
+        <div style="background:#FFFFFF; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,0.4); padding:14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B;">PEN · PENCIL PRO</span>
+            <span style="font-size:9px; color:#A9A7AE;">squeeze to open</span>
+          </div>
+          <div style="display:flex; gap:5px; margin-top:10px;">
+            <sc-for list="{{ penTools }}" as="t" hint-placeholder-count="6">
+              <div onClick="{{ t.tap }}" title="{{ t.name }}" style="flex:1; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; background: {{ t.bg }}; box-shadow: {{ t.ring }};" style-hover="background:#F6E3EB;">{{ t.icon }}</div>
+            </sc-for>
+          </div>
+          <div style="font-size:10px; color:#66646C; margin-top:5px; text-align:center;">{{ penToolLab }}</div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:11px;">
+            <span style="font-size:9px; letter-spacing:0.12em; font-weight:700; color:#A9A7AE; width:38px;">COLOR</span>
+            <span style="width:17px; height:17px; border-radius:50%; background:#5F4B8B; box-shadow:0 0 0 2px #FFFFFF, 0 0 0 3.5px #A63D63;"></span>
+            <span style="width:17px; height:17px; border-radius:50%; background:#B85C8A; cursor:pointer;"></span>
+            <span style="width:17px; height:17px; border-radius:50%; background:#5E7FA6; cursor:pointer;"></span>
+            <span style="width:17px; height:17px; border-radius:50%; background:#44414B; cursor:pointer;"></span>
+            <span style="width:17px; height:17px; border-radius:50%; background:#C99A3B; cursor:pointer;"></span>
+            <span style="font-size:11px; color:#96949B; margin-left:2px; cursor:pointer;">⌄ palette</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+            <span style="font-size:9px; letter-spacing:0.12em; font-weight:700; color:#A9A7AE; width:38px;">WIDTH</span>
+            <span style="width:5px; height:5px; border-radius:50%; background:#454349; cursor:pointer;"></span>
+            <span style="width:8px; height:8px; border-radius:50%; background:#454349; box-shadow:0 0 0 2px #FFFFFF, 0 0 0 3px #A63D63; cursor:pointer;"></span>
+            <span style="width:12px; height:12px; border-radius:50%; background:#D9D7DC; cursor:pointer;"></span>
+            <span style="flex:1;"></span>
+            <span style="font-size:10px; color:#96949B;">0.4 mm</span>
+          </div>
+          <div style="height:1px; background:#EDEBEE; margin:12px 0;"></div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-size:9px; letter-spacing:0.12em; font-weight:700; color:#A9A7AE;">BIBLE MODE</span>
+            <div style="display:flex; background:#FAF9FA; border:1px solid #E4E2E6; border-radius:99px; padding:2.5px;">
+              <span style="font-size:9px; letter-spacing:0.08em; font-weight:700; color:#FFFFFF; background:#A63D63; border-radius:99px; padding:3.5px 12px;">STUDY</span>
+              <span style="font-size:9px; letter-spacing:0.08em; font-weight:700; color:#96949B; border-radius:99px; padding:3.5px 12px; cursor:pointer;">SCRATCH</span>
+            </div>
+          </div>
+          <div style="font-size:10px; color:#96949B; line-height:1.6; margin-top:10px; background:#FAF9FA; border-radius:10px; padding:9px 11px;">
+            <span style="color:#454349; font-weight:600;">Squeeze</span> — this popover · <span style="color:#454349; font-weight:600;">double-tap</span> — pen ⇄ eraser · <span style="color:#454349; font-weight:600;">barrel roll</span> — nib angle · <span style="color:#454349; font-weight:600;">hover</span> — rail + tool chip
+          </div>
+          <div style="margin-top:9px; display:flex; justify-content:flex-end;"><a href="pitaya-ipad-11-settings.dc.html" style="font-size:10.5px; font-weight:600; color:#8C2F51;">All pen settings →</a></div>
+        </div>
+        <div style="background:#1B1A1F; border:1px solid #2A292E; border-radius:14px; padding:13px 15px; margin-top:14px;">
+          <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#DC74A0;">WHICH TOOL AM I HOLDING</div>
+          <div style="font-size:12px; color:#96949B; line-height:1.6; margin-top:6px;">The hover chip (see 2a, v. 4) answers before the nib lands: tool glyph + ink dot, 80% opaque, trailing the hover point. It fades 400 ms after hover ends.</div>
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ annOn }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:26px; max-width:1400px;">
+        <div style="flex:1; min-width:230px; background:#1B1A1F; border:1px solid #2A292E; border-radius:14px; padding:14px 16px;">
+          <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#DC74A0;">TWO MODES, ONE TOGGLE</div>
+          <div style="font-size:12px; color:#96949B; line-height:1.6; margin-top:6px;">Toggled from pen settings, echoed in the pane header. Study: pen marks are gestures — tick, circle, drag — that evaporate into system results. Scratch: the page freezes like print and ink stays put. Selection, highlighter and drag work in both.</div>
+        </div>
+        <div style="flex:1; min-width:230px; background:#1B1A1F; border:1px solid #2A292E; border-radius:14px; padding:14px 16px;">
+          <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#DC74A0;">ONLY THE HIGHLIGHTER HIGHLIGHTS</div>
+          <div style="font-size:12px; color:#96949B; line-height:1.6; margin-top:6px;">Six labelled category colors — meaning, not shade. Tap a verse number for the whole verse; drag like a real highlighter for a span. On lift: ~18% tint, 3px edge bar, margin dot, notebook filters. The pen tool never creates one.</div>
+        </div>
+        <div style="flex:1; min-width:230px; background:#1B1A1F; border:1px solid #2A292E; border-radius:14px; padding:14px 16px;">
+          <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#DC74A0;">CURATE, DON'T INITIATE — IN INK</div>
+          <div style="font-size:12px; color:#96949B; line-height:1.6; margin-top:6px;">A pen tick beside a suggested (dashed) mark accepts it; a strike dismisses. The tick evaporates over ~2s; the acceptance persists as a solid bar. Same rhythm as the phone, now at pen speed.</div>
+        </div>
+        <div style="flex:1; min-width:230px; background:#1B1A1F; border:1px solid #2A292E; border-radius:14px; padding:14px 16px;">
+          <div style="font-size:9.5px; letter-spacing:0.15em; font-weight:700; color:#DC74A0;">THE FROZEN PAGE, LEGIBLE AT A WEEK</div>
+          <div style="font-size:12px; color:#96949B; line-height:1.6; margin-top:6px;">The pin chip + locked aA say why text won't reflow. Ink lives under lines, around words, in the 56px margin — never over the type. System highlights (v.1, v.6) coexist with ink; they are different things and look it. Dark + night surfaces come with deliverable 2.</div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;annotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Canvas&quot;}}">
+class Component extends DCLogic {
+  state = { cat: 1, tool: 0 };
+  renderVals() {
+    const p = this.props;
+    const CATS = [['God', '#D9A23E'], ['Promise', '#4C7DBF'], ['Command', '#3E7A54'], ['Sin', '#B4533F'], ['Christ', '#7B5EA7'], ['Context', '#4E7C8A']];
+    const c = this.state.cat;
+    const TOOLS = ['Fountain pen — pressure shapes the line', 'Highlighter — the six categories', 'Pencil — soft, tilt shades', 'Marker — flat, opaque', 'Eraser — stroke or pixel', 'Lasso — select ink'];
+    const ic = (d, i) => React.createElement('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: this.state.tool === i ? '#8C2F51' : '#66646C', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', key: i }, d.map((p2, j) => React.createElement('path', { d: p2, key: j })));
+    const paths = [
+      ['M12 19l7-7-4-4-7 7-1.5 5.5L12 19Z', 'M15 8l1.5-1.5a2.4 2.4 0 0 1 3.4 3.4L18.5 11.5'],
+      ['M7 17 3 13l9-9 6 6-7 7H7Z', 'M14 17h7'],
+      ['M6 20l1-4L17.5 5.5a2 2 0 0 1 3 3L10 19l-4 1Z', 'M14 7l3 3'],
+      ['M9 3h6v6l3 3v9H6v-9l3-3V3Z', 'M9 9h6'],
+      ['M7 17 3 13l9-9 6 6-7 7H7Z', 'M5 15l4 4'],
+      ['M4 11a8 6 0 1 1 8 6', 'M14 15l4 5']
+    ];
+    return {
+      annOn: (p.annotations ?? true),
+      dragBg: CATS[c][1] + '4D',
+      dragTool: CATS[c][1],
+      hlChips: CATS.map(([lab, col], i) => ({
+        lab, dot: col,
+        bg: i === c ? col + '26' : '#FFFFFF',
+        ring: i === c ? 'inset 0 0 0 1.5px ' + col : 'inset 0 0 0 1px #EDEBEE',
+        tap: () => this.setState({ cat: i })
+      })),
+      penTools: paths.map((d, i) => ({
+        name: TOOLS[i], icon: ic(d, i),
+        bg: this.state.tool === i ? '#F6E3EB' : '#FAF9FA',
+        ring: this.state.tool === i ? 'inset 0 0 0 1.5px #A63D63' : 'inset 0 0 0 1px #EDEBEE',
+        tap: () => this.setState({ tool: i })
+      })),
+      penToolLab: TOOLS[this.state.tool]
+    };
+  }
+}
+</script>
+</body>
+</html>

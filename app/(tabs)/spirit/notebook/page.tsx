@@ -35,11 +35,17 @@ export default function SpiritNotebookPage() {
   const [kind, setKind] = useState("All");
   const [cat, setCat] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [inkPages, setInkPages] = useState<{ id: string; title: string; kind: string; thumbnail: string | null; updatedAt: string; recordingId: string | null }[]>([]);
 
   useEffect(() => {
     fetch("/api/spirit/notebook")
       .then((r) => (r.ok ? r.json() : null))
       .then(setData)
+      .catch(() => {});
+    // the iPad's handwritten pages — rendered read-only on the phone (8e)
+    fetch("/api/spirit/ink?take=12")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setInkPages(((d?.pages ?? []) as { kind: string }[]).filter((p) => p.kind !== "overlay") as typeof inkPages))
       .catch(() => {});
   }, []);
 
@@ -68,8 +74,9 @@ export default function SpiritNotebookPage() {
         ? "ASK"
         : it.kind.toUpperCase();
 
+  const [now] = useState(() => Date.now());
   const ago = (iso: string) => {
-    const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+    const days = Math.floor((now - new Date(iso).getTime()) / 86_400_000);
     if (days <= 0) return "today";
     if (days === 1) return "yesterday";
     if (days < 7) return `${days} days ago`;
@@ -117,6 +124,30 @@ export default function SpiritNotebookPage() {
           className="flex-1 bg-transparent text-[12.5px] text-[#232227] outline-none placeholder:text-[#96949B]"
         />
       </div>
+
+      {inkPages.length > 0 && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold tracking-[0.16em] text-[#96949B]">FROM THE IPAD · READ-ONLY</span>
+            <span className="text-[9.5px] text-[#A9A7AE]">the pen lives on the iPad</span>
+          </div>
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+            {inkPages.map((p) => (
+              <a key={p.id} href={`/spirit/notebook/page/${p.id}`} className="tap-scale flex-none overflow-hidden rounded-[11px] border border-[#E4E2E6] bg-white" style={{ width: 118 }}>
+                <div className="relative h-[74px] bg-[#FFFDF9]" style={{ backgroundImage: "radial-gradient(#EBE6E1 1px, transparent 1.2px)", backgroundSize: "12px 12px" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {p.thumbnail && <img src={p.thumbnail} alt="" className="h-full w-full object-cover object-top" />}
+                  {p.recordingId && <span className="absolute right-1.5 top-1.5 h-[6px] w-[6px] rounded-full bg-[#A63D63]" />}
+                </div>
+                <div className="px-2 py-1.5">
+                  <div className="truncate text-[10px] font-semibold text-[#232227]" style={{ fontFamily: "var(--font-display)" }}>{p.title || p.kind}</div>
+                  <div className="text-[8.5px] text-[#A9A7AE]">{new Date(p.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-3 flex gap-1.5">
         {(

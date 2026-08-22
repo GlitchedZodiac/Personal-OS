@@ -131,7 +131,11 @@ shared-checkout collision (a lane's `checkout -b` yanked the branch out from
 under the other mid-commit) is why each lane has its own worktree.
 
 Cross-lane work is never edited directly — file a `docs/deferred-items.md`
-entry (tagged `[watch]` or `[main]`) and surface it to Michael. Both lanes
+entry (tagged `[watch]` or `[main]`) and surface it to Michael. **Exception
+(his 2026-08-22 call, Q23): the Spirit-on-iPad project may be built by one
+session across `app/**`, `lib/**` AND `ios/**`** — provided `ios/` is at parity
+with `claude/watch-app` first (`git log HEAD..claude/watch-app -- ios/` empty)
+and state.md says so before `ios/**` is touched. Both lanes
 read `docs/state.md` at session start and write entries when they ship.
 `/api/mobile/*` payload shapes are the inter-lane contract: the main lane
 implements changes, the watch lane requests them.

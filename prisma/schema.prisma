@@ -1179,6 +1179,7 @@ model DevotionalDay {
   citations    Json? // [{label, sourceKey, locator}]
   suggested    Json? // [{refInt, category}] — pre-marked highlights
   homework     Json? // {kind, label, minutes, text} — exactly one per study
+  writtenPrompt String? // the written assignment every study carries on the iPad worksheet (his 2026-08-22 rule)
   aim          String? // one line: what THIS study is for, shown on every step
   generatedAt  DateTime @default(now())
 
@@ -1309,6 +1310,7 @@ model SpiritPref {
   posture        String   @default("westminster") // westminster | 1689 | compare
   termPaused     Boolean  @default(false)
   track2Position Int      @default(0) // chapters completed, 0..1189 (BSB canon order)
+  desk           Json? // iPad desk prefs: handedness, bible mode/overlay, pen, recognition, recording, layouts (lib/desk-prefs.ts)
   updatedAt      DateTime @updatedAt
 
   @@map("spirit_prefs")
@@ -1317,6 +1319,114 @@ model SpiritPref {
 // ESV passage cache — LRU with pinning, NEVER a full-canon store
 // (Crossway's license forbids a substantially complete copy; term
 // passages pin for the term, the rest evicts).
+// ——— Spirit on iPad (2026-08-22) — the desk's ink, notebooks, recordings ———
+// Design: docs/design/pitaya-ipad-0*.dc.html · plan: docs/spirit-ipad-brainstorm.md §9/§15.
+// A page is objects + ink; an overlay is a page of kind "overlay" anchored to a
+// chapter + layer; a worksheet is a page with a Submit state machine.
+
+model SpiritNotebook {
+  id         String    @id @default(uuid())
+  title      String
+  kind       String    @default("custom") // sermons | term | free | worksheets | custom
+  termId     String?
+  accent     String    @default("#5E7FA6") // the shelf's left rule
+  inkLang    String    @default("en") // recognition language for ink
+  audioLang  String    @default("es") // recognition language for recordings
+  sortOrder  Int       @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  pages InkPage[]
+
+  @@map("spirit_notebooks")
+}
+
+model InkPage {
+  id                String          @id @default(uuid())
+  notebookId        String?
+  notebook          SpiritNotebook? @relation(fields: [notebookId], references: [id])
+  kind              String // study | sermon | worksheet | free | reflection | overlay
+  title             String          @default("")
+  subtitle          String? // the kicker line
+  dayId             String? // study / worksheet anchor
+  seriesId          String? // sermon anchor
+  weekIndex         Int?
+  refStart          Int? // linked passage (canonical ints)
+  refEnd            Int?
+  chapterKey        Int? // overlay: book*1000 + chapter
+  layerKey          String? // overlay: my | study:<dayId> | sermon:<seriesId>:<week>
+  background        String          @default("dots") // dots | lined | grid | blank | paper
+  strokes           Json            @default("[]") // Stroke[] — lib/ink.ts
+  objects           Json            @default("[]") // PageObject[] — ref cards, typed blocks, photos, prompts
+  layout            Json? // overlay: pinned layout {fontSize, serif, justify, width, marginStep}
+  textLayer         String? // recognized text — hidden by default
+  refs              Json            @default("[]") // canonical ints found on the page
+  transcribedAt     DateTime?
+  thumbnail         String? // small data URL of the rendered page
+  status            String          @default("open") // open | submitted | reopened (worksheets)
+  submittedAt       DateTime?
+  reopenedAt        DateTime?
+  editedAfterSubmit Boolean         @default(false)
+  recordingId       String?
+  strokeCount       Int             @default(0)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([kind, dayId])
+  @@index([chapterKey, layerKey])
+  @@index([notebookId, updatedAt])
+  @@index([seriesId, weekIndex])
+  @@map("spirit_ink_pages")
+}
+
+model Recording {
+  id          String   @id @default(uuid())
+  pageId      String?
+  seriesId    String?
+  weekIndex   Int?
+  title       String
+  label       String   @default("sermon")
+  preacher    String?
+  passageRef  String?
+  startedAt   DateTime @default(now())
+  durationSec Float    @default(0)
+  status      String   @default("recording") // recording | uploaded | transcribing | ready | failed | audio_deleted
+  lang        String   @default("es")
+  transcript  Json     @default("[]") // [{start, end, text, gloss?}]
+  retention   String   @default("forever") // 90d | forever | after_transcript
+  mimeType    String   @default("audio/mp4")
+  sizeBytes   Int      @default(0)
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  segments RecordingSegment[]
+
+  @@index([seriesId, weekIndex])
+  @@index([startedAt])
+  @@map("spirit_recordings")
+}
+
+// Audio lives in Postgres as ~2-minute segments (no storage bucket key in
+// this project; Supabase Storage is the upgrade path). Each segment is an
+// independently playable file, so a lost connection never loses more than
+// two minutes and replay can seek segment by segment.
+model RecordingSegment {
+  id            String    @id @default(uuid())
+  recordingId   String
+  recording     Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  index         Int
+  startSec      Float
+  durationSec   Float
+  mimeType      String
+  bytes         Bytes
+  transcribedAt DateTime?
+
+  @@unique([recordingId, index])
+  @@map("spirit_recording_segments")
+}
+
 model EsvPassage {
   queryKey     String   @id // normalized query, e.g. "judges 4"
   canonical    String

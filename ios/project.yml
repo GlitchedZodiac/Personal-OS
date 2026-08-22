@@ -38,6 +38,15 @@ targets:
         CFBundleDisplayName: Pitaya
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # iPad (2026-08-22, Spirit desk): landscape-first, every orientation,
+        # and NOT full-screen-only so Split View beside Logos works.
+        UISupportedInterfaceOrientations~ipad:
+          [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight,
+           UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown]
+        UIRequiresFullScreen: false
+        # DEBUG smoke against `npm run dev` (pitaya.devOrigin → http://localhost:3000)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         NSHealthShareUsageDescription: >-
           Pitaya reads your weight, sleep, heart data, and activity from
           Apple Health to sync your dashboard automatically.
@@ -61,7 +70,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.blacksheepglobal.pitaya
-        TARGETED_DEVICE_FAMILY: "1"
+        # 1 = iPhone, 2 = iPad — the desk lives on the iPad (2026-08-22)
+        TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   PersonalOS Watch:

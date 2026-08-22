@@ -1,0 +1,373 @@
+// The ink model — shared by the iPad notebook canvas, the Bible overlay,
+// page thumbnails and the phone's read-only renderer. Pure module: no
+// DOM beyond a CanvasRenderingContext2D handed in by the caller.
+//
+// Design: docs/design/pitaya-ipad-03-notebook-rail.dc.html (brushes),
+// 05 (overlay anchoring), 06 (per-stroke timestamps for sermon replay).
+// A PencilKit PKDrawing exposes the same point data (location, force,
+// timeOffset), so the native pane round-trips into this shape.
+
+export type InkTool = "fountain" | "gpen" | "pencil" | "marker";
+
+export interface InkPoint {
+  x: number;
+  y: number;
+  /** pressure 0..1 (0.5 when the input has none) */
+  p: number;
+  /** ms since the stroke's t0 */
+  t: number;
+}
+
+export interface Stroke {
+  id: string;
+  tool: InkTool;
+  color: string;
+  /** base width in page units */
+  width: number;
+  opacity: number;
+  /** epoch ms at the first point */
+  t0: number;
+  pts: InkPoint[];
+  /** seconds into the active recording at t0, when one was running */
+  recT?: number | null;
+  /** overlay: anchored to a verse — offsets relative to that verse's box */
+  anchor?: { ref: number; dx: number; dy: number } | null;
+  /** overlay: where the stroke lives — the text column or the margin */
+  region?: "text" | "margin";
+}
+
+export type PageObjectType = "refcard" | "text" | "image" | "section" | "prompt" | "answer" | "header";
+
+export interface PageObject {
+  id: string;
+  type: PageObjectType;
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+  t0?: number;
+  recT?: number | null;
+  data: Record<string, unknown>;
+}
+
+/** Logical page width — every page is laid out in these units and scaled to the pane. */
+export const PAGE_WIDTH = 800;
+export const PAGE_MIN_HEIGHT = 1120;
+export const PAGE_GROW_MARGIN = 260;
+
+export const BRUSHES: Record<InkTool, { label: string; sub: string; base: number; alpha: number }> = {
+  fountain: { label: "Fountain pen", sub: "pressure → weight · his TWSBI", base: 2.6, alpha: 0.92 },
+  gpen: { label: "G-pen", sub: "fine, flexes on press · comics nib", base: 1.5, alpha: 0.95 },
+  pencil: { label: "Pencil", sub: "tilt shades · grain", base: 2.2, alpha: 0.78 },
+  marker: { label: "Marker", sub: "flat, translucent — not the highlighter", base: 7, alpha: 0.42 },
+};
+
+export const WIDTH_STEPS = [0.7, 1, 1.5] as const; // thin · default · thick multipliers
+
+export function newId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Exponential smoothing — Procreate's "streamline". 0 = raw, 1 = glassy. */
+export function streamline(prev: InkPoint | null, next: InkPoint, amount: number): InkPoint {
+  if (!prev || amount <= 0) return next;
+  const k = 1 - Math.min(0.92, amount);
+  return { x: prev.x + (next.x - prev.x) * k, y: prev.y + (next.y - prev.y) * k, p: next.p, t: next.t };
+}
+
+/** Half-width at a point for a tool, from pressure and (lightly) speed. */
+export function halfWidthAt(stroke: Stroke, i: number): number {
+  const pt = stroke.pts[i];
+  const base = stroke.width;
+  const p = Number.isFinite(pt.p) ? pt.p : 0.5;
+  switch (stroke.tool) {
+    case "fountain": {
+      // nib: pressure dominates, fast strokes thin a little
+      const prev = stroke.pts[i - 1];
+      let speed = 0;
+      if (prev) {
+        const d = Math.hypot(pt.x - prev.x, pt.y - prev.y);
+        const dt = Math.max(1, pt.t - prev.t);
+        speed = Math.min(1, d / dt / 2.4);
+      }
+      return (base * (0.45 + 0.95 * p) * (1 - 0.25 * speed)) / 2;
+    }
+    case "gpen":
+      return (base * (0.35 + 1.25 * p * p)) / 2;
+    case "pencil":
+      return (base * (0.6 + 0.5 * p)) / 2;
+    case "marker":
+      return base / 2;
+    default:
+      return base / 2;
+  }
+}
+
+export function strokeBounds(s: Stroke): { x: number; y: number; w: number; h: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const pt of s.pts) {
+    if (pt.x < minX) minX = pt.x;
+    if (pt.y < minY) minY = pt.y;
+    if (pt.x > maxX) maxX = pt.x;
+    if (pt.y > maxY) maxY = pt.y;
+  }
+  const pad = s.width;
+  if (!Number.isFinite(minX)) return { x: 0, y: 0, w: 0, h: 0 };
+  return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
+}
+
+export function pageHeightFor(strokes: Stroke[], objects: PageObject[], min = PAGE_MIN_HEIGHT): number {
+  let bottom = 0;
+  for (const s of strokes) {
+    const b = strokeBounds(s);
+    bottom = Math.max(bottom, b.y + b.h);
+  }
+  for (const o of objects) bottom = Math.max(bottom, o.y + (o.h ?? 80));
+  return Math.max(min, Math.ceil((bottom + PAGE_GROW_MARGIN) / 40) * 40);
+}
+
+/** Draw one stroke as a variable-width ribbon (round joins by construction). */
+export function drawStroke(
+  ctx: CanvasRenderingContext2D,
+  s: Stroke,
+  opts: { offsetX?: number; offsetY?: number; alphaScale?: number; colorOverride?: string } = {},
+) {
+  const pts = s.pts;
+  if (!pts.length) return;
+  const ox = opts.offsetX ?? 0;
+  const oy = opts.offsetY ?? 0;
+  const color = opts.colorOverride ?? s.color;
+  const alpha = Math.max(0, Math.min(1, (s.opacity ?? 1) * (BRUSHES[s.tool]?.alpha ?? 1) * (opts.alphaScale ?? 1)));
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (s.tool === "marker") ctx.globalCompositeOperation = "multiply";
+
+  if (pts.length === 1) {
+    const r = halfWidthAt(s, 0);
+    ctx.beginPath();
+    ctx.arc(pts[0].x + ox, pts[0].y + oy, Math.max(0.6, r), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  // Ribbon: offset each point by its half-width along the segment normal.
+  const left: [number, number][] = [];
+  const right: [number, number][] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)];
+    const b = pts[Math.min(pts.length - 1, i + 1)];
+    let nx = -(b.y - a.y);
+    let ny = b.x - a.x;
+    const len = Math.hypot(nx, ny) || 1;
+    nx /= len;
+    ny /= len;
+    const hw = Math.max(0.35, halfWidthAt(s, i));
+    left.push([pts[i].x + nx * hw + ox, pts[i].y + ny * hw + oy]);
+    right.push([pts[i].x - nx * hw + ox, pts[i].y - ny * hw + oy]);
+  }
+  ctx.beginPath();
+  ctx.moveTo(left[0][0], left[0][1]);
+  for (let i = 1; i < left.length; i++) {
+    const [px, py] = left[i - 1];
+    const [cx, cy] = left[i];
+    ctx.quadraticCurveTo(px, py, (px + cx) / 2, (py + cy) / 2);
+  }
+  ctx.lineTo(left[left.length - 1][0], left[left.length - 1][1]);
+  for (let i = right.length - 1; i >= 1; i--) {
+    const [px, py] = right[i];
+    const [cx, cy] = right[i - 1];
+    ctx.quadraticCurveTo(px, py, (px + cx) / 2, (py + cy) / 2);
+  }
+  ctx.closePath();
+  ctx.fill();
+  // round the two ends
+  const r0 = Math.max(0.35, halfWidthAt(s, 0));
+  const r1 = Math.max(0.35, halfWidthAt(s, pts.length - 1));
+  ctx.beginPath();
+  ctx.arc(pts[0].x + ox, pts[0].y + oy, r0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(pts[pts.length - 1].x + ox, pts[pts.length - 1].y + oy, r1, 0, Math.PI * 2);
+  ctx.fill();
+  if (s.tool === "pencil") {
+    // a light grain: a second, thinner, jittered pass
+    ctx.globalAlpha = alpha * 0.35;
+    ctx.lineWidth = Math.max(0.5, s.width * 0.35);
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const j = ((i * 7919) % 13) / 13 - 0.5;
+      const x = pts[i].x + ox + j * 0.9;
+      const y = pts[i].y + oy - j * 0.9;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+export function drawStrokes(
+  ctx: CanvasRenderingContext2D,
+  strokes: Stroke[],
+  opts: { alphaScale?: number; offsetFor?: (s: Stroke) => { x: number; y: number } | null } = {},
+) {
+  for (const s of strokes) {
+    const off = opts.offsetFor ? opts.offsetFor(s) : null;
+    drawStroke(ctx, s, { offsetX: off?.x ?? 0, offsetY: off?.y ?? 0, alphaScale: opts.alphaScale });
+  }
+}
+
+/** Render strokes (and a paper background) into a PNG data URL — thumbnails, recognition, export. */
+export function renderToDataUrl(
+  strokes: Stroke[],
+  opts: {
+    width?: number;
+    height?: number;
+    scale?: number;
+    background?: string | null;
+    region?: { x: number; y: number; w: number; h: number };
+    objectsText?: { x: number; y: number; text: string }[];
+  } = {},
+): string | null {
+  if (typeof document === "undefined") return null;
+  const region = opts.region ?? { x: 0, y: 0, w: opts.width ?? PAGE_WIDTH, h: opts.height ?? PAGE_MIN_HEIGHT };
+  const scale = opts.scale ?? 1;
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(region.w * scale));
+  c.height = Math.max(1, Math.round(region.h * scale));
+  const ctx = c.getContext("2d");
+  if (!ctx) return null;
+  if (opts.background) {
+    ctx.fillStyle = opts.background;
+    ctx.fillRect(0, 0, c.width, c.height);
+  }
+  ctx.scale(scale, scale);
+  ctx.translate(-region.x, -region.y);
+  for (const t of opts.objectsText ?? []) {
+    ctx.fillStyle = "#232227";
+    ctx.font = "16px Instrument Sans, sans-serif";
+    ctx.fillText(t.text, t.x, t.y + 16);
+  }
+  drawStrokes(ctx, strokes);
+  return c.toDataURL("image/png");
+}
+
+// ——— geometry for gestures ———
+
+export function pointInPolygon(x: number, y: number, poly: { x: number; y: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi + 1e-9) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/** A stroke is "inside" a lasso when most of its points are. */
+export function strokesInLasso(strokes: Stroke[], poly: { x: number; y: number }[]): Stroke[] {
+  if (poly.length < 3) return [];
+  return strokes.filter((s) => {
+    let inside = 0;
+    for (const pt of s.pts) if (pointInPolygon(pt.x, pt.y, poly)) inside++;
+    return inside >= Math.max(1, Math.ceil(s.pts.length * 0.6));
+  });
+}
+
+/** Is this stroke a closed loop (a circle gesture)? start ≈ end, some area. */
+export function isClosedLoop(pts: InkPoint[]): boolean {
+  if (pts.length < 12) return false;
+  const a = pts[0], b = pts[pts.length - 1];
+  const b2 = strokeBoundsOf(pts);
+  const diag = Math.hypot(b2.w, b2.h);
+  if (diag < 24) return false;
+  return Math.hypot(a.x - b.x, a.y - b.y) < Math.max(18, diag * 0.28);
+}
+
+/** A tick: a short stroke with one sharp direction change, going down then up-right. */
+export function isTick(pts: InkPoint[]): boolean {
+  if (pts.length < 6) return false;
+  const b = strokeBoundsOf(pts);
+  if (b.w < 8 || b.w > 90 || b.h < 6 || b.h > 90) return false;
+  let lowest = 0;
+  for (let i = 1; i < pts.length; i++) if (pts[i].y > pts[lowest].y) lowest = i;
+  if (lowest <= 1 || lowest >= pts.length - 2) return false;
+  const first = pts[0], low = pts[lowest], last = pts[pts.length - 1];
+  return low.y - first.y > 3 && last.y < low.y - 4 && last.x > low.x;
+}
+
+/** A strike: a mostly horizontal dash (or a single diagonal slash) across something. */
+export function isStrike(pts: InkPoint[]): boolean {
+  if (pts.length < 4) return false;
+  const b = strokeBoundsOf(pts);
+  if (b.w < 22) return false;
+  return b.h < Math.max(14, b.w * 0.35) && !isClosedLoop(pts);
+}
+
+/** An underline: long, flat, thin. */
+export function isUnderline(pts: InkPoint[]): boolean {
+  if (pts.length < 4) return false;
+  const b = strokeBoundsOf(pts);
+  return b.w > 40 && b.h < Math.max(10, b.w * 0.12);
+}
+
+export function strokeBoundsOf(pts: InkPoint[]): { x: number; y: number; w: number; h: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const pt of pts) {
+    if (pt.x < minX) minX = pt.x;
+    if (pt.y < minY) minY = pt.y;
+    if (pt.x > maxX) maxX = pt.x;
+    if (pt.y > maxY) maxY = pt.y;
+  }
+  if (!Number.isFinite(minX)) return { x: 0, y: 0, w: 0, h: 0 };
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+/** QuickShape: when the pen holds still at the end of a loop, snap it to an ellipse. */
+export function snapToEllipse(pts: InkPoint[]): InkPoint[] {
+  const b = strokeBoundsOf(pts);
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  const rx = Math.max(6, b.w / 2), ry = Math.max(6, b.h / 2);
+  const n = 48;
+  const t0 = pts[0]?.t ?? 0;
+  const out: InkPoint[] = [];
+  for (let i = 0; i <= n; i++) {
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+    out.push({ x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry, p: 0.55, t: t0 + i * 6 });
+  }
+  return out;
+}
+
+/** QuickShape: snap a near-straight stroke to a line (arrowheads keep their last few points). */
+export function snapToLine(pts: InkPoint[]): InkPoint[] {
+  if (pts.length < 2) return pts;
+  const a = pts[0], b = pts[pts.length - 1];
+  return [a, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, p: 0.55, t: (a.t + b.t) / 2 }, b];
+}
+
+export function strokeDistanceTo(s: Stroke, x: number, y: number): number {
+  let best = Infinity;
+  for (const pt of s.pts) {
+    const d = Math.hypot(pt.x - x, pt.y - y);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+/** Seconds → m:ss (or h:mm:ss). */
+export function fmtSeconds(total: number): string {
+  if (!Number.isFinite(total) || total < 0) return "0:00";
+  const s = Math.floor(total);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
+    : `${m}:${String(sec).padStart(2, "0")}`;
+}

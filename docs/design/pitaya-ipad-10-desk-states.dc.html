@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400..700;1,7..72,400..700&family=Caveat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#131216; -webkit-font-smoothing:antialiased; }
+    a { color:#DC74A0; text-decoration:none; } a:hover { color:#E795B4; }
+  </style>
+</helmet>
+<section data-screen-label="10 — Desk states" style="min-height:100vh; box-sizing:border-box; padding:56px 64px 90px; font-family:'Instrument Sans',sans-serif; background:#131216;">
+  <div style="max-width:1380px;">
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:10px; font-size:12px; letter-spacing:0.2em; font-weight:600; color:#DC74A0;"><svg width="11" height="11" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#DC74A0"></rect></svg> PITAYA · SPIRIT ON IPAD — ROUND 2</div>
+      <span style="flex:1;"></span>
+      <div style="display:flex; gap:6px; font-size:11.5px; font-weight:600; flex-wrap:wrap; justify-content:flex-end; max-width:780px;">
+        <a href="pitaya-ipad-00-home.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">00 · Home</a>
+        <a href="pitaya-ipad-01-sermon-desk.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">01 · Sermon Desk</a>
+        <a href="pitaya-ipad-02-bible-modes.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">02 · Bible modes</a>
+        <a href="pitaya-ipad-03-notebook-rail.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">03 · Notebook rail</a>
+        <a href="pitaya-ipad-04-guided-study.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">04 · Guided study</a>
+        <a href="pitaya-ipad-05-bible-overlay.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">05 · Overlay</a>
+        <a href="pitaya-ipad-06-sunday-replay.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">06 · Sunday replay</a>
+        <a href="pitaya-ipad-07-bible-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">07 · Bible states</a>
+        <a href="pitaya-ipad-08-notebook-states.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">08 · Notebook states</a>
+        <a href="pitaya-ipad-09-worksheets.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">09 · Worksheets</a>
+        <span style="background:#F2F1F2; color:#131216; border-radius:99px; padding:5px 13px;">10 · Desk states</span>
+        <a href="pitaya-ipad-11-settings.dc.html" style="border:1px solid #3A383E; border-radius:99px; padding:5px 13px; color:#96949B;">11 · Settings</a>
+      </div>
+    </div>
+    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:36px; font-weight:700; color:#F2F1F2; letter-spacing:-0.02em; margin-top:12px;">Desk states — portrait, Split View, the Source pane</div>
+    <div style="font-size:14px; color:#96949B; margin-top:8px; line-height:1.65; max-width:880px;">Portrait stacks the desk — text above, writing at the bottom, where either hand suits. Compact (~500 pt beside Logos) is the phone app, untouched, inside the pane. And the optional third document: a Source pane, Logos-style — Calvin open beside the text he's citing. The right-handed sermon mirror is live on <a href="pitaya-ipad-01-sermon-desk.dc.html">01</a> (one tap).</div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:40px; margin-top:26px; align-items:flex-start;">
+
+      <div data-screen-label="10a Portrait — stacked, 820×1180" style="flex:none;">
+        <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:11px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">10a</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Portrait · 820 × 1180 — text above, notebook below</span></div>
+        <div style="display:inline-block; background:#0B0A0D; border:1px solid #2A292E; border-radius:38px; padding:21px; box-shadow:0 24px 80px rgba(0,0,0,0.5);">
+          <div style="width:820px; height:1180px; background:#F2F1F2; border-radius:20px; position:relative; overflow:hidden;">
+            <div style="position:absolute; top:0; left:0; right:0; height:26px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; box-sizing:border-box;">
+              <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:12px; font-weight:600; color:#454349;">7:19</span><span style="font-size:11.5px; color:#96949B;">Tue Aug 25</span></div>
+              <div style="display:flex; align-items:center; gap:7px;"><svg width="15" height="11" viewBox="0 0 16 12" fill="none" stroke="#454349" stroke-width="1.6" stroke-linecap="round"><path d="M2 4.5a9 9 0 0 1 12 0M4.4 7a5.6 5.6 0 0 1 7.2 0"></path><circle cx="8" cy="9.8" r="1.15" fill="#454349" stroke="none"></circle></svg><svg width="24" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3" fill="none" stroke="#96949B"></rect><rect x="2" y="2" width="14" height="8" rx="1.6" fill="#454349"></rect><path d="M23.5 4v4a2 2 0 0 0 0-4Z" fill="#96949B"></path></svg></div>
+            </div>
+            <div style="position:absolute; top:26px; left:0; right:0; height:48px; display:flex; align-items:center; gap:9px; padding:0 16px; box-sizing:border-box;">
+              <div style="display:flex; align-items:center; gap:6px; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:99px; padding:6px 12px 6px 9px;"><span style="font-size:13px; color:#8C2F51; line-height:1;">‹</span><span style="font-size:11.5px; font-weight:600; color:#454349;">Home</span></div>
+              <svg width="10" height="10" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63"></rect></svg>
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#232227;">Study — The question behind Romans 9</span>
+              <span style="flex:1;"></span>
+              <div style="display:flex; align-items:center; gap:6px; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:99px; padding:5px 10px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#454349" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7-4-4-7 7-1.5 5.5L12 19Z"></path></svg><span style="width:8px; height:8px; border-radius:50%; background:#5F4B8B;"></span></div>
+              <div style="width:32px; height:32px; border-radius:10px; background:#FFFFFF; border:1px solid #E4E2E6; display:flex; align-items:center; justify-content:center;"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1.4" fill="none" stroke="#454349" stroke-width="1.5"></rect><rect x="9" y="1" width="6" height="6" rx="1.4" fill="none" stroke="#454349" stroke-width="1.5"></rect><rect x="1" y="9" width="6" height="6" rx="1.4" fill="none" stroke="#454349" stroke-width="1.5"></rect><rect x="9" y="9" width="6" height="6" rx="1.4" fill="none" stroke="#454349" stroke-width="1.5"></rect></svg></div>
+            </div>
+            <div style="position:absolute; top:76px; left:12px; right:12px; bottom:12px; display:flex; flex-direction:column;">
+              <div style="flex:0.82; min-height:0; background:#FFFFFF; border-radius:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden; display:flex; flex-direction:column;">
+                <div style="height:40px; flex:none; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid #EDEBEE;">
+                  <span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B;">BIBLE ⌄ · ESV</span>
+                  <span style="font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:#232227;">Romans 9</span>
+                  <span style="flex:1;"></span>
+                  <span style="font-size:9px; letter-spacing:0.1em; font-weight:700; color:#8C2F51; border:1px solid #E9CFDC; border-radius:99px; padding:3px 9px;">STUDY</span>
+                  <span style="font-size:12px; color:#96949B;"><span style="font-size:10px;">a</span>A</span>
+                </div>
+                <div style="flex:1; overflow:hidden; padding:10px 18px;">
+                  <div style="font-family:'Literata',serif; font-size:16px; color:#232227; line-height:1.72;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:5px;">1</span>I am speaking the truth in Christ—I am not lying; my conscience bears me witness in the Holy Spirit—<span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin:0 5px 0 9px;">2</span>that I have great sorrow and unceasing anguish in my heart.<span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin:0 5px 0 9px;">3</span>For I could wish that I myself were accursed and cut off from Christ for the sake of my brothers, my kinsmen according to the flesh.<span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#A63D63; vertical-align:super; margin:0 5px 0 9px;">4</span>They are Israelites, and to them belong the adoption, the glory, the covenants, the giving of the law, the worship, and the promises.</div>
+                </div>
+              </div>
+              <div style="height:14px; flex:none; display:flex; align-items:center; justify-content:center; cursor:row-resize;"><span style="width:34px; height:4px; border-radius:99px; background:#C9C7CD;"></span></div>
+              <div style="flex:1.05; min-height:0; background:#FFFFFF; border-radius:16px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden; display:flex;">
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+                  <div style="height:40px; flex:none; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid #EDEBEE;">
+                    <span style="font-size:9.5px; letter-spacing:0.14em; font-weight:700; color:#96949B;">NOTEBOOK ⌄</span>
+                    <span style="font-size:12px; font-weight:600; color:#232227;">Term 1 — Reading the Room</span>
+                    <span style="font-size:10.5px; color:#96949B;">p. 8</span>
+                    <span style="flex:1;"></span>
+                    <span style="font-size:10px; color:#A9A7AE;">writing at the bottom suits either hand</span>
+                  </div>
+                  <div style="flex:1; background:#FFFDF9; background-image:radial-gradient(#EBE6E1 1px, transparent 1.2px); background-size:22px 22px; padding:16px 22px; position:relative; overflow:hidden;">
+                    <div style="font-size:9px; letter-spacing:0.13em; font-weight:700; color:#A9A7AE;">TERM 1 · STUDY 5 · RO 9:1–5</div>
+                    <div style="font-family:'Caveat',cursive; font-size:24px; line-height:1.3; color:#5F4B8B; transform:rotate(-0.4deg); margin-top:10px;">he weeps before he argues (9:2)</div>
+                    <div style="font-family:'Caveat',cursive; font-size:22px; line-height:1.3; color:#5E7FA6; transform:rotate(0.2deg); margin-top:4px;">"accursed for my brothers" — who talks like that??</div>
+                    <div style="display:flex; align-items:center; gap:10px; margin-top:12px;">
+                      <div style="width:180px; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:12px; padding:9px 11px; box-shadow:0 1px 6px rgba(35,34,39,0.05);">
+                        <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:700; color:#8C2F51;">Ro 9:6</span><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#C9C7CD" stroke-width="1.6" stroke-linecap="round"><path d="M3 9 9 3M4.5 3H9v4.5"></path></svg></div>
+                        <div style="font-family:'Literata',serif; font-style:italic; font-size:10.5px; color:#66646C; line-height:1.5; margin-top:3px;">“But it is not as though the word of God has failed…”</div>
+                      </div>
+                      <span style="font-family:'Caveat',cursive; font-size:18px; color:#B85C8A; transform:rotate(-2deg);">← the thesis</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="width:52px; flex:none; border-left:1px solid #EDEBEE; background:#FCFBFC; display:flex; flex-direction:column; align-items:center; padding:8px 0; gap:5px;">
+                  <div style="width:34px; height:34px; border-radius:10px; background:#F6E3EB; box-shadow:inset 0 0 0 1.5px #A63D63; display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8C2F51" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7-4-4-7 7-1.5 5.5L12 19Z"></path><path d="M15 8l1.5-1.5a2.4 2.4 0 0 1 3.4 3.4L18.5 11.5"></path></svg></div>
+                  <div style="width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#66646C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 3 13l9-9 6 6-7 7H7Z"></path><path d="M14 17h7"></path></svg></div>
+                  <div style="width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#66646C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 3 13l9-9 6 6-7 7H7Z"></path><path d="M5 15l4 4"></path></svg></div>
+                  <div style="width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:700; color:#66646C;">T</span></div>
+                  <div style="width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center;"><svg width="15" height="15" viewBox="0 0 20 20"><rect x="7" y="1.5" width="6" height="10.5" rx="3" fill="none" stroke="#66646C" stroke-width="1.7"></rect><path d="M4 8.5a6 6 0 0 0 12 0M10 14.5v3" stroke="#66646C" stroke-width="1.7" fill="none" stroke-linecap="round"></path></svg></div>
+                  <span style="flex:1;"></span>
+                  <div style="width:8px; height:52px; border-radius:99px; background:#EDEBEE; position:relative;"><span style="position:absolute; left:50%; transform:translateX(-50%); top:16px; width:15px; height:15px; border-radius:50%; background:#FFFFFF; border:1px solid #D9D7DC;"></span></div>
+                  <div style="width:20px; height:20px; border-radius:50%; background:#5F4B8B; box-shadow:inset 0 0 0 2px #FFFFFF, 0 0 0 1px #D9D7DC; margin-top:5px;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:none; width:640px; display:flex; flex-direction:column; gap:34px;">
+        <div data-screen-label="10b Compact — Split View beside Logos">
+          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:11px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">10b</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Compact ~500 pt — the phone app, untouched, beside Logos</span></div>
+          <div style="display:inline-block; background:#0B0A0D; border:1px solid #2A292E; border-radius:26px; padding:13px; box-shadow:0 18px 60px rgba(0,0,0,0.5);">
+            <div style="width:614px; height:428px; background:#0F0E11; border-radius:13px; position:relative; overflow:hidden; display:flex;">
+              <div style="flex:1.18; background:#191820; display:flex; flex-direction:column; border-right:1px solid #000000;">
+                <div style="height:30px; display:flex; align-items:center; gap:7px; padding:0 12px; border-bottom:1px solid #26242C;">
+                  <span style="width:8px; height:8px; border-radius:2px; background:#4A5568;"></span>
+                  <span style="font-size:9px; font-weight:700; letter-spacing:0.08em; color:#B8B4C0;">LOGOS · NBLA</span>
+                  <span style="font-size:8.5px; color:#66626C;">Gálatas 3</span>
+                  <span style="flex:1;"></span>
+                  <span style="font-size:8.5px; color:#66626C;">⌕ · aA</span>
+                </div>
+                <div style="flex:1; padding:12px 14px; overflow:hidden;">
+                  <div style="font-family:'Literata',serif; font-size:12px; color:#C9C5CE; line-height:1.75;"><span style="font-size:8px; color:#7E7A88; vertical-align:super; margin-right:3px;">1</span>¡Oh, gálatas insensatos! ¿Quién los ha fascinado a ustedes, ante cuyos ojos Jesucristo fue presentado públicamente como crucificado?<span style="font-size:8px; color:#7E7A88; vertical-align:super; margin:0 3px 0 7px;">2</span>Esto es lo único que quiero averiguar de ustedes: ¿recibieron el Espíritu por las obras de la ley, o por el oír con fe?</div>
+                  <div style="margin-top:10px; border:1px solid #26242C; border-radius:8px; padding:7px 9px;"><span style="font-size:8px; letter-spacing:0.1em; font-weight:700; color:#7E7A88;">NOTAS · RVR STUDY</span><div style="font-size:9.5px; color:#8E8A98; line-height:1.55; margin-top:3px;">3:2 — el argumento apela a la experiencia del Espíritu…</div></div>
+                </div>
+              </div>
+              <div style="width:9px; flex:none; background:#0F0E11; display:flex; align-items:center; justify-content:center;"><span style="width:3px; height:34px; border-radius:99px; background:#3A383E;"></span></div>
+              <div style="flex:1; background:#F2F1F2; display:flex; flex-direction:column;">
+                <div style="padding:10px 14px 0;">
+                  <div style="font-size:8px; letter-spacing:0.16em; font-weight:600; color:#96949B;">THE READER · COMPACT = PHONE</div>
+                  <div style="display:flex; align-items:center; gap:6px; margin-top:3px;">
+                    <span style="font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:700; color:#232227;">Galatians 3</span>
+                    <span style="font-size:7.5px; font-weight:700; color:#8C2F51; border:1px solid #E9CFDC; border-radius:99px; padding:2px 7px;">STUDY</span>
+                    <span style="flex:1;"></span>
+                    <span style="font-size:9px; color:#96949B;"><span style="font-size:7.5px;">a</span>A</span>
+                  </div>
+                </div>
+                <div style="flex:1; background:#FFFFFF; border-radius:12px; margin:8px 10px 10px; padding:9px 11px; overflow:hidden; box-shadow:0 2px 12px rgba(35,34,39,0.06);">
+                  <div style="display:flex; gap:6px; padding:4px 5px 4px 0; border-radius:7px; background:#7B5EA71F; border-left:3px solid #7B5EA7;"><span style="width:8px; flex:none; display:flex; justify-content:center;"><span style="width:4px; height:4px; border-radius:50%; background:#7B5EA7; margin-top:7px;"></span></span><div style="font-family:'Literata',serif; font-size:11.5px; color:#232227; line-height:1.65;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:7.5px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:3px;">1</span>O foolish Galatians! Who has bewitched you? It was before your eyes that Jesus Christ was publicly portrayed as crucified.</div></div>
+                  <div style="display:flex; gap:6px; padding:4px 5px 4px 0; border-left:3px solid transparent;"><span style="width:8px; flex:none;"></span><div style="font-family:'Literata',serif; font-size:11.5px; color:#232227; line-height:1.65;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:7.5px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:3px;">2</span>Let me ask you only this: Did you receive the Spirit by works of the law or by hearing with faith?</div></div>
+                  <div style="display:flex; gap:5px; margin-top:8px;">
+                    <span style="flex:1; text-align:center; font-size:8px; font-weight:600; color:#232227; background:#FAF9FA; border-radius:8px; padding:6px 0;">Highlight</span>
+                    <span style="flex:1; text-align:center; font-size:8px; font-weight:600; color:#232227; background:#FAF9FA; border-radius:8px; padding:6px 0;">✎ Note</span>
+                    <span style="flex:1; text-align:center; font-size:8px; font-weight:600; color:#232227; background:#FAF9FA; border-radius:8px; padding:6px 0;">⇄ Link</span>
+                    <span style="flex:1; text-align:center; font-size:8px; font-weight:600; color:#232227; background:#FAF9FA; border-radius:8px; padding:6px 0;">? Ask</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:11.5px; color:#96949B; line-height:1.6; margin-top:10px; max-width:614px;">Below ~500 pt the desk steps aside and the phone layout renders verbatim — same components, no iPad chrome. The seam belongs to iPadOS here; the desk's own seams never appear in compact.</div>
+        </div>
+
+        <div data-screen-label="10c Source pane — Logos-style reading">
+          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:11px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">10c</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">The Source pane — Calvin beside the text he cites</span></div>
+          <div style="display:inline-block; background:#0B0A0D; border:1px solid #2A292E; border-radius:26px; padding:13px; box-shadow:0 18px 60px rgba(0,0,0,0.5);">
+            <div style="width:614px; height:428px; background:#F2F1F2; border-radius:13px; position:relative; overflow:hidden; padding:8px; box-sizing:border-box; display:flex; gap:8px;">
+              <div style="flex:1.05; background:#FFFFFF; border-radius:11px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden; display:flex; flex-direction:column;">
+                <div style="height:30px; flex:none; display:flex; align-items:center; gap:6px; padding:0 11px; border-bottom:1px solid #EDEBEE;"><span style="font-size:8px; letter-spacing:0.13em; font-weight:700; color:#96949B;">NOTEBOOK ⌄</span><span style="font-size:9.5px; font-weight:600; color:#232227;">Term 2 · The Judges</span></div>
+                <div style="flex:1; background:#FFFDF9; background-image:radial-gradient(#EBE6E1 1px, transparent 1.2px); background-size:16px 16px; padding:10px 13px;">
+                  <div style="font-family:'Caveat',cursive; font-size:17px; color:#5F4B8B; transform:rotate(-0.5deg);">Calvin: Barak's fear ≠ the promise's failure</div>
+                  <div style="font-family:'Caveat',cursive; font-size:15px; color:#B85C8A; margin-top:5px;">"the shield of the word" — keep this line</div>
+                  <div style="display:inline-block; background:#FFFFFF; border:1px solid #E4E2E6; border-radius:9px; padding:6px 9px; margin-top:8px;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:10px; font-weight:700; color:#8C2F51;">Judg 4:8</span><div style="font-family:'Literata',serif; font-style:italic; font-size:9px; color:#66646C; margin-top:2px;">"If you will go with me…"</div></div>
+                </div>
+              </div>
+              <div style="width:8px; flex:none; display:flex; align-items:center; justify-content:center;"><span style="width:3px; height:26px; border-radius:99px; background:#C9C7CD;"></span></div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+                <div style="flex:1; background:#FFFFFF; border-radius:11px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden;">
+                  <div style="height:30px; display:flex; align-items:center; gap:6px; padding:0 11px; border-bottom:1px solid #EDEBEE;"><span style="font-size:8px; letter-spacing:0.13em; font-weight:700; color:#96949B;">BIBLE ⌄ · ESV</span><span style="font-size:9.5px; font-weight:600; color:#232227;">Judges 4</span></div>
+                  <div style="padding:8px 11px;"><div style="font-family:'Literata',serif; font-size:11px; color:#232227; line-height:1.65;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:7.5px; font-weight:700; color:#A63D63; vertical-align:super; margin-right:3px;">8</span>Barak said to her, “If you will go with me, I will go, but if you will not go with me, I will not go.”</div></div>
+                </div>
+                <div style="flex:1.35; background:#FFFFFF; border-radius:11px; box-shadow:0 2px 12px rgba(35,34,39,0.06); overflow:hidden; display:flex; flex-direction:column;">
+                  <div style="height:30px; flex:none; display:flex; align-items:center; gap:6px; padding:0 11px; border-bottom:1px solid #EDEBEE;">
+                    <span style="font-size:8px; letter-spacing:0.13em; font-weight:700; color:#96949B;">SOURCE ⌄</span>
+                    <span style="font-size:9.5px; font-weight:600; color:#232227;">Calvin — on Judges</span>
+                    <span style="flex:1;"></span>
+                    <span style="font-size:7.5px; font-weight:600; color:#8C2F51; background:#F6E3EB; border-radius:99px; padding:2px 7px;">cited in today's teaching</span>
+                  </div>
+                  <div style="flex:1; padding:9px 12px;">
+                    <div style="font-family:'Literata',serif; font-size:11px; color:#454349; line-height:1.7; font-style:italic;">“Barak's trembling did not annul the promise; the LORD carries His word to its end through the very weakness of the instrument. Faith leans not on the courage of the servant but on the shield of the word…”</div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-top:8px;">
+                      <span style="font-size:8px; font-weight:600; color:#66646C; border:1px solid #E4E2E6; border-radius:99px; padding:2.5px 8px; cursor:pointer;">Comm. Judges 4:8 ›</span>
+                      <span style="font-size:8px; font-weight:600; color:#8C2F51; cursor:pointer;">Open in Library</span>
+                      <span style="flex:1;"></span>
+                      <span style="font-size:7.5px; color:#A9A7AE;">public domain · stored, never recalled</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:12px; max-width:614px;">
+            <div style="flex:1; background:#1B1A1F; border:1px solid #2A292E; border-radius:12px; padding:11px 13px;"><div style="font-size:9px; letter-spacing:0.14em; font-weight:700; color:#DC74A0;">THE THIRD DOCUMENT</div><div style="font-size:11.5px; color:#96949B; line-height:1.55; margin-top:5px;">Any pane can host a Source; citation chips in a teaching open it here instead of a sheet when a Source pane exists. Selection in a source → Send to notes, same as the Bible.</div></div>
+            <div style="flex:1; background:#1B1A1F; border:1px solid #2A292E; border-radius:12px; padding:11px 13px;"><div style="font-size:9px; letter-spacing:0.14em; font-weight:700; color:#DC74A0;">THE RIGHTY MIRROR</div><div style="font-size:11.5px; color:#96949B; line-height:1.55; margin-top:5px;">The mirrored Sermon desk is live on <a href="pitaya-ipad-01-sermon-desk.dc.html">01</a> — one tap on the handedness chips (or Flip). Notebook right, rail on its left edge, Bibles left; the margin rule on <a href="pitaya-ipad-05-bible-overlay.dc.html">05</a> follows the same setting.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+</body>
+</html>

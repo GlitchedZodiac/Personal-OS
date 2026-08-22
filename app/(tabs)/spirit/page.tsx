@@ -430,6 +430,11 @@ export default function SpiritPage() {
             ? "The passage, its context, and three questions to bring back — you arrive next Sunday primed. Runs beside the term, never instead of it."
             : "Speak it, photograph the slides, or paste a transcript — the week deepens what was preached. Runs beside the term, never instead of it."}
         </p>
+        {data?.series && (
+          <p className="mt-2 text-[10px] font-semibold text-[#8C2F51]">
+            Sunday&apos;s page takes notes on the iPad — the Sermon layout, recording ready →
+          </p>
+        )}
       </button>
 
       {/* Track 2 — live */}

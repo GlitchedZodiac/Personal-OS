@@ -24,7 +24,27 @@ struct WebShellView: UIViewControllerRepresentable {
 }
 
 final class ShellViewController: UIViewController {
-    static let origin = MobileAPIClient.productionBaseURL
+    /// The web origin. DEBUG builds honour `pitaya.devOrigin` in UserDefaults
+    /// (e.g. http://localhost:3000 for a simulator smoke against `npm run dev`):
+    ///   xcrun simctl spawn booted defaults write net.blacksheepglobal.pitaya pitaya.devOrigin http://localhost:3000
+    static var origin: URL {
+        #if DEBUG
+        if let raw = UserDefaults.standard.string(forKey: "pitaya.devOrigin"), let url = URL(string: raw) {
+            return url
+        }
+        #endif
+        return MobileAPIClient.productionBaseURL
+    }
+
+    /// iPad opens on the desk's front door (Spirit Home); iPhone on the web
+    /// app's own root. The web layer routes compact widths back to the phone
+    /// layout, so a narrow Split View on iPad still lands somewhere sensible.
+    static var landingURL: URL {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            return origin.appendingPathComponent("home")
+        }
+        return origin
+    }
     var onShake: (() -> Void)?
     private var webView: WKWebView?
 
@@ -52,7 +72,10 @@ final class ShellViewController: UIViewController {
         view.addSubview(webView)
         self.webView = webView
 
-        webView.load(URLRequest(url: Self.origin))
+        // Apple Pencil reaches the web ink engine as pointer events with
+        // pressure + tilt; finger scrolling stays native. Nothing to bridge
+        // for V1 — PencilKit is the upgrade path (docs/deferred-items.md).
+        webView.load(URLRequest(url: Self.landingURL))
     }
 
     override func viewDidAppear(_ animated: Bool) {
