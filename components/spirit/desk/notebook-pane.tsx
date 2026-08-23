@@ -168,6 +168,12 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   const [nbMenu, setNbMenu] = useState(false);
   const [moreMenu, setMoreMenu] = useState(false);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "offline">("idle");
+  // the native shell reads this before it reloads a stale web view — his ink is never worth
+  // trading for a fresher bundle
+  useEffect(() => {
+    (window as unknown as { __pitayaHasUnsavedInk?: boolean }).__pitayaHasUnsavedInk =
+      saving === "saving" || saving === "offline";
+  }, [saving]);
   const [lasso, setLasso] = useState<{ ids: Set<string>; polygon: { x: number; y: number }[]; bounds: { x: number; y: number; w: number; h: number }; client: { x: number; y: number } } | null>(null);
   const [lassoBusy, setLassoBusy] = useState(false);
   const [moving, setMoving] = useState(false);
