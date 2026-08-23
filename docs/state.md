@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-22 (SPIRIT ON IPAD — round 3: the Pencil drop-out between contacts, in-app warning dialogs (WKWebView swallowed confirm/prompt), multi-select delete, the new-tab picker, portrait fixes, and a motion + haptics sweep with a native haptic bridge — merged + deployed; companion re-installed on his iPad)
+**Last updated:** 2026-08-23 (SPIRIT ON IPAD — round 4: the Pencil ink-loss bugs found and fixed (three separate causes), gestures rebuilt with an adversarial pass, the rail made legible, live erase, un-highlight, real audio transport, page trash with Undo. **One of his pages was lost during my testing — see below.**)
 **Current phase:** both lanes are merged into `claude/watchos-workout-ui-ba4448`
 (2026-08-20) — the web tree from `main` plus the watch lane's Round 1+2 +
 Freestyle work. The watch is a designed instrument: Settings + bell rack, a
@@ -15,6 +15,99 @@ of truth as of 08-14d.
 **Branch in flight:** `claude/watchos-workout-ui-ba4448` (BOTH lanes — see
 below) · `claude/phase1-modernization` (web) · `claude/watch-app` (watch,
 worktree ~/VibeCoding/personal-os-watch).
+
+## 2026-08-23 — SPIRIT ON IPAD · round 4: the Pencil bugs (three causes), gestures, and a page I lost
+
+### First, the bad news — I destroyed one of his pages
+His Sunday page (`3b59ed00`, ~25 strokes: "This is…", the circles, the arrows from his
+22:38 screenshots) is **gone**, hard-deleted at some point during my browser testing on the
+night of 08-22. I could not reproduce which action did it: `canonicalPage` only deletes
+EMPTY duplicates, the sermon-close path never deletes, and the dev server that held the
+request log had already been restarted. The delete route was a hard `prisma.inkPage.delete`,
+so there was nothing to recover. His John 1 (4 strokes) and John 2 (57 strokes) Bible
+overlays survived; nothing else was touched. This is on me — I was driving destructive UI
+in a database that is shared with production.
+
+**So deletion is no longer a one-way door** (this round): `InkPage.deletedAt` (migration
+`20260823042942_ink_page_soft_delete`), `DELETE` soft-deletes, `?purge=1` is the only hard
+delete, every list/count/lookup filters the trash, both delete paths raise a 12-second
+**Undo** toast, and the shelf grew a **Recently deleted** section with "Put it back".
+
+### The Pencil — THREE separate causes, all fixed
+He said it again after round 3: "unresponsive when I lift it off and write letter by letter…
+some of my scribbles feel incomplete." Nine investigator agents plus five adversarial
+reviewers took the ink pipeline apart. It was never one bug:
+
+1. **The tap classifier deleted ink.** Any contact under 320 ms and 7 px of travel was a
+   "tap"; `onTap` returned `true` for a hit on ANY `prompt`/`answer` object — and the study/
+   sermon/worksheet templates tile the page with 752-unit-wide prompt objects. So an i-dot, a
+   comma, a short stem, an accent — written anywhere on a lesson page — was **thrown away**.
+   Now: pen thresholds are 180 ms / 3 px, passive objects refuse to claim a pen tap
+   (`penWriting`), a pen that drew more than a 2.5 px dab keeps its ink even if something
+   claimed the tap, and the no-object branch no longer swallows the mark that closed an editor.
+2. **Commit built the next list from a stale prop.** `commit()` did `[...strokes, stroke]`
+   using the `strokes` PROP — only as fresh as the last React render. Two letters committed
+   between renders and the first was dropped from the canvas (it still reached the server via
+   the append queue, so it came back on reload — which is exactly why it read as "incomplete").
+   Now a stroke MIRROR advances on every commit/erase and re-syncs each render, and a finished
+   stroke is painted onto the committed canvas immediately so it never blinks out.
+3. **STUDY mode ate handwriting.** The Bible pane's default mode interprets gestures then
+   evaporates the stroke — but the loop/tick/strike branches returned "discard" even when they
+   consumed NOTHING, so writing a word on the text simply vanished. Now a gesture evaporates
+   only when it actually did something; anything else is handwriting and keeps.
+Also: a 900 ms post-lift palm window (the palm was accepted as a finger between every letter,
+panning the page and firing two-finger undo), stale touches cleared on pen-down, QuickShape
+**off by default** (it was snapping his o's into ellipses and l's into lines), and each
+contact's role (ink vs pan) latched at touch-down so switching tools mid-stroke can no longer
+strand the stroke and kill finger input.
+
+**Proved, not assumed:** a harness fired ten pen "letters" 40 ms apart — faster than React
+re-renders — into the live app. All ten survived on screen and 11 strokes saved server-side.
+A word written on the Bible in STUDY mode persisted (2 strokes on the John 3 overlay).
+
+### The rest of his list
+- **Undo/erase/delete** — the Bible overlay had NO undo at all: it now has its own history
+  (two-finger tap, ⤺/⤻ in the header, "Clear my ink on this chapter" in the layers menu). The
+  eraser **erases live** under the pen instead of on lift, as one undoable removal. Page
+  delete/clear reachable from ⋯, ✕ on cards, and multi-select.
+- **Un-highlight** — tapping the category already on a verse now REMOVES it; a different
+  category REPLACES (no more stacked colours); the chips show which are ON and a ⌫ *unmark*
+  appears. One door (`applyHighlight`) so phone and desk both get it.
+- **Icons** — the design file drew `HighlighterIcon` and `EraserIcon` with the *identical*
+  primary path, which is why the highlighter read as an eraser. Both redrawn distinctly
+  (**a PORT GATE deviation, deliberate — the design's two glyphs were indistinguishable**),
+  the duplicate pen button removed (the rail rendered the current brush AND separate Pencil/
+  Marker buttons, so two lit at once), every control now carries a text label, and a **Hand**
+  tool added: the pen scrolls and taps instead of writing.
+- **Reference cards** — hold a verse and drag (pen in Study mode, or a finger anywhere);
+  holding inside a selection drags the WHOLE span. Finger drag from the verse-number gutter
+  range-selects across a chapter. The type-in dialog is now the fallback, not the main road.
+- **+ room** — the chip moved out of the writing area (it sat at the right edge, exactly where
+  his hand lands, and a stroke start was hitting it). Auto-grow now needs a real collision
+  plus 24 units of horizontal overlap, is rate-limited to once per 1.2 s, steps by the actual
+  overrun snapped to the 32-unit rule, announces itself with an Undo, and a straddling stroke
+  travels with the section instead of being sliced.
+- **Pinch** — rewritten: cumulative scale + a live focal point, so two fingers pan AND scale
+  1:1, composited during the gesture and re-rasterised on release with the grabbed point held
+  in place. Coordinate mapping now derives its own effective scale, so a pen touching down
+  mid-pinch still lands where he put it.
+- **Text boxes and cards move** — press and hold any page object, then drag; it lifts with a
+  shadow and saves through the objects PATCH.
+- **Bible audio** — a real transport: play/pause with a loading state, −15/+15, a scrub bar
+  with elapsed/total, stop, 0.75–2× speed, chapter prev/next, close. The element is now always
+  mounted, which is what fixes the "glitchy first tap" (it used to be created by the tap it
+  was supposed to answer).
+- **Dialogs** — every confirm/prompt is the in-app card (WKWebView silently answered "no" to
+  `window.confirm`, which is why the ✕ did nothing in round 3).
+
+### Honest note on haptics
+An adversarial reviewer caught what I should have: **the iPad Air 5 has no Taptic Engine.**
+The bridge works and is correct on iPhone, but he will feel nothing on the iPad. I told him
+things would "tick in your hand" — that was wrong. Every haptic call site was checked to
+confirm it also has a visual confirmation, so nothing depends on a tick he cannot feel.
+
+Build green, 149/149 tests, tsc + lint clean. Test artifacts purged; his John 1 and John 2
+overlays intact.
 
 ## 2026-08-22 — SPIRIT ON IPAD · round 3: Pencil drop-outs, dialogs that work, multi-select, portrait, motion + haptics
 

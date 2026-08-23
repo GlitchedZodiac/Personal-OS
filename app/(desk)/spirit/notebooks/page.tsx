@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { DISPLAY, cardShadow } from "@/components/spirit/desk/ui";
 import { RecDot } from "@/components/spirit/desk/desk-icons";
 import { fmtSeconds } from "@/lib/ink";
@@ -30,6 +31,18 @@ function Inner() {
   }, [nbId]);
   const nb = nbs.find((n) => n.id === nbId) ?? null;
   const shown = nb ? pages : [];
+  const [trash, setTrash] = useState<Pg[]>([]);
+  const [trashOpen, setTrashOpen] = useState(false);
+  const loadTrash = () => fetch("/api/spirit/ink?trash=1&take=50").then((r) => (r.ok ? r.json() : null)).then((d) => setTrash(d?.pages ?? [])).catch(() => {});
+  useEffect(() => {
+    void loadTrash();
+  }, [pages.length]);
+  const restore = async (id: string) => {
+    await fetch(`/api/spirit/ink/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "restore" }) });
+    haptic("success");
+    await loadTrash();
+    await reload();
+  };
   const router = useRouter();
   const reload = () => nbId && fetch(`/api/spirit/notebooks/${nbId}`).then((r) => (r.ok ? r.json() : null)).then((d) => setPages(d?.pages ?? [])).catch(() => {});
   const newPage = async () => {
@@ -60,6 +73,19 @@ function Inner() {
     setSelected(new Set());
     setSelectMode(false);
     await reload();
+    toast(ids.length === 1 ? "Page moved to the trash" : `${ids.length} pages moved to the trash`, {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          void (async () => {
+            await Promise.all(ids.map((id) => fetch(`/api/spirit/ink/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "restore" }) })));
+            await reload();
+            haptic("success");
+          })();
+        },
+      },
+      duration: 12000,
+    });
   };
   const deletePage = (p: Pg) => deletePages([p.id]);
   const ctxFor = (p: Pg) => (p.kind === "sermon" ? "sermon" : p.kind === "worksheet" || p.kind === "study" ? "study" : "free");
@@ -121,6 +147,25 @@ function Inner() {
               <span style={{ fontSize: 22, color: "#96949B", lineHeight: 1 }}>+</span>
               <span style={{ fontSize: 11, color: "#96949B" }}>new {nb?.kind === "sermons" ? "sermon " : ""}page</span>
             </button>
+          </div>
+        )}
+        {trash.length > 0 && (
+          <div style={{ marginTop: 30 }}>
+            <button type="button" onClick={() => setTrashOpen((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: 0, cursor: "pointer", padding: 0 }}>
+              <span style={{ fontSize: 10.5, letterSpacing: "0.16em", fontWeight: 700, color: "#96949B" }}>RECENTLY DELETED · {trash.length}</span>
+              <span style={{ fontSize: 10, color: "#A9A7AE" }}>{trashOpen ? "hide" : "nothing is really gone — tap to look"}</span>
+            </button>
+            {trashOpen && (
+              <div className="desk-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12, marginTop: 12 }}>
+                {trash.map((p) => (
+                  <div key={p.id} style={{ background: "#FFFFFF", border: "1px dashed #D9D7DC", borderRadius: 12, padding: "10px 12px", opacity: 0.85 }}>
+                    <div style={{ fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: "#66646C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.title || p.kind}</div>
+                    <div style={{ fontSize: 9.5, color: "#A9A7AE", marginTop: 1 }}>{new Date(p.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                    <button type="button" onClick={() => void restore(p.id)} style={{ marginTop: 8, fontSize: 10.5, fontWeight: 700, color: "#8C2F51", background: "#F6E3EB", border: 0, borderRadius: 99, padding: "5px 12px", cursor: "pointer" }}>Put it back</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

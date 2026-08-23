@@ -21,7 +21,7 @@ export async function GET() {
       prisma.foodLog.findMany({ where: { loggedAt: { gte: since } }, select: { loggedAt: true, calories: true } }),
       prisma.bodyMeasurement.findMany({ where: { weightKg: { not: null } }, orderBy: { measuredAt: "desc" }, take: 30, select: { measuredAt: true, weightKg: true } }),
       prisma.churchSeries.findFirst({ where: { status: "active" } }),
-      prisma.inkPage.findMany({ where: { kind: "sermon" }, orderBy: { updatedAt: "desc" }, take: 1, select: { id: true, title: true, subtitle: true, updatedAt: true, recordingId: true, transcribedAt: true, refs: true, seriesId: true, weekIndex: true } }),
+      prisma.inkPage.findMany({ where: { kind: "sermon", deletedAt: null }, orderBy: { updatedAt: "desc" }, take: 1, select: { id: true, title: true, subtitle: true, updatedAt: true, recordingId: true, transcribedAt: true, refs: true, seriesId: true, weekIndex: true } }),
       prisma.recording.findFirst({ orderBy: { startedAt: "desc" }, select: { id: true, durationSec: true, status: true, pageId: true } }),
     ]);
 

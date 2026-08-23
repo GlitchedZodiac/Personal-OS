@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
     const [highlights, notes, links, threads, day] = await Promise.all([
       prisma.highlight.findMany({
         where: { refStart: { lte: hi }, refEnd: { gte: lo } },
+        orderBy: { createdAt: "asc" }, // newest wins where two overlap, deterministically
       }),
       prisma.spiritNote.findMany({
         where: { refStart: { lte: hi }, refEnd: { gte: lo } },

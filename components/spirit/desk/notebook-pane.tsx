@@ -95,7 +95,7 @@ function resolveOnce(key: string, run: () => Promise<Response>) {
 
 export function NotebookPane({ railSide, context, initialPageId, dayId, onPageChange }: NotebookPaneProps) {
   const desk = useDesk();
-  const { setPen, popover, setPopover, prefs, setRecording, recordingSeconds, emit } = desk;
+  const { pen, setPen, popover, setPopover, prefs, setRecording, recordingSeconds, emit } = desk;
   const canvasRef = useRef<InkCanvasHandle | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const paneRef = useRef<HTMLDivElement | null>(null);
@@ -106,38 +106,52 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   const [history, setHistory] = useState<{ strokes: Stroke[]; objects: PageObject[] }[]>([]);
   const [future, setFuture] = useState<{ strokes: Stroke[]; objects: PageObject[] }[]>([]);
   const [zoom, setZoom] = useState(1);
-  // pinch: the page wrapper scales live via a transform (no re-render per move); on lift we
-  // commit the zoom and move the scroll so the point under the fingers stays put
+  // ——— PINCH: live, 1:1 with the fingers, then crisp ———
+  // The page is composited during the gesture (transform only — no layout, no re-render)
+  // and re-rasterised at the new scale on release with the point under the fingers held
+  // exactly in place. Two fingers moving together pan as well as scale.
   const pageWrapRef = useRef<HTMLDivElement | null>(null);
-  const pinchRef = useRef<{ factor: number; cx: number; cy: number } | null>(null);
-  const onPinchZoom = (f: number, center: { x: number; y: number }) => {
+  const pinchRef = useRef<{ wx: number; wy: number; k: number; fx: number; fy: number } | null>(null);
+  const onPinchZoom = (k: number, center: { x: number; y: number }) => {
     const sc = scrollRef.current, wrap = pageWrapRef.current;
     if (!sc || !wrap) return;
     const r = sc.getBoundingClientRect();
-    const cx = center.x - r.left + sc.scrollLeft, cy = center.y - r.top + sc.scrollTop; // content coords at current zoom
-    const cur = pinchRef.current ?? { factor: 1, cx, cy };
-    const maxF = 3 / zoom, minF = 0.5 / zoom;
-    cur.factor = Math.max(minF, Math.min(maxF, cur.factor * f));
-    cur.cx = cx; cur.cy = cy;
-    pinchRef.current = cur;
+    const fx = center.x - r.left, fy = center.y - r.top; // focal, in the scroller's viewport
+    if (!pinchRef.current) {
+      // wrapper-pixel coordinate of the point the fingers grabbed
+      pinchRef.current = { wx: fx + sc.scrollLeft, wy: fy + sc.scrollTop, k: 1, fx, fy };
+    }
+    const st = pinchRef.current;
+    const clamped = Math.max(0.45 / zoom, Math.min(3.2 / zoom, k));
+    st.k = clamped;
+    st.fx = fx;
+    st.fy = fy;
+    // put the grabbed point back under the fingers, scaled — this is the whole trick
+    const tx = fx + sc.scrollLeft - clamped * st.wx;
+    const ty = fy + sc.scrollTop - clamped * st.wy;
     wrap.style.transformOrigin = "0 0";
-    wrap.style.transform = `translate(${(1 - cur.factor) * cx}px, ${(1 - cur.factor) * cy}px) scale(${cur.factor})`;
+    wrap.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${clamped})`;
     wrap.style.willChange = "transform";
   };
   const onPinchEnd = () => {
-    const sc = scrollRef.current, wrap = pageWrapRef.current, cur = pinchRef.current;
+    const sc = scrollRef.current, wrap = pageWrapRef.current, st = pinchRef.current;
     pinchRef.current = null;
     if (!wrap) return;
     wrap.style.transform = "";
     wrap.style.willChange = "";
-    if (!sc || !cur || Math.abs(cur.factor - 1) < 0.01) return;
-    const nextZoom = Math.round(zoom * cur.factor * 100) / 100;
-    const k = nextZoom / zoom;
-    setZoom(nextZoom);
-    // keep the pinch centre fixed on screen after the re-layout
+    wrap.style.transformOrigin = "";
+    if (!sc || !st) return;
+    if (Math.abs(st.k - 1) < 0.005) return; // a two-finger pan, not a zoom
+    const next = Math.max(0.45, Math.min(3.2, zoom * st.k));
+    const applied = next / zoom; // what actually survived the clamp
+    setZoom(next);
+    haptic("soft");
+    // scrollLeft such that the grabbed wrapper point lands back under the fingers
+    const left = st.wx * applied - st.fx;
+    const top = st.wy * applied - st.fy;
     requestAnimationFrame(() => {
-      sc.scrollLeft = cur.cx * k - (cur.cx - sc.scrollLeft);
-      sc.scrollTop = cur.cy * k - (cur.cy - sc.scrollTop);
+      sc.scrollLeft = Math.max(0, left);
+      sc.scrollTop = Math.max(0, top);
     });
   };
   const [paneW, setPaneW] = useState(600);
@@ -319,7 +333,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     const moved: Stroke[] = [];
     const nextStrokes = baseStrokes.map((st) => {
       const b = strokeBounds(st);
-      if (b.y < boundaryY - 1) return st;
+      if (b.y + b.h / 2 < boundaryY - 1) return st; // decided by the stroke's middle — never sliced
       const ns = { ...st, pts: st.pts.map((pt) => ({ ...pt, y: pt.y + delta })) };
       moved.push(ns);
       return ns;
@@ -338,6 +352,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     }
     scheduleSave();
   };
+  const lastGrowAt = useRef(0);
   const sectionsSorted = () => objects.filter((o) => o.type === "section").sort((a, b) => a.y - b.y);
   /** the stroke just written sits in a section and reaches its floor → the section grows */
   const autoGrowFor = (stroke: Stroke, current: Stroke[], currentObjects: PageObject[]) => {
@@ -346,9 +361,20 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     const b = strokeBounds(stroke);
     const idx = secs.findIndex((sec, i) => b.y >= sec.y && (i === secs.length - 1 || b.y < secs[i + 1].y));
     if (idx < 0 || idx === secs.length - 1) return;
-    const floor = secs[idx + 1].y;
-    if (b.y + b.h > floor - 56) {
-      const delta = Math.max(140, Math.round(b.y + b.h + 90 - floor));
+    const nextSec = secs[idx + 1];
+    const floor = nextSec.y;
+    // he must be writing in THIS heading's column, not brushing the far margin
+    const r = objectRect(nextSec);
+    const overlap = Math.min(b.x + b.w, r.x + (r.w ?? PAGE_W)) - Math.max(b.x, r.x);
+    if (overlap < 24) return;
+    if (Date.now() - lastGrowAt.current < 1200) return; // one nudge per word, not per stroke
+    // only when the ink has ACTUALLY run into the next heading — not merely approached it.
+    // (It used to fire 56 units early, which moved a section while he was still writing
+    // comfortably inside his own; that read as the page moving on its own.)
+    if (b.y + b.h > floor + 4) {
+      // exactly the overrun, snapped to the 32-unit rule so the page keeps its rhythm
+      const delta = Math.max(32, Math.ceil((b.y + b.h + 40 - floor) / 32) * 32);
+      lastGrowAt.current = Date.now();
       // everything at/below the NEXT section moves; the stroke that triggered it stays where he wrote it
       const others = current.filter((st) => st.id !== stroke.id);
       const g = growBelow(floor, delta, others, currentObjects);
@@ -359,6 +385,10 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
         pending.current.remove.push(...g.moved.map((m) => m.id));
         pending.current.append.push(...g.moved);
       }
+      // never silent: say which heading moved, and hand him the way back
+      haptic("soft");
+      const movedLabel = String((secs[idx + 1].data as { label?: string })?.label ?? "the next section");
+      toast(`${movedLabel} moved down to make room`, { action: { label: "Undo", onClick: () => undo() } });
     }
   };
   const applyStrokes = (next: Stroke[], delta: { appended?: Stroke[]; removed?: string[] }) => {
@@ -486,8 +516,38 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   };
 
   // ——— taps on the page: objects, chips, cards ———
+  // ——— MOVE A PAGE OBJECT: press and hold it, then drag. Text blocks, reference cards and
+  // photos all move; the ink stays put. Saved through the same objects PATCH. ———
+  const [moveObj, setMoveObj] = useState<{ id: string; dx: number; dy: number } | null>(null);
+  const onObjectHold = (pt: { x: number; y: number; clientX: number; clientY: number; pointerType: string }) => {
+    const o = hitObject(objects, pt.x, pt.y);
+    if (!o || o.type === "section" || o.type === "header") return false;
+    pushHistory();
+    haptic("medium");
+    setMoveObj({ id: o.id, dx: pt.x - o.x, dy: pt.y - o.y });
+    return true;
+  };
+  const onObjectDragMove = (c: { x: number; y: number }) => {
+    const mv = moveObj;
+    if (!mv || !canvasRef.current) return;
+    const pg = canvasRef.current.clientToPage(c.x, c.y);
+    setObjects((os) => os.map((o) => (o.id === mv.id ? { ...o, x: Math.max(8, Math.min(PAGE_W - 40, pg.x - mv.dx)), y: Math.max(8, pg.y - mv.dy) } : o)));
+  };
+  const onObjectDragEnd = () => {
+    if (!moveObj) return;
+    setMoveObj(null);
+    haptic("light");
+    pending.current.objects = true;
+    scheduleSave();
+  };
+
   const onTap = (pt: { x: number; y: number; clientX: number; clientY: number; pointerType: string }) => {
     lastTap.current = { x: pt.x, y: pt.y };
+    // A PEN HOLDING A DRAWING TOOL IS WRITING, NOT TAPPING. The study/sermon/worksheet
+    // templates tile the page with full-width `prompt` objects; short marks (the dot of an
+    // i, a comma, a stem) were classified as taps, "hit" one of those passive objects, and
+    // the ink was thrown away. Only genuinely interactive things may claim a pen tap.
+    const penWriting = pt.pointerType === "pen" && (pen.tool === "fountain" || pen.tool === "gpen" || pen.tool === "pencil" || pen.tool === "marker");
     if (lasso) {
       setLasso(null);
       return true;
@@ -528,17 +588,16 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     }
     const o = hitObject(objects, pt.x, pt.y);
     if (!o) {
-      if (editing) {
-        commitEdit();
-        return true;
-      }
-      return false;
+      // close the open editor, but never swallow the mark that closed it
+      if (editing) commitEdit();
+      return editing ? !penWriting : false;
     }
     if (o.type === "refcard") {
       const d = o.data as { refStart: number; refEnd: number; label: string };
       emit({ type: "jump-reference-pane", refStart: d.refStart, refEnd: d.refEnd });
       return true;
     }
+    if (o.type === "text" && penWriting) return false; // write across a typed block if you like
     if (o.type === "text") {
       const d = o.data as { text?: string; pending?: boolean };
       if (d.pending) {
@@ -546,24 +605,28 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
       } else setEditing({ id: o.id, value: d.text ?? "" });
       return true;
     }
-    if (o.type === "header" && isSermon) {
+    if (o.type === "header" && isSermon && !penWriting) {
       editSermonHeader();
       return true;
     }
     if (o.type === "answer") {
       const d = o.data as { mode?: string; text?: string };
-      if (d.mode === "type") setEditing({ id: o.id, value: d.text ?? "" });
-      return true;
+      if (d.mode === "type" && !penWriting) {
+        setEditing({ id: o.id, value: d.text ?? "" });
+        return true;
+      }
+      return false; // ink mode: he is writing his answer IN the box
     }
     if (o.type === "prompt") {
       const d = o.data as { field?: boolean; value?: string };
-      if (d.field) {
+      if (d.field && !penWriting) {
         void (async () => {
           const v = await askPrompt({ title: "Type it", value: d.value ?? "" });
           if (v !== null) applyObjects(objects.map((x) => (x.id === o.id ? { ...x, data: { ...x.data, value: v } } : x)));
         })();
+        return true;
       }
-      return true;
+      return false; // a plain prompt is paper — writing on it is writing
     }
     return false;
   };
@@ -913,13 +976,43 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     setSelectMode(false);
     await loadNotebooks();
     if (listNotebook) await openList(listNotebook);
+    // deleting is never the end of a page: it rests in the trash, and this brings it straight back
+    toast(ids.length === 1 ? "Page moved to the trash" : `${ids.length} pages moved to the trash`, {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          void (async () => {
+            await Promise.all(ids.map((id) => fetch(`/api/spirit/ink/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "restore" }) })));
+            await loadNotebooks();
+            if (listNotebook) await openList(listNotebook);
+            haptic("success");
+          })();
+        },
+      },
+      duration: 12000,
+    });
   };
   const deletePage = async () => {
     if (!page) return;
     if (!(await askConfirm({ title: `Delete "${page.title || "this page"}"?`, body: `Its ink is gone for good${recordingRow ? " — the recording stays in the library" : ""}.`, confirmLabel: "Delete page", danger: true }))) return;
     const nbRow = notebooks.find((n) => n.id === page.notebookId) ?? null;
+    const goneId = page.id;
     pending.current = { append: [], remove: [], objects: false };
-    await fetch(`/api/spirit/ink/${page.id}`, { method: "DELETE" });
+    await fetch(`/api/spirit/ink/${goneId}`, { method: "DELETE" });
+    toast("Page moved to the trash", {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          void (async () => {
+            await fetch(`/api/spirit/ink/${goneId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "restore" }) });
+            await loadNotebooks();
+            await openPage(goneId);
+            haptic("success");
+          })();
+        },
+      },
+      duration: 12000,
+    });
     try {
       localStorage.removeItem(`spirit-desk-page:${context}`);
     } catch {}
@@ -1080,6 +1173,10 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
                 scrollRef={scrollRef}
                 background={(page.background as "dots" | "lined" | "grid" | "blank" | "paper") ?? "dots"}
                 onTap={onTap}
+                onHold={onObjectHold}
+                onDragMove={onObjectDragMove}
+                onDragEnd={onObjectDragEnd}
+                onEraseTick={() => haptic("light")}
                 onLasso={onLasso}
                 onUndoGesture={undo}
                 onRedoGesture={redo}
@@ -1089,7 +1186,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
                 highlightStrokeId={replayStroke}
                 paper={page.background === "blank" ? "#FFFFFF" : "#FFFDF9"}
               >
-                <PageObjects objects={objects} fresh={freshCards} editingId={editing?.id ?? null} />
+                <PageObjects objects={objects} fresh={freshCards} editingId={editing?.id ?? null} liftedId={moveObj?.id ?? null} />
               </InkCanvas>
               {/* typed-block editor: floats over the object in page coords */}
               {editingObj && (

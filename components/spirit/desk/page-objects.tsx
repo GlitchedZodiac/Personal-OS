@@ -30,7 +30,7 @@ export function hitObject(objects: PageObject[], x: number, y: number): PageObje
 export function PageHeaderObject({ o }: { o: PageObject }) {
   const d = o.data as { kicker?: string; title?: string; chips?: string[]; aim?: string | null; editable?: boolean };
   return (
-    <div style={{ position: "absolute", left: o.x, top: o.y, width: o.w ?? 752 }}>
+    <div data-obj={o.id} style={{ position: "absolute", left: o.x, top: o.y, width: o.w ?? 752 }}>
       <div style={{ fontSize: 11.5, letterSpacing: "0.13em", fontWeight: 700, color: "#A9A7AE" }}>{d.kicker}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 5, flexWrap: "wrap" }}>
         <span style={{ fontFamily: DISPLAY, fontSize: 22, fontWeight: 700, color: "#232227", letterSpacing: "-0.01em" }}>{d.title}</span>
@@ -48,10 +48,11 @@ export function PageHeaderObject({ o }: { o: PageObject }) {
 export function SectionObject({ o }: { o: PageObject }) {
   const d = o.data as { label: string };
   return (
-    <div style={{ position: "absolute", left: o.x, top: o.y, width: o.w ?? 752, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div data-obj={o.id} style={{ position: "absolute", left: o.x, top: o.y, display: "flex", alignItems: "center", gap: 10 }}>
       <SectionHead label={d.label} />
-      {/* profuse notes: grow this section — pushes everything below it down (auto-grows as he writes, too) */}
-      <span data-section-grow={o.id} style={{ fontSize: 10.5, letterSpacing: "0.06em", fontWeight: 700, color: "#B7A2AC", border: "1px dashed #E4D6DC", borderRadius: 99, padding: "2px 10px", marginLeft: 8, whiteSpace: "nowrap", pointerEvents: "auto" }}>+ room</span>
+      {/* "make room": pushes everything below this heading down. It sits BESIDE the heading —
+          never out in the writing area, where it used to catch the start of a stroke. */}
+      <span data-section-grow={o.id} style={{ fontSize: 9.5, letterSpacing: "0.06em", fontWeight: 700, color: "#C4B4BC", border: "1px dashed #EADFE4", borderRadius: 99, padding: "1.5px 8px", whiteSpace: "nowrap", pointerEvents: "auto" }}>+ room</span>
     </div>
   );
 }
@@ -62,7 +63,7 @@ export function PromptObject({ o, onChip }: { o: PageObject; onChip?: (ref: stri
   const linesH = d.lined ? (d.lines ?? 3) * 32 + 8 : 0;
   void onChip;
   return (
-    <div style={{ position: "absolute", left: o.x, top: o.y, width: r.w }}>
+    <div data-obj={o.id} style={{ position: "absolute", left: o.x, top: o.y, width: r.w }}>
       {d.label && <div style={{ fontSize: 11, letterSpacing: "0.13em", fontWeight: 700, color: "#B7A2AC" }}>{d.label}</div>}
       {(d.text || d.chip) && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: d.label ? 4 : 0 }}>
@@ -94,7 +95,7 @@ export function PromptObject({ o, onChip }: { o: PageObject; onChip?: (ref: stri
 export function RefCardObject({ o, fresh, selected }: { o: PageObject; fresh?: boolean; selected?: boolean }) {
   const d = o.data as unknown as RefCardData;
   return (
-    <div className={fresh ? "desk-card-drop" : undefined} style={{ position: "absolute", left: o.x, top: o.y, transformOrigin: "left top" }}>
+    <div className={fresh ? "desk-card-drop" : undefined} data-obj={o.id} style={{ position: "absolute", left: o.x, top: o.y, transformOrigin: "left top" }}>
       <RefCard data={d} width={o.w ?? 196} fresh={fresh} selected={selected} />
     </div>
   );
@@ -103,7 +104,7 @@ export function RefCardObject({ o, fresh, selected }: { o: PageObject; fresh?: b
 export function TextObject({ o, editing }: { o: PageObject; editing?: boolean }) {
   const d = o.data as { text?: string; pending?: boolean; label?: string };
   return (
-    <div style={{ position: "absolute", left: o.x, top: o.y, width: o.w ?? 420, background: "#FFFFFF", border: `1px solid ${editing ? "#A63D63" : "#EDEBEE"}`, borderRadius: 11, padding: "10px 12px", boxShadow: "0 1px 6px rgba(35,34,39,0.04)", boxSizing: "border-box", minHeight: 44 }}>
+    <div data-obj={o.id} style={{ position: "absolute", left: o.x, top: o.y, width: o.w ?? 420, background: "#FFFFFF", border: `1px solid ${editing ? "#A63D63" : "#EDEBEE"}`, borderRadius: 11, padding: "10px 12px", boxShadow: "0 1px 6px rgba(35,34,39,0.04)", boxSizing: "border-box", minHeight: 44 }}>
       <div style={{ fontSize: 11, letterSpacing: "0.12em", fontWeight: 700, color: "#C9C7CD" }}>{d.label ?? (d.pending ? "DICTATED — TAP TO KEEP" : "TYPED")}</div>
       <div style={{ fontSize: 17, color: d.pending ? "#B07A93" : "#454349", lineHeight: 1.6, marginTop: 4, whiteSpace: "pre-wrap" }}>{d.text || (editing ? "" : "…")}</div>
     </div>
@@ -114,7 +115,7 @@ export function ImageObject({ o }: { o: PageObject }) {
   const d = o.data as { src: string; caption?: string };
   const r = objectRect(o);
   return (
-    <div style={{ position: "absolute", left: o.x, top: o.y, width: r.w, background: "#FFFFFF", border: "1px solid #E4E2E6", borderRadius: 10, padding: "6px 6px 8px", transform: "rotate(1.6deg)", boxShadow: "0 2px 10px rgba(35,34,39,0.08)", boxSizing: "border-box" }}>
+    <div data-obj={o.id} style={{ position: "absolute", left: o.x, top: o.y, width: r.w, background: "#FFFFFF", border: "1px solid #E4E2E6", borderRadius: 10, padding: "6px 6px 8px", transform: "rotate(1.6deg)", boxShadow: "0 2px 10px rgba(35,34,39,0.08)", boxSizing: "border-box" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={d.src} alt={d.caption ?? "photo"} style={{ width: "100%", height: Math.max(40, (o.h ?? 120) - 30), objectFit: "cover", borderRadius: 6, display: "block" }} />
       {d.caption && <div style={{ fontSize: 11.5, color: "#96949B", marginTop: 6, textAlign: "center" }}>{d.caption}</div>}
@@ -132,7 +133,7 @@ export function AnswerObject({ o }: { o: PageObject }) {
     </span>
   );
   return (
-    <div style={{ position: "absolute", left: o.x, top: o.y, width: o.w ?? 752 }}>
+    <div data-obj={o.id} style={{ position: "absolute", left: o.x, top: o.y, width: o.w ?? 752 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <Diamond size={7} />
         <span style={{ fontSize: 11.5, letterSpacing: "0.15em", fontWeight: 700, color: "#8C2F51" }}>THE QUESTION · CARRIED FROM STEP 5</span>
@@ -176,7 +177,7 @@ export function CompareObject({ o }: { o: PageObject }) {
     }).catch(() => setBsb("BSB unavailable"));
   }, [ref]);
   return (
-    <div style={{ position: "absolute", left: o.x, top: o.y, width: o.w ?? 752 }}>
+    <div data-obj={o.id} style={{ position: "absolute", left: o.x, top: o.y, width: o.w ?? 752 }}>
       <div style={{ fontSize: 11, letterSpacing: "0.13em", fontWeight: 700, color: "#B7A2AC" }}>{d.label ?? "ESV | BSB"} · {ref.toUpperCase()}</div>
       <div style={{ display: "flex", marginTop: 6, background: "rgba(255,255,255,0.7)", borderRadius: 10, border: "1px solid #EDEBEE" }}>
         <div style={{ flex: 1, padding: "10px 12px", borderRight: "1px solid #F2F1F2" }}>
@@ -193,10 +194,14 @@ export function CompareObject({ o }: { o: PageObject }) {
   );
 }
 
-export function PageObjects({ objects, fresh, selectedId, editingId }: { objects: PageObject[]; fresh?: Set<string>; selectedId?: string | null; editingId?: string | null }) {
+export function PageObjects({ objects, fresh, selectedId, editingId, liftedId }: { objects: PageObject[]; fresh?: Set<string>; selectedId?: string | null; editingId?: string | null; liftedId?: string | null }) {
   return (
     <>
+      {liftedId && <style>{`[data-obj="${liftedId}"] { filter: drop-shadow(0 12px 22px rgba(35,34,39,0.22)); }`}</style>}
       {objects.map((o) => {
+        // the one being dragged rides above the page
+        const lifted = liftedId === o.id;
+        if (lifted) o = { ...o, data: o.data };
         switch (o.type) {
           case "header":
             return <PageHeaderObject key={o.id} o={o} />;

@@ -12,7 +12,7 @@ export type DeskContext = "study" | "sermon" | "free";
 export type Retention = "90d" | "forever" | "after_transcript";
 
 export interface PenDefaults {
-  tool: "fountain" | "gpen" | "pencil" | "marker" | "highlighter" | "eraser" | "lasso";
+  tool: "fountain" | "gpen" | "pencil" | "marker" | "highlighter" | "eraser" | "lasso" | "hand";
   brush: "fountain" | "gpen" | "pencil" | "marker";
   color: string;
   widthStep: 0 | 1 | 2;

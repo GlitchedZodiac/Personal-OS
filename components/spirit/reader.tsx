@@ -106,6 +106,8 @@ export interface SpiritReaderHandle {
   dismissSuggestion: (refInt: number) => void;
   suggestionAt: (refInt: number) => { refInt: number; category: string } | null;
   applyHighlight: (category: string, refStart?: number, refEnd?: number) => Promise<void>;
+  highlightsAt: (refStart: number, refEnd?: number) => { id: string; refStart: number; refEnd: number; category: string }[];
+  removeHighlights: (ids: string[]) => Promise<void>;
   getSelection: () => { sel: number | null; selEnd: number | null };
   getVerse: (refInt: number) => Verse | null;
   getData: () => PassageData | null;
@@ -169,12 +171,16 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
   // audio mini-player
   const [audOn, setAudOn] = useState(false);
   const [audPlaying, setAudPlaying] = useState(false);
-  const [audPos, setAudPos] = useState("0:00");
-  const [audSpeed, setAudSpeed] = useState(0); // index into SPEEDS
+  const [audSpeed, setAudSpeed] = useState(1); // index into SPEEDS
+  const [audT, setAudT] = useState(0);
+  const [audDur, setAudDur] = useState(0);
+  const [audLoading, setAudLoading] = useState(false);
+  const [scrubT, setScrubT] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audPending = useRef(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const SPEEDS = [1, 1.25, 1.5];
+  const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -280,14 +286,43 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
     return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   };
 
+  /** start playback from a real user gesture — the element is always mounted, so this lands */
+  const startAudio = () => {
+    setAudOn(true);
+    const el = audioRef.current;
+    if (!el || audPending.current) return;
+    audPending.current = true;
+    setAudLoading(true);
+    el.playbackRate = SPEEDS[audSpeed];
+    void el
+      .play()
+      .catch((err: DOMException) => {
+        if (err?.name !== "AbortError") toast.error("Audio couldn't start.");
+      })
+      .finally(() => {
+        audPending.current = false;
+      });
+  };
   const toggleAudio = () => {
     const el = audioRef.current;
     if (!el) return;
-    if (el.paused) {
-      el.play().catch(() => toast.error("Audio couldn't start."));
-    } else {
-      el.pause();
-    }
+    if (audPending.current) return; // a second tap while it loads must not cancel the first
+    if (el.paused) startAudio();
+    else el.pause();
+  };
+  const stopAudio = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.pause();
+    el.currentTime = 0;
+    setAudT(0);
+  };
+  const seekAudio = (sec: number) => {
+    const el = audioRef.current;
+    if (!el) return;
+    const t = Math.max(0, Math.min(audDur || el.duration || 0, sec));
+    el.currentTime = t;
+    setAudT(t);
   };
 
   // Current book/chapter + chapter chips (prev · current · next).
@@ -351,16 +386,44 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
     load();
   };
 
+  /**
+   * The one door every surface goes through — the phone sheet, the desk chips, the
+   * highlighter stroke, the verse-number tap, accepting a suggestion.
+   *   same category already there → TAKE IT OFF
+   *   a different category there  → REPLACE it (no more stacked, arbitrary colours)
+   *   nothing there               → mark it
+   */
   const applyHighlight = async (category: string, refStart?: number, refEnd?: number) => {
     const start = refStart ?? sel;
     if (!start) return;
     const end = refEnd ?? (refStart ? refStart : (selEnd ?? start));
+    const overlapping = (data?.layer.highlights ?? []).filter((h) => h.refStart <= end && h.refEnd >= start);
+    const same = overlapping.filter((h) => h.category === category);
+    if (same.length) {
+      await Promise.all(same.map((h) => fetch(`/api/spirit/layer?type=highlight&id=${h.id}`, { method: "DELETE" })));
+      // name the span that actually went, not the verse he tapped — one tap can clear a band
+      const lo = Math.min(...same.map((h) => h.refStart));
+      const hi = Math.max(...same.map((h) => h.refEnd));
+      finish(`Unmarked ${category} — ${formatRef(lo, hi)}`);
+      return;
+    }
+    if (overlapping.length) {
+      await Promise.all(overlapping.map((h) => fetch(`/api/spirit/layer?type=highlight&id=${h.id}`, { method: "DELETE" })));
+    }
     await fetch("/api/spirit/layer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "highlight", refStart: start, refEnd: end, category }),
     });
-    finish(`Marked ${category} — ${formatRef(start, end)}`);
+    finish(`${overlapping.length ? "Re-marked" : "Marked"} ${category} — ${formatRef(start, end)}`);
+  };
+  /** every highlight touching a span (the desk asks before offering "unmark") */
+  const highlightsAt = (a: number, b?: number) =>
+    (data?.layer.highlights ?? []).filter((h) => h.refStart <= (b ?? a) && h.refEnd >= a);
+  const removeHighlights = async (ids: string[]) => {
+    if (!ids.length) return;
+    await Promise.all(ids.map((id) => fetch(`/api/spirit/layer?type=highlight&id=${id}`, { method: "DELETE" })));
+    finish(`Unmarked — ${ids.length} highlight${ids.length === 1 ? "" : "s"} removed`);
   };
 
   const saveNote = async () => {
@@ -605,6 +668,8 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
     dismissSuggestion: (refInt: number) => setDismissed((prev) => new Set([...prev, refInt])),
     suggestionAt: (refInt: number) => suggestedFor(refInt),
     applyHighlight: (category: string, refStart?: number, refEnd?: number) => applyHighlight(category, refStart, refEnd),
+    highlightsAt: (a: number, b?: number) => highlightsAt(a, b),
+    removeHighlights: (ids: string[]) => removeHighlights(ids),
     getSelection: () => ({ sel, selEnd }),
     getVerse: (refInt: number) => data?.verses.find((v) => v.refInt === refInt) ?? null,
     getData: () => data,
@@ -754,11 +819,13 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
           )}
         </button>
         <button
-          onClick={() => setAudOn(true)}
-          className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#A63D63] text-[9px] text-white hover:bg-[#8C2F51]"
-          aria-label="Listen"
+          onClick={startAudio}
+          className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#A63D63] text-white hover:bg-[#8C2F51]"
+          aria-label="Listen to this chapter"
+          title="Listen — ESV audio"
         >
-          ▶
+          {/* the same play glyph the sermon replay uses, not a text triangle */}
+          <svg width="9" height="10" viewBox="0 0 9 10" fill="#FFFFFF"><path d="M0 0l9 5-9 5Z" /></svg>
         </button>
       </div>
 
@@ -1234,20 +1301,39 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
         ) : null}
       </p>
 
-      {/* ——— audio mini-player ——— */}
+      {/* ——— the Bible's audio: element always mounted so the first tap actually plays ——— */}
+      {data?.audioUrl && (
+        <audio
+          ref={audioRef}
+          src={data.audioUrl}
+          preload="metadata"
+          onLoadedMetadata={(e) => {
+            setAudDur(e.currentTarget.duration || 0);
+            e.currentTarget.playbackRate = SPEEDS[audSpeed];
+          }}
+          onWaiting={() => setAudLoading(true)}
+          onCanPlay={() => setAudLoading(false)}
+          onPlaying={() => setAudLoading(false)}
+          onPlay={() => setAudPlaying(true)}
+          onPause={() => setAudPlaying(false)}
+          onTimeUpdate={(e) => {
+            if (scrubT === null) setAudT(e.currentTarget.currentTime);
+          }}
+          onEnded={() => {
+            setAudPlaying(false);
+            setAudT(0);
+          }}
+          onError={() => {
+            setAudLoading(false);
+            setAudPlaying(false);
+          }}
+          style={{ display: "none" }}
+        />
+      )}
       {audOn && data?.audioUrl && (
         <Portal>
-          <audio
-            ref={audioRef}
-            src={data.audioUrl}
-            autoPlay
-            onPlay={() => setAudPlaying(true)}
-            onPause={() => setAudPlaying(false)}
-            onTimeUpdate={(e) => setAudPos(fmtTime(e.currentTarget.currentTime))}
-            onEnded={() => setAudPlaying(false)}
-          />
           <div
-            className={`${embedded ? "absolute inset-x-3 z-[32]" : "fixed inset-x-3.5 z-[80]"} flex items-center gap-2.5 rounded-2xl border px-3 py-2.5`}
+            className={`${embedded ? "absolute inset-x-3 z-[32]" : "fixed inset-x-3.5 z-[80]"} rounded-2xl border px-3 py-2.5`}
             style={{
               bottom: "calc(env(safe-area-inset-bottom) + 118px)",
               background: T.card,
@@ -1255,62 +1341,82 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
               boxShadow: "0 12px 32px rgba(20,15,18,0.28)",
             }}
           >
-            <button
-              onClick={toggleAudio}
-              className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[#A63D63] text-[10px] tracking-[-1px] text-white hover:bg-[#8C2F51]"
-              aria-label={audPlaying ? "Pause" : "Play"}
-            >
-              {audPlaying ? "❚❚" : "▶"}
-            </button>
-            <div className="min-w-0 flex-1">
-              <div
-                className="truncate text-xs font-semibold"
-                style={{ fontFamily: "var(--font-display)", color: T.ink }}
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={toggleAudio}
+                className={`flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[#A63D63] text-white hover:bg-[#8C2F51] ${audPlaying ? "desk-pulse" : ""}`}
+                aria-label={audPlaying ? "Pause" : "Play"}
               >
-                {data.canonical} · ESV audio
+                {audLoading ? (
+                  <span className="text-[10px]">···</span>
+                ) : audPlaying ? (
+                  <svg width="10" height="11" viewBox="0 0 10 11" fill="#FFFFFF"><rect x="0" y="0" width="3.2" height="11" rx="1" /><rect x="6.2" y="0" width="3.2" height="11" rx="1" /></svg>
+                ) : (
+                  <svg width="10" height="11" viewBox="0 0 10 11" fill="#FFFFFF"><path d="M0 0l10 5.5L0 11Z" /></svg>
+                )}
+              </button>
+              <button onClick={() => seekAudio((scrubT ?? audT) - 15)} className="flex-none rounded-full px-2 py-1 text-[10px] font-bold tabular-nums" style={{ background: T.chip, color: T.ink }} aria-label="Back 15 seconds">−15</button>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[11px] font-semibold" style={{ fontFamily: "var(--font-display)", color: T.ink }}>
+                  {data.canonical} · ESV audio
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(1, audDur)}
+                  step={0.5}
+                  value={scrubT ?? audT}
+                  onChange={(e) => setScrubT(Number(e.target.value))}
+                  onPointerUp={() => {
+                    if (scrubT !== null) seekAudio(scrubT);
+                    setScrubT(null);
+                  }}
+                  onKeyUp={() => {
+                    if (scrubT !== null) seekAudio(scrubT);
+                    setScrubT(null);
+                  }}
+                  aria-label="Scrub"
+                  className="mt-1 w-full"
+                  style={{ accentColor: "#A63D63", height: 14 }}
+                />
               </div>
-              <div className="text-[10px]" style={{ color: T.faint }}>
-                {audPlaying ? "reading with you" : "paused"} · {audPos}
-              </div>
+              <span className="flex-none text-[10px] tabular-nums" style={{ color: T.faint }}>
+                {fmtTime(scrubT ?? audT)} / {fmtTime(audDur)}
+              </span>
+              <button onClick={() => seekAudio((scrubT ?? audT) + 15)} className="flex-none rounded-full px-2 py-1 text-[10px] font-bold tabular-nums" style={{ background: T.chip, color: T.ink }} aria-label="Forward 15 seconds">+15</button>
+              <button onClick={stopAudio} className="flex h-7 w-7 flex-none items-center justify-center rounded-full" style={{ background: T.chip, color: T.ink }} aria-label="Stop">
+                <svg width="9" height="9" viewBox="0 0 9 9"><rect width="9" height="9" rx="1.6" fill="currentColor" /></svg>
+              </button>
+              <button
+                onClick={() => {
+                  const next = (audSpeed + 1) % SPEEDS.length;
+                  setAudSpeed(next);
+                  if (audioRef.current) audioRef.current.playbackRate = SPEEDS[next];
+                }}
+                className="flex-none rounded-full px-2.5 py-1.5 text-[10.5px] font-bold tabular-nums"
+                style={{ fontFamily: "var(--font-display)", background: T.chip, color: T.ink }}
+                aria-label="Playback speed"
+              >
+                {SPEEDS[audSpeed]}×
+              </button>
+              {cur && cur.chapter > 1 && (
+                <button onClick={() => setQ(`${BOOKS[cur.book - 1]} ${cur.chapter - 1}`)} className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-sm" style={{ background: T.chip, color: T.ink }} aria-label="Previous chapter">‹</button>
+              )}
+              {cur && cur.chapter < maxCh && (
+                <button onClick={() => setQ(`${BOOKS[cur.book - 1]} ${cur.chapter + 1}`)} className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-sm" style={{ background: T.chip, color: T.ink }} aria-label="Next chapter">›</button>
+              )}
+              <button
+                onClick={() => {
+                  audioRef.current?.pause();
+                  setAudOn(false);
+                }}
+                className="flex h-6 w-6 flex-none items-center justify-center rounded-full text-[11px]"
+                style={{ color: T.faint }}
+                aria-label="Close player"
+              >
+                ✕
+              </button>
             </div>
-            {cur && cur.chapter > 1 && (
-              <button
-                onClick={() => setQ(`${BOOKS[cur.book - 1]} ${cur.chapter - 1}`)}
-                className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-sm"
-                style={{ background: T.chip, color: T.ink }}
-                aria-label="Previous chapter"
-              >
-                ‹
-              </button>
-            )}
-            {cur && cur.chapter < maxCh && (
-              <button
-                onClick={() => setQ(`${BOOKS[cur.book - 1]} ${cur.chapter + 1}`)}
-                className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-sm"
-                style={{ background: T.chip, color: T.ink }}
-                aria-label="Next chapter"
-              >
-                ›
-              </button>
-            )}
-            <button
-              onClick={() => setAudSpeed((s) => (s + 1) % SPEEDS.length)}
-              className="flex-none rounded-full px-2.5 py-1.5 text-[10.5px] font-bold tabular-nums"
-              style={{ fontFamily: "var(--font-display)", background: T.chip, color: T.ink }}
-            >
-              {SPEEDS[audSpeed]}×
-            </button>
-            <button
-              onClick={() => {
-                audioRef.current?.pause();
-                setAudOn(false);
-              }}
-              className="flex h-6 w-6 flex-none items-center justify-center rounded-full text-[11px]"
-              style={{ color: T.faint }}
-              aria-label="Close player"
-            >
-              ✕
-            </button>
           </div>
         </Portal>
       )}

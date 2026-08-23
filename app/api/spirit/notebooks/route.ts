@@ -13,7 +13,7 @@ export async function GET() {
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     });
     const pages = await prisma.inkPage.findMany({
-      where: { notebookId: { in: notebooks.map((n) => n.id) } },
+      where: { notebookId: { in: notebooks.map((n) => n.id) }, deletedAt: null },
       select: { id: true, notebookId: true, recordingId: true, kind: true, updatedAt: true },
     });
     const out = notebooks.map((n) => {

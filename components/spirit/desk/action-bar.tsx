@@ -17,6 +17,8 @@ export function ActionBarA({
   onAction,
   onHighlight,
   showChips,
+  marked,
+  onUnmark,
 }: {
   x: number;
   y: number;
@@ -24,6 +26,9 @@ export function ActionBarA({
   onAction: (a: BarAction) => void;
   onHighlight: (category: string) => void;
   showChips: boolean;
+  /** categories already on this selection — the chips read ON and a ⌫ appears */
+  marked?: string[];
+  onUnmark?: () => void;
 }) {
   // rises beside the tip on the free-hand side so the palm never covers it
   const left = hand === "left" ? x + 16 : x - 290;
@@ -47,19 +52,28 @@ export function ActionBarA({
       </DarkPill>
       {showChips && (
         <div style={{ marginTop: 6, display: "flex", gap: 4, background: "#232227", borderRadius: 12, padding: 6 }}>
-          {HL_CATEGORIES.map((c) => (
-            <button key={c.name} type="button" onClick={() => onHighlight(c.name)} title={c.name} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "transparent", border: 0, cursor: "pointer", padding: "3px 6px", borderRadius: 8 }}>
-              <span style={{ width: 12, height: 12, borderRadius: "50%", background: c.color }} />
-              <span style={{ fontSize: 8, fontWeight: 600, color: "#F2F1F2" }}>{c.short}</span>
+          {HL_CATEGORIES.map((c) => {
+            const on = marked?.includes(c.name);
+            return (
+              <button key={c.name} type="button" onClick={() => onHighlight(c.name)} title={on ? `${c.name} — tap to take it off` : c.name} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: on ? "rgba(255,255,255,0.14)" : "transparent", border: 0, cursor: "pointer", padding: "3px 6px", borderRadius: 8 }}>
+                <span style={{ width: 12, height: 12, borderRadius: "50%", background: c.color, boxShadow: on ? "0 0 0 2px #FFFFFF" : "none" }} />
+                <span style={{ fontSize: 8, fontWeight: 600, color: "#F2F1F2" }}>{on ? "on" : c.short}</span>
+              </button>
+            );
+          })}
+          {marked && marked.length > 0 && (
+            <button type="button" onClick={() => onUnmark?.()} title="Remove the highlight from this verse" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "transparent", border: 0, cursor: "pointer", padding: "3px 8px", borderRadius: 8, borderLeft: "1px solid #3A3239" }}>
+              <span style={{ fontSize: 12, color: "#F2F1F2", lineHeight: "12px" }}>⌫</span>
+              <span style={{ fontSize: 8, fontWeight: 600, color: "#DCA8BE" }}>unmark</span>
             </button>
-          ))}
+          )}
         </div>
       )}
     </div>
   );
 }
 
-export function ActionBarB({ onAction, onHighlight, showChips }: { onAction: (a: BarAction) => void; onHighlight: (category: string) => void; showChips: boolean }) {
+export function ActionBarB({ onAction, onHighlight, showChips, marked, onUnmark }: { onAction: (a: BarAction) => void; onHighlight: (category: string) => void; showChips: boolean; marked?: string[]; onUnmark?: () => void }) {
   return (
     <div style={{ position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 2, background: "#232227", borderRadius: 11, padding: "4px 6px", animation: "fadeUp .2s ease both" }}>
@@ -79,12 +93,21 @@ export function ActionBarB({ onAction, onHighlight, showChips }: { onAction: (a:
       </div>
       {showChips && (
         <div style={{ position: "absolute", right: 0, top: 34, display: "flex", gap: 4, background: "#232227", borderRadius: 12, padding: 6, zIndex: 50 }}>
-          {HL_CATEGORIES.map((c) => (
-            <button key={c.name} type="button" onClick={() => onHighlight(c.name)} title={c.name} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "transparent", border: 0, cursor: "pointer", padding: "3px 6px", borderRadius: 8 }}>
-              <span style={{ width: 12, height: 12, borderRadius: "50%", background: c.color }} />
-              <span style={{ fontSize: 8, fontWeight: 600, color: "#F2F1F2", whiteSpace: "nowrap" }}>{c.short}</span>
+          {HL_CATEGORIES.map((c) => {
+            const on = marked?.includes(c.name);
+            return (
+              <button key={c.name} type="button" onClick={() => onHighlight(c.name)} title={on ? `${c.name} — tap to take it off` : c.name} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: on ? "rgba(255,255,255,0.14)" : "transparent", border: 0, cursor: "pointer", padding: "3px 6px", borderRadius: 8 }}>
+                <span style={{ width: 12, height: 12, borderRadius: "50%", background: c.color, boxShadow: on ? "0 0 0 2px #FFFFFF" : "none" }} />
+                <span style={{ fontSize: 8, fontWeight: 600, color: "#F2F1F2", whiteSpace: "nowrap" }}>{on ? "on" : c.short}</span>
+              </button>
+            );
+          })}
+          {marked && marked.length > 0 && (
+            <button type="button" onClick={() => onUnmark?.()} title="Remove the highlight from this verse" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "transparent", border: 0, cursor: "pointer", padding: "3px 8px", borderRadius: 8, borderLeft: "1px solid #3A3239" }}>
+              <span style={{ fontSize: 12, color: "#F2F1F2", lineHeight: "12px" }}>⌫</span>
+              <span style={{ fontSize: 8, fontWeight: 600, color: "#DCA8BE", whiteSpace: "nowrap" }}>unmark</span>
             </button>
-          ))}
+          )}
         </div>
       )}
     </div>

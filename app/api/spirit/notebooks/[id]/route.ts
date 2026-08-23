@@ -9,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const notebook = await prisma.spiritNotebook.findUnique({ where: { id } });
     if (!notebook) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const pages = await prisma.inkPage.findMany({
-      where: { notebookId: id },
+      where: { deletedAt: null, notebookId: id },
       orderBy: { updatedAt: "desc" },
       select: {
         id: true, kind: true, title: true, subtitle: true, dayId: true, seriesId: true, weekIndex: true,

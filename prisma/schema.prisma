@@ -1370,6 +1370,8 @@ model InkPage {
   editedAfterSubmit Boolean         @default(false)
   recordingId       String?
   strokeCount       Int             @default(0)
+  /// soft delete — a removed page rests in the trash instead of vanishing (2026-08-23)
+  deletedAt         DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 

@@ -23,7 +23,7 @@ import { PaneHeader, Chip, Segmented, Popover, Kicker } from "./ui";
 import { EyeIcon, LayersIcon, MarginIcon, PinIcon, PenIcon } from "./desk-icons";
 import { formatRef, refParts, BOOKS } from "@/lib/bible-refs";
 import { type Stroke } from "@/lib/ink";
-import { askPrompt } from "./dialog";
+import { askConfirm, askPrompt } from "./dialog";
 import { haptic } from "@/lib/haptics";
 
 const MARGIN_W = [0, 122, 170] as const; // none · wide · wider — none is none
@@ -95,6 +95,10 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
   const [popover, setPopover] = useState<RefPopoverState | null>(null);
   const [drag, setDrag] = useState<{ refStart: number; refEnd: number; label: string; text: string; x: number; y: number; hot: boolean } | null>(null);
   const [history, setHistory] = useState<string[]>([]);
+  // the overlay's own undo stack — the tool rail belongs to the notebook, so the Bible
+  // needs its own way back (two-finger tap, the header ⤺, and clear-the-layer)
+  const [inkPast, setInkPast] = useState<Stroke[][]>([]);
+  const [inkFuture, setInkFuture] = useState<Stroke[][]>([]);
   const pending = useRef<{ append: Stroke[]; remove: string[] }>({ append: [], remove: [] });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const creating = useRef<Promise<OverlayPage | null> | null>(null);
@@ -157,8 +161,24 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
     }
   }, []);
   useEffect(() => {
-    if (chapterKey) void loadOverlay(chapterKey, layerKey);
+    if (!chapterKey) return;
+    // save what is queued for the chapter/layer we are LEAVING before we load the next one —
+    // a scroll or a layer tap inside the 1.1 s debounce used to destroy those strokes
+    void (async () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      await flushRef.current();
+      await loadOverlay(chapterKey, layerKey);
+    })();
   }, [chapterKey, layerKey, loadOverlay]);
+  // and on the way out
+  useEffect(() => {
+    return () => {
+      void flushRef.current();
+    };
+  }, []);
   useEffect(() => {
     fetch("/api/spirit/ink?kind=overlay&take=500")
       .then((r) => (r.ok ? r.json() : null))
@@ -214,10 +234,14 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
     });
   }, [chapterKey, overlay, layerKey, layerContext, strokes.length]);
 
+  const flushRef = useRef(flush);
+  useEffect(() => {
+    flushRef.current = flush;
+  }, [flush]);
   const scheduleSave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => void flush(), 1100);
-  }, [flush]);
+    saveTimer.current = setTimeout(() => void flushRef.current(), 1100);
+  }, []);
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     void flush();
@@ -297,14 +321,16 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
     // STUDY — interpret, then evaporate
     const reader = readerRef.current;
     if (!reader) return "discard";
+    // Each gesture evaporates ONLY when it actually did something. A gesture that consumed
+    // nothing was handwriting that happened to look like one, and handwriting is never eaten.
     if (info.kind === "loop") {
       const vs = versesInBounds(info.clientPts);
       if (vs.length) {
         reader.select(vs[0], vs[vs.length - 1]);
         setBarAnchor(info.clientEnd);
         setShowChips(false);
+        return "discard";
       }
-      return "discard";
     }
     if (info.kind === "tick" || info.kind === "strike") {
       const v = refOf(verseElAt(info.clientStart.x, info.clientStart.y)) ?? refOf(verseElAt(info.clientEnd.x, info.clientEnd.y));
@@ -313,23 +339,24 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
         if (sug) {
           if (info.kind === "tick") void reader.acceptSuggestion(v, sug.category);
           else reader.dismissSuggestion(v);
+          return "discard";
         }
       }
-      return "discard";
     }
     if (info.kind === "underline") {
       const v = refOf(verseElAt(info.clientStart.x, info.clientStart.y));
       if (v) {
         reader.select(v);
         setBarAnchor(info.clientEnd);
+        return "discard";
       }
-      return "discard";
     }
-    return "discard";
+    // NOT a gesture — it is handwriting. Study mode evaporates MARKS, never words.
+    return "keep";
   };
   const onHighlighterStroke = (stroke: Stroke, info: StrokeEndInfo): "keep" | "discard" => {
     const vs = versesAlong(info.clientPts);
-    if (!vs.length) return "discard";
+    if (!vs.length) return stroke.region === "margin" ? "keep" : "discard"; // margin ink always stays
     // the verse-level highlight (the data the phone, the notebook and the layer queries use) …
     haptic("light");
     void readerRef.current?.applyHighlight(pen.hlCategory, vs[0], vs[vs.length - 1]);
@@ -389,10 +416,36 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
     const el = verseElAt(pt.clientX, pt.clientY);
     const ref = refOf(el);
     if (!ref) return false;
-    const v = readerRef.current?.getVerse(ref);
-    const text = v ? (v.lines ? v.lines.join(" ") : v.text) : "";
-    setDrag({ refStart: ref, refEnd: ref, label: formatRef(ref), text, x: pt.clientX, y: pt.clientY, hot: false });
+    // hold inside the current selection → the WHOLE span travels, not just the verse under the finger
+    const inSel = sel.start !== null && ref >= sel.start && ref <= (sel.end ?? sel.start);
+    const a = inSel ? sel.start! : ref;
+    const b = inSel ? (sel.end ?? sel.start!) : ref;
+    const parts: string[] = [];
+    for (let r = a; r <= b; r++) {
+      const v = readerRef.current?.getVerse(r);
+      if (v) parts.push(v.lines ? v.lines.join(" ") : v.text);
+    }
+    haptic("medium");
+    setDrag({ refStart: a, refEnd: b, label: formatRef(a, b), text: parts.join(" "), x: pt.clientX, y: pt.clientY, hot: false });
     return true;
+  };
+  // ——— finger range-select: start on a verse NUMBER (the gutter is the handle, so this can
+  // never steal a scroll started on the text) and drag up or down across the chapter ———
+  const onSelectDragStart = (c: { x: number; y: number }) => {
+    const els = document.elementsFromPoint(c.x, c.y).filter((el) => !isInkLayer(el)) as HTMLElement[];
+    const num = els[0]?.closest?.("[data-verse-number]") as HTMLElement | null;
+    if (!num) return false;
+    const ref = Number(num.getAttribute("data-verse-number"));
+    if (!ref) return false;
+    haptic("selection");
+    readerRef.current?.select(ref, ref);
+    return true;
+  };
+  const onSelectDragMove = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+    const a = refOf(verseElAt(from.x, from.y));
+    const b = refOf(verseElAt(to.x, to.y));
+    if (!a || !b) return;
+    readerRef.current?.select(Math.min(a, b), Math.max(a, b));
   };
   const onDragMove = (c: { x: number; y: number }) => {
     const hot = document.elementsFromPoint(c.x, c.y).some((el) => (el as HTMLElement).closest?.("[data-notebook-drop]"));
@@ -402,7 +455,10 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
     setDrag((d) => {
       if (d && !cancelled) {
         const hot = document.elementsFromPoint(c.x, c.y).some((el) => (el as HTMLElement).closest?.("[data-notebook-drop]"));
-        if (hot) emit({ type: "send-to-notes", refStart: d.refStart, refEnd: d.refEnd, label: d.label, text: d.text, source: `drag:${c.x},${c.y}` });
+        if (hot) {
+          haptic("success");
+          emit({ type: "send-to-notes", refStart: d.refStart, refEnd: d.refEnd, label: d.label, text: d.text, source: `drag:${c.x},${c.y}` });
+        }
       }
       return null;
     });
@@ -446,9 +502,49 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
 
   // ——— strokes change ———
   const onStrokesChange = (next: Stroke[], delta: { appended?: Stroke[]; removed?: string[] }) => {
+    setInkPast((h) => [...h.slice(-40), strokes]);
+    setInkFuture([]);
     setStrokes(next);
     if (delta.appended?.length) pending.current.append.push(...delta.appended);
     if (delta.removed?.length) pending.current.remove.push(...delta.removed);
+    scheduleSave();
+  };
+  /** step the overlay's ink back or forward; the diff against what is on screen becomes the save */
+  const stepInk = (dir: "undo" | "redo") => {
+    const from = dir === "undo" ? inkPast : inkFuture;
+    const target = from[from.length - 1];
+    if (!target) return;
+    if (dir === "undo") {
+      setInkPast((h) => h.slice(0, -1));
+      setInkFuture((f) => [...f, strokes]);
+    } else {
+      setInkFuture((f) => f.slice(0, -1));
+      setInkPast((h) => [...h, strokes]);
+    }
+    const removed = strokes.filter((s) => !target.find((t) => t.id === s.id)).map((s) => s.id);
+    const added = target.filter((t) => !strokes.find((s) => s.id === t.id));
+    setStrokes(target);
+    if (removed.length) pending.current.remove.push(...removed);
+    if (added.length) pending.current.append.push(...added);
+    haptic("light");
+    scheduleSave();
+  };
+  /** wipe every stroke on the layer showing — the only escape from a page of test scribbles */
+  const clearLayer = async () => {
+    if (!strokes.length) return;
+    const ok = await askConfirm({
+      title: `Clear your ink on ${title || "this chapter"}?`,
+      body: `${strokes.length} stroke${strokes.length === 1 ? "" : "s"} on the ${layerKey === "my" ? "My layer" : "current"} layer. Highlights on the verses stay — this is only the ink you drew.`,
+      confirmLabel: "Clear the ink",
+      danger: true,
+    });
+    if (!ok) return;
+    haptic("warning");
+    setInkPast((h) => [...h.slice(-40), strokes]);
+    setInkFuture([]);
+    pending.current.remove.push(...strokes.map((s) => s.id));
+    setStrokes([]);
+    setLayersOpen(false);
     scheduleSave();
   };
 
@@ -457,6 +553,13 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
   // a third-of-the-desk pane (~240px, three columns): one eye button that cycles, one mode chip that toggles
   const tiny = contentSize.w > 0 && contentSize.w < 360;
   const layerLabel = narrow ? "" : layerKey === "my" ? "MY LAYER" : layerContext && layerContext.key === layerKey ? layerContext.label.toUpperCase() : layerKey.toUpperCase();
+  const markedOnSelection = sel.start === null ? [] : Array.from(new Set((readerRef.current?.highlightsAt(sel.start, sel.end ?? sel.start) ?? []).map((h) => h.category)));
+  const unmarkSelection = () => {
+    if (sel.start === null) return;
+    const ids = (readerRef.current?.highlightsAt(sel.start, sel.end ?? sel.start) ?? []).map((h) => h.id);
+    haptic("warning");
+    void readerRef.current?.removeHighlights(ids);
+  };
   const selectedLabel = sel.start !== null ? `${formatRef(sel.start, sel.end ?? sel.start).toUpperCase()} SELECTED` : null;
   const free2 = Boolean(free);
   const canvasEnabled = overlayVisibility !== "hide";
@@ -469,7 +572,7 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
           <button type="button" onClick={() => { const prev = history[history.length - 1]; if (prev) { setHistory((h) => h.slice(0, -1)); onQueryChange(prev); } }} style={{ fontSize: 13, color: history.length ? "#96949B" : "#D9D7DC", background: "none", border: 0, cursor: history.length ? "pointer" : "default" }} aria-label="Back">‹</button>
         </>
       )}
-      {prefs.actionBar === "B" && sel.start !== null && <ActionBarB onAction={barAction} onHighlight={applyCategory} showChips={showChips} />}
+      {prefs.actionBar === "B" && sel.start !== null && <ActionBarB onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} />}
       {pinned && (
         <Chip tone="tint" title="type set when first inked — unpin to reflow"><PinIcon /> PAGE PINNED</Chip>
       )}
@@ -500,12 +603,23 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
                 <span style={{ fontSize: 9.5, color: "#96949B" }}>{l.strokeCount}</span>
               </button>
             ))}
+            {strokes.length > 0 && (
+              <button type="button" onClick={() => void clearLayer()} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 6, borderRadius: 9, fontSize: 11.5, fontWeight: 600, color: "#B4533F", background: "transparent", border: 0, cursor: "pointer" }}>
+                Clear my ink on this chapter · {strokes.length} stroke{strokes.length === 1 ? "" : "s"}
+              </button>
+            )}
             <button type="button" onClick={async () => { const nm = await askPrompt({ title: "Name the layer", placeholder: "e.g. Sunday · Galatians series" }); if (nm?.trim()) { setLayerKey(`layer:${nm.trim()}`); setLayersOpen(false); } }} style={{ fontSize: 10, color: "#96949B", padding: "8px 9px 2px", borderTop: "1px solid #EDEBEE", marginTop: 8, lineHeight: 1.5, background: "none", border: 0, cursor: "pointer", width: "100%", textAlign: "left" }}>
               + new layer · layers are contexts, not versions — ink saves to the active one
             </button>
           </Popover>
         )}
       </div>
+      {strokes.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 2, border: "1px solid #E4E2E6", background: "#FFFFFF", borderRadius: 99, padding: "2px 3px" }}>
+          <button type="button" title="Undo your last mark here" onClick={() => stepInk("undo")} disabled={!inkPast.length} style={{ width: 26, height: 22, borderRadius: 99, border: 0, background: "transparent", cursor: inkPast.length ? "pointer" : "default", opacity: inkPast.length ? 1 : 0.3, fontSize: 12, color: "#454349" }}>⤺</button>
+          <button type="button" title="Redo" onClick={() => stepInk("redo")} disabled={!inkFuture.length} style={{ width: 26, height: 22, borderRadius: 99, border: 0, background: "transparent", cursor: inkFuture.length ? "pointer" : "default", opacity: inkFuture.length ? 1 : 0.3, fontSize: 12, color: "#454349" }}>⤻</button>
+        </div>
+      )}
       {tiny ? (
         <button type="button" title={`overlay: ${overlayVisibility} — tap to cycle`} onClick={() => setOverlayVisibility(overlayVisibility === "show" ? "dim" : overlayVisibility === "dim" ? "hide" : "show")} style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid #E4E2E6", background: overlayVisibility === "hide" ? "#FFFFFF" : "#FAF9FA", borderRadius: 99, padding: "4px 8px", cursor: "pointer", opacity: overlayVisibility === "hide" ? 0.6 : 1 }}>
           <EyeIcon />
@@ -613,9 +727,18 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
               alpha={alpha}
               onStrokeEnd={onStrokeEnd}
               onHighlighterStroke={onHighlighterStroke}
+              onEraseTick={() => haptic("light")}
+              onUndoGesture={() => stepInk("undo")}
+              onRedoGesture={() => stepInk("redo")}
               onHover={onHover}
               onTap={onTap}
-              onHold={bibleMode === "study" ? onHold : undefined}
+              onHold={(pt) => (pt.pointerType === "pen" && bibleMode !== "study" ? false : onHold(pt))}
+              onSelectDragStart={onSelectDragStart}
+              onSelectDragMove={onSelectDragMove}
+              onSelectDragEnd={(c) => {
+                if (c) setBarAnchor(c);
+                haptic("light");
+              }}
               onDragMove={onDragMove}
               onDragEnd={onDragEnd}
               anchorFor={anchorFor}
@@ -647,7 +770,7 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
       )}
       {/* action bar A — rises beside the tip */}
       {prefs.actionBar === "A" && sel.start !== null && barAnchor && (
-        <ActionBarA x={barAnchor.x} y={barAnchor.y} hand={hand} onAction={barAction} onHighlight={applyCategory} showChips={showChips} />
+        <ActionBarA x={barAnchor.x} y={barAnchor.y} hand={hand} onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} />
       )}
       {drag && <RefCardGhost label={drag.label} text={drag.text} x={drag.x} y={drag.y} />}
       {popover && (
