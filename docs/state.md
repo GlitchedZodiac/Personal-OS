@@ -5,7 +5,100 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-23 (SPIRIT ON IPAD — round 6: the Pencil root cause found in the layer nobody had looked at — the NATIVE shell — plus two handwriting-destroying regressions round 5 shipped. First on-device instrumentation in the project's history.)
+**Last updated:** 2026-08-23 (SPIRIT ON IPAD — round 7: **he confirms the pen works** — "incredibly responsive". A splitting eraser, the dead margin explained and removed, a trimmed rail, honest chips, and a V2 design prompt written from a week of real use.)
+
+---
+
+## 2026-08-23 · Spirit on iPad — round 7: the pen is fixed; now the furniture
+
+**His verdict on round 6: "the pen works great now. it's incredibly responsive."**
+Seven rounds in, that is the headline. What follows is the list he sent next,
+written with the app in his hands.
+
+**THE ERASER NOW CUTS.** His words: *"I draw an L and I meant it to be lower case
+so I remove the bottom part - the entire L will erase."* It was whole-stroke by
+construction — the gesture collected stroke ids and the commit was one filter.
+`eraseFromStroke()` in `lib/ink.ts` drops the points the nib touched and returns
+the surviving runs, so rubbing an end shortens a stroke and rubbing the middle
+splits it in two. During the gesture the original is hidden and its survivors are
+drawn on the live layer at full strength, so the letter visibly loses its foot
+under the nib.
+
+I shipped this **twice**. The first version classified each sampled POINT as
+in-or-out — the tempting small version, and wrong for exactly the reason
+`strokeDistanceToSeg` exists: a fast Pencil samples sparsely, so the cut landed
+up to a whole segment from the nib and a two-sample stroke could not be cut at
+all. The cut is now solved in the polyline's PARAMETER space (solve the quadratic
+per segment per disc, merge the intervals, materialise the complement with
+interpolated endpoints), the eraser's own path is densified so a fast sweep
+leaves no slivers, and the anchor offset moved INSIDE the primitive — a
+page-space disc applied to Bible-overlay ink cuts where the verse *used to be*,
+which is silent mutilation that would not surface until the chapter reflowed.
+**Proven on device data:** a two-sample stroke spanning 648 page units, one dab
+at its midpoint, becomes two pieces with a 54-unit hole exactly at the nib.
+
+**TWO SAVE BUGS FOUND ON THE WAY**, both of which bite independently:
+a stroke drawn and erased inside one 1.2 s debounce window queued `append[X]` AND
+`remove[X]`; the server applies removals first, against a copy that never had X,
+then appends it — **the erased stroke came back on the next load**. Both panes
+now cancel a queued append when its id is removed. And the interaction between
+that guard and the new fragments, caught *only* by driving the real app:
+fragments originally reused the parent's id, so the guard ate them and half the
+stroke vanished. Every fragment gets a fresh id, with a comment saying why.
+
+**THE DEAD MARGIN.** He could not write on a strip at the right of the page. The
+page is *already* fit-to-width at zoom 1 — so this was zoom having drifted BELOW
+1. The pure-pan deadband was 0.5%, and human fingers change separation by more
+than that during an ordinary two-finger pan, so most pans fell through to the
+zoom branch and multiplied zoom by ~0.99 each time. A session of panning walks
+down to ~0.9, an 8% dead strip. Zoom now floors at fit-to-width — literally what
+he asked for — the deadband is 4%, and the canvas is at least as tall as the
+scroller.
+
+**THE RAIL, TRIMMED TO WHAT THE PEN DOES.** Select (lasso) and Verse (reference
+card) removed — he selects by holding and dragging and drops references the same
+way. Photo and Speak moved to the desk bar, riding the desk event bus so the
+notebook still owns the page context they write into. Four fewer buttons is
+~130 px more travel for the SIZE and OPAC sliders he reported as scrunched.
+
+**"PAGE PINNED" WAS A LIE.** The chip announced a feature that does not exist:
+its only effect is that the Aa type sheet will not open, so the footer's "type
+size was set when the page was pinned" was false — and it occupied a permanent
+row on BOTH panes. Footer gone; the chip now says TEXT SIZE LOCKED, explains
+itself, and is itself the unlock. It no longer locks while the ink layer is
+hidden, where there is nothing to protect.
+
+**HEADER OVERFLOW.** The pane header clipped its right-hand controls because the
+breakpoints were measured against raw pane width while the row gains chips
+conditionally. Those chips are now spent from a width BUDGET, plus `minWidth:0`
+and `overflow:hidden` as a guarantee.
+
+**Also landed:** the eraser hot path (the sweep ran inside the coalesced-sample
+loop — ~47,000 distance evaluations per pointermove on a 300-stroke page; now one
+sweep per event, with a WeakMap-cached centreline box and a 300-case fuzz test
+holding it against brute force), `SpiritReader` memoised with its six inline
+props stabilised, and a real bug: `const Portal = embedded ? ({children}) => …`
+minted a new component TYPE every render, remounting the whole sheet subtree on
+every keystroke.
+
+**V2 DESIGN PROMPT:** `docs/design/pitaya-ipad-v2-design-prompt.md`. Its thesis is
+his — *the chrome is eating the page*. Carries the tokens forward unchanged,
+states the hardware truth V1 got wrong (Air 5 / Pencil 2: no hover, no squeeze,
+no haptics), and asks for seven screens including the pen menu opening in place
+on double-tap and the nav collapsed into one top band.
+
+**Build/tests:** build green, 180/180 vitest (28 in `ink-eraser` alone).
+**Deployed:** `main` `f2720b4`. **Companion installed and running on his iPad**
+(`ebc315c`, PID verified) — round 7 is all web, so it reaches him on a reload.
+
+**Known and deferred:** Bible overlay ink still drifts when the pane WIDTH
+changes (root-caused: strokes anchor to a verse box by raw pixel offset, so
+horizontal reflow cannot work; the fix is per-word anchoring, and it wants the V2
+answer on whether the column reflows at all).
+
+---
+
+**Superseded:** 2026-08-23 (SPIRIT ON IPAD — round 6: the Pencil root cause found in the layer nobody had looked at — the NATIVE shell — plus two handwriting-destroying regressions round 5 shipped. First on-device instrumentation in the project's history.)
 
 ---
 
