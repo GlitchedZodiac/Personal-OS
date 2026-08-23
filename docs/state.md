@@ -124,6 +124,11 @@ in it; the tap test measured accumulated arc length instead of displacement (a 2
 racks that up standing still, so real taps never registered); the palm window came down from
 900 ms to 320 ms and now exempts a finger arriving while another is already down.
 
+**Deployed 2026-08-23:** `main` `3700349` live on personal-os-plum.vercel.app (verified in a
+real browser: auth, the ink list and the new `?trash=1` list all 200; his John 2 (57 strokes)
+and John 1 (4) present). The companion was rebuilt and re-installed on his iPad and launched
+(PID confirmed). The free-team profile still expires ~2026-08-29.
+
 Build green, 149/149 tests, tsc + lint clean. Test artifacts purged; his John 1 and John 2
 overlays intact.
 
