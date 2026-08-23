@@ -397,7 +397,10 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
     const start = refStart ?? sel;
     if (!start) return;
     const end = refEnd ?? (refStart ? refStart : (selEnd ?? start));
-    const overlapping = (data?.layer.highlights ?? []).filter((h) => h.refStart <= end && h.refEnd >= start);
+    // only highlights CONTAINED in what he selected — tapping one verse inside a long band
+    // must never wipe that band off the verses he did not touch
+    const touching = (data?.layer.highlights ?? []).filter((h) => h.refStart <= end && h.refEnd >= start);
+    const overlapping = touching.filter((h) => h.refStart >= start && h.refEnd <= end);
     const same = overlapping.filter((h) => h.category === category);
     if (same.length) {
       await Promise.all(same.map((h) => fetch(`/api/spirit/layer?type=highlight&id=${h.id}`, { method: "DELETE" })));

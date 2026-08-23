@@ -106,6 +106,24 @@ The bridge works and is correct on iPhone, but he will feel nothing on the iPad.
 things would "tick in your hand" — that was wrong. Every haptic call site was checked to
 confirm it also has a visual confirmation, so nothing depends on a tick he cannot feel.
 
+### The adversarial pass earned its keep
+Five reviewers plus a verdict agent tried to REFUTE the fixes rather than confirm them. They
+proved the mirror and the tap fix correct at file:line, refuted six findings as already-fixed,
+and found **two ink-loss paths nobody else had**, both matching his symptom exactly:
+- **A cancelled stroke was thrown away.** `pointercancel` (a system gesture, an interrupted
+  capture) ran `finishStroke(cancelled)`, which returned without committing — ink he had
+  already watched appear was erased. A cancelled DRAWING now keeps.
+- **An open stroke died with the component.** Nothing closed `cur.current` on unmount, so a
+  page switch, layout change or rotation with the pen down dropped the stroke. It now commits.
+Also fixed from their list: the gesture counters leaked past the new early-returns (a stray
+single-finger tap could fire the two-finger UNDO and delete the stroke he had just written);
+the notebook's new object-hold could hijack a writing pen mid-word; the overlay's undo stack
+crossed chapters/layers (it now resets with the overlay — that was real corruption); the
+highlight toggle deleted bands that merely OVERLAPPED the selection instead of ones contained
+in it; the tap test measured accumulated arc length instead of displacement (a 240 Hz Pencil
+racks that up standing still, so real taps never registered); the palm window came down from
+900 ms to 320 ms and now exempts a finger arriving while another is already down.
+
 Build green, 149/149 tests, tsc + lint clean. Test artifacts purged; his John 1 and John 2
 overlays intact.
 
