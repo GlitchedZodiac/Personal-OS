@@ -520,6 +520,8 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   // photos all move; the ink stays put. Saved through the same objects PATCH. ———
   const [moveObj, setMoveObj] = useState<{ id: string; dx: number; dy: number } | null>(null);
   const onObjectHold = (pt: { x: number; y: number; clientX: number; clientY: number; pointerType: string }) => {
+    // a pen holding a writing tool is WRITING — pausing mid-word must never lift an object
+    if (pt.pointerType === "pen" && (pen.tool === "fountain" || pen.tool === "gpen" || pen.tool === "pencil" || pen.tool === "marker")) return false;
     const o = hitObject(objects, pt.x, pt.y);
     if (!o || o.type === "section" || o.type === "header") return false;
     pushHistory();

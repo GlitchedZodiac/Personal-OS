@@ -384,6 +384,16 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   // render (his "incomplete scribbles"; the server still got them via the append queue,
   // so they reappeared on reload). Every commit/erase now reads and advances this mirror,
   // and the mirror re-syncs to the props on each render.
+  // If this canvas unmounts mid-stroke — a page switch, a layout change, a rotation — the
+  // stroke in flight is committed rather than lost with the component.
+  const closeRef = useRef<(() => void) | null>(null);
+  useEffect(
+    () => () => {
+      closeRef.current?.();
+    },
+    [],
+  );
+
   const redrawRef = useRef<(() => void) | null>(null);
   const redrawLive = useCallback(() => {
     const c = liveRef.current;
@@ -585,6 +595,12 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     finishStroke({ pointerId: st.pointerId, clientX: last.x, clientY: last.y, pointerType: st.pointerType } as unknown as React.PointerEvent, false);
   };
 
+  // the unmount cleanup calls through this ref (closeStroke is redefined every render)
+  closeRef.current = () => {
+    const st = cur.current;
+    if (st) closeStroke(st);
+  };
+
   const finishStroke = (e: React.PointerEvent, cancelled = false) => {
     const st = cur.current;
     if (!st || e.pointerId !== st.pointerId) return;
@@ -606,6 +622,21 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     const clientEnd = st.clientPts[st.clientPts.length - 1];
     if (cancelled) {
       setErasedNow(null);
+      // a cancelled DRAWING keeps: pointercancel arrives for system gestures and lost
+      // captures, and he has already seen the stroke on the page. Only the interpreted
+      // modes (erase/lasso) and one-sample dabs are dropped.
+      if (st.mode === "draw" && st.stroke.pts.length > 2) {
+        const cPts = st.stroke.pts;
+        commit({ ...st.stroke, pts: cPts }, {
+          kind: "stroke",
+          pts: cPts,
+          bounds: strokeBoundsOf(cPts),
+          tool: pen.tool,
+          clientStart,
+          clientEnd,
+          clientPts: st.clientPts,
+        });
+      }
       redrawLive();
       return;
     }
@@ -820,6 +851,11 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       if (touchHold.current) {
         clearTimeout(touchHold.current);
         touchHold.current = null;
+      }
+      // the gesture counters must be cleared on EVERY exit, or a later single tap is
+      // mistaken for the two-finger undo and deletes the stroke he just wrote
+      if (touches.current.size === 0 && (selDrag.current?.id === e.pointerId || touchDrag.current === e.pointerId)) {
+        maxTouches.current = 0;
       }
       if (selDrag.current?.id === e.pointerId) {
         selDrag.current = null;
