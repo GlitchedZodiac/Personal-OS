@@ -124,6 +124,11 @@ in it; the tap test measured accumulated arc length instead of displacement (a 2
 racks that up standing still, so real taps never registered); the palm window came down from
 900 ms to 320 ms and now exempts a finger arriving while another is already down.
 
+**Deployed 2026-08-23:** `main` `3700349` live on personal-os-plum.vercel.app (verified in a
+real browser: auth, the ink list and the new `?trash=1` list all 200; his John 2 (57 strokes)
+and John 1 (4) present). The companion was rebuilt and re-installed on his iPad and launched
+(PID confirmed). The free-team profile still expires ~2026-08-29.
+
 Build green, 149/149 tests, tsc + lint clean. Test artifacts purged; his John 1 and John 2
 overlays intact.
 
@@ -173,8 +178,10 @@ recordings stagger-in, ref-card drop, tool pop, play-button pulse, compact pane 
 stagger; `prefers-reduced-motion` honoured. **Companion rebuilt and installed on his iPad**
 (haptics need the native bridge).
 
+**Deployed 2026-08-22 (round 3):** `main` `ae3b60a` → Vercel production Ready (51 s build). Verified in a real browser with the minted cookie (curl polling tripped Vercel's Security Checkpoint — `x-vercel-mitigated: challenge` — so never poll prod with curl in a loop; one `vercel ls` tells you the state): `/spirit/desk-settings` renders the round-2 copy, the round-3 motion keyframes and the dialog host are in the page. **Companion re-installed on his iPad** (`devicectl`, 2026-08-22 ~17:58) with the haptic bridge + native alert/confirm/prompt handlers.
+
 Verified on the dev server: the picker fits · the warning dialog over his real page (cancelled)
-· ··· menu · tab animations. Build green, 149/149, tsc + lint clean.
+· ··· menu · tab animations · shelf multi-select (Delete 1 · Done) · portrait Home stacked. Build green, 149/149, tsc + lint clean.
 
 ## 2026-08-22 — SPIRIT ON IPAD · round 2: his first hour on the iPad Air → eleven fixes, merged + deployed
 
@@ -229,6 +236,8 @@ page, and sent screenshots + eleven notes. Each one, what it was, what shipped:
 + Settings no longer promises "double-tap → eraser · squeeze → settings" (his Air 5 +
   Pencil 2 can't do either; a native `UIPencilInteraction` bridge is the deferred way
   to make double-tap real).
+
+**Deployed 2026-08-22 (round 2):** `main` `65957d9` live on personal-os-plum.vercel.app — verified with a minted cookie: `/home`, the sermon desk, settings, shelf → 200; `POST /api/spirit/sermon {action:"open", fresh:true}` made a fresh page (round-2 code) and was deleted again; his Sunday page (25 strokes) untouched; desk prefs carry margin none + five sermon tabs. The companion needs no reinstall — this is the web layer.
 
 Verified on the dev server (Browser pane, 1180×820): tab strip · All-three columns ·
 Notebook single pane · Scratch stroke persisted · highlighter band + verse highlight
