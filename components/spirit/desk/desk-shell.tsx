@@ -24,6 +24,8 @@ import { SEAM_STOPS_H, SEAM_STOPS_V, nearestStop, type DeskContext } from "@/lib
 import { hlColor } from "./desk-state";
 import { askPrompt } from "./dialog";
 import { haptic } from "@/lib/haptics";
+import { BOOKS, refParts } from "@/lib/bible-refs";
+import { toast } from "sonner";
 
 export type DocKind = "bible" | "reference" | "teaching" | "notebook" | "source" | "sunday";
 
@@ -101,6 +103,9 @@ export function DeskShell(props: DeskShellProps) {
   const [nbFrac, setNbFrac] = useState(prefs.layouts[context]?.nbFrac ?? 0.535);
   const [stackFrac, setStackFrac] = useState(prefs.layouts[context]?.stackFrac ?? 0.6);
   const [mainQ, setMainQ] = useState<string | null>(props.mainQ);
+  // a verse the shell asked a Bible pane to show. `seq` re-arms it so tapping the same
+  // reference card twice jumps twice.
+  const [jump, setJump] = useState<{ refStart: number; refEnd: number | null; seq: number; to: "main" | "reference" } | null>(null);
   const [refQ, setRefQ] = useState<string | null>(props.refQ ?? props.mainQ);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [dragging, setDragging] = useState<"v" | "h" | null>(null);
@@ -159,6 +164,21 @@ export function DeskShell(props: DeskShellProps) {
     if (e.type === "open-reference" && !layout.text.includes("reference")) {
       // no reference pane: the main follows
       setMainQ(e.q);
+    }
+    if (e.type === "jump-reference-pane") {
+      // The panes handle this themselves when one is open. The case only the SHELL can fix is
+      // a tab with no Bible at all — Study is Notebook | Teaching — where the tap used to fire
+      // into an empty room and look broken.
+      const hasBible = layout.text.includes("reference") || layout.text.includes("bible");
+      if (hasBible) return;
+      const p = refParts(e.refStart);
+      const book = BOOKS[p.book - 1];
+      if (!book) return; // never ask for the chapter "undefined 4"
+      setMainQ(`${book} ${p.chapter}`);
+      setLayout((l) => ({ preset: "custom", writing: l.writing, text: ["bible", ...l.text.filter((k) => k !== "bible")].slice(0, 2) as DocKind[] }));
+      setJump((j) => ({ refStart: e.refStart, refEnd: e.refEnd ?? null, seq: (j?.seq ?? 0) + 1, to: "main" }));
+      toast(`Opened ${book} ${p.chapter}`);
+      haptic("selection");
     }
   }, [layout]);
 
@@ -268,7 +288,7 @@ export function DeskShell(props: DeskShellProps) {
       case "notebook":
         return <NotebookPane railSide={portrait ? (writingLeft ? "right" : "left") : railSide} context={context} initialPageId={pageId ?? null} dayId={dayId ?? null} onKicker={kicker} />;
       case "bible":
-        return <BiblePane role="main" query={mainQ} onQueryChange={setMainQ} free={free} dayId={dayId ?? null} layerContext={notebookPageLayerContext} onKicker={kicker} />;
+        return <BiblePane role="main" query={mainQ} onQueryChange={setMainQ} pendingJump={jump?.to === "main" ? jump : null} free={free} dayId={dayId ?? null} layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "reference":
         return <BiblePane role="reference" query={refQ} onQueryChange={setRefQ} free layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "teaching":

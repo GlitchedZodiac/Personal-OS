@@ -32,6 +32,8 @@ const MARGIN_LABEL = ["MARGIN · NONE", "MARGIN · WIDE", "MARGIN · WIDER"] as 
 export interface BiblePaneProps {
   role: "main" | "reference";
   query: string | null;
+  /** a verse the shell wants selected once this pane has the passage — bumped `seq` re-arms it */
+  pendingJump?: { refStart: number; refEnd: number | null; seq: number } | null;
   onQueryChange: (q: string) => void;
   free?: boolean;
   dayId?: string | null;
@@ -68,7 +70,7 @@ function refOf(el: HTMLElement | null): number | null {
   return v ? Number(v) : null;
 }
 
-export function BiblePane({ role, query, onQueryChange, free, dayId, layerContext, onKicker, headerExtra }: BiblePaneProps) {
+export function BiblePane({ role, query, onQueryChange, pendingJump, free, dayId, layerContext, onKicker, headerExtra }: BiblePaneProps) {
   const desk = useDesk();
   const { pen, bibleMode, setBibleMode, overlayVisibility, setOverlayVisibility, overlayMargin, setOverlayMargin, hand, prefs, emit } = desk;
   const readerRef = useRef<SpiritReaderHandle | null>(null);
@@ -81,6 +83,41 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
   const [sel, setSel] = useState<{ start: number | null; end: number | null }>({ start: null, end: null });
   const [barAnchor, setBarAnchor] = useState<{ x: number; y: number } | null>(null);
   const scrolledTo = useRef<string | null>(null);
+  /** select a verse in the passage that is already on screen, and bring it into view */
+  const selectVerseNow = useCallback((refStart: number, refEnd: number | null) => {
+    requestAnimationFrame(() => {
+      readerRef.current?.select(refStart, refEnd);
+      const el = contentRef.current?.querySelector<HTMLElement>(`#v-${refStart}`);
+      const sc = scrollRef.current;
+      if (el && sc) {
+        const top = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 90;
+        sc.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      }
+    });
+  }, []);
+  const [history, setHistory] = useState<string[]>([]);
+  /** a verse to select as soon as the next passage finishes loading */
+  const pendingSelect = useRef<{ refStart: number; refEnd: number | null } | null>(null);
+  /**
+   * Bring a verse into view. If the pane must change chapter, arm the selection and let
+   * `onPassageLoaded` fire it; if the pane is ALREADY on that chapter, `onQueryChange` sets an
+   * identical string, the reader never reloads, `onPassageLoaded` never fires — so select now
+   * instead of leaving the request armed to hijack whatever chapter he opens next.
+   */
+  const jumpToVerse = useCallback((refStart: number, refEnd: number | null) => {
+    const p = refParts(refStart);
+    const book = BOOKS[p.book - 1];
+    if (!book) return; // an out-of-range ref would ask for the chapter "undefined 4"
+    const target = `${book} ${p.chapter}`;
+    if (query && query.trim().toLowerCase() === target.toLowerCase()) {
+      pendingSelect.current = null;
+      selectVerseNow(refStart, refEnd);
+      return;
+    }
+    setHistory((h) => (query ? [...h, query].slice(-12) : h));
+    pendingSelect.current = { refStart, refEnd };
+    onQueryChange(target);
+  }, [query, onQueryChange, selectVerseNow]);
   const [showChips, setShowChips] = useState(false);
   const [hover, setHover] = useState<{ left: number; top: number; width: number; num: number } | null>(null);
   const [hoverTip, setHoverTip] = useState<{ x: number; y: number } | null>(null);
@@ -94,7 +131,6 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
   const [inkChapters, setInkChapters] = useState<Set<number>>(new Set());
   const [popover, setPopover] = useState<RefPopoverState | null>(null);
   const [drag, setDrag] = useState<{ refStart: number; refEnd: number; label: string; text: string; x: number; y: number; hot: boolean } | null>(null);
-  const [history, setHistory] = useState<string[]>([]);
   // the overlay's own undo stack — the tool rail belongs to the notebook, so the Bible
   // needs its own way back (two-finger tap, the header ⤺, and clear-the-layer)
   const [inkPast, setInkPast] = useState<Stroke[][]>([]);
@@ -115,21 +151,30 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
   // ——— desk events: open in the reference Bible / main ———
   useDeskEvent(
     (e) => {
-      if (e.type === "open-reference" && role === "reference") {
+      // A jump belongs to the REFERENCE pane when one is open. In a tab that has no
+      // reference pane (Notebook | Bible, for instance) the main Bible takes it — the tap
+      // used to go nowhere at all.
+      const soleBible = role === "main" && !document.querySelector('[data-pane-role="reference"]');
+      if (e.type === "open-reference" && (role === "reference" || soleBible)) {
         setHistory((h) => (query ? [...h, query].slice(-12) : h));
         onQueryChange(e.q);
       } else if (e.type === "open-main" && role === "main") {
         onQueryChange(e.q);
-      } else if (e.type === "jump-reference-pane" && role === "reference") {
-        const p = refParts(e.refStart);
-        const book = BOOKS[p.book - 1];
-        setHistory((h) => (query ? [...h, query].slice(-12) : h));
-        onQueryChange(`${book} ${p.chapter}`);
-        setTimeout(() => readerRef.current?.select(e.refStart, e.refEnd ?? null), 500);
+      } else if (e.type === "jump-reference-pane" && (role === "reference" || soleBible)) {
+        jumpToVerse(e.refStart, e.refEnd ?? null);
+        haptic("selection");
       }
     },
-    [role, query, onQueryChange],
+    [role, query, onQueryChange, jumpToVerse],
   );
+
+  // the shell routes the jump here when the tab had no Bible pane at all and it had to open one
+  const lastJump = useRef(0);
+  useEffect(() => {
+    if (!pendingJump || pendingJump.seq === lastJump.current) return;
+    lastJump.current = pendingJump.seq;
+    jumpToVerse(pendingJump.refStart, pendingJump.refEnd);
+  }, [pendingJump, jumpToVerse]);
 
   // ——— content size → overlay canvas size ———
   useEffect(() => {
@@ -651,7 +696,7 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
   );
 
   return (
-    <div ref={paneRef} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, position: "relative", background: "#FFFFFF" }}>
+    <div ref={paneRef} data-pane-role={role} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, position: "relative", background: "#FFFFFF" }}>
       <PaneHeader kicker={role === "main" ? "BIBLE" : "REFERENCE"} title={narrow ? undefined : `${title || query || "…"}`} meta={narrow ? undefined : "ESV"} onKicker={onKicker} right={headerRight}>
         {selectedLabel && <Chip tone="tint" style={{ color: "#A63D63" }}>{selectedLabel}</Chip>}
       </PaneHeader>
@@ -675,6 +720,11 @@ export function BiblePane({ role, query, onQueryChange, free, dayId, layerContex
             onQueryChange={onQueryChange}
             onPassageLoaded={(d) => {
               setTitle(d.canonical);
+              const ps = pendingSelect.current;
+              if (ps) {
+                pendingSelect.current = null;
+                selectVerseNow(ps.refStart, ps.refEnd);
+              }
               // opening a study reopens the Bible AT the assignment — once per chapter
               // load; the verses commit a tick after the data arrives, so retry briefly
               const key = `${d.canonical}`;

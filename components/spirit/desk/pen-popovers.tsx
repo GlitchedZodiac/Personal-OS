@@ -1,7 +1,7 @@
 "use client";
 
 // Three popovers from the design: the pen settings (02c / 04 — Pencil
-// squeeze opens it; tools, color, width, BIBLE MODE toggle, gesture hints,
+// tools, color, width, BIBLE MODE toggle, gesture hints,
 // "All pen settings →"), the brush library (3b) and the free palette (3c).
 
 import Link from "next/link";
@@ -47,8 +47,7 @@ export function PenPopover({ style, onClose, showBibleMode = true }: { style?: R
   return (
     <Popover style={style} onClose={onClose} width={296}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Kicker>PEN · PENCIL PRO</Kicker>
-        <span style={{ fontSize: 9, color: "#A9A7AE" }}>or squeeze to open</span>
+        <Kicker>PEN</Kicker>
       </div>
       <div style={{ display: "flex", gap: 5, marginTop: 10 }}>
         {TOOLS.map((t) => {
@@ -112,7 +111,7 @@ export function PenPopover({ style, onClose, showBibleMode = true }: { style?: R
         </>
       )}
       <div style={{ fontSize: 10, color: "#96949B", lineHeight: 1.6, marginTop: 10, background: "#FAF9FA", borderRadius: 10, padding: "9px 11px" }}>
-        <span style={{ color: "#454349", fontWeight: 600 }}>Squeeze</span> — this popover · <span style={{ color: "#454349", fontWeight: 600 }}>double-tap</span> — pen ⇄ eraser · <span style={{ color: "#454349", fontWeight: 600 }}>barrel roll</span> — nib angle · <span style={{ color: "#454349", fontWeight: 600 }}>hover</span> — rail + tool chip
+<span style={{ color: "#454349", fontWeight: 600 }}>Double-tap</span> the pencil — pen ⇄ eraser. Set it in iPad Settings › Apple&nbsp;Pencil.
       </div>
       <div style={{ marginTop: 9, display: "flex", justifyContent: "flex-end" }}>
         <Link href="/spirit/desk-settings" style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51" }}>All pen settings →</Link>
