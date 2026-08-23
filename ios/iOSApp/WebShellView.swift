@@ -47,6 +47,7 @@ final class ShellViewController: UIViewController {
     }
     var onShake: (() -> Void)?
     private var webView: WKWebView?
+    private var lastActiveAt = Date()
 
     override var canBecomeFirstResponder: Bool { true }
 
@@ -122,6 +123,29 @@ final class ShellViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         becomeFirstResponder()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(refreshIfStale),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+
+    /// A WKWebView document loaded once in viewDidLoad can survive weeks of suspend and resume,
+    /// so the app can sit on a months-old bundle while the server has long since moved on —
+    /// which is exactly how a round of Pencil fixes came to be judged against a build that was
+    /// never installed. Reload when the app has been away long enough that it cannot be
+    /// mid-thought, and never while there is unsaved ink in flight.
+    @objc private func refreshIfStale() {
+        guard let webView, Date().timeIntervalSince(lastActiveAt) > 900 else {
+            lastActiveAt = Date()
+            return
+        }
+        lastActiveAt = Date()
+        webView.evaluateJavaScript("window.__pitayaHasUnsavedInk === true") { [weak webView] result, _ in
+            if (result as? Bool) == true { return }
+            webView?.reload()
+        }
     }
 
     override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {

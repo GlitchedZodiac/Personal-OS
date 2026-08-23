@@ -36,7 +36,9 @@ export function PenDebug() {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <strong style={{ fontSize: 10, letterSpacing: 0.6 }}>PEN TRACE</strong>
+        <strong style={{ fontSize: 10, letterSpacing: 0.6 }}>
+          PEN TRACE <span style={{ opacity: 0.55, fontWeight: 400 }}>build {process.env.NEXT_PUBLIC_BUILD}</span>
+        </strong>
         <span style={{ display: "flex", gap: 6 }}>
           <button onClick={() => penTrace.reset()} style={btn}>reset</button>
           <button onClick={() => setOpen((o) => !o)} style={btn}>{open ? "hide" : "show"}</button>

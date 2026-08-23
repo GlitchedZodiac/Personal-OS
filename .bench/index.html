@@ -1,0 +1,10 @@
+<!doctype html><meta charset=utf8><title>bench</title><body><div id=root></div><script src="bundle.js"></script>
+<script>
+window.run = async () => {
+  const out = [];
+  for (const [v,n] of [[40,5],[40,40],[176,5],[176,40]]) out.push(await window.__bench(v,n,60));
+  document.title = "done";
+  window.__out = out;
+  return out;
+};
+</script></body>

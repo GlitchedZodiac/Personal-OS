@@ -123,6 +123,16 @@ const PALM_AFTER_PEN_MS = 320;
 const PALM_PROMOTE_MS = 160;
 // after a pinch ends the surviving finger must not immediately pan, or the page lurches
 const PAN_AFTER_PINCH_MS = 160;
+/**
+ * How long after a pen lift the DESTRUCTIVE finger gestures stay locked out.
+ *
+ * He writes letter by letter and pauses about a second between letters, with his hand resting
+ * on the glass the whole time. A hand that rocks or re-seats in that pause is two brief
+ * contacts — which the gesture reader scored as a deliberate two-finger tap and answered by
+ * UNDOING the letter he had just written. Panning and pinching can stay permissive; undo is
+ * the one gesture that destroys work, so it waits until the pen has really been put down.
+ */
+const DESTRUCTIVE_AFTER_PEN_MS = 1500;
 const HOLD_MS = 520;
 const HOLD_PX = 5;
 
@@ -496,6 +506,32 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     }
     if (ghosts.current.length) requestAnimationFrame(() => redrawRef.current?.());
   }, [viewport, scale, dpr, alpha, offsetFor, eraseRadius]);
+  /**
+   * Claim the touch, in the one language UIKit listens to.
+   *
+   * `touch-action: none` tells WebKit "do not scroll here". It does NOT tell WebKit "the page
+   * handled this touch" — those are two different signals feeding two different pieces of
+   * machinery, and until now the app only ever sent the first. Calling preventDefault on a
+   * NON-PASSIVE touchstart/touchmove is the second one: it is what stops iPadOS handing the
+   * contact to Scribble or to a native recogniser that is still arbitrating.
+   *
+   * React attaches touch listeners passively, where preventDefault is a no-op, so this has to
+   * be a native listener with { passive: false }. Scoped to the ink surface only, so the rail,
+   * the popovers and typed fields keep every normal behaviour.
+   */
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || !enabled) return;
+    const claim = (ev: TouchEvent) => {
+      if (ev.cancelable) ev.preventDefault();
+    };
+    el.addEventListener("touchstart", claim, { passive: false });
+    el.addEventListener("touchmove", claim, { passive: false });
+    return () => {
+      el.removeEventListener("touchstart", claim);
+      el.removeEventListener("touchmove", claim);
+    };
+  }, [enabled]);
   useEffect(() => {
     redrawRef.current = redrawLive;
     redrawLive();
@@ -987,6 +1023,17 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       extendStroke(e);
       return;
     }
+    // RESUME AFTER A STOLEN CONTACT.
+    //
+    // pointercancel and lostpointercapture end the stroke, but they do NOT lift the pen — it is
+    // still on the glass, still moving, and every subsequent pointermove used to fall through
+    // to the inert hover branch below. The nib kept travelling and nothing appeared until he
+    // lifted and re-landed. That is, word for word, "it becomes unresponsive and it stops
+    // writing." A cancel should cost a seam in one letter, never the rest of the contact.
+    if (e.pointerType === "pen" && e.buttons !== 0 && routed(e) === "ink") {
+      beginStroke(e);
+      return;
+    }
     if (e.pointerType === "pen" && e.buttons === 0 && onHover) {
       const p = clientToPage(e.clientX, e.clientY);
       onHover({ x: p.x, y: p.y, clientX: e.clientX, clientY: e.clientY });
@@ -1036,8 +1083,14 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         if (quick && n === 1) {
           const p = clientToPage(e.clientX, e.clientY);
           onTap?.({ x: p.x, y: p.y, clientX: e.clientX, clientY: e.clientY, pointerType: "touch" });
-        } else if (quick && n === 2) onUndoGesture?.();
-        else if (quick && n >= 3) onRedoGesture?.();
+        } else if (quick && (n === 2 || n >= 3)) {
+          // never let a hand that is still holding the pen undo his writing
+          const penIsInPlay = penActive.current || nowMs() - penLeftAt.current < DESTRUCTIVE_AFTER_PEN_MS;
+          if (!penIsInPlay) {
+            if (n === 2) onUndoGesture?.();
+            else onRedoGesture?.();
+          }
+        }
       }
       return;
     }
@@ -1081,7 +1134,10 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       onPointerMove={onPointerMove}
       onPointerUp={(e) => onPointerUp(e)}
       onPointerCancel={(e) => onPointerUp(e, true)}
-      onLostPointerCapture={(e) => { penTrace.record("lostcapture", e); const st = cur.current; if (st && st.pointerId === e.pointerId) closeStroke(st); }}
+      // a lost capture is a STOLEN contact, not a lift — route it through the cancelled path so
+      // the ink is kept whole, and let the resume above pick the stroke back up if the pen is
+      // still down
+      onLostPointerCapture={(e) => { penTrace.record("lostcapture", e); const st = cur.current; if (st && st.pointerId === e.pointerId) onPointerUp(e, true); }}
       onPointerLeave={onPointerLeave}
       onContextMenu={(e) => e.preventDefault()}
     >
