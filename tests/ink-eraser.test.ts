@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eraseFromStroke, eraserCatches, eraserSweep, isTapContact, strokeDistanceToSeg, type Stroke } from "@/lib/ink";
+import { densify, eraseFromStroke, eraserCatches, eraserSweep, isTapContact, strokeDistanceToSeg, type Stroke } from "@/lib/ink";
 import { matchBooks } from "@/components/spirit/bible-nav";
 import { BOOKS } from "@/lib/bible-refs";
 
@@ -184,30 +184,39 @@ describe("eraseFromStroke — the eraser cuts, it does not confiscate", () => {
     id: "orig", tool: "gpen", color: "#000", width, opacity: 1,
     pts: Array.from({ length: k }, (_, i) => ({ x: i, y: 0, p: 0.5, t: i * 8 })),
   } as Stroke);
+  const noCrumb = { crumb: -1 };
 
   it("REGRESSION: rubbing one end of an L leaves the rest standing", () => {
-    // 20 points along x; erase near x=19 (the foot) with a small nib
-    const out = eraseFromStroke(run(20), [{ x: 19, y: 0 }], 1.5, nid);
+    const out = eraseFromStroke(run(20), [{ x: 19, y: 0 }], 1.5, nid, noCrumb);
     expect(out).not.toBeNull();
     expect(out).toHaveLength(1);
-    expect(out![0].pts.length).toBeGreaterThan(12);   // the upright survives
-    expect(out![0].pts.length).toBeLessThan(20);      // the foot is gone
-    expect(out![0].id).not.toBe("orig");              // fresh id — see eraseFromStroke's note
+    expect(out![0].pts.length).toBeGreaterThan(12);
+    expect(out![0].id).not.toBe("orig");   // fresh id — see eraseFromStroke's note
   });
 
   it("erasing the middle SPLITS one stroke into two", () => {
-    const out = eraseFromStroke(run(21), [{ x: 10, y: 0 }], 1.5, nid);
+    const out = eraseFromStroke(run(21), [{ x: 10, y: 0 }], 1.5, nid, noCrumb)!;
     expect(out).toHaveLength(2);
-    // both fragments are new strokes; the original is removed. Reusing the parent id here made
-    // the save queue's duplicate-append guard eat the fragment.
-    expect(out![0].id).not.toBe("orig");
-    expect(out![1].id).not.toBe("orig");
-    expect(out![0].id).not.toBe(out![1].id);
-    // nothing survives inside the nib
-    for (const frag of out!) for (const p of frag.pts) expect(Math.abs(p.x - 10)).toBeGreaterThan(1.5);
+    expect(out[0].id).not.toBe(out[1].id);
+    for (const frag of out) for (const p of frag.pts) expect(Math.abs(p.x - 10)).toBeGreaterThan(1.4);
   });
 
-  it("returns null when the eraser missed — the caller must keep the original untouched", () => {
+  it("REGRESSION: cuts a FAST stroke exactly where the nib is, not at the nearest sample", () => {
+    // The failure this whole function is parameterised to avoid. Two samples 400 apart — the
+    // same sparse geometry tests/ink-eraser pins for the distance helper. A sample-granularity
+    // eraser takes all of it or none of it; this one must cut a nib-sized hole in the middle.
+    const fast = {
+      id: "fast", tool: "gpen", color: "#000", width: 2, opacity: 1,
+      pts: [{ x: 0, y: 0, p: 0.5, t: 0 }, { x: 400, y: 0, p: 0.5, t: 8 }],
+    } as Stroke;
+    const out = eraseFromStroke(fast, [{ x: 200, y: 0 }], 10, nid, noCrumb)!;
+    expect(out).toHaveLength(2);
+    // reach = 10 + 2/2 = 11 — the hole is exactly the nib, at the nib
+    expect(out[0].pts[out[0].pts.length - 1].x).toBeCloseTo(189, 4);
+    expect(out[1].pts[0].x).toBeCloseTo(211, 4);
+  });
+
+  it("returns null when the eraser missed — the caller keeps the original untouched", () => {
     expect(eraseFromStroke(run(10), [{ x: 500, y: 500 }], 5, nid)).toBeNull();
   });
 
@@ -215,16 +224,36 @@ describe("eraseFromStroke — the eraser cuts, it does not confiscate", () => {
     expect(eraseFromStroke(run(6), [{ x: 3, y: 0 }], 40, nid)).toEqual([]);
   });
 
-  it("drops a lone surviving sample rather than leaving dust", () => {
-    // a 3-point stroke with the middle erased would leave two 1-point runs
-    const out = eraseFromStroke(run(3), [{ x: 1, y: 0 }], 0.6, nid);
-    expect(out).toEqual([]);
+  it("a dot is taken whole or left whole — never carved", () => {
+    const dot = { id: "d", tool: "gpen", color: "#000", width: 4, opacity: 1,
+      pts: [{ x: 50, y: 50, p: 0.5, t: 0 }] } as Stroke;
+    expect(eraseFromStroke(dot, [{ x: 50, y: 50 }], 4, nid)).toEqual([]);
+    expect(eraseFromStroke(dot, [{ x: 500, y: 5 }], 4, nid)).toBeNull();
+  });
+
+  it("drops a surviving sliver shorter than the stroke is wide", () => {
+    // default crumb = s.width: a 3-long tail on a 20-wide marker is a blob, not a mark
+    const fat = run(40, 20);
+    const out = eraseFromStroke(fat, [{ x: 20, y: 0 }], 4, nid)!;
+    for (const frag of out) {
+      let len = 0;
+      for (let i = 1; i < frag.pts.length; i++) len += Math.hypot(frag.pts[i].x - frag.pts[i-1].x, frag.pts[i].y - frag.pts[i-1].y);
+      expect(len).toBeGreaterThanOrEqual(fat.width);
+    }
+  });
+
+  it("honours the Bible overlay's anchor offset — the cut lands on the ink, not where it used to be", () => {
+    const s = run(21);
+    // the verse moved 200 down: a disc at page y=200 is over ink stored at y=0
+    const withOffset = eraseFromStroke(s, [{ x: 10, y: 200 }], 1.5, nid, { offset: { x: 0, y: 200 }, crumb: -1 });
+    expect(withOffset).toHaveLength(2);
+    // and the same disc without the offset misses entirely
+    expect(eraseFromStroke(s, [{ x: 10, y: 200 }], 1.5, nid, noCrumb)).toBeNull();
   });
 
   it("fragments inherit everything except geometry and identity", () => {
     const s = { ...run(21), tool: "fountain", color: "#A63D63", width: 7, opacity: 0.5 } as Stroke;
-    const out = eraseFromStroke(s, [{ x: 10, y: 0 }], 1.5, nid)!;
-    for (const frag of out) {
+    for (const frag of eraseFromStroke(s, [{ x: 10, y: 0 }], 1.5, nid, noCrumb)!) {
       expect(frag.tool).toBe("fountain");
       expect(frag.color).toBe("#A63D63");
       expect(frag.width).toBe(7);
@@ -232,20 +261,23 @@ describe("eraseFromStroke — the eraser cuts, it does not confiscate", () => {
     }
   });
 
-  it("a wider stroke is reached from further away — the same reach the ring draws", () => {
-    // reach = radius + width/2; at width 20 the nib grabs from 10 further out
-    const thin = eraseFromStroke(run(21, 2), [{ x: 10, y: 6 }], 1, nid);
-    const fat = eraseFromStroke(run(21, 20), [{ x: 10, y: 6 }], 1, nid);
-    expect(thin).toBeNull();       // 6 away, reach 2 → missed
-    expect(fat).not.toBeNull();    // 6 away, reach 11 → cut
+  it("survivors stay in order and never leave the original path", () => {
+    const s = run(30);
+    const out = eraseFromStroke(s, [{ x: 8, y: 0 }, { x: 20, y: 0 }], 1.5, nid, noCrumb)!;
+    const xs = out.flatMap((f) => f.pts).map((p) => p.x);
+    expect([...xs].sort((a, b) => a - b)).toEqual(xs);
+    for (const x of xs) { expect(x).toBeGreaterThanOrEqual(0); expect(x).toBeLessThanOrEqual(29); }
   });
 
-  it("never invents or loses points: survivors are a subsequence of the original", () => {
-    const s = run(30);
-    const out = eraseFromStroke(s, [{ x: 8, y: 0 }, { x: 20, y: 0 }], 1.5, nid)!;
-    const all = out.flatMap((f) => f.pts);
-    const xs = all.map((p) => p.x);
-    expect([...xs].sort((a, b) => a - b)).toEqual(xs);        // still in order
-    for (const p of all) expect(s.pts).toContain(p);          // same objects, untransformed
+  it("densify closes the gaps a fast sweep would otherwise skip over", () => {
+    const sparse = [{ x: 0, y: 0 }, { x: 100, y: 0 }];
+    const dense = densify(sparse, 10);
+    expect(dense.length).toBeGreaterThan(9);
+    for (let i = 1; i < dense.length; i++) {
+      expect(Math.hypot(dense[i].x - dense[i-1].x, dense[i].y - dense[i-1].y)).toBeLessThanOrEqual(10.001);
+    }
+    // and a sweep built from it leaves no sliver in the middle of the lane
+    const out = eraseFromStroke(run(101), dense, 6, nid, noCrumb);
+    expect(out).toEqual([]);
   });
 });

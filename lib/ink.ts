@@ -461,53 +461,137 @@ function cachedBox(s: Stroke) {
  * exact test would have caught.
  */
 /**
- * A PARTIAL eraser: cut the points the eraser touched out of a stroke and return what survives.
+ * A PARTIAL eraser: cut the eraser's path out of a stroke and return what survives.
  *
  * The whole-stroke eraser was correct for a highlighter and wrong for a pen. His example: draw
- * a capital L meaning a lowercase one, rub out the foot, and the entire letter went. Erasing
- * the middle of a stroke must leave two strokes; erasing an end must shorten it.
+ * a capital L meaning a lowercase one, rub out the foot, and the entire letter went. Erasing the
+ * middle of a stroke must leave two strokes; erasing an end must shorten it.
  *
- * Returns null when nothing was touched (the caller keeps the original stroke untouched, which
- * matters: an unchanged `pts` array keeps its cached bounding box and its React identity).
- * Returns [] when the whole stroke goes.
+ * The cut is solved in the polyline's PARAMETER space, t ∈ [0, N-1], where t = (i-1) + u is the
+ * point u of the way along segment pts[i-1]→pts[i] — NOT at sample granularity. That distinction
+ * is the whole correctness of this function: a fast Pencil samples sparsely (the existing tests
+ * pin two samples 400 units apart), so classifying each sampled POINT as in-or-out would put the
+ * cut up to a whole segment away from where he actually put the nib, and a two-sample stroke
+ * could not be cut at all. Same reason `strokeDistanceToSeg` measures to segments.
  *
- * EVERY fragment gets a fresh id, including the first. Reusing the original id for the leading
- * run looks like a nice optimisation and is a trap: the save queue cancels a queued append whose
- * id is also in the removal list (that guard exists because a stroke drawn and erased inside one
- * debounce window used to come back from the dead), so a fragment wearing its parent's id was
- * silently dropped on the way to the server. An erase is always: remove the original, append
- * what survived.
+ * `discs` are the eraser's sample centres in the STROKE's own coordinates — pass `offset` for
+ * Bible-overlay ink, whose strokes are anchored to a live verse box and therefore drawn at a
+ * shifting offset from page space. Getting that wrong carves a hole where the verse used to be.
+ *
+ * Returns null when nothing was touched, so the caller keeps the original object — an unchanged
+ * `pts` array keeps its cached bounding box and its React identity. Returns [] when it all goes.
+ *
+ * EVERY fragment gets a fresh id. Reusing the parent's id for the leading run looks like a nice
+ * optimisation and is a trap: the save queue cancels a queued append whose id is also in the
+ * removal list (that guard exists because a stroke drawn and erased inside one debounce window
+ * used to come back from the dead), so a fragment wearing its parent's id was silently dropped
+ * on the way to the server. An erase is always: remove the original, append what survived.
  */
 export function eraseFromStroke(
   s: Stroke,
-  pts: readonly { x: number; y: number }[],
+  discs: readonly { x: number; y: number }[],
   radius: number,
-  newId: () => string,
+  newIdFn: () => string,
+  opts: { offset?: { x: number; y: number } | null; crumb?: number } = {},
 ): Stroke[] | null {
+  const pts = s.pts;
+  if (pts.length === 0) return null;
   const reach = eraserReach(s, radius);
-  const r2 = reach * reach;
-  const hit = s.pts.map((p) => pts.some((e) => {
-    const dx = p.x - e.x, dy = p.y - e.y;
-    return dx * dx + dy * dy < r2;
-  }));
-  if (!hit.some(Boolean)) return null;
-  if (hit.every(Boolean)) return [];
+  const ox = opts.offset?.x ?? 0, oy = opts.offset?.y ?? 0;
+  const cs = discs.map((d) => ({ x: d.x - ox, y: d.y - oy }));
 
-  const runs: InkPoint[][] = [];
-  let run: InkPoint[] = [];
-  for (let i = 0; i < s.pts.length; i++) {
-    if (hit[i]) {
-      if (run.length) { runs.push(run); run = []; }
-    } else {
-      run.push(s.pts[i]);
+  // A dot is a deliberate mark — a full stop, the tittle of an i. Never carve one; take it whole
+  // or leave it whole.
+  if (pts.length === 1) {
+    const p = pts[0];
+    return cs.some((c) => Math.hypot(p.x - c.x, p.y - c.y) < reach) ? [] : null;
+  }
+
+  // every [t0, t1] the eraser covers, in parameter space
+  const cut: [number, number][] = [];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    const vx = b.x - a.x, vy = b.y - a.y;
+    const A = vx * vx + vy * vy;
+    for (const c of cs) {
+      const wx = a.x - c.x, wy = a.y - c.y;
+      if (A === 0) {
+        // duplicate samples — the Pencil emits them; treat as a point
+        if (wx * wx + wy * wy < reach * reach) cut.push([i - 1, i]);
+        continue;
+      }
+      const B = 2 * (wx * vx + wy * vy);
+      const C = wx * wx + wy * wy - reach * reach;
+      const disc = B * B - 4 * A * C;
+      if (disc <= 0) continue;
+      const rt = Math.sqrt(disc);
+      let u0 = (-B - rt) / (2 * A);
+      let u1 = (-B + rt) / (2 * A);
+      if (u1 <= 0 || u0 >= 1) continue;
+      u0 = Math.max(0, u0);
+      u1 = Math.min(1, u1);
+      cut.push([i - 1 + u0, i - 1 + u1]);
     }
   }
-  if (run.length) runs.push(run);
+  if (!cut.length) return null;
 
-  // A single surviving sample is a speck, not a mark — dropping it is what makes rubbing feel
-  // like rubbing instead of leaving dust behind.
-  const kept = runs.filter((r) => r.length >= 2);
-  return kept.map((rpts) => ({ ...s, id: newId(), pts: rpts }));
+  // merge into a disjoint union
+  cut.sort((p1, p2) => p1[0] - p2[0]);
+  const merged: [number, number][] = [cut[0]];
+  for (const [lo, hi] of cut.slice(1)) {
+    const last = merged[merged.length - 1];
+    if (lo <= last[1]) last[1] = Math.max(last[1], hi);
+    else merged.push([lo, hi]);
+  }
+
+  // the complement is what survives
+  const runs: [number, number][] = [];
+  let at = 0;
+  for (const [lo, hi] of merged) {
+    if (lo > at) runs.push([at, lo]);
+    at = Math.max(at, hi);
+  }
+  if (at < pts.length - 1) runs.push([at, pts.length - 1]);
+  if (!runs.length) return [];
+
+  const lerp = (t: number): InkPoint => {
+    const i = Math.min(Math.floor(t), pts.length - 2);
+    const u = t - i;
+    const a = pts[i], b = pts[i + 1];
+    return { ...a, x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, p: a.p + (b.p - a.p) * u, t: a.t + (b.t - a.t) * u };
+  };
+
+  const crumb = opts.crumb ?? s.width;
+  const out: Stroke[] = [];
+  for (const [t0, t1] of runs) {
+    const rp: InkPoint[] = [lerp(t0)];
+    for (let k = Math.ceil(t0); k < t1; k++) if (k > t0 + 1e-9) rp.push(pts[k]);
+    if (t1 > t0 + 1e-9) rp.push(lerp(t1));
+    if (rp.length < 2) continue;
+    // a surviving sliver shorter than the stroke is wide is a blob, not a mark
+    let len = 0;
+    for (let k = 1; k < rp.length; k++) len += Math.hypot(rp[k].x - rp[k - 1].x, rp[k].y - rp[k - 1].y);
+    if (crumb >= 0 && len < crumb) continue;
+    out.push({ ...s, id: newIdFn(), pts: rp });
+  }
+  return out;
+}
+
+/**
+ * Interpolate an eraser's own sample path so consecutive centres are no further apart than
+ * `maxGap`. A fast sweep otherwise leaves thin surviving slivers between the discs — the
+ * partial-erase version of "the ring passed right over it and nothing happened".
+ */
+export function densify(path: readonly { x: number; y: number }[], maxGap: number): { x: number; y: number }[] {
+  if (path.length < 2 || maxGap <= 0) return path.slice();
+  const out: { x: number; y: number }[] = [path[0]];
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i];
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    const n = Math.ceil(d / maxGap);
+    for (let k = 1; k <= n; k++) out.push({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n });
+  }
+  return out;
 }
 
 export function eraserSweep(
