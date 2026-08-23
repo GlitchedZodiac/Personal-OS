@@ -19,7 +19,7 @@ import { SourcePane } from "./source-pane";
 import { SundayPane } from "./sunday-pane";
 import { PenPopover } from "./pen-popovers";
 import { Popover, Kicker, IconButton, DISPLAY } from "./ui";
-import { Diamond, FlipIcon, LayoutGridIcon, PenIcon, GPenIcon, HighlighterIcon, PencilIcon, MarkerIcon, EraserIcon, LassoIcon } from "./desk-icons";
+import { Diamond, FlipIcon, LayoutGridIcon, PenIcon, GPenIcon, HighlighterIcon, PencilIcon, MarkerIcon, EraserIcon, LassoIcon, MicIcon, PhotoIcon } from "./desk-icons";
 import { SEAM_STOPS_H, SEAM_STOPS_V, nearestStop, type DeskContext } from "@/lib/desk-prefs";
 import { hlColor } from "./desk-state";
 import { askPrompt } from "./dialog";
@@ -433,6 +433,14 @@ export function DeskShell(props: DeskShellProps) {
             </Popover>
           )}
         </div>
+        {/* capture lives up here now, not in the writing rail — a photo and a voice note are
+            things he ADDS to the page, not things the pen does with it */}
+        {layout.writing.includes("notebook") && (
+          <>
+            <IconButton title="Photo — add to this page" onClick={() => desk.emit({ type: "capture-photo" })}><PhotoIcon size={16} color="#454349" /></IconButton>
+            <IconButton title="Speak — dictate into this page" onClick={() => desk.emit({ type: "capture-voice" })}><MicIcon size={16} color="#454349" /></IconButton>
+          </>
+        )}
         <IconButton title="Flip — swap sides" onClick={doFlip}><FlipIcon /></IconButton>
       </div>
 

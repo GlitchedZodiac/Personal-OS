@@ -27,7 +27,7 @@ import {
   streamline as smooth,
   strokeBounds,
   strokeBoundsOf,
-  eraserCatches,
+  eraseFromStroke,
   isTapContact,
   strokesInLasso,
   type InkPoint,
@@ -202,6 +202,8 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     holdStart: number;
     mode: "draw" | "erase" | "lasso";
     erased: Set<string>;
+    /** original stroke id → the pieces of it that survived this erase gesture */
+    frags: Map<string, Stroke[]>;
     dragging: boolean;
   } | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -464,17 +466,23 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     }
     const st = cur.current;
     if (st && st.mode === "draw" && !st.dragging) drawStroke(ctx, st.stroke, { alphaScale: alpha });
-    // ——— the eraser shows its work: a ring the true size of the eraser, and the strokes
-    // it is about to take outlined underneath it. Visible from the instant it touches down.
+    // ——— the eraser shows its work: a ring the true size of the eraser, and the ink as it is
+    // being cut. Visible from the instant it touches down.
     if (st && st.mode === "erase" && !st.dragging) {
       const tip = st.stroke.pts[st.stroke.pts.length - 1];
       const radius = eraseRadius(); // the SAME number the catch test uses — the ring cannot lie
       ctx.save();
-      // what will go
+      // The base layer has already dropped every stroke the eraser has touched (via `erased`),
+      // so draw the SURVIVORS here at full strength — that is what makes the letter visibly lose
+      // its foot under the nib rather than flashing rose and vanishing whole. A stroke cut to
+      // nothing simply has no fragments and is gone, which is the honest picture.
       for (const s of mirror.current) {
-        if (!st.erased.has(s.id)) continue;
+        const frags = st.frags.get(s.id);
+        if (!frags) continue;
         const off = offsetFor ? offsetFor(s) : null;
-        drawStroke(ctx, s, { offsetX: off?.x ?? 0, offsetY: off?.y ?? 0, alphaScale: 0.28, colorOverride: "#B4533F" });
+        for (const frag of frags) {
+          drawStroke(ctx, frag, { offsetX: off?.x ?? 0, offsetY: off?.y ?? 0, alphaScale: alpha });
+        }
       }
       // the ring
       ctx.beginPath();
@@ -611,14 +619,19 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       holdStart: now,
       mode,
       erased: new Set(),
+      frags: new Map(),
       dragging: false,
     };
     if (mode === "erase") {
       // sweep at the landing point so the ring and its victims appear instantly
-      const radius = eraseRadius();
+      const r0 = eraseRadius();
       for (const s of mirror.current) {
         const off = offsetFor ? offsetFor(s) : null;
-        if (eraserCatches(s, p.x - (off?.x ?? 0), p.y - (off?.y ?? 0), radius)) cur.current!.erased.add(s.id);
+        const local = off ? [{ x: p.x - off.x, y: p.y - off.y }] : [p];
+        const cut = eraseFromStroke(s, local, r0, newId);
+        if (cut === null) continue;
+        cur.current!.erased.add(s.id);
+        cur.current!.frags.set(s.id, cut);
       }
       if (cur.current!.erased.size) setErasedNow(new Set(cur.current!.erased));
       redrawLive();
@@ -653,8 +666,13 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     const list: PointerEvent[] = typeof (e.nativeEvent as PointerEvent).getCoalescedEvents === "function" ? (e.nativeEvent as PointerEvent).getCoalescedEvents() : [];
     const events = list.length ? list : [e.nativeEvent as PointerEvent];
     const now = nowMs();
+    // every coalesced sample's page point, so the erase sweep can run ONCE per event over all
+    // of them instead of once per sample — same points tested, same strokes caught, C times
+    // less work (a 240 Hz Pencil delivers 4-8 samples a frame)
+    const swept: { x: number; y: number }[] = [];
     for (const ev of events) {
       const p = clientToPage(ev.clientX, ev.clientY);
+      if (st.mode === "erase") swept.push(p);
       const last = st.raw[st.raw.length - 1];
       const dpx = Math.hypot((p.x - last.x) * scale, (p.y - last.y) * scale);
       st.movedPx += dpx;
@@ -678,19 +696,36 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         st.holdStart = now;
       }
       st.lastMoveAt = now;
-      if (st.mode === "erase") {
-        const radius = eraseRadius();
-        const before = st.erased.size;
-        for (const s of mirror.current) {
-          if (st.erased.has(s.id)) continue;
-          const off = offsetFor ? offsetFor(s) : null;
-          if (eraserCatches(s, p.x - (off?.x ?? 0), p.y - (off?.y ?? 0), radius)) st.erased.add(s.id);
+    }
+    if (st.mode === "erase" && swept.length) {
+      const r = eraseRadius();
+      let changed = false;
+      // PARTIAL erase: cut the touched points out and keep the survivors, so rubbing the foot
+      // off an L leaves the upright standing instead of taking the whole letter. The original is
+      // hidden from the base layer via `erased`; its survivors ride the LIVE layer until he
+      // lifts, which is what makes the ink shrink under the nib as he rubs.
+      for (const s of mirror.current) {
+        const off = offsetFor ? offsetFor(s) : null;
+        const local = off ? swept.map((q) => ({ x: q.x - off.x, y: q.y - off.y })) : swept;
+        // once cut, keep cutting the SURVIVORS, not the original
+        const target = st.frags.get(s.id) ?? [s];
+        const out: Stroke[] = [];
+        let touched = false;
+        for (const piece of target) {
+          const cut = eraseFromStroke(piece, local, r, newId);
+          if (cut === null) { out.push(piece); continue; }
+          touched = true;
+          out.push(...cut);
         }
-        if (st.erased.size !== before) {
-          // it must feel like erasing: the ink goes NOW, not when the pen lifts
-          setErasedNow(new Set(st.erased));
-          onEraseTick?.();
-        }
+        if (!touched) continue;
+        changed = true;
+        st.erased.add(s.id);
+        st.frags.set(s.id, out);
+      }
+      if (changed) {
+        // it must feel like erasing: the ink goes NOW, not when the pen lifts
+        setErasedNow(new Set(st.erased));
+        onEraseTick?.();
       }
     }
     redrawLive();
@@ -802,9 +837,16 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       setErasedNow(null);
       if (st.erased.size && onStrokesChange) {
         const rm = st.erased;
-        const next = mirror.current.filter((s) => !rm.has(s.id));
+        // Survivors take the place of the stroke they came from, so a cut letter keeps its
+        // z-order with the ink around it instead of jumping to the top of the page.
+        const appended: Stroke[] = [];
+        const next: Stroke[] = [];
+        for (const s of mirror.current) {
+          if (!rm.has(s.id)) { next.push(s); continue; }
+          for (const frag of st.frags.get(s.id) ?? []) { next.push(frag); appended.push(frag); }
+        }
         setMirror(next);
-        onStrokesChange(next, { removed: Array.from(rm) });
+        onStrokesChange(next, { removed: Array.from(rm), ...(appended.length ? { appended } : {}) });
       }
       redrawLive();
       return;

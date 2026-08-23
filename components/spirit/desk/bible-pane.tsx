@@ -12,7 +12,7 @@
 // the rail + "which tool" chip; a press-hold on a verse lifts a reference
 // card across the seam. Nothing floats over text.
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SpiritReader, type SpiritReaderHandle } from "@/components/spirit/reader";
 import { InkCanvas, type InkCanvasHandle, type StrokeEndInfo } from "./ink-canvas";
 import { useDesk, useDeskEvent, hlColor } from "./desk-state";
@@ -152,7 +152,68 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const hasMarginInk = strokes.some((s) => s.region === "margin");
   const marginPx = overlayVisibility === "hide" ? 0 : MARGIN_W[Math.max(overlayMargin, hasMarginInk ? 1 : 0) as 0 | 1 | 2];
   const marginSide: "left" | "right" = hand === "left" ? "left" : "right";
-  const pinned = strokes.length > 0 && !unpinned;
+
+  // ——— stable props for SpiritReader ———
+  // These are the reason React.memo could never engage: a fresh Set, a fresh object and three
+  // fresh closures on every render meant the reader re-rendered on every stroke commit, every
+  // save flush and every hover move even though nothing it displays had changed.
+  const marginInsetProp = useMemo(() => ({ side: marginSide, px: marginPx }), [marginSide, marginPx]);
+  const inkChaptersProp = useMemo(
+    () => (chapterKey
+      ? new Set(Array.from(inkChapters).filter((k) => Math.floor(k / 1000) === Math.floor(chapterKey / 1000)).map((k) => k % 1000))
+      : null),
+    [inkChapters, chapterKey],
+  );
+  const handleOpenRef = useCallback((q: string, label?: string) => {
+    if (role === "main") emit({ type: "open-reference", q, label, source: "crossref" });
+    else onQueryChange(q);
+  }, [role, emit, onQueryChange]);
+  const handleChapterChange = useCallback((ck: number) => setChapterKey(ck), []);
+  const handlePassageLoaded = useCallback((d: { canonical: string }) => {
+              setTitle(d.canonical);
+              const ps = pendingSelect.current;
+              if (ps) {
+                pendingSelect.current = null;
+                selectVerseNow(ps.refStart, ps.refEnd);
+              }
+              // opening a study reopens the Bible AT the assignment — once per chapter
+              // load; the verses commit a tick after the data arrives, so retry briefly
+              const key = `${d.canonical}`;
+              if (scrolledTo.current !== key) {
+                let tries = 0;
+                const attempt = () => {
+                  const sc = scrollRef.current;
+                  const el = contentRef.current?.querySelector<HTMLElement>("[data-assigned]");
+                  // "ready" means the verse is laid out below the fold; an early pass sees it at ~0
+                  const top = sc && el ? el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 72 : 0;
+                  if (sc && el && top > 40) {
+                    scrolledTo.current = key;
+                    sc.scrollTo({ top, behavior: "smooth" });
+                    // the pinned-page / overlay loads that follow can briefly shrink the
+                    // content and clamp the scroll back to 0 — re-apply once it settles
+                    [700, 1600].forEach((ms) =>
+                      setTimeout(() => {
+                        const s2 = scrollRef.current;
+                        const e2 = contentRef.current?.querySelector<HTMLElement>("[data-assigned]");
+                        if (!s2 || !e2 || s2.scrollTop > 40) return;
+                        const t2 = e2.getBoundingClientRect().top - s2.getBoundingClientRect().top + s2.scrollTop - 72;
+                        if (t2 > 40) s2.scrollTo({ top: t2 });
+                      }, ms),
+                    );
+                    return;
+                  }
+                  if (sc && el && sc.scrollTop > 40) {
+                    scrolledTo.current = key; // he already scrolled — leave him be
+                    return;
+                  }
+                  if (++tries < 10) setTimeout(attempt, 60 * tries);
+                };
+                setTimeout(attempt, 0); // a timer, not rAF — rAF starves when the view isn't compositing (background tab, hidden pane)
+              }
+              }, [selectVerseNow]);
+  // Locked only while ink is actually ON SCREEN — reflowing text under a hidden layer cannot
+  // visibly move anything, so there is nothing to protect and no reason to take the Aa away.
+  const pinned = strokes.length > 0 && !unpinned && overlayVisibility !== "hide";
   const alpha = overlayVisibility === "show" ? 1 : overlayVisibility === "dim" ? 0.22 : 0;
 
   // ——— desk events: open in the reference Bible / main ———
@@ -257,7 +318,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
         creating.current = fetch("/api/spirit/ink", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kind: "overlay", chapterKey, layerKey, title: `${book} ${chapterKey % 1000} · ${layerKey === "my" ? "my layer" : layerContext?.label ?? layerKey}`, layout: { pinnedAt: new Date().toISOString() } }),
+          body: JSON.stringify({ kind: "overlay", chapterKey, layerKey, title: `${book} ${chapterKey % 1000} · ${layerKey === "my" ? "my layer" : layerContext?.label ?? layerKey}`, layout: null }),
         })
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => (d?.page ? { id: d.page.id, chapterKey, layerKey, strokes: [], layout: d.page.layout ?? null } : null))
@@ -520,14 +581,14 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   };
 
   // ——— action bar ———
-  const onSelectionChange = (s: number | null, e: number | null) => {
+  const onSelectionChange = useCallback((s: number | null, e: number | null) => {
     setSel({ start: s, end: e });
-    if (s !== null && lastTapClient.current && !barAnchor) setBarAnchor(lastTapClient.current);
+    if (s !== null) { const tap = lastTapClient.current; if (tap) setBarAnchor((prev) => prev ?? tap); }
     if (s === null) {
       setBarAnchor(null);
       setShowChips(false);
     }
-  };
+  }, []);
   const barAction = (a: BarAction) => {
     haptic(a === "send" ? "success" : "light");
     const reader = readerRef.current;
@@ -561,7 +622,14 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     setInkFuture([]);
     setStrokes(next);
     if (delta.appended?.length) pending.current.append.push(...delta.appended);
-    if (delta.removed?.length) pending.current.remove.push(...delta.removed);
+    if (delta.removed?.length) {
+      const rm = new Set(delta.removed);
+      // A stroke drawn and erased inside one debounce window queued append[X] AND remove[X].
+      // The server applies removals first — against a copy that never had X — then appends it,
+      // so the erased stroke came back on the next load. Cancel the append instead of racing.
+      pending.current.append = pending.current.append.filter((s) => !rm.has(s.id));
+      pending.current.remove.push(...delta.removed);
+    }
     scheduleSave();
   };
   /** step the overlay's ink back or forward; the diff against what is on screen becomes the save */
@@ -603,10 +671,20 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     scheduleSave();
   };
 
+  // The header gains chips CONDITIONALLY — a selection chip, the text-size lock, undo/redo once
+  // there is ink — so its natural width is not a function of the pane alone. Measuring the
+  // breakpoints against the raw pane width is what let the row grow past the pane's right edge
+  // and get scissored off by the pane's overflow:hidden. Spend each optional chip from a BUDGET
+  // instead, so adding one collapses the row's long labels rather than pushing controls off.
+  const chipCost =
+    (sel.start !== null ? 118 : 0) +           // "JONAH 2:1 SELECTED"
+    (strokes.length > 0 && !unpinned && overlayVisibility !== "hide" ? 138 : 0) + // TEXT SIZE LOCKED
+    (inkPast.length || inkFuture.length ? 64 : 0);                                // ⤺ ⤻
+  const budgetW = contentSize.w > 0 ? Math.max(0, contentSize.w - chipCost) : 0;
   // a narrow pane (stacked Bible, ~360px) keeps every control but drops the long labels
-  const narrow = contentSize.w > 0 && contentSize.w < 600;
+  const narrow = budgetW > 0 && budgetW < 600;
   // a third-of-the-desk pane (~240px, three columns): one eye button that cycles, one mode chip that toggles
-  const tiny = contentSize.w > 0 && contentSize.w < 360;
+  const tiny = budgetW > 0 && budgetW < 360;
   const layerLabel = narrow ? "" : layerKey === "my" ? "MY LAYER" : layerContext && layerContext.key === layerKey ? layerContext.label.toUpperCase() : layerKey.toUpperCase();
   const markedOnSelection = sel.start === null ? [] : Array.from(new Set((readerRef.current?.highlightsAt(sel.start, sel.end ?? sel.start) ?? []).map((h) => h.category)));
   const unmarkSelection = () => {
@@ -620,7 +698,8 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const canvasEnabled = overlayVisibility !== "hide";
 
   const headerRight = (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap" }}>
+    // minWidth:0 so this can be squeezed rather than forcing the row wider than the pane
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap", minWidth: 0 }}>
       {role === "reference" && (
         <>
           {!tiny && <span style={{ fontSize: 10, color: "#A9A7AE" }}>follows links</span>}
@@ -629,7 +708,11 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       )}
       {prefs.actionBar === "B" && sel.start !== null && <ActionBarB onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} />}
       {pinned && (
-        <Chip tone="tint" title="type set when first inked — unpin to reflow"><PinIcon /> PAGE PINNED</Chip>
+        // It was called "PAGE PINNED" and the footer claimed the page was "frozen like print"
+        // with a captured type size. None of that was true: the ONLY effect is that the Aa type
+        // sheet will not open, so that changing the size cannot reflow the text out from under
+        // his ink. Name that, and let the chip itself be the way out.
+        <Chip tone="tint" title="Text size is locked so your ink stays on the right words. Tap to unlock." onClick={() => setUnpinned(true)}><PinIcon /> TEXT SIZE LOCKED</Chip>
       )}
       <div style={{ position: "relative" }}>
         <button type="button" onClick={() => setLayersOpen((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${layersOpen ? "#A63D63" : "#E9CFDC"}`, background: layersOpen ? "#F0D3E0" : "#F6E3EB", borderRadius: 99, padding: "4px 10px", cursor: "pointer" }}>
@@ -721,56 +804,12 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
             role={role}
             externalActionBar
             typeLocked={pinned}
-            marginInset={{ side: marginSide, px: marginPx }}
-            inkChapters={chapterKey ? new Set(Array.from(inkChapters).filter((k) => Math.floor(k / 1000) === Math.floor(chapterKey / 1000)).map((k) => k % 1000)) : null}
-            onOpenRef={(q, label) => {
-              if (role === "main") emit({ type: "open-reference", q, label, source: "crossref" });
-              else onQueryChange(q);
-            }}
+            marginInset={marginInsetProp}
+            inkChapters={inkChaptersProp}
+            onOpenRef={handleOpenRef}
             onQueryChange={onQueryChange}
-            onPassageLoaded={(d) => {
-              setTitle(d.canonical);
-              const ps = pendingSelect.current;
-              if (ps) {
-                pendingSelect.current = null;
-                selectVerseNow(ps.refStart, ps.refEnd);
-              }
-              // opening a study reopens the Bible AT the assignment — once per chapter
-              // load; the verses commit a tick after the data arrives, so retry briefly
-              const key = `${d.canonical}`;
-              if (scrolledTo.current !== key) {
-                let tries = 0;
-                const attempt = () => {
-                  const sc = scrollRef.current;
-                  const el = contentRef.current?.querySelector<HTMLElement>("[data-assigned]");
-                  // "ready" means the verse is laid out below the fold; an early pass sees it at ~0
-                  const top = sc && el ? el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 72 : 0;
-                  if (sc && el && top > 40) {
-                    scrolledTo.current = key;
-                    sc.scrollTo({ top, behavior: "smooth" });
-                    // the pinned-page / overlay loads that follow can briefly shrink the
-                    // content and clamp the scroll back to 0 — re-apply once it settles
-                    [700, 1600].forEach((ms) =>
-                      setTimeout(() => {
-                        const s2 = scrollRef.current;
-                        const e2 = contentRef.current?.querySelector<HTMLElement>("[data-assigned]");
-                        if (!s2 || !e2 || s2.scrollTop > 40) return;
-                        const t2 = e2.getBoundingClientRect().top - s2.getBoundingClientRect().top + s2.scrollTop - 72;
-                        if (t2 > 40) s2.scrollTo({ top: t2 });
-                      }, ms),
-                    );
-                    return;
-                  }
-                  if (sc && el && sc.scrollTop > 40) {
-                    scrolledTo.current = key; // he already scrolled — leave him be
-                    return;
-                  }
-                  if (++tries < 10) setTimeout(attempt, 60 * tries);
-                };
-                setTimeout(attempt, 0); // a timer, not rAF — rAF starves when the view isn't compositing (background tab, hidden pane)
-              }
-            }}
-            onChapterChange={(ck) => setChapterKey(ck)}
+            onPassageLoaded={handlePassageLoaded}
+            onChapterChange={handleChapterChange}
             onSelectionChange={onSelectionChange}
           />
           {contentSize.w > 0 && (
@@ -809,14 +848,6 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
           )}
         </div>
       </div>
-      {pinned && (
-        <div style={{ borderTop: "1px solid #F0EDE8", background: "#FCFAF6", padding: "7px 14px", display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
-          <PinIcon color="#A9A7AE" size={11} />
-          <span style={{ fontSize: 10, color: "#96949B" }}>Frozen like print — type size was set when the page was pinned; unpin to reflow (ink re-anchors by verse).</span>
-          <span style={{ flex: 1 }} />
-          <button type="button" onClick={() => setUnpinned(true)} style={{ fontSize: 10, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>Unpin</button>
-        </div>
-      )}
       {/* hover rail + "which tool" chip (02a) */}
       {hover && canvasEnabled && (
         <span style={{ position: "absolute", left: hover.left + 24, top: hover.top, width: Math.max(40, hover.width - 32), height: 3, borderRadius: 99, background: "#A63D63", opacity: 0.4, pointerEvents: "none", zIndex: 6, animation: "hoverPulse 1.8s ease-in-out infinite" }} />

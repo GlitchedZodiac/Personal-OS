@@ -52,6 +52,10 @@ export type DeskEvent =
   | { type: "dictate"; text: string }
   | { type: "notebook-open-page"; pageId: string }
   | { type: "notebook-page-list" }
+  // capture actions live in the desk bar (2026-08-23, his call: the rail is for what the PEN
+  // does), but the notebook pane owns the page context they write into
+  | { type: "capture-photo" }
+  | { type: "capture-voice" }
   | { type: "answer-box"; question: string; dayId: string; refStart: number }
   | { type: "worksheet-open"; dayId: string }
   | { type: "study-step"; step: number }

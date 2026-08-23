@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { SheetPortal } from "@/components/sheet-portal";
@@ -124,7 +124,19 @@ function logosUrl(ref: number) {
   return `https://ref.ly/${book}${p.chapter}.${p.verse || 1}`;
 }
 
-export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(function SpiritReader(props, ref) {
+/** in the desk the sheets dock inside the pane, so the portal is a no-op wrapper */
+function Passthrough({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
+
+/**
+ * Memoised because the desk re-renders this pane on every stroke commit, every 1.1s save flush
+ * and every hover move, and re-rendering a 30-verse chapter for a change it does not display is
+ * pure waste. memo only bails out if EVERY prop is referentially stable — bible-pane.tsx
+ * useMemo/useCallbacks all six of the props that used to be rebuilt inline. forwardRef is
+ * memo-safe: the ref is not a prop and the imperative handle is unaffected.
+ */
+const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(function SpiritReader(props, ref) {
   const embedded = Boolean(props.embedded);
   const router = useRouter();
   const goBack = useBackTo("/spirit");
@@ -666,7 +678,11 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
   };
 
   // Sheets dock inside the pane when embedded (no portal, no fixed bottom).
-  const Portal = embedded ? ({ children }: { children: ReactNode }) => <>{children}</> : SheetPortal;
+  // NOT defined inline: a component expression in render is a new component TYPE every render,
+  // so React unmounts and remounts the whole subtree beneath it each time — losing DOM state and
+  // restarting transitions on every keystroke, hover and stroke commit. Both variants are
+  // module-level constants, so the type is stable and only the choice between them changes.
+  const Portal = embedded ? Passthrough : SheetPortal;
   const sheetPos = embedded
     ? "absolute inset-x-2 bottom-2 z-[31] max-h-[72%] overflow-y-auto rounded-[18px]"
     : "fixed inset-x-0 bottom-0 z-[81] rounded-t-[24px]";
@@ -2092,3 +2108,4 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
   );
 });
 
+export const SpiritReader = memo(SpiritReaderInner);

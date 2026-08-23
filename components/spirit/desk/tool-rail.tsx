@@ -1,7 +1,12 @@
 "use client";
 
 // The notebook's tool rail (03) — on the seam edge for the free hand:
-// pen · highlighter · pencil · marker · eraser · lasso │ T · ref-card ·
+// pen · highlighter · eraser · hand │ T │ undo · redo │ size · opacity · colour.
+// 2026-08-23, his call after a week of real use: Select (lasso) and Verse (reference card) are
+// gone from the rail — he selects by holding and dragging, and drops references the same way —
+// and Photo and Speak moved to the desk bar, where capture actions belong. The rail is for the
+// hand that is writing; everything it holds should be a thing the pen DOES.
+// was: pen · highlighter · pencil · marker · eraser · lasso │ T · ref-card ·
 // photo · mic │ undo · redo │ SIZE · OPAC sliders · the color dot.
 // Hold a tool → brush library; tap the dot → palette.
 
@@ -12,14 +17,10 @@ import {
   EraserIcon,
   GPenIcon,
   HighlighterIcon,
-  LassoIcon,
   MarkerIcon,
-  MicIcon,
   PenIcon,
   PencilIcon,
-  PhotoIcon,
   RedoIcon,
-  RefCardIcon,
   TextToolIcon,
   UndoIcon,
   HandIcon,
@@ -84,10 +85,6 @@ export function ToolRail({
   canUndo,
   canRedo,
   onText,
-  onRefCard,
-  onPhoto,
-  onMic,
-  micActive,
   compact,
 }: {
   side: "left" | "right";
@@ -96,10 +93,6 @@ export function ToolRail({
   canUndo?: boolean;
   canRedo?: boolean;
   onText?: () => void;
-  onRefCard?: () => void;
-  onPhoto?: () => void;
-  onMic?: () => void;
-  micActive?: boolean;
   compact?: boolean;
 }) {
   const { pen, setPen, popover, setPopover } = useDesk();
@@ -149,7 +142,6 @@ export function ToolRail({
     pen.brush === "gpen" ? <GPenIcon size={17} color={penBtn.color} /> : pen.brush === "pencil" ? <PencilIcon size={17} color={penBtn.color} /> : pen.brush === "marker" ? <MarkerIcon size={17} color={penBtn.color} /> : <PenIcon size={17} color={penBtn.color} />;
   const hl = tool("highlighter");
   const eraser = tool("eraser");
-  const lasso = tool("lasso");
   const hand = tool("hand");
   const brushName = pen.brush === "gpen" ? "G-pen" : pen.brush === "pencil" ? "Pencil" : pen.brush === "marker" ? "Marker" : "Pen";
   const iconSize = compact ? 16 : 17;
@@ -178,13 +170,9 @@ export function ToolRail({
       <RailBtn label={brushName} {...penBtn}>{penIcon}</RailBtn>
       <RailBtn label="Mark" {...hl}><HighlighterIcon size={iconSize} color={hl.color} /></RailBtn>
       <RailBtn label="Erase" {...eraser}><EraserIcon size={iconSize} color={eraser.color} /></RailBtn>
-      <RailBtn label="Select" {...lasso}><LassoIcon size={iconSize} color={lasso.color} /></RailBtn>
       <RailBtn label="Hand" {...hand}><HandIcon size={iconSize} color={hand.color} /></RailBtn>
       <Rule />
       <RailBtn label="Type" aria-label="Typed block" onClick={onText} style={{ ...penBtn.style, background: pen.tool === "text" ? "#F6E3EB" : "transparent", boxShadow: pen.tool === "text" ? "inset 0 0 0 1.5px #A63D63" : "none" }}><TextToolIcon size={15} color={pen.tool === "text" ? "#8C2F51" : "#66646C"} /></RailBtn>
-      <RailBtn label="Verse" aria-label="Reference card" onClick={onRefCard} style={{ ...penBtn.style, background: "transparent", boxShadow: "none" }}><RefCardIcon size={iconSize} color="#66646C" /></RailBtn>
-      <RailBtn label="Photo" aria-label="Photo" onClick={onPhoto} style={{ ...penBtn.style, background: "transparent", boxShadow: "none" }}><PhotoIcon size={iconSize} color="#66646C" /></RailBtn>
-      <RailBtn label="Speak" aria-label="Dictate" onClick={onMic} style={{ ...penBtn.style, background: micActive ? "#F6E3EB" : "transparent", boxShadow: micActive ? "inset 0 0 0 1.5px #A63D63" : "none" }}><MicIcon size={16} color={micActive ? "#8C2F51" : "#66646C"} /></RailBtn>
       <Rule />
       <RailBtn label="Undo" aria-label="Undo" onClick={() => { haptic("light"); onUndo?.(); }} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canUndo ? 1 : 0.4 }}><UndoIcon /></RailBtn>
       <RailBtn label="Redo" aria-label="Redo" onClick={() => { haptic("light"); onRedo?.(); }} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canRedo ? 1 : 0.4 }}><RedoIcon /></RailBtn>
