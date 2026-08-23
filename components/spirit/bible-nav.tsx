@@ -11,7 +11,7 @@
 // on the desk, with the same body.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BOOKS, CHAPTERS } from "@/lib/bible-refs";
+import { BOOKS, BOOK_ABBREV, CHAPTERS } from "@/lib/bible-refs";
 import { parseReadingRef } from "@/lib/spirit-refs";
 import { haptic } from "@/lib/haptics";
 
@@ -49,19 +49,37 @@ export function pushRecent(ref: string) {
 }
 
 /** the canon, matched the way he would type it: "jn3", "1 co 13:4", "romans 9" */
+/** do the letters of `key` appear in `name`, in order? "jn" -> joh(n), "gl" -> ga(l)atians */
+function isSubsequence(key: string, name: string): boolean {
+  let i = 0;
+  for (const ch of name) {
+    if (ch === key[i]) i++;
+    if (i === key.length) return true;
+  }
+  return false;
+}
+
 export function matchBooks(term: string): number[] {
   const q = term.trim().toLowerCase().replace(/\s+/g, "");
   if (!q) return [];
   const letters = q.replace(/[0-9:.-]+$/g, ""); // drop a trailing chapter/verse
   const key = letters || q;
   const starts: number[] = [];
+  const abbrev: number[] = [];
+  const initials: number[] = [];
   const contains: number[] = [];
   BOOKS.slice(0, 66).forEach((b, i) => {
     const n = b.toLowerCase().replace(/\s+/g, "");
+    const a = (BOOK_ABBREV[i] ?? "").toLowerCase();
     if (n.startsWith(key)) starts.push(i);
+    else if (a.startsWith(key)) abbrev.push(i);
+    // how people actually type: "jn" for John, "phlp" for Philippians, "rms" for Romans
+    else if (key.length >= 2 && isSubsequence(key, n)) initials.push(i);
     else if (n.includes(key)) contains.push(i);
   });
-  return [...starts, ...contains];
+  // among initials matches, the shortest name is the tightest fit: "jn" means John, not Jonah
+  initials.sort((a, b) => BOOKS[a].length - BOOKS[b].length);
+  return [...starts, ...abbrev, ...initials, ...contains];
 }
 
 export function BibleNav({

@@ -68,10 +68,42 @@ final class ShellViewController: UIViewController {
         webView.navigationDelegate = self
         webView.scrollView.bounces = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+
+        // ——— THE PEN LIVES OR DIES HERE ———
+        //
+        // This app is a writing surface. Every native gesture recogniser that arbitrates over
+        // the web view is a competitor for the Apple Pencil's very first samples, and when one
+        // of them wins, WebKit sends the page `pointercancel` and the stroke ends mid-letter.
+        // Arbitration restarts on EVERY pen-down, which is why writing letter by letter — lift,
+        // land, lift, land — was so much worse than writing a continuous line.
+        //
+        // 1. delaysContentTouches (default TRUE) withholds touchesBegan from the web content
+        //    for ~150 ms while the scroll view decides whether this is a scroll. That delay is
+        //    literally the symptom he reported: "lag in reading the pencil between contact."
+        // 2. canCancelContentTouches (default TRUE) lets the scroll view take back a contact it
+        //    has ALREADY handed to the page. That is the stroke dying halfway through a letter.
+        // Neither costs us anything: the page does its own finger panning in JS (ink-canvas's
+        // scrollBy) inside its own overflow:auto panes. The web view's scroll view has nothing
+        // to scroll here, so all it can do is steal.
+        webView.scrollView.delaysContentTouches = false
+        webView.scrollView.canCancelContentTouches = false
+
         webView.isOpaque = false
         webView.backgroundColor = UIColor(red: 0.949, green: 0.945, blue: 0.949, alpha: 1)
         view.backgroundColor = webView.backgroundColor
-        webView.allowsBackForwardNavigationGestures = true
+
+        // 3. Screen-edge back/forward swipes arm on any contact within ~44pt of a screen edge
+        //    and cancel content touches when they recognise. On the two-pane desk the notebook
+        //    sits flush against an edge, so a word started near the margin could be cancelled —
+        //    or navigate the whole desk away mid-sentence. Routing is the web app's job here.
+        webView.allowsBackForwardNavigationGestures = false
+
+        // 4. Web Inspector. Without this, Safari on the Mac cannot see this web view at all
+        //    (iOS 16.4+ defaults isInspectable to false) — which is the reason four rounds of
+        //    pen fixes were only ever verified in a desktop browser that has none of the
+        //    native arbitration above.
+        if #available(iOS 16.4, *) { webView.isInspectable = true }
+
         view.addSubview(webView)
         self.webView = webView
 
@@ -235,6 +267,41 @@ extension ShellViewController: WKNavigationDelegate {
         }
         UIApplication.shared.open(url)
         decisionHandler(.cancel)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        disableScribble(in: webView)
+    }
+}
+
+extension ShellViewController {
+    /// Take iPadOS Scribble off the web view.
+    ///
+    /// Scribble is on by default whenever a Pencil is paired, and WebKit installs a scribble
+    /// interaction on its content view so a pencil can write into text fields. To do that, it
+    /// has to inspect the beginning of EVERY pencil contact and ask the web content process
+    /// whether there is something writable under the tip — an answer that arrives
+    /// asynchronously. While it is waiting, it is holding a claim on the touch it may still
+    /// cancel. On a page that is one large drawing canvas there is nothing for it to win, so
+    /// the only thing it can contribute is a stolen first stroke.
+    ///
+    /// WebKit re-adds the interaction across navigations, so this runs after every load.
+    /// UIIndirectScribbleInteraction is public API; removing an interaction we did not add is
+    /// the documented way for a drawing surface to opt out.
+    private func disableScribble(in webView: WKWebView) {
+        // Matched by class name: UIIndirectScribbleInteraction is generic over its delegate, so
+        // `is` cannot infer a type here, and WebKit's concrete interaction classes are private.
+        func isScribble(_ interaction: UIInteraction) -> Bool {
+            let name = NSStringFromClass(type(of: interaction) as AnyClass)
+            return name.contains("Scribble")
+        }
+        func strip(_ v: UIView) {
+            for interaction in v.interactions where isScribble(interaction) {
+                v.removeInteraction(interaction)
+            }
+            v.subviews.forEach(strip)
+        }
+        strip(webView)
     }
 }
 #endif

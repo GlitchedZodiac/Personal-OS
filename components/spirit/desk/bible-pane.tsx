@@ -34,6 +34,8 @@ export interface BiblePaneProps {
   query: string | null;
   /** a verse the shell wants selected once this pane has the passage — bumped `seq` re-arms it */
   pendingJump?: { refStart: number; refEnd: number | null; seq: number } | null;
+  /** tell the shell the jump has been taken, so a later remount cannot replay it */
+  onJumpConsumed?: (seq: number) => void;
   onQueryChange: (q: string) => void;
   free?: boolean;
   dayId?: string | null;
@@ -70,7 +72,7 @@ function refOf(el: HTMLElement | null): number | null {
   return v ? Number(v) : null;
 }
 
-export function BiblePane({ role, query, onQueryChange, pendingJump, free, dayId, layerContext, onKicker, headerExtra }: BiblePaneProps) {
+export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsumed, free, dayId, layerContext, onKicker, headerExtra }: BiblePaneProps) {
   const desk = useDesk();
   const { pen, bibleMode, setBibleMode, overlayVisibility, setOverlayVisibility, overlayMargin, setOverlayMargin, hand, prefs, emit } = desk;
   const readerRef = useRef<SpiritReaderHandle | null>(null);
@@ -109,7 +111,12 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, free, dayId
     const book = BOOKS[p.book - 1];
     if (!book) return; // an out-of-range ref would ask for the chapter "undefined 4"
     const target = `${book} ${p.chapter}`;
-    if (query && query.trim().toLowerCase() === target.toLowerCase()) {
+    // Guard on the chapter the pane is ACTUALLY rendering, not on the `query` prop. The Reader
+    // owns navigation internally (chapter chips, the navigator) and never calls back up, so the
+    // prop goes stale the moment he turns a page — and a stale prop here either no-ops a real
+    // jump or arms a pendingSelect that later hijacks an unrelated chapter.
+    const onThisChapterAlready = chapterKey !== null && chapterKey === p.book * 1000 + p.chapter;
+    if (onThisChapterAlready) {
       pendingSelect.current = null;
       selectVerseNow(refStart, refEnd);
       return;
@@ -117,7 +124,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, free, dayId
     setHistory((h) => (query ? [...h, query].slice(-12) : h));
     pendingSelect.current = { refStart, refEnd };
     onQueryChange(target);
-  }, [query, onQueryChange, selectVerseNow]);
+  }, [query, chapterKey, onQueryChange, selectVerseNow]);
   const [showChips, setShowChips] = useState(false);
   const [hover, setHover] = useState<{ left: number; top: number; width: number; num: number } | null>(null);
   const [hoverTip, setHoverTip] = useState<{ x: number; y: number } | null>(null);
@@ -174,7 +181,10 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, free, dayId
     if (!pendingJump || pendingJump.seq === lastJump.current) return;
     lastJump.current = pendingJump.seq;
     jumpToVerse(pendingJump.refStart, pendingJump.refEnd);
-  }, [pendingJump, jumpToVerse]);
+    // one-shot: without this the shell keeps the jump forever and a tab switch (which remounts
+    // the pane) replays it, yanking him off whatever chapter he had navigated to since
+    onJumpConsumed?.(pendingJump.seq);
+  }, [pendingJump, jumpToVerse, onJumpConsumed]);
 
   // ——— content size → overlay canvas size ———
   useEffect(() => {

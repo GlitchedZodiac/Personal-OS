@@ -11,6 +11,7 @@
 // Canvases are viewport-sized and follow the scroll, so a two-hour page
 // never allocates a bitmap taller than the screen.
 
+import { penTrace } from "@/lib/pen-trace";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import {
   BRUSHES,
@@ -27,6 +28,7 @@ import {
   strokeBounds,
   strokeBoundsOf,
   eraserCatches,
+  isTapContact,
   strokesInLasso,
   type InkPoint,
   type InkTool,
@@ -107,9 +109,6 @@ export interface InkCanvasProps {
   paper?: string;
 }
 
-const TAP_MS = 320;
-const TAP_PX = 7;
-/** a pen tap is a much smaller, quicker thing than a finger tap */
 // setPointerCapture throws NotFoundError if the pointer has already ended — iPadOS can
 // deliver a pointerup between the browser queueing pointerdown and React running our handler.
 // An uncaught throw here would abandon the rest of the handler, so it is never allowed to.
@@ -117,8 +116,6 @@ function capture(el: Element | null | undefined, pointerId: number) {
   try { el?.setPointerCapture(pointerId); } catch { /* pointer already gone */ }
 }
 
-const PEN_TAP_MS = 250;
-const PEN_TAP_PX = 6;
 /** touches this soon after a pen lift are the hand resting between letters, not a gesture */
 const PALM_AFTER_PEN_MS = 320;
 // two quarantined contacts landing this close together are a deliberate two-finger gesture,
@@ -233,23 +230,44 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   );
 
   // ——— viewport tracking (canvases follow the scroll) ———
+  /**
+   * During a live pinch an ancestor transform scales this element, revealing page area that
+   * was never measured — and the canvases, sized to the scroller's viewport, render it as
+   * blank paper. Widening the measured area for the duration of the gesture keeps ink on
+   * screen while he zooms out. The margin is the zoom-out headroom the pinch clamp allows.
+   */
+  const gestureMargin = useRef(1);
   const measure = useCallback(() => {
     const sc = scrollRef?.current;
     const wrap = wrapRef.current;
     if (!wrap) return;
+    const m = gestureMargin.current;
     if (sc) {
       const sr = sc.getBoundingClientRect();
       const wr = wrap.getBoundingClientRect();
-      const left = Math.max(0, sr.left - wr.left);
-      const top = Math.max(0, sr.top - wr.top);
-      const w = Math.min(sr.width, wr.width - left);
-      const h = Math.min(sr.height, wr.height - top);
+      const padX = (sr.width * (m - 1)) / 2;
+      const padY = (sr.height * (m - 1)) / 2;
+      const left = Math.max(0, sr.left - wr.left - padX);
+      const top = Math.max(0, sr.top - wr.top - padY);
+      const w = Math.min(sr.width * m, wr.width - left);
+      const h = Math.min(sr.height * m, wr.height - top);
       setViewport((v) => (v.left === left && v.top === top && v.w === w && v.h === h ? v : { left, top, w: Math.max(0, w), h: Math.max(0, h) }));
     } else {
       const wr = wrap.getBoundingClientRect();
       setViewport((v) => (v.w === wr.width && v.h === wr.height && v.left === 0 && v.top === 0 ? v : { left: 0, top: 0, w: wr.width, h: wr.height }));
     }
   }, [scrollRef]);
+  /** 2.2x covers the pinch clamp's full zoom-out headroom (0.45x) with room to spare */
+  const widenForGesture = useCallback(() => {
+    if (gestureMargin.current !== 1) return;
+    gestureMargin.current = 2.2;
+    measure();
+  }, [measure]);
+  const restoreAfterGesture = useCallback(() => {
+    if (gestureMargin.current === 1) return;
+    gestureMargin.current = 1;
+    measure();
+  }, [measure]);
 
   useLayoutEffect(() => {
     measure();
@@ -675,10 +693,16 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     const clientEnd = st.clientPts[st.clientPts.length - 1];
     if (cancelled) {
       setErasedNow(null);
-      // a cancelled DRAWING keeps: pointercancel arrives for system gestures and lost
-      // captures, and he has already seen the stroke on the page. Only the interpreted
-      // modes (erase/lasso) and one-sample dabs are dropped.
-      if (st.mode === "draw" && st.stroke.pts.length > 2) {
+      // A cancelled DRAWING always keeps, down to a single sample.
+      //
+      // pointercancel is not rare here and it is not the user's doing: it is what WebKit sends
+      // when a NATIVE gesture recogniser wins the contact — the web view's scroll view, a
+      // screen-edge back-swipe, Scribble. Arbitration is decided in the first samples, so the
+      // strokes stolen this way are precisely the SHORT ones, and requiring more than two
+      // points meant every stolen letter was deleted without a trace. That is what "it stops
+      // writing" looked like from his side of the glass. A pen that touched paper made a mark;
+      // there is no contact count at which it is safe to throw his ink away.
+      if (st.mode === "draw" && st.stroke.pts.length > 0) {
         const cPts = st.stroke.pts;
         commit({ ...st.stroke, pts: cPts }, {
           kind: "stroke",
@@ -693,18 +717,34 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       redrawLive();
       return;
     }
-    const tapMs = st.pointerType === "pen" ? PEN_TAP_MS : TAP_MS;
-    const tapPx = st.pointerType === "pen" ? PEN_TAP_PX : TAP_PX;
+
     // DISPLACEMENT from where it landed — movedPx is accumulated arc length, which a 240 Hz
     // Pencil racks up while standing still, so a real tap never registered.
-    const drift = Math.hypot(clientEnd.x - clientStart.x, clientEnd.y - clientStart.y);
+    // the bounding box of everything he actually drew, in client px — see isTapContact
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const c of st.clientPts) {
+      if (c.x < minX) minX = c.x;
+      if (c.x > maxX) maxX = c.x;
+      if (c.y < minY) minY = c.y;
+      if (c.y > maxY) maxY = c.y;
+    }
+    const spanPx = st.clientPts.length ? Math.max(maxX - minX, maxY - minY) : 0;
     // An eraser contact that caught nothing and never moved was him reaching for a control
     // underneath (chapter chips, the navigator, play) — let it through, or the Bible's UI is
     // dead whenever the eraser is up.
-    const eraserMissedAndStill = st.mode === "erase" && st.erased.size === 0 && durationMs < TAP_MS && drift < TAP_PX;
+    // ...but displacement ALONE cannot tell a tap from a loop: an "o", "a", "e", "d", "g", "0"
+    // or "8" ends within a pixel or two of where it started. Using drift by itself turned every
+    // closed letter into a dot. A tap is a contact that went nowhere AND travelled nowhere, so
+    // both the displacement and the arc length have to be small.
+    const isTap = isTapContact({ durationMs, spanPx, pointerType: st.pointerType });
+    // An eraser contact that caught nothing and never moved was him reaching for a control
+    // underneath (chapter chips, the navigator, play) — let it through, or the Bible's UI is
+    // dead whenever the eraser is up. Judged on the SAME thresholds the tap branch will use,
+    // so the two can never disagree and strand a contact that fires neither path.
+    const eraserMissedAndStill = st.mode === "erase" && st.erased.size === 0 && isTap;
     if (st.mode === "erase" && !eraserMissedAndStill) {
       // handled by the erase branch below
-    } else if (durationMs < tapMs && drift < tapPx) {
+    } else if (isTap) {
       const hit = onTap?.({ x: st.stroke.pts[0].x, y: st.stroke.pts[0].y, clientX: clientStart.x, clientY: clientStart.y, pointerType: st.pointerType });
       // belt and braces: a PEN that actually drew more than a dab keeps its ink even if
       // something claimed the tap. Ink is never destroyed by an ambiguous classification.
@@ -713,9 +753,12 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         redrawLive();
         return;
       }
-      // a pen tap on nothing: a dot
-      const dot: Stroke = { ...st.stroke, pts: [st.stroke.pts[0]] };
-      commit(dot, { kind: "dot", pts: dot.pts, bounds: strokeBoundsOf(dot.pts), tool: pen.tool, clientStart, clientEnd, clientPts: st.clientPts });
+      // A pen tap on nothing is a dot — but ONLY if it really was a dab. Anything with more
+      // samples than that is a mark he made, and truncating it to its first point is the
+      // silent handwriting loss this whole classifier exists to prevent. Keep every point.
+      const wasADot = st.raw.length <= 2;
+      const kept: Stroke = wasADot ? { ...st.stroke, pts: [st.stroke.pts[0]] } : st.stroke;
+      commit(kept, { kind: wasADot ? "dot" : "stroke", pts: kept.pts, bounds: strokeBoundsOf(kept.pts), tool: pen.tool, clientStart, clientEnd, clientPts: st.clientPts });
       redrawLive();
       return;
     }
@@ -776,9 +819,11 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     if (!stroke.region && regionFor) stroke.region = regionFor({ x: pt0.x, y: pt0.y }, info.clientStart);
     const verdict = decided ? "keep" : onStrokeEnd ? onStrokeEnd(stroke, info) : "keep";
     if (verdict === "discard") {
+      penTrace.record("up", { pointerType: "pen", pointerId: -1 }, { dropped: `onStrokeEnd discarded a ${info.kind}`, points: stroke.pts.length });
       ghosts.current.push({ stroke, born: nowMs() });
       return;
     }
+    penTrace.committed();
     if (anchorFor) stroke.anchor = anchorFor({ x: pt0.x, y: pt0.y }, info.clientStart) ?? null;
     const next = [...mirror.current, stroke];
     setMirror(next);
@@ -799,9 +844,12 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   const routeOf = useRef<Map<number, "ink" | "pan">>(new Map());
   // contacts the palm guard rejected, held briefly in case a second one proves them a pinch
   const quarantine = useRef<Map<number, { x: number; y: number; t: number }>>(new Map());
+  /** contacts that only got in via quarantine promotion — allowed to pinch, never to tap */
+  const promoted = useRef<Set<number>>(new Set());
   const pinchEndedAt = useRef(0);
   const routed = (e: React.PointerEvent) => routeOf.current.get(e.pointerId) ?? (pans(e) ? "pan" : "ink");
   const onPointerDown = (e: React.PointerEvent) => {
+    penTrace.record("down", e);
     if (!enabled) return;
     const wrap = wrapRef.current;
     routeOf.current.set(e.pointerId, pans(e) ? "pan" : "ink");
@@ -815,13 +863,26 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         const t0 = nowMs();
         for (const [id, q] of quarantine.current) if (t0 - q.t > PALM_PROMOTE_MS) quarantine.current.delete(id);
         quarantine.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: t0 });
-        if (quarantine.current.size >= 2) {
-          for (const [id, q] of quarantine.current) touches.current.set(id, { x: q.x, y: q.y, sx: q.x, sy: q.y, t: q.t, moved: 0 });
+        // Promote ONLY once the pen is off the glass. While he is writing, a settling hand
+        // puts down a heel and a pinky edge milliseconds apart — that is two contacts, and
+        // promoting them panned the page out from under the live stroke and could even fire
+        // the two-finger undo on the word he had just written. The quarantine exists for
+        // "lifts the pen, then pinches", which is the penLeftAt window, never penActive.
+        if (quarantine.current.size >= 2 && !penActive.current && !cur.current) {
+          for (const [id, q] of quarantine.current) {
+            touches.current.set(id, { x: q.x, y: q.y, sx: q.x, sy: q.y, t: q.t, moved: 0 });
+            promoted.current.add(id);
+          }
           quarantine.current.clear();
-          maxTouches.current = Math.max(maxTouches.current, touches.current.size);
+          // deliberately NOT advancing maxTouches: promoted contacts may only pinch. The
+          // two-finger tap is destructive (undo) and must never be reachable from a palm.
           const [a, b] = Array.from(touches.current.values());
           pinch.current = { d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
-          capture(wrap, e.pointerId);
+          widenForGesture();
+          // capture EVERY promoted contact — the first one never reached the normal capture
+          // path, so a pinch that shrinks the canvas out from under it would strand it in
+          // `touches` forever and kill finger gestures for the rest of the session.
+          for (const id of touches.current.keys()) capture(wrap, id);
         }
         return;
       }
@@ -851,6 +912,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       if (touches.current.size === 2) {
         const [a, b] = Array.from(touches.current.values());
         pinch.current = { d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+        widenForGesture();
       }
       capture(wrap, e.pointerId);
       return;
@@ -883,6 +945,10 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (penTrace.enabled) {
+      const ne = e.nativeEvent as PointerEvent;
+      penTrace.record("move", e, { coalesced: typeof ne.getCoalescedEvents === "function" ? ne.getCoalescedEvents().length : 0 });
+    }
     if (!enabled) return;
     if (routed(e) === "pan") {
       const t = touches.current.get(e.pointerId);
@@ -928,12 +994,16 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   };
 
   const onPointerUp = (e: React.PointerEvent, cancelled = false) => {
+    penTrace.record(cancelled ? "cancel" : "up", e, { points: cur.current?.stroke.pts.length ?? 0 });
     const route = routed(e);
     routeOf.current.delete(e.pointerId);
     quarantine.current.delete(e.pointerId);
+    const wasPromoted = promoted.current.delete(e.pointerId);
     if (route === "pan") {
       const t = touches.current.get(e.pointerId);
       touches.current.delete(e.pointerId);
+      // a palm that got in only to complete a pinch never counts as a deliberate tap
+      if (wasPromoted) maxTouches.current = 0;
       if (touchHold.current) {
         clearTimeout(touchHold.current);
         touchHold.current = null;
@@ -957,6 +1027,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         pinch.current = null;
         pinchEndedAt.current = nowMs();
         onZoomEnd?.();
+        restoreAfterGesture();
       }
       if (t && touches.current.size === 0) {
         const quick = nowMs() - t.t < 260 && t.moved < 10;
@@ -1010,7 +1081,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       onPointerMove={onPointerMove}
       onPointerUp={(e) => onPointerUp(e)}
       onPointerCancel={(e) => onPointerUp(e, true)}
-      onLostPointerCapture={(e) => { const st = cur.current; if (st && st.pointerId === e.pointerId) closeStroke(st); }}
+      onLostPointerCapture={(e) => { penTrace.record("lostcapture", e); const st = cur.current; if (st && st.pointerId === e.pointerId) closeStroke(st); }}
       onPointerLeave={onPointerLeave}
       onContextMenu={(e) => e.preventDefault()}
     >

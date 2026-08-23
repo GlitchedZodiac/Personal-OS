@@ -106,6 +106,7 @@ export function DeskShell(props: DeskShellProps) {
   // a verse the shell asked a Bible pane to show. `seq` re-arms it so tapping the same
   // reference card twice jumps twice.
   const [jump, setJump] = useState<{ refStart: number; refEnd: number | null; seq: number; to: "main" | "reference" } | null>(null);
+  const clearJump = useCallback((seq: number) => setJump((j) => (j && j.seq === seq ? null : j)), []);
   const [refQ, setRefQ] = useState<string | null>(props.refQ ?? props.mainQ);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [dragging, setDragging] = useState<"v" | "h" | null>(null);
@@ -169,7 +170,9 @@ export function DeskShell(props: DeskShellProps) {
       // The panes handle this themselves when one is open. The case only the SHELL can fix is
       // a tab with no Bible at all — Study is Notebook | Teaching — where the tap used to fire
       // into an empty room and look broken.
-      const hasBible = layout.text.includes("reference") || layout.text.includes("bible");
+      // BOTH columns — a Bible living in the writing slot is still a Bible, and splicing a
+      // second one in would double-handle the tap
+      const hasBible = [...layout.writing, ...layout.text].some((k) => k === "bible" || k === "reference");
       if (hasBible) return;
       const p = refParts(e.refStart);
       const book = BOOKS[p.book - 1];
@@ -288,7 +291,7 @@ export function DeskShell(props: DeskShellProps) {
       case "notebook":
         return <NotebookPane railSide={portrait ? (writingLeft ? "right" : "left") : railSide} context={context} initialPageId={pageId ?? null} dayId={dayId ?? null} onKicker={kicker} />;
       case "bible":
-        return <BiblePane role="main" query={mainQ} onQueryChange={setMainQ} pendingJump={jump?.to === "main" ? jump : null} free={free} dayId={dayId ?? null} layerContext={notebookPageLayerContext} onKicker={kicker} />;
+        return <BiblePane role="main" query={mainQ} onQueryChange={setMainQ} pendingJump={jump?.to === "main" ? jump : null} onJumpConsumed={clearJump} free={free} dayId={dayId ?? null} layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "reference":
         return <BiblePane role="reference" query={refQ} onQueryChange={setRefQ} free layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "teaching":
