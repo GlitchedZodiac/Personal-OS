@@ -3,6 +3,7 @@
 import { PinGate } from "@/components/pin-gate";
 import { NavStackTracker } from "@/components/nav-stack-tracker";
 import { DialogHost } from "@/components/spirit/desk/dialog";
+import { PenDebug } from "@/components/spirit/desk/pen-debug";
 
 // The iPad desk routes — full-bleed, no phone chrome (tab bar, dock,
 // sidebar). Below ~700pt the pages themselves step aside for the phone
@@ -52,6 +53,7 @@ export default function DeskLayout({ children }: { children: React.ReactNode }) 
       `}</style>
       <div className="desk-root min-h-screen bg-[#F2F1F2]" style={{ position: "relative" }} onContextMenu={(e) => { const t = e.target as HTMLElement; if (!(t.closest("input, textarea, [contenteditable='true']"))) e.preventDefault(); }}>{children}</div>
       <DialogHost />
+      <PenDebug />
     </PinGate>
   );
 }

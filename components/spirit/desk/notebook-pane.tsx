@@ -143,11 +143,16 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     wrap.style.willChange = "";
     wrap.style.transformOrigin = "";
     if (!sc || !st) return;
-    if (Math.abs(st.k - 1) < 0.005) return; // a two-finger pan, not a zoom
-    const next = Math.max(0.45, Math.min(3.2, zoom * st.k));
-    const applied = next / zoom; // what actually survived the clamp
-    setZoom(next);
-    haptic("soft");
+    // A two-finger drag at constant separation, or a pinch held against the zoom clamp, is a
+    // PAN: k stays 1 but the page tracked his fingers the whole way. Returning here cleared the
+    // transform and threw that away, so the page snapped back the instant he lifted.
+    const purePan = Math.abs(st.k - 1) < 0.005;
+    const next = purePan ? zoom : Math.max(0.45, Math.min(3.2, zoom * st.k));
+    const applied = purePan ? 1 : next / zoom; // what actually survived the clamp
+    if (!purePan) {
+      setZoom(next);
+      haptic("soft");
+    }
     // scrollLeft such that the grabbed wrapper point lands back under the fingers
     const left = st.wx * applied - st.fx;
     const top = st.wy * applied - st.fy;

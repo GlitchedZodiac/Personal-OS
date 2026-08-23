@@ -351,6 +351,36 @@ export function snapToLine(pts: InkPoint[]): InkPoint[] {
   return [a, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, p: 0.55, t: (a.t + b.t) / 2 }, b];
 }
 
+/** a finger tap is a bigger, slower thing than a pen tap */
+export const TAP_MS = 320;
+export const TAP_PX = 7;
+export const PEN_TAP_MS = 250;
+export const PEN_TAP_PX = 6;
+
+/**
+ * Was this contact a TAP, or was he writing?
+ *
+ * Judged on the bounding-box EXTENT of the whole contact path, because the two obvious
+ * measures are each wrong on their own, and both have shipped and broken his handwriting:
+ *   - arc length: a 240 Hz Pencil accumulates path length while standing perfectly still,
+ *     so a real tap never registered and taps on page objects did nothing;
+ *   - displacement (first point to last): "o", "a", "e", "d", "g", "0", "8" and every quick
+ *     loop end where they began, so each was classified a tap and replaced with a dot.
+ * Extent has neither failure: sensor jitter keeps the box a pixel or two wide, while a
+ * letter's box is the size of the letter. Extent is also >= displacement by construction,
+ * so it subsumes the drift test rather than needing to be combined with it.
+ */
+export function isTapContact(c: {
+  durationMs: number;
+  /** the widest dimension of the contact path's bounding box, in client px */
+  spanPx: number;
+  pointerType: string;
+}): boolean {
+  const ms = c.pointerType === "pen" ? PEN_TAP_MS : TAP_MS;
+  const px = c.pointerType === "pen" ? PEN_TAP_PX : TAP_PX;
+  return c.durationMs < ms && c.spanPx < px;
+}
+
 /**
  * Distance from a point to a stroke's POLYLINE — the segments, not just the sampled points.
  * `strokeDistanceTo` measures to points only, so a fast stroke (sparse samples) reads as far

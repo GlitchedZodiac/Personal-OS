@@ -183,6 +183,13 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
   const audPending = useRef(false);
   /** a verse chosen in the navigator, selected once its chapter arrives */
   const pendingVerse = useRef<number | null>(null);
+  /** select and reveal a verse in the passage that is already rendered */
+  const revealVerse = useCallback((want: number) => {
+    setSel(want);
+    setSelEnd(null);
+    setBar("act");
+    requestAnimationFrame(() => document.getElementById(`v-${want}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }, []);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
@@ -267,12 +274,7 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
     if (pendingVerse.current) {
       const want = pendingVerse.current;
       pendingVerse.current = null;
-      if (body.verses?.some((v) => v.refInt === want)) {
-        setSel(want);
-        setSelEnd(null);
-        setBar("act");
-        requestAnimationFrame(() => document.getElementById(`v-${want}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
-      }
+      if (body.verses?.some((v) => v.refInt === want)) revealVerse(want);
     }
     props.onPassageLoaded?.(body);
     const first = body.verses?.[0]?.refInt;
@@ -815,6 +817,15 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
               variant="popover"
               onClose={() => setNavOpen(false)}
               onPick={(query, verse) => {
+                // If he picks a verse in the chapter he is already reading, setQ is a no-op:
+                // React bails on the identical string, load() never re-runs, and a pending
+                // request would sit armed until some unrelated chapter loaded and stole it.
+                const sameChapter = !!q && query.trim().toLowerCase() === q.trim().toLowerCase();
+                if (sameChapter) {
+                  pendingVerse.current = null;
+                  if (verse) revealVerse(verse);
+                  return;
+                }
                 setQ(query);
                 if (verse) pendingVerse.current = verse;
               }}
