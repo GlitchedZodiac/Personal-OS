@@ -5,7 +5,101 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-23 (SPIRIT ON IPAD — round 4: the Pencil ink-loss bugs found and fixed (three separate causes), gestures rebuilt with an adversarial pass, the rail made legible, live erase, un-highlight, real audio transport, page trash with Undo. **One of his pages was lost during my testing — see below.**)
+**Last updated:** 2026-08-23 (SPIRIT ON IPAD — round 5: the PencilKit question answered — **no** — and the six remaining defects fixed, five of which were our own bugs. Live pinch restored, the eraser made honest, a Bible navigator, the reference jump routed from the shell, the audio dock frozen to the screen, and the native double-tap bridge finally installed on the iPad.)
+
+---
+
+## 2026-08-23 · Spirit on iPad — round 5: PencilKit answered, six defects closed
+
+**The question he asked:** "we might have to go pencil native kit … you're free
+to make pencil kit native take over if that's the case." An eight-agent
+investigation says **do not**. Five of his six complaints are bugs in this
+codebase; PencilKit fixes none of them and makes one *harder* (PKEraserTool
+draws its own indicator you cannot hook, so "outline what I'm about to erase"
+would mean abandoning PKEraserTool anyway). The sixth — Pencil double-tap — is
+genuinely native-only, and the native code was already written in round 4 but
+**had never been installed**: his iPad was running commit `53d0819`. Four
+rounds of web fixes could not have moved it. Full-native (his path B) is 3–6
+weeks, needs a bearer-token auth surface (`proxy.ts` exposes only
+`/api/mobile/*`), doubles the PORT GATE surface, and cannot express the Bible
+overlay's per-verse anchoring in PencilKit's single flat coordinate space.
+
+**PINCH — my own round-3 animation sweep broke it.** `.desk-page-in` runs
+`deskPageIn` with `fill-mode: both`; the *forwards* half keeps applying the
+keyframe's `transform: none` forever, and the CSS animation origin outranks the
+style attribute (CSS Cascading 4 §6.6.2). The pinch handler wrote its transform
+to that exact div (`notebook-pane.tsx:1166`), so it was set and never painted —
+precisely his "it only zooms after I've ended my gesture," because release goes
+through `setZoom` and a real relayout. Fixed by splitting the animated div from
+the transformed one, and moving every entry animation to `backwards` so the
+whole bug class is gone. **Proven:** computed scale tracks 1.37 → 3.2 through
+the gesture (locked at 1.0 before), on localhost *and* on production.
+
+**ERASER — the ring now tells the truth.** One predicate (`eraserCatches` in
+`lib/ink.ts`) both draws the circle and deletes the ink. It had two lies: the
+distance test sampled stroke POINTS, so a fast stroke's sparse samples survived
+under the circle; and the catch used `radius + s.width` (a full width) when a
+stroke's visible edge is a HALF width out. **Proven on his real page data:** a
+stationary dab erased a stroke whose nearest sampled point was **197 page units
+away** — impossible under the old test — and the removal persisted (22 → 21).
+`tests/ink-eraser.test.ts` asserts the drawn predicate IS the deleting one.
+Note: markers and highlighter are now very slightly less grabby. That is the
+price of the circle meaning what it says.
+
+**BIBLE NAVIGATION — there was none.** No book picker, no chapter grid, no verse
+jump anywhere in the Reader; the only navigation was three chapter chips and the
+`?q=` URL. A full picker existed at `/spirit/bible` but was reachable from
+exactly one place — the phone home — and unreachable from the desk.
+`components/spirit/bible-nav.tsx` makes it a component the Reader opens in
+place: OT/NT, book grid, chapter grid, type-ahead, recents. **Proven:** typing
+"rom 8:28" jumped to Romans 8:28.
+
+**REFERENCE JUMP — the event fired into an empty room.** `jump-reference-pane`
+was handled only by a mounted Bible pane, and his Study tab is Notebook |
+Teaching, which has none. The shell now owns the decision: it opens a Bible,
+jumps, and toasts. Panes keep their own handling, and a jump to the chapter
+already on screen selects immediately instead of arming a request that would
+later hijack an unrelated chapter. **Proven:** tapping the 1 Corinthians 1:10
+card in the Study tab spliced in a Bible pane, loaded the chapter, highlighted
+verse 10, and toasted "Opened 1 Corinthians 1".
+
+**AUDIO DOCK — frozen to the screen.** Portalled to `document.body`
+unconditionally (the `embedded` passthrough had it rendering inside the pane's
+scroller, pinned 118px above the bottom of the whole chapter). **Proven:** it is
+a direct child of `<body>`, `position: fixed`, 16px above the bottom, and moved
+**0 pixels** while the Bible pane scrolled 302px. Content gets bottom clearance
+while it is open.
+
+**Also:** palm-guard contacts are now *quarantined* rather than discarded, so a
+pinch begun right after writing a letter is no longer silently downgraded to a
+scroll (two contacts within 160 ms are a deliberate gesture); the pinch scroll
+origin is frozen against in-flight momentum; every `setPointerCapture` is
+guarded against `NotFoundError`; the eraser can no longer become the boot tool;
+and the pen popover no longer advertises Pencil Pro squeeze/hover/barrel-roll.
+
+**Hardware, measured off the device, not assumed:** `xcrun devicectl list
+devices` reports **iPad Air (5th generation), iPad13,16**. Apple Pencil Pro does
+not pair with an Air 5 at all — he is holding an Apple Pencil **2**. Double-tap
+works on it; squeeze, hover and barrel roll never will. The UI copy claiming
+otherwise is where his belief came from, and it is gone.
+
+**Five fixes I reported last round were never on disk.** My Python edit helper
+wrote a file only after every replacement in a batch succeeded; a later failing
+assertion silently discarded earlier successful ones, and I had already reported
+them as shipped. An audit caught it. All five are now applied and grep-verified
+individually rather than trusted from the script's output.
+
+**Build/tests:** `npm run build` green; 153/153 vitest pass (4 new).
+**Deployed 2026-08-23:** `main` `c8038aa` → Vercel production Ready (41 s).
+Verified on https://personal-os-plum.vercel.app with a minted cookie: pinch
+paints live (1.4 → 3.0), fill-mode `backwards`, the navigator button renders, no
+Pencil Pro copy remains. **Companion rebuilt and installed on his iPad**
+(`devicectl`, 2026-08-23) — this is the build that finally carries
+`UIPencilInteraction`, so double-tap can work for the first time.
+
+---
+
+**Superseded:** 2026-08-23 (SPIRIT ON IPAD — round 4: the Pencil ink-loss bugs found and fixed (three separate causes), gestures rebuilt with an adversarial pass, the rail made legible, live erase, un-highlight, real audio transport, page trash with Undo. **One of his pages was lost during my testing — see below.**)
 **Current phase:** both lanes are merged into `claude/watchos-workout-ui-ba4448`
 (2026-08-20) — the web tree from `main` plus the watch lane's Round 1+2 +
 Freestyle work. The watch is a designed instrument: Settings + bell rack, a
