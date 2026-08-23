@@ -25,7 +25,6 @@ import { askConfirm, askPrompt } from "./dialog";
 import { haptic } from "@/lib/haptics";
 import { getOrCreateMicrophoneStream, deactivateMicrophoneStream } from "@/lib/microphone";
 import { formatRef } from "@/lib/bible-refs";
-import { parseReadingRef } from "@/lib/spirit-refs";
 
 interface PageRow {
   id: string;
@@ -496,6 +495,10 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
           at = canvasRef.current.clientToPage(cx, cy);
         }
         void addRefCard(e.refStart, e.refEnd, e.label, e.text, at);
+      } else if (e.type === "capture-photo") {
+        fileRef.current?.click();
+      } else if (e.type === "capture-voice") {
+        void dictate();
       } else if (e.type === "notebook-open-page") {
         void openPage(e.pageId);
       } else if (e.type === "notebook-page-list") {
@@ -1064,16 +1067,6 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
         setPen({ tool: "text" });
         addTextBlock("", false, lastTap.current ?? undefined);
       }}
-      onRefCard={async () => {
-        const ref = await askPrompt({ title: "Reference card", placeholder: "e.g. Romans 9:6", confirmLabel: "Add card" });
-        if (!ref) return;
-        const segs = parseReadingRef(ref);
-        if (!segs.length) return toast.error("Couldn't read that reference.");
-        void addRefCard(segs[0].refStart, segs[0].refEnd, segs[0].label, "", lastTap.current ?? undefined);
-      }}
-      onPhoto={() => fileRef.current?.click()}
-      onMic={() => void dictate()}
-      micActive={dictating}
       compact={paneW < 420}
     />
   );
