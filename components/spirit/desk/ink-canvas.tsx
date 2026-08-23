@@ -27,6 +27,7 @@ import {
   streamline as smooth,
   strokeBounds,
   strokeBoundsOf,
+  densify,
   eraseFromStroke,
   isTapContact,
   strokesInLasso,
@@ -204,6 +205,8 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     erased: Set<string>;
     /** original stroke id → the pieces of it that survived this erase gesture */
     frags: Map<string, Stroke[]>;
+    /** where the eraser was at the end of the previous event, so the sweep has no gaps */
+    eraseFrom: { x: number; y: number };
     dragging: boolean;
   } | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -620,15 +623,14 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       mode,
       erased: new Set(),
       frags: new Map(),
+      eraseFrom: p,
       dragging: false,
     };
     if (mode === "erase") {
       // sweep at the landing point so the ring and its victims appear instantly
       const r0 = eraseRadius();
       for (const s of mirror.current) {
-        const off = offsetFor ? offsetFor(s) : null;
-        const local = off ? [{ x: p.x - off.x, y: p.y - off.y }] : [p];
-        const cut = eraseFromStroke(s, local, r0, newId);
+        const cut = eraseFromStroke(s, [p], r0, newId, { offset: offsetFor ? offsetFor(s) : null });
         if (cut === null) continue;
         cur.current!.erased.add(s.id);
         cur.current!.frags.set(s.id, cut);
@@ -704,15 +706,17 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       // off an L leaves the upright standing instead of taking the whole letter. The original is
       // hidden from the base layer via `erased`; its survivors ride the LIVE layer until he
       // lifts, which is what makes the ink shrink under the nib as he rubs.
+      // fill in the gaps between coalesced samples, or a fast sweep leaves slivers behind
+      const path = densify([{ x: st.eraseFrom.x, y: st.eraseFrom.y }, ...swept], r * 0.5);
+      st.eraseFrom = swept[swept.length - 1];
       for (const s of mirror.current) {
         const off = offsetFor ? offsetFor(s) : null;
-        const local = off ? swept.map((q) => ({ x: q.x - off.x, y: q.y - off.y })) : swept;
         // once cut, keep cutting the SURVIVORS, not the original
         const target = st.frags.get(s.id) ?? [s];
         const out: Stroke[] = [];
         let touched = false;
         for (const piece of target) {
-          const cut = eraseFromStroke(piece, local, r, newId);
+          const cut = eraseFromStroke(piece, path, r, newId, { offset: off });
           if (cut === null) { out.push(piece); continue; }
           touched = true;
           out.push(...cut);
