@@ -387,12 +387,15 @@ export function isTapContact(c: {
  * away even when the eraser is sitting right on top of the line between two of them. That is
  * what made the eraser ring a liar: it covered ink that refused to vanish.
  */
-export function strokeDistanceToSeg(s: Stroke, x: number, y: number): number {
+export function strokeDistanceToSeg(s: Stroke, x: number, y: number, stopBelow = -1): number {
   const pts = s.pts;
   if (pts.length === 0) return Infinity;
   if (pts.length === 1) return Math.hypot(pts[0].x - x, pts[0].y - y);
   let best = Infinity;
   for (let i = 1; i < pts.length; i++) {
+    // callers that only need "is it within R" can stop at the first segment that proves it,
+    // instead of walking all 40 segments of a stroke that was already caught by its second
+    if (stopBelow >= 0 && best < stopBelow) return best;
     const a = pts[i - 1], b = pts[i];
     const vx = b.x - a.x, vy = b.y - a.y;
     const L2 = vx * vx + vy * vy;
@@ -410,7 +413,75 @@ export function strokeDistanceToSeg(s: Stroke, x: number, y: number): number {
  * radius + width/2, not radius + width.
  */
 export function eraserCatches(s: Stroke, x: number, y: number, radius: number): boolean {
-  return strokeDistanceToSeg(s, x, y) < radius + s.width / 2;
+  return strokeDistanceToSeg(s, x, y, eraserReach(s, radius)) < eraserReach(s, radius);
+}
+
+/**
+ * How far the eraser reaches past its own ring for a given stroke: a stroke's visible edge is
+ * a HALF width out from its centreline. ONE name, used by the exact test, by the bounding-box
+ * rejection and by the ring — three places that must never disagree. They did once: the catch
+ * used a full `s.width` and grabbed from twice as far as the ring showed.
+ */
+export function eraserReach(s: Stroke, radius: number): number {
+  return radius + s.width / 2;
+}
+
+/** axis-aligned box around a stroke's CENTRELINE — no width padding, that is the reach's job */
+function centrelineBox(s: Stroke): { x0: number; y0: number; x1: number; y1: number } {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of s.pts) {
+    if (p.x < x0) x0 = p.x;
+    if (p.x > x1) x1 = p.x;
+    if (p.y < y0) y0 = p.y;
+    if (p.y > y1) y1 = p.y;
+  }
+  return { x0, y0, x1, y1 };
+}
+
+/**
+ * Cached on the POINTS ARRAY, not the stroke object and not the id: `pts` is replaced whenever
+ * the geometry changes, so a stale box is impossible, and a WeakMap lets a deleted stroke's
+ * entry be collected. Module state rather than a ref, so nothing is written during render and
+ * react-hooks/immutability has nothing to complain about.
+ */
+const boxCache = new WeakMap<Stroke["pts"], { x0: number; y0: number; x1: number; y1: number }>();
+function cachedBox(s: Stroke) {
+  let b = boxCache.get(s.pts);
+  if (!b) { b = centrelineBox(s); boxCache.set(s.pts, b); }
+  return b;
+}
+
+/**
+ * Which strokes does an eraser at these points take?
+ *
+ * Pure and exported so a fuzz test can hold it against a brute-force reference. The catch set
+ * is the contract: this must return exactly the strokes `eraserCatches` would, for every point
+ * given — the optimisation is only allowed to be faster, never different. The box rejection is
+ * inflated by the same `eraserReach` the exact test uses, so it can never reject a stroke the
+ * exact test would have caught.
+ */
+export function eraserSweep(
+  strokes: readonly Stroke[],
+  pts: readonly { x: number; y: number }[],
+  radius: number,
+  already: ReadonlySet<string>,
+  offsetFor?: ((s: Stroke) => { x: number; y: number } | null) | null,
+): string[] {
+  const caught: string[] = [];
+  for (const s of strokes) {
+    if (already.has(s.id) || s.pts.length === 0) continue;
+    const off = offsetFor ? offsetFor(s) : null;
+    const ox = off?.x ?? 0, oy = off?.y ?? 0;
+    const b = cachedBox(s);
+    const reach = eraserReach(s, radius);
+    for (const p of pts) {
+      const x = p.x - ox, y = p.y - oy;
+      // cheap rejection first — most strokes on a full page are nowhere near the tip
+      if (x < b.x0 - reach || x > b.x1 + reach || y < b.y0 - reach || y > b.y1 + reach) continue;
+      if (strokeDistanceToSeg(s, x, y, reach) < reach) { caught.push(s.id); break; }
+    }
+  }
+  return caught;
 }
 
 export function strokeDistanceTo(s: Stroke, x: number, y: number): number {

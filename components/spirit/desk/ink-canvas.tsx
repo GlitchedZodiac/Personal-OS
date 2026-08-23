@@ -27,7 +27,7 @@ import {
   streamline as smooth,
   strokeBounds,
   strokeBoundsOf,
-  eraserCatches,
+  eraserSweep,
   isTapContact,
   strokesInLasso,
   type InkPoint,
@@ -615,10 +615,8 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     };
     if (mode === "erase") {
       // sweep at the landing point so the ring and its victims appear instantly
-      const radius = eraseRadius();
-      for (const s of mirror.current) {
-        const off = offsetFor ? offsetFor(s) : null;
-        if (eraserCatches(s, p.x - (off?.x ?? 0), p.y - (off?.y ?? 0), radius)) cur.current!.erased.add(s.id);
+      for (const id of eraserSweep(mirror.current, [p], eraseRadius(), cur.current!.erased, offsetFor)) {
+        cur.current!.erased.add(id);
       }
       if (cur.current!.erased.size) setErasedNow(new Set(cur.current!.erased));
       redrawLive();
@@ -653,8 +651,13 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     const list: PointerEvent[] = typeof (e.nativeEvent as PointerEvent).getCoalescedEvents === "function" ? (e.nativeEvent as PointerEvent).getCoalescedEvents() : [];
     const events = list.length ? list : [e.nativeEvent as PointerEvent];
     const now = nowMs();
+    // every coalesced sample's page point, so the erase sweep can run ONCE per event over all
+    // of them instead of once per sample — same points tested, same strokes caught, C times
+    // less work (a 240 Hz Pencil delivers 4-8 samples a frame)
+    const swept: { x: number; y: number }[] = [];
     for (const ev of events) {
       const p = clientToPage(ev.clientX, ev.clientY);
+      if (st.mode === "erase") swept.push(p);
       const last = st.raw[st.raw.length - 1];
       const dpx = Math.hypot((p.x - last.x) * scale, (p.y - last.y) * scale);
       st.movedPx += dpx;
@@ -678,19 +681,14 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         st.holdStart = now;
       }
       st.lastMoveAt = now;
-      if (st.mode === "erase") {
-        const radius = eraseRadius();
-        const before = st.erased.size;
-        for (const s of mirror.current) {
-          if (st.erased.has(s.id)) continue;
-          const off = offsetFor ? offsetFor(s) : null;
-          if (eraserCatches(s, p.x - (off?.x ?? 0), p.y - (off?.y ?? 0), radius)) st.erased.add(s.id);
-        }
-        if (st.erased.size !== before) {
-          // it must feel like erasing: the ink goes NOW, not when the pen lifts
-          setErasedNow(new Set(st.erased));
-          onEraseTick?.();
-        }
+    }
+    if (st.mode === "erase" && swept.length) {
+      const caught = eraserSweep(mirror.current, swept, eraseRadius(), st.erased, offsetFor);
+      if (caught.length) {
+        for (const id of caught) st.erased.add(id);
+        // it must feel like erasing: the ink goes NOW, not when the pen lifts
+        setErasedNow(new Set(st.erased));
+        onEraseTick?.();
       }
     }
     redrawLive();

@@ -12,7 +12,7 @@
 // the rail + "which tool" chip; a press-hold on a verse lifts a reference
 // card across the seam. Nothing floats over text.
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SpiritReader, type SpiritReaderHandle } from "@/components/spirit/reader";
 import { InkCanvas, type InkCanvasHandle, type StrokeEndInfo } from "./ink-canvas";
 import { useDesk, useDeskEvent, hlColor } from "./desk-state";
@@ -152,6 +152,65 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const hasMarginInk = strokes.some((s) => s.region === "margin");
   const marginPx = overlayVisibility === "hide" ? 0 : MARGIN_W[Math.max(overlayMargin, hasMarginInk ? 1 : 0) as 0 | 1 | 2];
   const marginSide: "left" | "right" = hand === "left" ? "left" : "right";
+
+  // ——— stable props for SpiritReader ———
+  // These are the reason React.memo could never engage: a fresh Set, a fresh object and three
+  // fresh closures on every render meant the reader re-rendered on every stroke commit, every
+  // save flush and every hover move even though nothing it displays had changed.
+  const marginInsetProp = useMemo(() => ({ side: marginSide, px: marginPx }), [marginSide, marginPx]);
+  const inkChaptersProp = useMemo(
+    () => (chapterKey
+      ? new Set(Array.from(inkChapters).filter((k) => Math.floor(k / 1000) === Math.floor(chapterKey / 1000)).map((k) => k % 1000))
+      : null),
+    [inkChapters, chapterKey],
+  );
+  const handleOpenRef = useCallback((q: string, label?: string) => {
+    if (role === "main") emit({ type: "open-reference", q, label, source: "crossref" });
+    else onQueryChange(q);
+  }, [role, emit, onQueryChange]);
+  const handleChapterChange = useCallback((ck: number) => setChapterKey(ck), []);
+  const handlePassageLoaded = useCallback((d: { canonical: string }) => {
+              setTitle(d.canonical);
+              const ps = pendingSelect.current;
+              if (ps) {
+                pendingSelect.current = null;
+                selectVerseNow(ps.refStart, ps.refEnd);
+              }
+              // opening a study reopens the Bible AT the assignment — once per chapter
+              // load; the verses commit a tick after the data arrives, so retry briefly
+              const key = `${d.canonical}`;
+              if (scrolledTo.current !== key) {
+                let tries = 0;
+                const attempt = () => {
+                  const sc = scrollRef.current;
+                  const el = contentRef.current?.querySelector<HTMLElement>("[data-assigned]");
+                  // "ready" means the verse is laid out below the fold; an early pass sees it at ~0
+                  const top = sc && el ? el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 72 : 0;
+                  if (sc && el && top > 40) {
+                    scrolledTo.current = key;
+                    sc.scrollTo({ top, behavior: "smooth" });
+                    // the pinned-page / overlay loads that follow can briefly shrink the
+                    // content and clamp the scroll back to 0 — re-apply once it settles
+                    [700, 1600].forEach((ms) =>
+                      setTimeout(() => {
+                        const s2 = scrollRef.current;
+                        const e2 = contentRef.current?.querySelector<HTMLElement>("[data-assigned]");
+                        if (!s2 || !e2 || s2.scrollTop > 40) return;
+                        const t2 = e2.getBoundingClientRect().top - s2.getBoundingClientRect().top + s2.scrollTop - 72;
+                        if (t2 > 40) s2.scrollTo({ top: t2 });
+                      }, ms),
+                    );
+                    return;
+                  }
+                  if (sc && el && sc.scrollTop > 40) {
+                    scrolledTo.current = key; // he already scrolled — leave him be
+                    return;
+                  }
+                  if (++tries < 10) setTimeout(attempt, 60 * tries);
+                };
+                setTimeout(attempt, 0); // a timer, not rAF — rAF starves when the view isn't compositing (background tab, hidden pane)
+              }
+              }, [selectVerseNow]);
   const pinned = strokes.length > 0 && !unpinned;
   const alpha = overlayVisibility === "show" ? 1 : overlayVisibility === "dim" ? 0.22 : 0;
 
@@ -520,14 +579,14 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   };
 
   // ——— action bar ———
-  const onSelectionChange = (s: number | null, e: number | null) => {
+  const onSelectionChange = useCallback((s: number | null, e: number | null) => {
     setSel({ start: s, end: e });
-    if (s !== null && lastTapClient.current && !barAnchor) setBarAnchor(lastTapClient.current);
+    if (s !== null) { const tap = lastTapClient.current; if (tap) setBarAnchor((prev) => prev ?? tap); }
     if (s === null) {
       setBarAnchor(null);
       setShowChips(false);
     }
-  };
+  }, []);
   const barAction = (a: BarAction) => {
     haptic(a === "send" ? "success" : "light");
     const reader = readerRef.current;
@@ -721,56 +780,12 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
             role={role}
             externalActionBar
             typeLocked={pinned}
-            marginInset={{ side: marginSide, px: marginPx }}
-            inkChapters={chapterKey ? new Set(Array.from(inkChapters).filter((k) => Math.floor(k / 1000) === Math.floor(chapterKey / 1000)).map((k) => k % 1000)) : null}
-            onOpenRef={(q, label) => {
-              if (role === "main") emit({ type: "open-reference", q, label, source: "crossref" });
-              else onQueryChange(q);
-            }}
+            marginInset={marginInsetProp}
+            inkChapters={inkChaptersProp}
+            onOpenRef={handleOpenRef}
             onQueryChange={onQueryChange}
-            onPassageLoaded={(d) => {
-              setTitle(d.canonical);
-              const ps = pendingSelect.current;
-              if (ps) {
-                pendingSelect.current = null;
-                selectVerseNow(ps.refStart, ps.refEnd);
-              }
-              // opening a study reopens the Bible AT the assignment — once per chapter
-              // load; the verses commit a tick after the data arrives, so retry briefly
-              const key = `${d.canonical}`;
-              if (scrolledTo.current !== key) {
-                let tries = 0;
-                const attempt = () => {
-                  const sc = scrollRef.current;
-                  const el = contentRef.current?.querySelector<HTMLElement>("[data-assigned]");
-                  // "ready" means the verse is laid out below the fold; an early pass sees it at ~0
-                  const top = sc && el ? el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 72 : 0;
-                  if (sc && el && top > 40) {
-                    scrolledTo.current = key;
-                    sc.scrollTo({ top, behavior: "smooth" });
-                    // the pinned-page / overlay loads that follow can briefly shrink the
-                    // content and clamp the scroll back to 0 — re-apply once it settles
-                    [700, 1600].forEach((ms) =>
-                      setTimeout(() => {
-                        const s2 = scrollRef.current;
-                        const e2 = contentRef.current?.querySelector<HTMLElement>("[data-assigned]");
-                        if (!s2 || !e2 || s2.scrollTop > 40) return;
-                        const t2 = e2.getBoundingClientRect().top - s2.getBoundingClientRect().top + s2.scrollTop - 72;
-                        if (t2 > 40) s2.scrollTo({ top: t2 });
-                      }, ms),
-                    );
-                    return;
-                  }
-                  if (sc && el && sc.scrollTop > 40) {
-                    scrolledTo.current = key; // he already scrolled — leave him be
-                    return;
-                  }
-                  if (++tries < 10) setTimeout(attempt, 60 * tries);
-                };
-                setTimeout(attempt, 0); // a timer, not rAF — rAF starves when the view isn't compositing (background tab, hidden pane)
-              }
-            }}
-            onChapterChange={(ck) => setChapterKey(ck)}
+            onPassageLoaded={handlePassageLoaded}
+            onChapterChange={handleChapterChange}
             onSelectionChange={onSelectionChange}
           />
           {contentSize.w > 0 && (
