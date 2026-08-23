@@ -111,7 +111,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   // and re-rasterised at the new scale on release with the point under the fingers held
   // exactly in place. Two fingers moving together pan as well as scale.
   const pageWrapRef = useRef<HTMLDivElement | null>(null);
-  const pinchRef = useRef<{ wx: number; wy: number; k: number; fx: number; fy: number } | null>(null);
+  const pinchRef = useRef<{ wx: number; wy: number; k: number; fx: number; fy: number; sl: number; st: number } | null>(null);
   const onPinchZoom = (k: number, center: { x: number; y: number }) => {
     const sc = scrollRef.current, wrap = pageWrapRef.current;
     if (!sc || !wrap) return;
@@ -119,7 +119,11 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     const fx = center.x - r.left, fy = center.y - r.top; // focal, in the scroller's viewport
     if (!pinchRef.current) {
       // wrapper-pixel coordinate of the point the fingers grabbed
-      pinchRef.current = { wx: fx + sc.scrollLeft, wy: fy + sc.scrollTop, k: 1, fx, fy };
+      // freeze the scroll origin: momentum still in flight would otherwise slide the page
+      // out from under his fingers mid-pinch
+      pinchRef.current = { wx: fx + sc.scrollLeft, wy: fy + sc.scrollTop, k: 1, fx, fy, sl: sc.scrollLeft, st: sc.scrollTop };
+      wrap.style.willChange = "transform"; // promote the layer BEFORE the first painted frame
+      wrap.style.transformOrigin = "0 0";
     }
     const st = pinchRef.current;
     const clamped = Math.max(0.45 / zoom, Math.min(3.2 / zoom, k));
@@ -127,11 +131,9 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     st.fx = fx;
     st.fy = fy;
     // put the grabbed point back under the fingers, scaled — this is the whole trick
-    const tx = fx + sc.scrollLeft - clamped * st.wx;
-    const ty = fy + sc.scrollTop - clamped * st.wy;
-    wrap.style.transformOrigin = "0 0";
+    const tx = fx + st.sl - clamped * st.wx;
+    const ty = fy + st.st - clamped * st.wy;
     wrap.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${clamped})`;
-    wrap.style.willChange = "transform";
   };
   const onPinchEnd = () => {
     const sc = scrollRef.current, wrap = pageWrapRef.current, st = pinchRef.current;
@@ -1163,7 +1165,10 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
             </div>
           )}
           {mode === "page" && page && (
-            <div ref={pageWrapRef} key={page.id} className="desk-page-in" style={{ position: "relative", width: PAGE_W * scale, minHeight: "100%" }}>
+            <div key={page.id} className="desk-page-in" style={{ position: "relative", width: PAGE_W * scale, minHeight: "100%" }}>
+              {/* the pinch transform lives on its OWN div with no class — an animation on the
+                  same element would outrank this inline transform and never paint it */}
+              <div ref={pageWrapRef} style={{ position: "relative", width: "100%", minHeight: "100%" }}>
               <InkCanvas
                 ref={canvasRef}
                 strokes={strokes}
@@ -1205,7 +1210,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
               {lasso && moving && (
                 <div
                   onPointerDown={(e) => {
-                    e.currentTarget.setPointerCapture(e.pointerId);
+                    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pointer already ended */ }
                     moveStart.current = { x: e.clientX, y: e.clientY, orig: lassoStrokes().map((s) => ({ ...s, pts: s.pts.map((p) => ({ ...p })) })) };
                   }}
                   onPointerMove={(e) => {
@@ -1229,6 +1234,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
                   style={{ position: "absolute", left: (lasso.bounds.x - 8) * scale, top: (lasso.bounds.y - 8) * scale, width: (lasso.bounds.w + 16) * scale, height: (lasso.bounds.h + 16) * scale, border: "1.5px dashed #A63D63", borderRadius: 8, background: "rgba(166,61,99,0.06)", cursor: "move", zIndex: 11, touchAction: "none" }}
                 />
               )}
+              </div>
             </div>
           )}
           {mode === "page" && !page && <div style={{ padding: 24, fontSize: 12, color: "#96949B" }}>Opening the page…</div>}

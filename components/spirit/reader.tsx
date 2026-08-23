@@ -18,6 +18,8 @@ import {
 import { useReaderPrefs, READER_SIZES, type ReaderTheme } from "@/lib/spirit-theme";
 import { assignedInChapter, type RefSegment } from "@/lib/spirit-refs";
 import { useBackTo } from "@/lib/nav-stack";
+import { BibleNav } from "./bible-nav";
+import { haptic } from "@/lib/haptics";
 
 // 2026-08-22: the Reader became a COMPONENT so the iPad desk can host it
 // as a pane (main or reference Bible) — embedded mode hides the page
@@ -169,6 +171,7 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
   // two-stage crossref tooltip (footnotes are single-stage): verse+marker+stage
   const [tip, setTip] = useState<{ refInt: number; letter: string; stage: 1 | 2; text?: string; kind: "cf" | "fn" } | null>(null);
   // audio mini-player
+  const [navOpen, setNavOpen] = useState(false);
   const [audOn, setAudOn] = useState(false);
   const [audPlaying, setAudPlaying] = useState(false);
   const [audSpeed, setAudSpeed] = useState(1); // index into SPEEDS
@@ -178,6 +181,8 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
   const [scrubT, setScrubT] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audPending = useRef(false);
+  /** a verse chosen in the navigator, selected once its chapter arrives */
+  const pendingVerse = useRef<number | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
@@ -259,6 +264,16 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
     setErr(null);
     const body = (await res.json()) as PassageData;
     setData(body);
+    if (pendingVerse.current) {
+      const want = pendingVerse.current;
+      pendingVerse.current = null;
+      if (body.verses?.some((v) => v.refInt === want)) {
+        setSel(want);
+        setSelEnd(null);
+        setBar("act");
+        requestAnimationFrame(() => document.getElementById(`v-${want}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+      }
+    }
     props.onPassageLoaded?.(body);
     const first = body.verses?.[0]?.refInt;
     if (first) {
@@ -691,6 +706,8 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
       style={{
         background: T.bg,
         ...(props.marginInset && props.marginInset.px > 0 ? { [props.marginInset.side === "left" ? "paddingLeft" : "paddingRight"]: props.marginInset.px + 12 } : {}),
+        // the floating transport hovers over the page — the last verse must still scroll clear of it
+        ...(audOn && data?.audioUrl ? { paddingBottom: embedded ? 108 : 236 } : {}),
       }}
     >
       {!embedded && (
@@ -767,6 +784,44 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
           </span>
         </div>
       )}
+
+      {/* the whole canon, three taps away — this is how you leave the chapter you are in */}
+      <div className="relative mt-3.5">
+        <button
+          onClick={() => { setNavOpen((v) => !v); haptic("selection"); }}
+          className="tap-scale flex w-full items-center gap-2 rounded-[12px] border px-3.5 py-[10px] text-left"
+          style={{ borderColor: navOpen ? "#A63D63" : T.rule, background: T.card }}
+          aria-label="Choose a book, chapter or verse"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A63D63" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H19v14H5.5A1.5 1.5 0 0 0 4 19.5V5.5Z" />
+            <path d="M19 18v2.5H5.5" />
+          </svg>
+          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold" style={{ fontFamily: "var(--font-display)", color: T.ink }}>
+            {data?.canonical ?? q ?? "Choose a passage"}
+          </span>
+          <span className="flex-none text-[10px]" style={{ color: T.faint }}>{navOpen ? "close" : "book · chapter · verse"}</span>
+          <span className="flex-none text-[9px]" style={{ color: T.faint }}>⌄</span>
+        </button>
+        {navOpen && (
+          <div
+            className="absolute inset-x-0 z-[45] mt-1.5 rounded-[16px] border p-3"
+            style={{ background: T.card, borderColor: T.rule, boxShadow: "0 18px 48px rgba(20,15,18,0.26)" }}
+          >
+            <BibleNav
+              currentBook={cur?.book ?? null}
+              currentChapter={cur?.chapter ?? null}
+              tokens={{ card: T.card, ink: T.ink, sub: T.sub, faint: T.faint, rule: T.rule, chip: T.chip }}
+              variant="popover"
+              onClose={() => setNavOpen(false)}
+              onPick={(query, verse) => {
+                setQ(query);
+                if (verse) pendingVerse.current = verse;
+              }}
+            />
+          </div>
+        )}
+      </div>
 
       {/* chapter chips · ESV⇄NBLA · Aa · ▶ */}
       <div className="mt-3.5 flex items-center gap-1.5">
@@ -1334,14 +1389,23 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
         />
       )}
       {audOn && data?.audioUrl && (
-        <Portal>
+        <SheetPortal>
           <div
-            className={`${embedded ? "absolute inset-x-3 z-[32]" : "fixed inset-x-3.5 z-[80]"} rounded-2xl border px-3 py-2.5`}
+            className="fixed z-[95] rounded-2xl border px-3 py-2.5"
             style={{
-              bottom: "calc(env(safe-area-inset-bottom) + 118px)",
+              // frozen to the SCREEN, centred, so he can follow along and still reach it —
+              // body-mounted because a transformed ancestor would otherwise capture "fixed"
+              left: "50%",
+              // translateZ gives the dock its own compositing layer, so the ink canvas
+              // repainting underneath never drags it along
+              transform: "translateX(-50%) translateZ(0)",
+              width: "min(680px, calc(100vw - 28px))",
+              bottom: "max(calc(env(safe-area-inset-bottom, 0px) + 16px), 16px)",
               background: T.card,
               borderColor: T.rule,
-              boxShadow: "0 12px 32px rgba(20,15,18,0.28)",
+              boxShadow: "0 18px 44px rgba(20,15,18,0.34)",
+              backdropFilter: "saturate(180%) blur(8px)",
+              WebkitBackdropFilter: "saturate(180%) blur(8px)",
             }}
           >
             <div className="flex items-center gap-2.5">
@@ -1421,7 +1485,7 @@ export const SpiritReader = forwardRef<SpiritReaderHandle, SpiritReaderProps>(fu
               </button>
             </div>
           </div>
-        </Portal>
+        </SheetPortal>
       )}
 
       {/* ——— action bar sheet ——— */}

@@ -21,6 +21,7 @@ import {
   type MarginStep,
 } from "@/lib/desk-prefs";
 import type { InkTool } from "@/lib/ink";
+import { haptic } from "@/lib/haptics";
 
 export type PenTool = "fountain" | "gpen" | "pencil" | "marker" | "highlighter" | "eraser" | "lasso" | "text" | "hand";
 
@@ -137,6 +138,34 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
     setOverlayMarginState(p.overlay.margin);
   }
 
+  /**
+   * Apple Pencil double-tap. UIKit hands it to the companion (WebShellView's
+   * UIPencilInteraction), which dispatches 'pitaya-pencil' here. Double-tap swaps to the
+   * eraser and back to whatever he was holding; the swap is deliberately NOT persisted, so
+   * a flick of the pencil never rewrites his saved default.
+   */
+  const beforeEraser = useRef<PenTool | null>(null);
+  useEffect(() => {
+    const onPencil = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ kind?: string; action?: string }>).detail ?? {};
+      if (detail.action === "ignore") return;
+      setPenState((cur) => {
+        if (detail.action === "palette" || detail.action === "attributes") return cur;
+        // eraser | previous — both mean "the other tool" here
+        if (cur.tool === "eraser") {
+          const back = beforeEraser.current ?? cur.brush;
+          beforeEraser.current = null;
+          return { ...cur, tool: back };
+        }
+        beforeEraser.current = cur.tool;
+        return { ...cur, tool: "eraser" };
+      });
+      haptic("rigid");
+    };
+    window.addEventListener("pitaya-pencil", onPencil);
+    return () => window.removeEventListener("pitaya-pencil", onPencil);
+  }, []);
+
   // boot: local first, then the server's copy (a microtask after mount, so the
   // server-rendered markup hydrates before the local prefs reshape the desk)
   useEffect(() => {
@@ -196,7 +225,9 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
             ...p,
             pen: {
               ...p.pen,
-              tool: (next.tool === "text" ? p.pen.tool : next.tool) as DeskPrefs["pen"]["tool"],
+              // "text" and "eraser" are transient modes, never a boot tool — a width nudge
+              // while erasing must not make the eraser what the desk opens with tomorrow
+              tool: (next.tool === "text" || next.tool === "eraser" ? p.pen.tool : next.tool) as DeskPrefs["pen"]["tool"],
               brush: next.brush,
               widthStep: next.widthStep,
               widthMul: next.widthMul,

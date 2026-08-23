@@ -351,6 +351,38 @@ export function snapToLine(pts: InkPoint[]): InkPoint[] {
   return [a, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, p: 0.55, t: (a.t + b.t) / 2 }, b];
 }
 
+/**
+ * Distance from a point to a stroke's POLYLINE — the segments, not just the sampled points.
+ * `strokeDistanceTo` measures to points only, so a fast stroke (sparse samples) reads as far
+ * away even when the eraser is sitting right on top of the line between two of them. That is
+ * what made the eraser ring a liar: it covered ink that refused to vanish.
+ */
+export function strokeDistanceToSeg(s: Stroke, x: number, y: number): number {
+  const pts = s.pts;
+  if (pts.length === 0) return Infinity;
+  if (pts.length === 1) return Math.hypot(pts[0].x - x, pts[0].y - y);
+  let best = Infinity;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    const vx = b.x - a.x, vy = b.y - a.y;
+    const L2 = vx * vx + vy * vy;
+    const u = L2 > 0 ? Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / L2)) : 0;
+    const d = Math.hypot(a.x + u * vx - x, a.y + u * vy - y);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+/**
+ * THE eraser predicate. The ring the user sees and the strokes that actually die are drawn
+ * from this one expression — two expressions that merely agree today will disagree tomorrow.
+ * A stroke's visible edge is a HALF width out from its centreline, so the catch is
+ * radius + width/2, not radius + width.
+ */
+export function eraserCatches(s: Stroke, x: number, y: number, radius: number): boolean {
+  return strokeDistanceToSeg(s, x, y) < radius + s.width / 2;
+}
+
 export function strokeDistanceTo(s: Stroke, x: number, y: number): number {
   let best = Infinity;
   for (const pt of s.pts) {

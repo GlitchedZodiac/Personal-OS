@@ -26,7 +26,7 @@ import {
   streamline as smooth,
   strokeBounds,
   strokeBoundsOf,
-  strokeDistanceTo,
+  eraserCatches,
   strokesInLasso,
   type InkPoint,
   type InkTool,
@@ -110,10 +110,22 @@ export interface InkCanvasProps {
 const TAP_MS = 320;
 const TAP_PX = 7;
 /** a pen tap is a much smaller, quicker thing than a finger tap */
-const PEN_TAP_MS = 180;
-const PEN_TAP_PX = 3;
+// setPointerCapture throws NotFoundError if the pointer has already ended — iPadOS can
+// deliver a pointerup between the browser queueing pointerdown and React running our handler.
+// An uncaught throw here would abandon the rest of the handler, so it is never allowed to.
+function capture(el: Element | null | undefined, pointerId: number) {
+  try { el?.setPointerCapture(pointerId); } catch { /* pointer already gone */ }
+}
+
+const PEN_TAP_MS = 250;
+const PEN_TAP_PX = 6;
 /** touches this soon after a pen lift are the hand resting between letters, not a gesture */
-const PALM_AFTER_PEN_MS = 900;
+const PALM_AFTER_PEN_MS = 320;
+// two quarantined contacts landing this close together are a deliberate two-finger gesture,
+// never a resting palm — he writes a letter and pinches in the same breath
+const PALM_PROMOTE_MS = 160;
+// after a pinch ends the surviving finger must not immediately pan, or the page lurches
+const PAN_AFTER_PINCH_MS = 160;
 const HOLD_MS = 520;
 const HOLD_PX = 5;
 
@@ -395,6 +407,11 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   );
 
   const redrawRef = useRef<(() => void) | null>(null);
+  /** the continuous nib size — the eraser ring and every stroke width come from this */
+  const widthMul = pen.widthMul ?? WIDTH_STEPS[pen.widthStep];
+  // ONE source of truth for the eraser's size: the ring that is drawn and the catch test
+  // that deletes read the same number, in page units.
+  const eraseRadius = useCallback(() => (8 + widthMul * 5) / scale, [widthMul, scale]);
   const redrawLive = useCallback(() => {
     const c = liveRef.current;
     if (!c || viewport.w <= 0) return;
@@ -419,6 +436,33 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     }
     const st = cur.current;
     if (st && st.mode === "draw" && !st.dragging) drawStroke(ctx, st.stroke, { alphaScale: alpha });
+    // ——— the eraser shows its work: a ring the true size of the eraser, and the strokes
+    // it is about to take outlined underneath it. Visible from the instant it touches down.
+    if (st && st.mode === "erase" && !st.dragging) {
+      const tip = st.stroke.pts[st.stroke.pts.length - 1];
+      const radius = eraseRadius(); // the SAME number the catch test uses — the ring cannot lie
+      ctx.save();
+      // what will go
+      for (const s of mirror.current) {
+        if (!st.erased.has(s.id)) continue;
+        const off = offsetFor ? offsetFor(s) : null;
+        drawStroke(ctx, s, { offsetX: off?.x ?? 0, offsetY: off?.y ?? 0, alphaScale: 0.28, colorOverride: "#B4533F" });
+      }
+      // the ring
+      ctx.beginPath();
+      ctx.arc(tip.x, tip.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(180,83,63,0.10)";
+      ctx.fill();
+      ctx.lineWidth = 1.5 / scale;
+      ctx.strokeStyle = "#B4533F";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(tip.x, tip.y, radius + 1.5 / scale, 0, Math.PI * 2);
+      ctx.lineWidth = 1 / scale;
+      ctx.strokeStyle = "rgba(255,255,255,0.9)"; // a hairline so the ring reads on dark ink too
+      ctx.stroke();
+      ctx.restore();
+    }
     if (st && st.mode === "lasso" && st.stroke.pts.length > 1) {
       ctx.save();
       ctx.strokeStyle = "#A63D63";
@@ -433,7 +477,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       ctx.restore();
     }
     if (ghosts.current.length) requestAnimationFrame(() => redrawRef.current?.());
-  }, [viewport, scale, dpr, alpha]);
+  }, [viewport, scale, dpr, alpha, offsetFor, eraseRadius]);
   useEffect(() => {
     redrawRef.current = redrawLive;
     redrawLive();
@@ -476,7 +520,6 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     if (pen.tool === "highlighter") return "marker";
     return null;
   };
-  const widthMul = pen.widthMul ?? WIDTH_STEPS[pen.widthStep];
   const strokeWidthFor = (tool: InkTool) => BRUSHES[tool].base * widthMul * (tool === "marker" && pen.tool === "highlighter" ? 2.2 : 1);
 
   const pressureOf = (e: React.PointerEvent | PointerEvent) => {
@@ -516,10 +559,20 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       erased: new Set(),
       dragging: false,
     };
+    if (mode === "erase") {
+      // sweep at the landing point so the ring and its victims appear instantly
+      const radius = eraseRadius();
+      for (const s of mirror.current) {
+        const off = offsetFor ? offsetFor(s) : null;
+        if (eraserCatches(s, p.x - (off?.x ?? 0), p.y - (off?.y ?? 0), radius)) cur.current!.erased.add(s.id);
+      }
+      if (cur.current!.erased.size) setErasedNow(new Set(cur.current!.erased));
+      redrawLive();
+    }
     if (holdTimer.current) clearTimeout(holdTimer.current);
     // hold→drag: any writing tool may hand off. The eraser and lasso never do — their drags
     // are destructive/selective and a hand-off would be a nasty surprise.
-    const holdTool = pen.tool !== "eraser" && pen.tool !== "lasso";
+    const holdTool = pen.tool === "fountain" || pen.tool === "gpen" || pen.tool === "pencil" || pen.tool === "marker";
     if (onHold && holdTool && mode === "draw") {
       const pid = e.pointerId;
       const client = { x: e.clientX, y: e.clientY };
@@ -572,12 +625,12 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       }
       st.lastMoveAt = now;
       if (st.mode === "erase") {
-        const radius = (8 + widthMul * 5) / scale;
+        const radius = eraseRadius();
         const before = st.erased.size;
         for (const s of mirror.current) {
           if (st.erased.has(s.id)) continue;
           const off = offsetFor ? offsetFor(s) : null;
-          if (strokeDistanceTo(s, p.x - (off?.x ?? 0), p.y - (off?.y ?? 0)) < radius + s.width) st.erased.add(s.id);
+          if (eraserCatches(s, p.x - (off?.x ?? 0), p.y - (off?.y ?? 0), radius)) st.erased.add(s.id);
         }
         if (st.erased.size !== before) {
           // it must feel like erasing: the ink goes NOW, not when the pen lifts
@@ -640,10 +693,18 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       redrawLive();
       return;
     }
-    // tap? (a pen writing must clear a much lower bar before it counts as a tap)
     const tapMs = st.pointerType === "pen" ? PEN_TAP_MS : TAP_MS;
     const tapPx = st.pointerType === "pen" ? PEN_TAP_PX : TAP_PX;
-    if (durationMs < tapMs && st.movedPx < tapPx) {
+    // DISPLACEMENT from where it landed — movedPx is accumulated arc length, which a 240 Hz
+    // Pencil racks up while standing still, so a real tap never registered.
+    const drift = Math.hypot(clientEnd.x - clientStart.x, clientEnd.y - clientStart.y);
+    // An eraser contact that caught nothing and never moved was him reaching for a control
+    // underneath (chapter chips, the navigator, play) — let it through, or the Bible's UI is
+    // dead whenever the eraser is up.
+    const eraserMissedAndStill = st.mode === "erase" && st.erased.size === 0 && durationMs < TAP_MS && drift < TAP_PX;
+    if (st.mode === "erase" && !eraserMissedAndStill) {
+      // handled by the erase branch below
+    } else if (durationMs < tapMs && drift < tapPx) {
       const hit = onTap?.({ x: st.stroke.pts[0].x, y: st.stroke.pts[0].y, clientX: clientStart.x, clientY: clientStart.y, pointerType: st.pointerType });
       // belt and braces: a PEN that actually drew more than a dab keeps its ink even if
       // something claimed the tap. Ink is never destroyed by an ambiguous classification.
@@ -736,18 +797,40 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
    * latching penActive true — after which no finger worked on that canvas again.
    */
   const routeOf = useRef<Map<number, "ink" | "pan">>(new Map());
+  // contacts the palm guard rejected, held briefly in case a second one proves them a pinch
+  const quarantine = useRef<Map<number, { x: number; y: number; t: number }>>(new Map());
+  const pinchEndedAt = useRef(0);
   const routed = (e: React.PointerEvent) => routeOf.current.get(e.pointerId) ?? (pans(e) ? "pan" : "ink");
   const onPointerDown = (e: React.PointerEvent) => {
     if (!enabled) return;
     const wrap = wrapRef.current;
     routeOf.current.set(e.pointerId, pans(e) ? "pan" : "ink");
     if (routed(e) === "pan") {
-      if (pen.tool !== "hand" && (penActive.current || nowMs() - penLeftAt.current < PALM_AFTER_PEN_MS)) return; // palm
+      // a resting palm is a palm whatever tool is up; but a finger arriving while another is
+      // already down is a deliberate gesture (pinch, undo tap) and must get through
+      if (e.pointerType === "touch" && touches.current.size === 0 && (penActive.current || nowMs() - penLeftAt.current < PALM_AFTER_PEN_MS)) {
+        // Quarantine rather than discard. ONE contact just after a pen lift is a resting
+        // palm. TWO within PALM_PROMOTE_MS is a pinch he means — and discarding the first
+        // one is why zooming right after writing a word silently became a scroll.
+        const t0 = nowMs();
+        for (const [id, q] of quarantine.current) if (t0 - q.t > PALM_PROMOTE_MS) quarantine.current.delete(id);
+        quarantine.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: t0 });
+        if (quarantine.current.size >= 2) {
+          for (const [id, q] of quarantine.current) touches.current.set(id, { x: q.x, y: q.y, sx: q.x, sy: q.y, t: q.t, moved: 0 });
+          quarantine.current.clear();
+          maxTouches.current = Math.max(maxTouches.current, touches.current.size);
+          const [a, b] = Array.from(touches.current.values());
+          pinch.current = { d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+          capture(wrap, e.pointerId);
+        }
+        return;
+      }
+      quarantine.current.delete(e.pointerId);
       touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: nowMs(), moved: 0 });
       if (touches.current.size === 1 && onSelectDragStart?.({ x: e.clientX, y: e.clientY })) {
         // a finger on the verse gutter drags a range instead of scrolling
         selDrag.current = { id: e.pointerId, from: { x: e.clientX, y: e.clientY } };
-        wrap?.setPointerCapture(e.pointerId);
+        capture(wrap, e.pointerId);
         return;
       }
       // press and hold with one finger → the same hand-off the pen gets (his "click and hold")
@@ -769,7 +852,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         const [a, b] = Array.from(touches.current.values());
         pinch.current = { d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
       }
-      wrap?.setPointerCapture(e.pointerId);
+      capture(wrap, e.pointerId);
       return;
     }
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -791,7 +874,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       }
     }
     try {
-      wrap?.setPointerCapture(e.pointerId);
+      capture(wrap, e.pointerId);
     } catch {
       // a contact that already ended — the events still arrive
     }
@@ -823,6 +906,8 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         touchHold.current = null;
       }
       if (touches.current.size === 1) {
+        // the finger left over from a pinch must not yank the page as the other lifts
+        if (nowMs() - pinchEndedAt.current < PAN_AFTER_PINCH_MS) return;
         scrollRef?.current?.scrollBy(-dx, -dy);
       } else if (touches.current.size === 2 && pinch.current) {
         const [a, b] = Array.from(touches.current.values());
@@ -845,6 +930,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   const onPointerUp = (e: React.PointerEvent, cancelled = false) => {
     const route = routed(e);
     routeOf.current.delete(e.pointerId);
+    quarantine.current.delete(e.pointerId);
     if (route === "pan") {
       const t = touches.current.get(e.pointerId);
       touches.current.delete(e.pointerId);
@@ -869,6 +955,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       }
       if (touches.current.size < 2 && pinch.current) {
         pinch.current = null;
+        pinchEndedAt.current = nowMs();
         onZoomEnd?.();
       }
       if (t && touches.current.size === 0) {

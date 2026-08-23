@@ -17,7 +17,10 @@ export default function DeskLayout({ children }: { children: React.ReactNode }) 
       <style>{`
         .desk-root, .desk-root * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
         .desk-root input, .desk-root textarea, .desk-root [contenteditable="true"], .desk-root input *, .desk-root textarea * { -webkit-user-select: text; user-select: text; }
-        /* ——— motion: every interaction has weight ——— */
+        /* ——— motion: every interaction has weight ———
+           fill-mode is backwards, never both. The forwards half keeps applying the keyframe
+           end state (transform: none) FOREVER, and the animation cascade origin outranks the
+           style attribute — which silently ate the live pinch transform on .desk-page-in. */
         @keyframes deskFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes deskFadeOut { from { opacity: 1; } to { opacity: 0; } }
         @keyframes deskPopIn { from { opacity: 0; transform: translateY(10px) scale(.94); } to { opacity: 1; transform: none; } }
@@ -34,14 +37,14 @@ export default function DeskLayout({ children }: { children: React.ReactNode }) 
         .desk-root button:not([data-no-press]):active { transform: scale(.95); }
         .desk-root a { transition: transform .14s cubic-bezier(.2,.8,.2,1), background-color .18s ease, box-shadow .18s ease; }
         .desk-root a:active { transform: scale(.97); }
-        .desk-page-in { animation: deskPageIn .38s cubic-bezier(.2,.9,.25,1) both; }
-        .desk-stagger > * { animation: deskStaggerIn .46s cubic-bezier(.2,.9,.25,1) both; }
+        .desk-page-in { animation: deskPageIn .38s cubic-bezier(.2,.9,.25,1) backwards; }
+        .desk-stagger > * { animation: deskStaggerIn .46s cubic-bezier(.2,.9,.25,1) backwards; }
         .desk-stagger > *:nth-child(1) { animation-delay: .02s } .desk-stagger > *:nth-child(2) { animation-delay: .07s } .desk-stagger > *:nth-child(3) { animation-delay: .12s }
         .desk-stagger > *:nth-child(4) { animation-delay: .17s } .desk-stagger > *:nth-child(5) { animation-delay: .22s } .desk-stagger > *:nth-child(6) { animation-delay: .27s }
         .desk-stagger > *:nth-child(7) { animation-delay: .32s } .desk-stagger > *:nth-child(8) { animation-delay: .37s } .desk-stagger > *:nth-child(n+9) { animation-delay: .42s }
-        .desk-card-drop { animation: deskCardDrop .5s cubic-bezier(.2,.9,.3,1.2) both; }
-        .desk-chip-pop { animation: deskChipPop .32s cubic-bezier(.2,.9,.3,1.2) both; }
-        .desk-tool-pop { animation: deskToolPop .28s cubic-bezier(.2,.9,.3,1.2) both; }
+        .desk-card-drop { animation: deskCardDrop .5s cubic-bezier(.2,.9,.3,1.2) backwards; }
+        .desk-chip-pop { animation: deskChipPop .32s cubic-bezier(.2,.9,.3,1.2) backwards; }
+        .desk-tool-pop { animation: deskToolPop .28s cubic-bezier(.2,.9,.3,1.2) backwards; }
         .desk-pulse { animation: deskPulseRing 1.4s ease-out infinite; }
         .desk-lift { transition: transform .22s cubic-bezier(.2,.9,.25,1), box-shadow .22s ease; }
         .desk-lift:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(35,34,39,0.10); }

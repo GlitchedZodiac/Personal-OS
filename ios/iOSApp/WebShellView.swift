@@ -75,6 +75,12 @@ final class ShellViewController: UIViewController {
         view.addSubview(webView)
         self.webView = webView
 
+        // Apple Pencil double-tap (and squeeze on a Pencil Pro) never reaches a web view —
+        // UIKit delivers it to native code only. Catch it here and hand it to the page.
+        let pencil = UIPencilInteraction()
+        pencil.delegate = self
+        webView.addInteraction(pencil)
+
         // Apple Pencil reaches the web ink engine as pointer events with
         // pressure + tilt; finger scrolling stays native. Nothing to bridge
         // for V1 — PencilKit is the upgrade path (docs/deferred-items.md).
@@ -128,6 +134,48 @@ final class HapticBridge: NSObject, WKScriptMessageHandler {
             default: light.impactOccurred()
             }
         }
+    }
+}
+
+// MARK: - Apple Pencil double-tap / squeeze -> the desk
+
+extension ShellViewController: UIPencilInteractionDelegate {
+    /// What the SYSTEM setting says the double-tap should mean. Respecting it means the
+    /// gesture behaves the same here as it does in Notes and Procreate.
+    private func actionName(for action: UIPencilPreferredAction) -> String {
+        switch action {
+        case .switchEraser: return "eraser"
+        case .switchPrevious: return "previous"
+        case .showColorPalette: return "palette"
+        case .showInkAttributes: return "attributes"
+        case .ignore: return "ignore"
+        @unknown default: return "eraser"
+        }
+    }
+
+    private func sendPencil(_ kind: String, _ action: String) {
+        let js = "window.dispatchEvent(new CustomEvent('pitaya-pencil',{detail:{kind:'\(kind)',action:'\(action)'}}))"
+        DispatchQueue.main.async { [weak self] in
+            self?.webView?.evaluateJavaScript(js, completionHandler: nil)
+        }
+    }
+
+    // iPadOS 17.5+ — carries which physical gesture fired.
+    @available(iOS 17.5, *)
+    func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveTap tap: UIPencilInteraction.Tap) {
+        sendPencil("doubleTap", actionName(for: UIPencilInteraction.preferredTapAction))
+    }
+
+    @available(iOS 17.5, *)
+    func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveSqueeze squeeze: UIPencilInteraction.Squeeze) {
+        guard squeeze.phase == .ended else { return }
+        sendPencil("squeeze", "palette")
+    }
+
+    // Pre-17.5 path — still the one that fires for an Apple Pencil 2 on older systems.
+    @available(iOS, introduced: 12.1, deprecated: 17.5)
+    func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
+        sendPencil("doubleTap", actionName(for: UIPencilInteraction.preferredTapAction))
     }
 }
 

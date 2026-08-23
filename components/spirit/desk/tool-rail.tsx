@@ -43,7 +43,7 @@ const Slider = ({ label, value, onChange }: { label: string; value: number; onCh
       style={{ width: 8, height: 56, borderRadius: 99, background: "#EDEBEE", position: "relative", cursor: "pointer", touchAction: "none" }}
       onPointerDown={(e) => {
         const el = e.currentTarget;
-        el.setPointerCapture(e.pointerId);
+        try { el.setPointerCapture(e.pointerId); } catch { /* pointer already ended */ }
         const move = (ev: PointerEvent | React.PointerEvent) => {
           const r = el.getBoundingClientRect();
           const f = 1 - Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
