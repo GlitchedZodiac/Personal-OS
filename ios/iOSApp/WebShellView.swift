@@ -78,11 +78,13 @@ final class ShellViewController: UIViewController {
         // Arbitration restarts on EVERY pen-down, which is why writing letter by letter — lift,
         // land, lift, land — was so much worse than writing a continuous line.
         //
-        // 1. delaysContentTouches (default TRUE) withholds touchesBegan from the web content
-        //    for ~150 ms while the scroll view decides whether this is a scroll. That delay is
-        //    literally the symptom he reported: "lag in reading the pencil between contact."
-        // 2. canCancelContentTouches (default TRUE) lets the scroll view take back a contact it
-        //    has ALREADY handed to the page. That is the stroke dying halfway through a letter.
+        // 1 & 2. delaysContentTouches / canCancelContentTouches. CAVEAT, recorded honestly:
+        //    these gate the UIResponder touchesBegan path, and WebKit takes web touches through
+        //    WKContentView's OWN gesture recogniser instead — so these two are quite possibly
+        //    INERT here. They are set because they cost nothing and the defaults are wrong for a
+        //    writing surface, NOT because they are known to be the fix. If the pen improves,
+        //    do not credit these lines without evidence; the ones with a demonstrated mechanism
+        //    are the edge-swipe recognisers and the Scribble strip below.
         // Neither costs us anything: the page does its own finger panning in JS (ink-canvas's
         // scrollBy) inside its own overflow:auto panes. The web view's scroll view has nothing
         // to scroll here, so all it can do is steal.
@@ -294,7 +296,16 @@ extension ShellViewController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        // WebKit can add the scribble interaction lazily — sometimes not until the first pencil
+        // contact — so one pass at didFinish is not enough. Sweep again over the next few
+        // seconds. Each pass is a cheap walk of a shallow view tree.
         disableScribble(in: webView)
+        for delay in [0.25, 1.0, 3.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak webView] in
+                guard let webView else { return }
+                self?.disableScribble(in: webView)
+            }
+        }
     }
 }
 

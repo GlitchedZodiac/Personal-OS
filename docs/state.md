@@ -5,7 +5,101 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-23 (SPIRIT ON IPAD — round 5: the PencilKit question answered — **no** — and the six remaining defects fixed, five of which were our own bugs. Live pinch restored, the eraser made honest, a Bible navigator, the reference jump routed from the shell, the audio dock frozen to the screen, and the native double-tap bridge finally installed on the iPad.)
+**Last updated:** 2026-08-23 (SPIRIT ON IPAD — round 6: the Pencil root cause found in the layer nobody had looked at — the NATIVE shell — plus two handwriting-destroying regressions round 5 shipped. First on-device instrumentation in the project's history.)
+
+---
+
+## 2026-08-23 · Spirit on iPad — round 6: the pen, found in the native shell
+
+**His verdict on round 5:** "pen is still busted. don't know what to do here. maybe rebuild
+it from scratch?"
+
+**Why five rounds missed it.** Every one was verified in a desktop Chrome harness driven by a
+mouse — an environment with no Pencil, no pressure, no 240 Hz coalesced samples, no Scribble,
+no UIScrollView and no UIKit gesture arbitration. The harness structurally could not contain
+the failure. Worse, `webView.isInspectable` was never set, so since iOS 16.4 the companion's
+web view has been **invisible to Safari Web Inspector** — nobody could have observed a single
+pointer event on his hardware even if they had tried.
+
+**THE MECHANISM.** Native gesture recognisers arbitrate over every pen-down. When one wins,
+WebKit sends the page `pointercancel` — and three things then went wrong:
+
+1. **A cancelled stroke was only kept if it had MORE than two points** (`ink-canvas.tsx`).
+   Arbitration is decided in the first samples, so the stolen strokes were precisely the short
+   ones. Every stolen letter was deleted without a trace.
+2. **After a cancel the pen was dead for the rest of the contact.** A cancel ends the stroke
+   but does not lift the pen — it is still on the glass and still moving, and every subsequent
+   `pointermove` fell through to the inert hover branch. Word for word: *"it becomes
+   unresponsive and it stops writing."* A pen still down now starts a fresh stroke, so a steal
+   costs a seam in one letter rather than the rest of the word.
+3. **His own resting palm was firing the two-finger UNDO between letters.** He pauses about a
+   second with his hand down; the palm guard covered only 320 ms, so a hand that rocks or
+   re-seats read as a deliberate two-finger tap wired straight to `undo()`. Destructive
+   gestures now wait 1.5 s after a pen lift; pan and pinch stay permissive.
+
+Arbitration restarts on EVERY pen-down, which is exactly why letter-by-letter was worse than a
+continuous line.
+
+**Native shell (`WebShellView.swift`), all previously unset:** `allowsBackForwardNavigationGestures`
+off (edge recognisers cancel content touches, and the notebook sits flush to a screen edge);
+iPadOS **Scribble stripped** from the web view after every load and again at 0.25/1/3 s, since
+WebKit can add it lazily (it inspects the start of every pencil contact and holds a cancellable
+claim while it asks the web process — asynchronously — whether anything writable is underneath);
+`isInspectable = true`. **Honest caveat, recorded in the code itself:** `delaysContentTouches`
+and `canCancelContentTouches` were also set false, but they gate the UIResponder `touchesBegan`
+path while WebKit takes web touches through WKContentView's own recogniser — they are quite
+possibly INERT here. They are set because the defaults are wrong for a writing surface, **not**
+because they are known to be the fix. If the pen improves, do not credit those two lines.
+
+**The page also never CLAIMED its touches.** `touch-action: none` tells WebKit "do not scroll
+here"; it does not tell WebKit "the page handled this". The ink surface now calls
+`preventDefault` on non-passive `touchstart`/`touchmove`, scoped to the canvas.
+
+**TWO REGRESSIONS ROUND 5 SHIPPED**, both caught by an adversarial review of its own diff:
+
+- **Every closed letter became a dot.** Round 5's tap-by-displacement measured start-to-end
+  drift, and "o", "a", "e", "d", "g", "0", "8" end where they began. Measured against 89 of his
+  real strokes in Supabase, 3 of 88 multi-point marks (17, 24 and 28 samples) fell inside the
+  250 ms/6 px window and were replaced with a single point. Under round 4's tighter 180/3 the
+  same data yields zero — so **the build he condemned was the first build in which it could
+  ever fire.** The classifier now judges bounding-box EXTENT (jitter cannot inflate it, a
+  letter cannot fake it), lives in `lib/ink.ts` as `isTapContact` behind unit tests, and the
+  fall-through no longer truncates a real mark to its first point.
+- **Palm-guard promotion fired while the pen was on the glass**, so a settling hand became a
+  live pinch that panned the page out from under the stroke and could reach the undo tap.
+
+**INSTRUMENTATION — the first ever taken on his hardware.** `lib/pen-trace.ts` +
+`components/spirit/desk/pen-debug.tsx`: `?pendebug=1` (also linked from desk-settings, since he
+cannot type a URL inside the companion) renders a live readout of contacts, cancels, lost
+captures, the gap between letters, and `downToFirstMove` — how long a touch was withheld before
+the page saw it. Reading it: **cancelled > 0 while writing = something is stealing the pen**;
+**downToFirstMove > 40 ms = the touch is withheld before the page sees it**. The bundle also
+carries its commit (`NEXT_PUBLIC_BUILD`), and the shell reloads a web view suspended over 15
+minutes — but never while ink is unsaved (`window.__pitayaHasUnsavedInk`). A WKWebView document
+loaded once in `viewDidLoad` can survive weeks of suspend/resume, which is how round 4's fixes
+came to be judged against a build that was never running.
+
+**Rebuild verdict: NO, not yet.** PencilKit would be round 7 of the same mistake — new
+unmeasured code validated in the same harness. It fixes none of the above (the bug was in the
+shell), and the Bible overlay can never be native: its strokes anchor to live `[data-verse]`
+rects, which PencilKit's single flat coordinate space cannot express. Full design is in
+`docs/deferred-items.md`, gated on the measurement.
+
+**Verified on localhost and prod:** an "o" persists as a 13-point letter, not a 1-point dot; a
+contact stolen mid-word continues as a second stroke covering 313 page units instead of the
+rest of the word vanishing; 4 pen contacts with 1 cancelled mid-letter → 4 strokes kept.
+**Build/tests:** build green, 168/168 vitest (12 new across `ink-eraser` and `ink-pen-path`,
+the latter seeded with his three real measured marks).
+**Deployed:** `main` `a5b8ef7` → Vercel production Ready. **Companion built and installed**
+(`devicectl`, 2026-08-23 ~09:20) — verified by markers in `PersonalOS.debug.dylib`, not by
+trusting the install log. NOTE: this is a debug-dylib build; the 92 KB `PersonalOS` is only a
+launcher stub, so inspect `PersonalOS.debug.dylib` when checking what shipped. A later build
+(09:41, the Scribble hardening + settings link) is **built but NOT installed** — his iPad went
+`unavailable` to `devicectl` before it could be pushed.
+
+---
+
+**Superseded:** 2026-08-23 (SPIRIT ON IPAD — round 5: the PencilKit question answered — **no** — and the six remaining defects fixed, five of which were our own bugs. Live pinch restored, the eraser made honest, a Bible navigator, the reference jump routed from the shell, the audio dock frozen to the screen, and the native double-tap bridge finally installed on the iPad.)
 
 ---
 

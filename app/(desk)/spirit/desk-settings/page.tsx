@@ -145,6 +145,21 @@ export default function DeskSettingsPage() {
             </div>
             <div style={{ fontSize: 10.5, color: "#96949B", marginTop: 10 }}>Tool, color, layout and last position persist per context — opening a study page reopens the Bible at the assignment.</div>
           </div>
+
+          <div style={card}>
+            {head("PEN DIAGNOSTICS", <span style={{ fontSize: 10.5, color: "#96949B" }}>build {process.env.NEXT_PUBLIC_BUILD}</span>)}
+            <div style={{ fontSize: 10.5, color: "#96949B", marginTop: 9, lineHeight: 1.6 }}>
+              Turns on a readout in the corner of the desk that counts what the Apple Pencil actually does — contacts,
+              cancelled contacts, and how long each touch was held back before the page saw it. If <b>cancelled</b> stays
+              at zero while you write, nothing is stealing the pen. If it climbs, something is.
+            </div>
+            <a
+              href="/spirit/desk?pendebug=1"
+              style={{ display: "inline-block", marginTop: 11, fontSize: 11.5, fontWeight: 700, color: "#8C2F51", border: "1px solid #E4E2E6", borderRadius: 9, padding: "7px 12px", textDecoration: "none" }}
+            >
+              Open the desk with the pen readout →
+            </a>
+          </div>
         </div>
       </div>
     </div>
