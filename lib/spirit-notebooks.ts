@@ -217,7 +217,7 @@ export const json = (v: unknown) => v as Prisma.InputJsonValue;
  * are removed, and every caller gets the same page back.
  */
 export async function canonicalPage(where: Prisma.InkPageWhereInput, fallback: InkPage): Promise<InkPage> {
-  const all = await prisma.inkPage.findMany({ where, orderBy: { createdAt: "asc" } });
+  const all = await prisma.inkPage.findMany({ where: { ...where, deletedAt: null }, orderBy: { createdAt: "asc" } });
   if (all.length <= 1) return all[0] ?? fallback;
   const [keep, ...extra] = all;
   const empties = extra.filter((p) => p.strokeCount === 0 && !p.recordingId && !p.transcribedAt).map((p) => p.id);

@@ -22,7 +22,7 @@ import {
 } from "@/lib/desk-prefs";
 import type { InkTool } from "@/lib/ink";
 
-export type PenTool = "fountain" | "gpen" | "pencil" | "marker" | "highlighter" | "eraser" | "lasso" | "text";
+export type PenTool = "fountain" | "gpen" | "pencil" | "marker" | "highlighter" | "eraser" | "lasso" | "text" | "hand";
 
 export interface PenState {
   tool: PenTool;

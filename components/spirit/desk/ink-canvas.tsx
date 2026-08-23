@@ -76,9 +76,12 @@ export interface InkCanvasProps {
   /** return true when the tap hit something (a pen tap then makes no dot) */
   onTap?: (pt: { x: number; y: number; clientX: number; clientY: number; pointerType: string }) => boolean | void;
   onLasso?: (selected: Stroke[], polygon: InkPoint[], bounds: { x: number; y: number; w: number; h: number }) => void;
+  /** fires the moment the eraser catches a stroke (a haptic tick) */
+  onEraseTick?: () => void;
   onUndoGesture?: () => void;
   onRedoGesture?: () => void;
-  onZoom?: (factor: number, center: { x: number; y: number }) => void;
+  /** cumulative scale since the pinch began (NOT incremental) + the live midpoint of the two fingers */
+  onZoom?: (k: number, center: { x: number; y: number }) => void;
   /** the pinch lifted — commit the live zoom */
   onZoomEnd?: () => void;
   selectedIds?: Set<string> | null;
@@ -88,8 +91,14 @@ export interface InkCanvasProps {
   offsetFor?: (s: Stroke) => { x: number; y: number } | null;
   regionFor?: (pt: { x: number; y: number }, clientPt: { x: number; y: number }) => "text" | "margin";
   fingerDraws?: boolean;
+  /** hold-still-to-snap a shape (off by default: it straightens handwriting) */
+  quickShape?: boolean;
   /** press-hold with no movement: return true to take the pointer over as a drag (ref card in flight) */
   onHold?: (pt: { x: number; y: number; clientX: number; clientY: number; pointerType: string }) => boolean | void;
+  /** a finger landed here — return true to make this contact a range-drag instead of a scroll */
+  onSelectDragStart?: (client: { x: number; y: number }) => boolean | void;
+  onSelectDragMove?: (from: { x: number; y: number }, to: { x: number; y: number }) => void;
+  onSelectDragEnd?: (client?: { x: number; y: number }) => void;
   onDragMove?: (client: { x: number; y: number }) => void;
   onDragEnd?: (client: { x: number; y: number }, cancelled: boolean) => void;
   style?: CSSProperties;
@@ -100,6 +109,11 @@ export interface InkCanvasProps {
 
 const TAP_MS = 320;
 const TAP_PX = 7;
+/** a pen tap is a much smaller, quicker thing than a finger tap */
+const PEN_TAP_MS = 180;
+const PEN_TAP_PX = 3;
+/** touches this soon after a pen lift are the hand resting between letters, not a gesture */
+const PALM_AFTER_PEN_MS = 900;
 const HOLD_MS = 520;
 const HOLD_PX = 5;
 
@@ -120,6 +134,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     onHover,
     onTap,
     onLasso,
+    onEraseTick,
     onUndoGesture,
     onRedoGesture,
     onZoom,
@@ -130,7 +145,11 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     offsetFor,
     regionFor,
     fingerDraws = false,
+    quickShape = false,
     onHold,
+    onSelectDragStart,
+    onSelectDragMove,
+    onSelectDragEnd,
     onDragMove,
     onDragEnd,
     style,
@@ -140,6 +159,12 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   const desk = useDesk();
   const { pen, recordingSeconds } = desk;
   const penActive = useRef(false); // palm rejection is per canvas: touch is inert while this canvas's pen is down
+  /** when the pen last left the glass — writing letter by letter lifts it constantly while the
+      palm stays down, so touches inside this window are the hand, not a finger gesture */
+  const penLeftAt = useRef(0);
+  const touchHold = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchDrag = useRef<number | null>(null);
+  const selDrag = useRef<{ id: number; from: { x: number; y: number } } | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const baseRef = useRef<HTMLCanvasElement | null>(null);
   const liveRef = useRef<HTMLCanvasElement | null>(null);
@@ -169,23 +194,30 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
 
   const dpr = typeof window !== "undefined" ? Math.min(2, window.devicePixelRatio || 1) : 1;
 
+  /**
+   * The wrapper can carry a live pinch transform this canvas knows nothing about. Both
+   * mappings therefore measure the wrapper's ACTUAL on-screen box and derive the effective
+   * scale from it — so a pen touching down mid-pinch still lands where he put it.
+   */
   const clientToPage = useCallback(
     (cx: number, cy: number) => {
       const el = wrapRef.current;
       if (!el) return { x: 0, y: 0 };
       const r = el.getBoundingClientRect();
-      return { x: (cx - r.left) / scale, y: (cy - r.top) / scale };
+      const eff = r.width > 4 ? r.width / width : scale;
+      return { x: (cx - r.left) / eff, y: (cy - r.top) / eff };
     },
-    [scale],
+    [scale, width],
   );
   const pageToClient = useCallback(
     (x: number, y: number) => {
       const el = wrapRef.current;
       if (!el) return { x: 0, y: 0 };
       const r = el.getBoundingClientRect();
-      return { x: r.left + x * scale, y: r.top + y * scale };
+      const eff = r.width > 4 ? r.width / width : scale;
+      return { x: r.left + x * eff, y: r.top + y * eff };
     },
-    [scale],
+    [scale, width],
   );
 
   // ——— viewport tracking (canvases follow the scroll) ———
@@ -229,6 +261,8 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     };
   }, [measure, scrollRef, scale, height]);
 
+  /** ids under the eraser right now — hidden live, committed as one removal on lift */
+  const [erasedNow, setErasedNow] = useState<Set<string> | null>(null);
   // ——— drawing the committed layer ———
   const redrawBase = useCallback(() => {
     const c = baseRef.current;
@@ -262,7 +296,8 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       }
       ctx.restore();
     }
-    for (const s of strokes) {
+    for (const s of (mirror.current.length >= strokes.length ? mirror.current : strokes)) {
+      if (erasedNow?.has(s.id)) continue; // under the eraser right now
       const off = offsetFor ? offsetFor(s) : null;
       const b = strokeBounds(s);
       const bx = b.x + (off?.x ?? 0), by = b.y + (off?.y ?? 0);
@@ -281,34 +316,74 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       }
       drawStroke(ctx, s, { offsetX: off?.x ?? 0, offsetY: off?.y ?? 0, alphaScale: alpha });
     }
-  }, [strokes, viewport, scale, dpr, selectedIds, highlightStrokeId, alpha, offsetFor]);
+  }, [strokes, viewport, scale, dpr, selectedIds, highlightStrokeId, alpha, offsetFor, erasedNow]);
+
+  // what the committed canvas currently shows. `refs` holds the very stroke OBJECTS painted:
+  // ids alone were not enough — growBelow/applyGrow/lasso-move rewrite a stroke's points and
+  // hand back NEW objects with the SAME ids, and the canvas then never repainted them.
+  const drawn = useRef<{ refs: Stroke[]; key: string } | null>(null);
+  const mirror = useRef<Stroke[]>([]);
+  /**
+   * Advancing the mirror is the whole point of it: it has to be right BETWEEN renders,
+   * which is exactly what the react-compiler rule forbids. One documented escape hatch,
+   * used by the three call sites (render sync, commit, erase).
+   */
+  const setMirror = (next: Stroke[]) => {
+    // eslint-disable-next-line react-hooks/immutability -- deliberate: correct between renders
+    mirror.current = next;
+  };
+  useLayoutEffect(() => {
+    setMirror(strokes);
+  }, [strokes]);
+
+  /** paint a single stroke onto the committed canvas immediately (no React round-trip) */
+  const paintToBase = (s: Stroke) => {
+    const c = baseRef.current;
+    if (!c || viewport.w <= 0) return;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr * scale, dpr * scale);
+    ctx.translate(-viewport.left / scale, -viewport.top / scale);
+    const off = offsetFor ? offsetFor(s) : null;
+    drawStroke(ctx, s, { offsetX: off?.x ?? 0, offsetY: off?.y ?? 0, alphaScale: alpha });
+    if (drawn.current) drawn.current = { refs: [...drawn.current.refs, s], key: drawn.current.key };
+  };
 
   // what the base canvas currently shows: the ids in order + the viewport/scale it was drawn for
-  const drawn = useRef<{ ids: string[]; key: string } | null>(null);
-  const baseKey = `${viewport.left}|${viewport.top}|${viewport.w}|${viewport.h}|${scale}|${dpr}|${alpha}|${highlightStrokeId ?? ""}|${selectedIds ? Array.from(selectedIds).join(",") : ""}`;
+  const baseKey = `${viewport.left}|${viewport.top}|${viewport.w}|${viewport.h}|${scale}|${dpr}|${alpha}|${highlightStrokeId ?? ""}|${selectedIds ? Array.from(selectedIds).join(",") : ""}|e${erasedNow ? erasedNow.size : -1}`;
   useEffect(() => {
     const prev = drawn.current;
     const c = baseRef.current;
+    const samePrefix = (n: number) => !!prev && prev.refs.length >= n && strokes.slice(0, n).every((s, i) => prev.refs[i] === s);
+    // already painted (commit paints eagerly) → nothing to do
+    if (prev && prev.key === baseKey && prev.refs.length === strokes.length && samePrefix(strokes.length)) return;
     // append-only change with the same viewport → paint just the new strokes
-    if (prev && c && prev.key === baseKey && strokes.length > prev.ids.length && prev.ids.every((id, i) => strokes[i]?.id === id)) {
+    if (prev && c && prev.key === baseKey && strokes.length > prev.refs.length && samePrefix(prev.refs.length)) {
       const ctx = c.getContext("2d");
       if (ctx) {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.scale(dpr * scale, dpr * scale);
         ctx.translate(-viewport.left / scale, -viewport.top / scale);
-        for (let i = prev.ids.length; i < strokes.length; i++) {
+        for (let i = prev.refs.length; i < strokes.length; i++) {
           const s = strokes[i];
           const off = offsetFor ? offsetFor(s) : null;
           drawStroke(ctx, s, { offsetX: off?.x ?? 0, offsetY: off?.y ?? 0, alphaScale: alpha });
         }
-        drawn.current = { ids: strokes.map((s) => s.id), key: baseKey };
+        drawn.current = { refs: strokes.slice(), key: baseKey };
         return;
       }
     }
     redrawBase();
-    drawn.current = { ids: strokes.map((s) => s.id), key: baseKey };
+    drawn.current = { refs: strokes.slice(), key: baseKey };
   }, [redrawBase, strokes, baseKey, dpr, scale, viewport, alpha, offsetFor]);
 
+  // THE STROKE MIRROR — the `strokes` PROP is only as fresh as the last React render.
+  // Writing letter by letter commits strokes faster than React re-renders, so building
+  // the next list from the prop dropped whichever strokes were committed since that
+  // render (his "incomplete scribbles"; the server still got them via the append queue,
+  // so they reappeared on reload). Every commit/erase now reads and advances this mirror,
+  // and the mirror re-syncs to the props on each render.
   const redrawRef = useRef<(() => void) | null>(null);
   const redrawLive = useCallback(() => {
     const c = liveRef.current;
@@ -432,8 +507,9 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       dragging: false,
     };
     if (holdTimer.current) clearTimeout(holdTimer.current);
-    // hold→drag is a pen gesture: the highlighter, eraser and lasso never hand off
-    const holdTool = pen.tool === "fountain" || pen.tool === "gpen" || pen.tool === "pencil" || pen.tool === "marker";
+    // hold→drag: any writing tool may hand off. The eraser and lasso never do — their drags
+    // are destructive/selective and a hand-off would be a nasty surprise.
+    const holdTool = pen.tool !== "eraser" && pen.tool !== "lasso";
     if (onHold && holdTool && mode === "draw") {
       const pid = e.pointerId;
       const client = { x: e.clientX, y: e.clientY };
@@ -487,10 +563,16 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       st.lastMoveAt = now;
       if (st.mode === "erase") {
         const radius = (8 + widthMul * 5) / scale;
-        for (const s of strokes) {
+        const before = st.erased.size;
+        for (const s of mirror.current) {
           if (st.erased.has(s.id)) continue;
           const off = offsetFor ? offsetFor(s) : null;
           if (strokeDistanceTo(s, p.x - (off?.x ?? 0), p.y - (off?.y ?? 0)) < radius + s.width) st.erased.add(s.id);
+        }
+        if (st.erased.size !== before) {
+          // it must feel like erasing: the ink goes NOW, not when the pen lifts
+          setErasedNow(new Set(st.erased));
+          onEraseTick?.();
         }
       }
     }
@@ -507,6 +589,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     const st = cur.current;
     if (!st || e.pointerId !== st.pointerId) return;
     cur.current = null;
+    if (st.pointerType === "pen") penLeftAt.current = nowMs();
     penActive.current = false;
     if (holdTimer.current) {
       clearTimeout(holdTimer.current);
@@ -522,13 +605,19 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     const clientStart = st.clientPts[0];
     const clientEnd = st.clientPts[st.clientPts.length - 1];
     if (cancelled) {
+      setErasedNow(null);
       redrawLive();
       return;
     }
-    // tap?
-    if (durationMs < TAP_MS && st.movedPx < TAP_PX) {
+    // tap? (a pen writing must clear a much lower bar before it counts as a tap)
+    const tapMs = st.pointerType === "pen" ? PEN_TAP_MS : TAP_MS;
+    const tapPx = st.pointerType === "pen" ? PEN_TAP_PX : TAP_PX;
+    if (durationMs < tapMs && st.movedPx < tapPx) {
       const hit = onTap?.({ x: st.stroke.pts[0].x, y: st.stroke.pts[0].y, clientX: clientStart.x, clientY: clientStart.y, pointerType: st.pointerType });
-      if (hit || st.mode !== "draw" || st.pointerType === "touch") {
+      // belt and braces: a PEN that actually drew more than a dab keeps its ink even if
+      // something claimed the tap. Ink is never destroyed by an ambiguous classification.
+      const wasADab = st.raw.length <= 2;
+      if ((hit && (st.pointerType !== "pen" || wasADab)) || st.mode !== "draw" || st.pointerType === "touch") {
         redrawLive();
         return;
       }
@@ -539,22 +628,26 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       return;
     }
     if (st.mode === "erase") {
+      setErasedNow(null);
       if (st.erased.size && onStrokesChange) {
         const rm = st.erased;
-        onStrokesChange(strokes.filter((s) => !rm.has(s.id)), { removed: Array.from(rm) });
+        const next = mirror.current.filter((s) => !rm.has(s.id));
+        setMirror(next);
+        onStrokesChange(next, { removed: Array.from(rm) });
       }
       redrawLive();
       return;
     }
     if (st.mode === "lasso") {
       const poly = st.stroke.pts;
-      onLasso?.(strokesInLasso(strokes, poly), poly, strokeBoundsOf(poly));
+      onLasso?.(strokesInLasso(mirror.current, poly), poly, strokeBoundsOf(poly));
       redrawLive();
       return;
     }
-    // QuickShape: held still at the end for HOLD_MS → snap
+    // QuickShape: held still at the end for HOLD_MS → snap. OFF by default — it was turning
+    // slowly-written letters into perfect ellipses and straight lines (o, l, d…).
     let pts = st.stroke.pts;
-    const held = now - st.holdStart > HOLD_MS && durationMs > 450;
+    const held = quickShape && now - st.holdStart > HOLD_MS && durationMs > 450;
     if (held) {
       if (isClosedLoop(pts)) pts = snapToEllipse(pts);
       else if (isUnderline(pts) || (strokeBoundsOf(pts).w > 60 && !isClosedLoop(pts))) {
@@ -570,10 +663,12 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     else if (isStrike(pts)) kind = "strike";
     const info: StrokeEndInfo = { kind, pts, bounds: strokeBoundsOf(pts), tool: pen.tool, clientStart, clientEnd, clientPts: st.clientPts };
     if (pen.tool === "highlighter" && onHighlighterStroke) {
+      // decide the region FIRST: margin ink always keeps, highlighter included
+      if (regionFor) stroke.region = regionFor({ x: stroke.pts[0].x, y: stroke.pts[0].y }, clientStart);
       const verdict = onHighlighterStroke(stroke, info);
       if (verdict === "keep") {
-        // the highlighter is real ink now: a translucent band in the category colour that stays
-        commit(stroke, info);
+        // final — do NOT consult onStrokeEnd, whose gesture rules would discard the band
+        commit(stroke, info, true);
       } else {
         ghosts.current.push({ stroke: { ...stroke, width: stroke.width }, born: nowMs() });
       }
@@ -584,29 +679,64 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     redrawLive();
   };
 
-  const commit = (stroke: Stroke, info: StrokeEndInfo) => {
+  const commit = (stroke: Stroke, info: StrokeEndInfo, decided = false) => {
     const pt0 = stroke.pts[0];
-    if (regionFor) stroke.region = regionFor({ x: pt0.x, y: pt0.y }, info.clientStart);
-    const verdict = onStrokeEnd ? onStrokeEnd(stroke, info) : "keep";
+    if (!stroke.region && regionFor) stroke.region = regionFor({ x: pt0.x, y: pt0.y }, info.clientStart);
+    const verdict = decided ? "keep" : onStrokeEnd ? onStrokeEnd(stroke, info) : "keep";
     if (verdict === "discard") {
       ghosts.current.push({ stroke, born: nowMs() });
       return;
     }
     if (anchorFor) stroke.anchor = anchorFor({ x: pt0.x, y: pt0.y }, info.clientStart) ?? null;
-    onStrokesChange?.([...strokes, stroke], { appended: [stroke] });
+    const next = [...mirror.current, stroke];
+    setMirror(next);
+    // paint it onto the committed layer NOW: the live layer is about to be cleared and
+    // React may not repaint for another frame or two — the ink must never blink out
+    paintToBase(stroke);
+    onStrokesChange?.(next, { appended: [stroke] });
   };
 
   // ——— pointer plumbing ———
+  /** contacts that PAN and TAP instead of drawing: fingers, and everything while the Hand tool is up */
+  const pans = (e: React.PointerEvent) => pen.tool === "hand" || (e.pointerType === "touch" && !fingerDraws);
+  /**
+   * A contact's ROLE is decided once, at touch-down, and never revisited. Switching tools
+   * with the pen still on the glass used to flip pans() mid-stroke, stranding the stroke and
+   * latching penActive true — after which no finger worked on that canvas again.
+   */
+  const routeOf = useRef<Map<number, "ink" | "pan">>(new Map());
+  const routed = (e: React.PointerEvent) => routeOf.current.get(e.pointerId) ?? (pans(e) ? "pan" : "ink");
   const onPointerDown = (e: React.PointerEvent) => {
     if (!enabled) return;
     const wrap = wrapRef.current;
-    if (e.pointerType === "touch" && !fingerDraws) {
-      if (penActive.current) return; // palm
+    routeOf.current.set(e.pointerId, pans(e) ? "pan" : "ink");
+    if (routed(e) === "pan") {
+      if (pen.tool !== "hand" && (penActive.current || nowMs() - penLeftAt.current < PALM_AFTER_PEN_MS)) return; // palm
       touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: nowMs(), moved: 0 });
+      if (touches.current.size === 1 && onSelectDragStart?.({ x: e.clientX, y: e.clientY })) {
+        // a finger on the verse gutter drags a range instead of scrolling
+        selDrag.current = { id: e.pointerId, from: { x: e.clientX, y: e.clientY } };
+        wrap?.setPointerCapture(e.pointerId);
+        return;
+      }
+      // press and hold with one finger → the same hand-off the pen gets (his "click and hold")
+      if (onHold && touches.current.size === 1) {
+        const pid = e.pointerId;
+        const client = { x: e.clientX, y: e.clientY };
+        if (touchHold.current) clearTimeout(touchHold.current);
+        touchHold.current = setTimeout(() => {
+          const t = touches.current.get(pid);
+          if (!t || t.moved > 8 || touches.current.size !== 1) return;
+          const pg = clientToPage(client.x, client.y);
+          if (onHold({ x: pg.x, y: pg.y, clientX: client.x, clientY: client.y, pointerType: "touch" })) {
+            touchDrag.current = pid;
+          }
+        }, 380);
+      }
       maxTouches.current = Math.max(maxTouches.current, touches.current.size);
       if (touches.current.size === 2) {
         const [a, b] = Array.from(touches.current.values());
-        pinch.current = { d0: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+        pinch.current = { d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
       }
       wrap?.setPointerCapture(e.pointerId);
       return;
@@ -619,7 +749,16 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       if (cur.current.pointerId === e.pointerId) return;
       closeStroke(cur.current);
     }
-    if (e.pointerType === "pen") penActive.current = true;
+    if (e.pointerType === "pen") {
+      penActive.current = true;
+      // drop any contact the hand left on the glass — it must not pan or fire undo mid-word
+      touches.current.clear();
+      maxTouches.current = 0;
+      if (touchHold.current) {
+        clearTimeout(touchHold.current);
+        touchHold.current = null;
+      }
+    }
     try {
       wrap?.setPointerCapture(e.pointerId);
     } catch {
@@ -631,7 +770,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (!enabled) return;
-    if (e.pointerType === "touch" && !fingerDraws) {
+    if (routed(e) === "pan") {
       const t = touches.current.get(e.pointerId);
       if (!t) {
         return;
@@ -640,16 +779,25 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       t.moved += Math.hypot(dx, dy);
       t.x = e.clientX;
       t.y = e.clientY;
+      if (selDrag.current?.id === e.pointerId) {
+        onSelectDragMove?.(selDrag.current.from, { x: e.clientX, y: e.clientY });
+        return;
+      }
+      if (touchDrag.current === e.pointerId) {
+        onDragMove?.({ x: e.clientX, y: e.clientY });
+        return;
+      }
+      if (t.moved > 8 && touchHold.current) {
+        clearTimeout(touchHold.current);
+        touchHold.current = null;
+      }
       if (touches.current.size === 1) {
         scrollRef?.current?.scrollBy(-dx, -dy);
       } else if (touches.current.size === 2 && pinch.current) {
         const [a, b] = Array.from(touches.current.values());
         const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch.current.d0 > 0 && Math.abs(d - pinch.current.d0) > 2) {
-          const f = d / pinch.current.d0;
-          pinch.current.d0 = d;
-          onZoom?.(f, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-        }
+        // cumulative — and the midpoint travels, so a pinch that also moves pans the page
+        onZoom?.(d / pinch.current.d0, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
       }
       return;
     }
@@ -664,9 +812,25 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   };
 
   const onPointerUp = (e: React.PointerEvent, cancelled = false) => {
-    if (e.pointerType === "touch" && !fingerDraws) {
+    const route = routed(e);
+    routeOf.current.delete(e.pointerId);
+    if (route === "pan") {
       const t = touches.current.get(e.pointerId);
       touches.current.delete(e.pointerId);
+      if (touchHold.current) {
+        clearTimeout(touchHold.current);
+        touchHold.current = null;
+      }
+      if (selDrag.current?.id === e.pointerId) {
+        selDrag.current = null;
+        onSelectDragEnd?.();
+        return;
+      }
+      if (touchDrag.current === e.pointerId) {
+        touchDrag.current = null;
+        onDragEnd?.({ x: e.clientX, y: e.clientY }, cancelled);
+        return;
+      }
       if (touches.current.size < 2 && pinch.current) {
         pinch.current = null;
         onZoomEnd?.();
@@ -714,7 +878,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         touchAction: "none",
         userSelect: "none",
         WebkitUserSelect: "none",
-        cursor: enabled ? (pen.tool === "eraser" ? "cell" : "crosshair") : "default",
+        cursor: enabled ? (pen.tool === "hand" ? "grab" : pen.tool === "eraser" ? "cell" : "crosshair") : "default",
         ...bgStyle,
         ...style,
       }}

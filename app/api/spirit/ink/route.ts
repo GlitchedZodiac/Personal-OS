@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
   try {
     const sp = new URL(request.url).searchParams;
     const where: Record<string, unknown> = {};
+    // the trash is hidden unless asked for (?trash=1)
+    where.deletedAt = new URL(request.url).searchParams.get("trash") === "1" ? { not: null } : null;
     const notebookId = sp.get("notebookId");
     const kind = sp.get("kind");
     const dayId = sp.get("dayId");

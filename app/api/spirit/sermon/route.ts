@@ -27,9 +27,9 @@ function dateLabel(d = new Date()) {
 export async function GET() {
   try {
     const series = await prisma.churchSeries.findFirst({ where: { status: "active" } });
-    const latest = await prisma.inkPage.findFirst({ where: { kind: "sermon" }, orderBy: { updatedAt: "desc" } });
+    const latest = await prisma.inkPage.findFirst({ where: { kind: "sermon", deletedAt: null }, orderBy: { updatedAt: "desc" } });
     const week = series ? weekOf(series, series.currentWeek) : null;
-    const current = series ? await prisma.inkPage.findFirst({ where: { kind: "sermon", seriesId: series.id, weekIndex: series.currentWeek } }) : null;
+    const current = series ? await prisma.inkPage.findFirst({ where: { kind: "sermon", seriesId: series.id, weekIndex: series.currentWeek, deletedAt: null } }) : null;
     return NextResponse.json({ series, week, page: current ?? latest ?? null });
   } catch (error) {
     console.error("Spirit sermon error:", error);
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       // different preacher) must not collapse into the morning's page
       const fresh = body.fresh === true;
       let page = series && !fresh
-        ? await prisma.inkPage.findFirst({ where: { kind: "sermon", seriesId: series.id, weekIndex } })
+        ? await prisma.inkPage.findFirst({ where: { kind: "sermon", seriesId: series.id, weekIndex, deletedAt: null } })
         : null;
       const week = series ? weekOf(series, weekIndex) : null;
       if (!page) {

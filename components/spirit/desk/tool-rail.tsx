@@ -5,7 +5,7 @@
 // photo · mic │ undo · redo │ SIZE · OPAC sliders · the color dot.
 // Hold a tool → brush library; tap the dot → palette.
 
-import { useRef } from "react";
+import { useRef, type CSSProperties, type ReactNode } from "react";
 import { useDesk, type PenTool } from "./desk-state";
 import { haptic } from "@/lib/haptics";
 import {
@@ -22,9 +22,20 @@ import {
   RefCardIcon,
   TextToolIcon,
   UndoIcon,
+  HandIcon,
 } from "./desk-icons";
 
-const Rule = () => <div style={{ width: 26, height: 1, background: "#E4E2E6", margin: "2px 0" }} />;
+const Rule = () => <div style={{ width: 26, height: 1, background: "#E4E2E6", margin: "4px 0" }} />;
+
+/** every rail control says what it is — the glyphs alone were not legible (2026-08-22) */
+const RailBtn = ({ label, children, className, style, ...rest }: { label: string; children: ReactNode; className?: string; style?: CSSProperties } & React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+  <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+    <button type="button" aria-label={rest["aria-label"] ?? label} className={className} style={style} {...rest}>
+      {children}
+    </button>
+    <span style={{ fontSize: 7.5, letterSpacing: "0.04em", fontWeight: 600, color: "#B4B0B8", lineHeight: 1, pointerEvents: "none" }}>{label}</span>
+  </span>
+);
 const Slider = ({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) => (
   <>
     <span style={{ fontSize: 7.5, letterSpacing: "0.1em", color: "#C9C7CD" }}>{label}</span>
@@ -137,10 +148,10 @@ export function ToolRail({
   const penIcon =
     pen.brush === "gpen" ? <GPenIcon size={17} color={penBtn.color} /> : pen.brush === "pencil" ? <PencilIcon size={17} color={penBtn.color} /> : pen.brush === "marker" ? <MarkerIcon size={17} color={penBtn.color} /> : <PenIcon size={17} color={penBtn.color} />;
   const hl = tool("highlighter");
-  const pencil = tool("pencil");
-  const marker = tool("marker");
   const eraser = tool("eraser");
   const lasso = tool("lasso");
+  const hand = tool("hand");
+  const brushName = pen.brush === "gpen" ? "G-pen" : pen.brush === "pencil" ? "Pencil" : pen.brush === "marker" ? "Marker" : "Pen";
   const iconSize = compact ? 16 : 17;
 
 
@@ -161,20 +172,22 @@ export function ToolRail({
         zIndex: 4,
       }}
     >
-      <button type="button" aria-label="Pen" {...penBtn}>{penIcon}</button>
-      <button type="button" aria-label="Highlighter — the six categories" {...hl}><HighlighterIcon size={iconSize} color={hl.color} /></button>
-      <button type="button" aria-label="Pencil" {...pencil}><PencilIcon size={iconSize} color={pencil.color} /></button>
-      <button type="button" aria-label="Marker" {...marker}><MarkerIcon size={iconSize} color={marker.color} /></button>
-      <button type="button" aria-label="Eraser" {...eraser}><EraserIcon size={iconSize} color={eraser.color} /></button>
-      <button type="button" aria-label="Lasso" {...lasso}><LassoIcon size={iconSize} color={lasso.color} /></button>
+      {/* ONE brush button — it shows the pen you're holding (fountain · G-pen · pencil · marker);
+          tap it when it's already up, or hold it, to change the nib. There used to be separate
+          Pencil and Marker buttons as well, so two identical-looking buttons lit at once. */}
+      <RailBtn label={brushName} {...penBtn}>{penIcon}</RailBtn>
+      <RailBtn label="Mark" {...hl}><HighlighterIcon size={iconSize} color={hl.color} /></RailBtn>
+      <RailBtn label="Erase" {...eraser}><EraserIcon size={iconSize} color={eraser.color} /></RailBtn>
+      <RailBtn label="Select" {...lasso}><LassoIcon size={iconSize} color={lasso.color} /></RailBtn>
+      <RailBtn label="Hand" {...hand}><HandIcon size={iconSize} color={hand.color} /></RailBtn>
       <Rule />
-      <button type="button" aria-label="Typed block" onClick={onText} style={{ ...penBtn.style, background: pen.tool === "text" ? "#F6E3EB" : "transparent", boxShadow: pen.tool === "text" ? "inset 0 0 0 1.5px #A63D63" : "none" }}><TextToolIcon size={15} color={pen.tool === "text" ? "#8C2F51" : "#66646C"} /></button>
-      <button type="button" aria-label="Reference card" onClick={onRefCard} style={{ ...penBtn.style, background: "transparent", boxShadow: "none" }}><RefCardIcon size={iconSize} color="#66646C" /></button>
-      <button type="button" aria-label="Photo" onClick={onPhoto} style={{ ...penBtn.style, background: "transparent", boxShadow: "none" }}><PhotoIcon size={iconSize} color="#66646C" /></button>
-      <button type="button" aria-label="Dictate" onClick={onMic} style={{ ...penBtn.style, background: micActive ? "#F6E3EB" : "transparent", boxShadow: micActive ? "inset 0 0 0 1.5px #A63D63" : "none" }}><MicIcon size={16} color={micActive ? "#8C2F51" : "#66646C"} /></button>
+      <RailBtn label="Type" aria-label="Typed block" onClick={onText} style={{ ...penBtn.style, background: pen.tool === "text" ? "#F6E3EB" : "transparent", boxShadow: pen.tool === "text" ? "inset 0 0 0 1.5px #A63D63" : "none" }}><TextToolIcon size={15} color={pen.tool === "text" ? "#8C2F51" : "#66646C"} /></RailBtn>
+      <RailBtn label="Verse" aria-label="Reference card" onClick={onRefCard} style={{ ...penBtn.style, background: "transparent", boxShadow: "none" }}><RefCardIcon size={iconSize} color="#66646C" /></RailBtn>
+      <RailBtn label="Photo" aria-label="Photo" onClick={onPhoto} style={{ ...penBtn.style, background: "transparent", boxShadow: "none" }}><PhotoIcon size={iconSize} color="#66646C" /></RailBtn>
+      <RailBtn label="Speak" aria-label="Dictate" onClick={onMic} style={{ ...penBtn.style, background: micActive ? "#F6E3EB" : "transparent", boxShadow: micActive ? "inset 0 0 0 1.5px #A63D63" : "none" }}><MicIcon size={16} color={micActive ? "#8C2F51" : "#66646C"} /></RailBtn>
       <Rule />
-      <button type="button" aria-label="Undo" onClick={() => { haptic("light"); onUndo?.(); }} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canUndo ? 1 : 0.4 }}><UndoIcon /></button>
-      <button type="button" aria-label="Redo" onClick={() => { haptic("light"); onRedo?.(); }} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canRedo ? 1 : 0.4 }}><RedoIcon /></button>
+      <RailBtn label="Undo" aria-label="Undo" onClick={() => { haptic("light"); onUndo?.(); }} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canUndo ? 1 : 0.4 }}><UndoIcon /></RailBtn>
+      <RailBtn label="Redo" aria-label="Redo" onClick={() => { haptic("light"); onRedo?.(); }} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canRedo ? 1 : 0.4 }}><RedoIcon /></RailBtn>
       <span style={{ flex: 1 }} />
       <Slider label="SIZE" value={(pen.widthMul - 0.5) / 1.7} onChange={(f) => setPen({ widthMul: Math.round((0.5 + f * 1.7) * 100) / 100 })} />
       <Slider label="OPAC" value={(pen.opacity - 0.15) / 0.85} onChange={(f) => setPen({ opacity: Math.round((0.15 + f * 0.85) * 100) / 100 })} />

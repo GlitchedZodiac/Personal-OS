@@ -90,11 +90,31 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 }
 
+/** put a page back (the Undo on the delete toast, and the trash list) */
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const body = (await request.json().catch(() => ({}))) as { action?: string };
+    if (body.action !== "restore") return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    const page = await prisma.inkPage.update({ where: { id }, data: { deletedAt: null } });
+    return NextResponse.json({ page });
+  } catch (error) {
+    console.error("Spirit ink restore error:", error);
+    return NextResponse.json({ error: "Failed to restore" }, { status: 500 });
+  }
+}
+
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    await prisma.inkPage.delete({ where: { id } });
-    return NextResponse.json({ deleted: true });
+    const purge = new URL(_req.url).searchParams.get("purge") === "1";
+    if (purge) {
+      await prisma.inkPage.delete({ where: { id } });
+      return NextResponse.json({ deleted: true, purged: true });
+    }
+    // soft: the page rests in the trash so a mis-tap is never the end of a page of ink
+    await prisma.inkPage.update({ where: { id }, data: { deletedAt: new Date() } });
+    return NextResponse.json({ deleted: true, restorable: true });
   } catch (error) {
     console.error("Spirit ink delete error:", error);
     return NextResponse.json({ error: "Failed to delete page" }, { status: 500 });

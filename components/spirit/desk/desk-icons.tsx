@@ -52,10 +52,13 @@ export function GPenIcon(p: P) {
   );
 }
 export function HighlighterIcon(p: P) {
+  // a chisel highlighter over its wash. (The design file drew this and the eraser with the
+  // SAME primary path — they were indistinguishable on the rail, 2026-08-22.)
   return (
     <svg {...base(p.size ?? 17, "0 0 24 24", p)}>
-      <path d="M7 17 3 13l9-9 6 6-7 7H7Z" />
-      <path d="M14 17h7" />
+      <path d="M9 13.5 15.5 7l3.5 3.5L12.5 17H9v-3.5Z" />
+      <path d="M15.5 7l1.8-1.8a1.8 1.8 0 0 1 2.5 2.5L18 9.5" />
+      <path d="M4 20.5h16" strokeWidth={2.6} strokeLinecap="round" />
     </svg>
   );
 }
@@ -78,8 +81,18 @@ export function MarkerIcon(p: P) {
 export function EraserIcon(p: P) {
   return (
     <svg {...base(p.size ?? 17, "0 0 24 24", p)}>
-      <path d="M7 17 3 13l9-9 6 6-7 7H7Z" />
-      <path d="M5 15l4 4" />
+      <path d="M8.5 18.5 3.8 13.8a1.8 1.8 0 0 1 0-2.6l7-7a1.8 1.8 0 0 1 2.6 0l4.7 4.7a1.8 1.8 0 0 1 0 2.6l-6.4 6.4c-.4.4-.9.6-1.4.6H8.5Z" />
+      <path d="M8.6 6.6 15.4 13.4" />
+      <path d="M4 20.5h16" strokeWidth={2.6} strokeLinecap="round" />
+    </svg>
+  );
+}
+export function HandIcon(p: P) {
+  return (
+    <svg {...base(p.size ?? 17, "0 0 24 24", p)}>
+      <path d="M9 11V5.2a1.6 1.6 0 0 1 3.2 0V11" />
+      <path d="M12.2 11V4.2a1.6 1.6 0 0 1 3.2 0V11" />
+      <path d="M15.4 11.4V6.8a1.6 1.6 0 0 1 3.2 0V14a6.4 6.4 0 0 1-6.4 6.4h-.8a5.6 5.6 0 0 1-4.2-1.9L4 14.6a1.7 1.7 0 0 1 2.4-2.4L9 14.4" />
     </svg>
   );
 }

@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const dayId = sp.get("dayId");
     const kind = sp.get("kind") ?? "worksheet";
     if (!dayId) return NextResponse.json({ error: "dayId required" }, { status: 400 });
-    const page = await prisma.inkPage.findFirst({ where: { kind, dayId } });
+    const page = await prisma.inkPage.findFirst({ where: { kind, dayId, deletedAt: null } });
     return NextResponse.json({ page });
   } catch (error) {
     console.error("Spirit worksheet error:", error);
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       const bundle = await dayBundle(dayId);
       if (!bundle || !bundle.term) return NextResponse.json({ error: "No such study" }, { status: 404 });
       const kind = action === "study" ? "study" : "worksheet";
-      let page = await prisma.inkPage.findFirst({ where: { kind, dayId } });
+      let page = await prisma.inkPage.findFirst({ where: { kind, dayId, deletedAt: null } });
       if (!page) {
         const nbs = await ensureSystemNotebooks();
         const refs = refsFromLabel(bundle.readingLabel);
