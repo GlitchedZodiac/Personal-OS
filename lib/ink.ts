@@ -460,6 +460,56 @@ function cachedBox(s: Stroke) {
  * inflated by the same `eraserReach` the exact test uses, so it can never reject a stroke the
  * exact test would have caught.
  */
+/**
+ * A PARTIAL eraser: cut the points the eraser touched out of a stroke and return what survives.
+ *
+ * The whole-stroke eraser was correct for a highlighter and wrong for a pen. His example: draw
+ * a capital L meaning a lowercase one, rub out the foot, and the entire letter went. Erasing
+ * the middle of a stroke must leave two strokes; erasing an end must shorten it.
+ *
+ * Returns null when nothing was touched (the caller keeps the original stroke untouched, which
+ * matters: an unchanged `pts` array keeps its cached bounding box and its React identity).
+ * Returns [] when the whole stroke goes.
+ *
+ * EVERY fragment gets a fresh id, including the first. Reusing the original id for the leading
+ * run looks like a nice optimisation and is a trap: the save queue cancels a queued append whose
+ * id is also in the removal list (that guard exists because a stroke drawn and erased inside one
+ * debounce window used to come back from the dead), so a fragment wearing its parent's id was
+ * silently dropped on the way to the server. An erase is always: remove the original, append
+ * what survived.
+ */
+export function eraseFromStroke(
+  s: Stroke,
+  pts: readonly { x: number; y: number }[],
+  radius: number,
+  newId: () => string,
+): Stroke[] | null {
+  const reach = eraserReach(s, radius);
+  const r2 = reach * reach;
+  const hit = s.pts.map((p) => pts.some((e) => {
+    const dx = p.x - e.x, dy = p.y - e.y;
+    return dx * dx + dy * dy < r2;
+  }));
+  if (!hit.some(Boolean)) return null;
+  if (hit.every(Boolean)) return [];
+
+  const runs: InkPoint[][] = [];
+  let run: InkPoint[] = [];
+  for (let i = 0; i < s.pts.length; i++) {
+    if (hit[i]) {
+      if (run.length) { runs.push(run); run = []; }
+    } else {
+      run.push(s.pts[i]);
+    }
+  }
+  if (run.length) runs.push(run);
+
+  // A single surviving sample is a speck, not a mark — dropping it is what makes rubbing feel
+  // like rubbing instead of leaving dust behind.
+  const kept = runs.filter((r) => r.length >= 2);
+  return kept.map((rpts) => ({ ...s, id: newId(), pts: rpts }));
+}
+
 export function eraserSweep(
   strokes: readonly Stroke[],
   pts: readonly { x: number; y: number }[],

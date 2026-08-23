@@ -76,6 +76,10 @@ export interface NotebookPaneProps {
   onPageChange?: (page: { id: string; kind: string; title: string; refStart: number | null } | null) => void;
 }
 
+/** fit-to-width is the floor: below 1 the page is narrower than the pane and the margin is dead paper */
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 3.2;
+
 const PAGE_W = 800;
 
 // One resolve per key at a time: React's dev double-mount (and a double tap)
@@ -104,6 +108,10 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   const [objects, setObjects] = useState<PageObject[]>([]);
   const [history, setHistory] = useState<{ strokes: Stroke[]; objects: PageObject[] }[]>([]);
   const [future, setFuture] = useState<{ strokes: Stroke[]; objects: PageObject[] }[]>([]);
+  // The page is fit-to-width at zoom 1 (scale = paneW / PAGE_W), so 1 IS the most-zoomed-out
+  // state: anything below it leaves paper narrower than the pane, and that margin is dead —
+  // it is outside the ink canvas, so the pen does nothing there. He asked for the page to
+  // "cover the whole thing as its most zoomed out version"; this is that, enforced.
   const [zoom, setZoom] = useState(1);
   // ——— PINCH: live, 1:1 with the fingers, then crisp ———
   // The page is composited during the gesture (transform only — no layout, no re-render)
@@ -125,7 +133,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
       wrap.style.transformOrigin = "0 0";
     }
     const st = pinchRef.current;
-    const clamped = Math.max(0.45 / zoom, Math.min(3.2 / zoom, k));
+    const clamped = Math.max(MIN_ZOOM / zoom, Math.min(MAX_ZOOM / zoom, k));
     st.k = clamped;
     st.fx = fx;
     st.fy = fy;
@@ -145,8 +153,12 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     // A two-finger drag at constant separation, or a pinch held against the zoom clamp, is a
     // PAN: k stays 1 but the page tracked his fingers the whole way. Returning here cleared the
     // transform and threw that away, so the page snapped back the instant he lifted.
-    const purePan = Math.abs(st.k - 1) < 0.005;
-    const next = purePan ? zoom : Math.max(0.45, Math.min(3.2, zoom * st.k));
+    // 0.5% was far too tight: human fingers change separation by more than that during an
+    // ordinary two-finger PAN, so most pans fell through to the zoom branch and multiplied the
+    // zoom by ~0.99 each time. Over a session that random walk drifted him down to ~0.9 — which
+    // is exactly the dead strip of un-inkable paper he photographed on the right of the page.
+    const purePan = Math.abs(st.k - 1) < 0.04;
+    const next = purePan ? zoom : Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * st.k));
     const applied = purePan ? 1 : next / zoom; // what actually survived the clamp
     if (!purePan) {
       setZoom(next);
@@ -161,6 +173,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     });
   };
   const [paneW, setPaneW] = useState(600);
+  const [paneH, setPaneH] = useState(0);
   const [mode, setMode] = useState<"page" | "list">("page");
   const [listNotebook, setListNotebook] = useState<NotebookRow | null>(null);
   const [listPages, setListPages] = useState<{ id: string; title: string; subtitle: string | null; kind: string; thumbnail: string | null; recordingId: string | null; transcribedAt: string | null; updatedAt: string; refStart: number | null; refEnd: number | null; recording?: { durationSec: number; status: string } | null }[]>([]);
@@ -200,7 +213,15 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const scale = (paneW / PAGE_W) * zoom;
-  const height = useMemo(() => pageHeightFor(strokes, objects), [strokes, objects]);
+  // a page he opened while zoomed out from a previous session should still fill the pane
+  
+  // ...and at least tall enough to fill the scroller, so the band below the last line is live
+  // paper he can write on rather than dead background
+  const height = useMemo(() => {
+    const content = pageHeightFor(strokes, objects);
+    const fillsPane = paneH > 0 && scale > 0 ? Math.ceil(paneH / scale) : 0;
+    return Math.max(content, fillsPane);
+  }, [strokes, objects, paneH, scale]);
   const isSermon = page?.kind === "sermon";
   const isWorksheet = page?.kind === "worksheet";
   const readOnly = isWorksheet && page?.status === "submitted";
@@ -209,7 +230,11 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setPaneW(Math.max(240, el.clientWidth - 2)));
+    const ro = new ResizeObserver(() => {
+      setPaneW(Math.max(240, el.clientWidth - 2));
+    setPaneH(el.clientHeight);
+      setPaneH(el.clientHeight);
+    });
     ro.observe(el);
     setPaneW(Math.max(240, el.clientWidth - 2));
     return () => ro.disconnect();
@@ -408,9 +433,17 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     pushHistory();
     setStrokes(next);
     if (delta.appended?.length) pending.current.append.push(...delta.appended);
-    if (delta.removed?.length) pending.current.remove.push(...delta.removed);
+    if (delta.removed?.length) {
+      const rm = new Set(delta.removed);
+      // A stroke drawn and erased inside one debounce window queued append[X] AND remove[X].
+      // The server applies removals first — against a copy that never had X — then appends it,
+      // so the erased stroke came back on the next load. Cancel the append instead of racing.
+      pending.current.append = pending.current.append.filter((s) => !rm.has(s.id));
+      pending.current.remove.push(...delta.removed);
+    }
     scheduleSave();
-    if (delta.appended?.length === 1 && (isSermon || page?.kind === "study" || page?.kind === "worksheet")) autoGrowFor(delta.appended[0], next, objects);
+    // an ERASE must never grow the page — only a new mark near the bottom edge can
+    if (delta.appended?.length === 1 && !delta.removed?.length && (isSermon || page?.kind === "study" || page?.kind === "worksheet")) autoGrowFor(delta.appended[0], next, objects);
   };
   const applyObjects = (next: PageObject[]) => {
     pushHistory();

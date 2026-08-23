@@ -45,6 +45,11 @@ export function PaneHeader({
         background: "#FFFFFF",
         position: "relative",
         zIndex: 3,
+        // a belt-and-braces guarantee: whatever the breakpoints decide, the row can never push
+        // a control past the pane edge, because the pane clips (desk-shell paneBox overflow:hidden)
+        // and a clipped control is an unreachable one
+        minWidth: 0,
+        overflow: "hidden",
       }}
     >
       <button

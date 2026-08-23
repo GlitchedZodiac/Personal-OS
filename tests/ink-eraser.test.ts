@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eraserCatches, eraserSweep, isTapContact, strokeDistanceToSeg, type Stroke } from "@/lib/ink";
+import { eraseFromStroke, eraserCatches, eraserSweep, isTapContact, strokeDistanceToSeg, type Stroke } from "@/lib/ink";
 import { matchBooks } from "@/components/spirit/bible-nav";
 import { BOOKS } from "@/lib/bible-refs";
 
@@ -173,5 +173,79 @@ describe("eraserSweep — the optimisation may be faster, never different", () =
       pts: [{ x: 10, y: 10, p: 0.5, t: 0 }] } as Stroke;
     expect(eraserSweep([s], [{ x: 10, y: 10 }], 6, new Set())).toEqual(["gone"]);
     expect(eraserSweep([s], [{ x: 10, y: 10 }], 6, new Set(["gone"]))).toEqual([]);
+  });
+});
+
+describe("eraseFromStroke — the eraser cuts, it does not confiscate", () => {
+  let n = 0;
+  const nid = () => `frag${++n}`;
+  /** a horizontal run of `k` points, one unit apart, starting at x=0 */
+  const run = (k: number, width = 2): Stroke => ({
+    id: "orig", tool: "gpen", color: "#000", width, opacity: 1,
+    pts: Array.from({ length: k }, (_, i) => ({ x: i, y: 0, p: 0.5, t: i * 8 })),
+  } as Stroke);
+
+  it("REGRESSION: rubbing one end of an L leaves the rest standing", () => {
+    // 20 points along x; erase near x=19 (the foot) with a small nib
+    const out = eraseFromStroke(run(20), [{ x: 19, y: 0 }], 1.5, nid);
+    expect(out).not.toBeNull();
+    expect(out).toHaveLength(1);
+    expect(out![0].pts.length).toBeGreaterThan(12);   // the upright survives
+    expect(out![0].pts.length).toBeLessThan(20);      // the foot is gone
+    expect(out![0].id).not.toBe("orig");              // fresh id — see eraseFromStroke's note
+  });
+
+  it("erasing the middle SPLITS one stroke into two", () => {
+    const out = eraseFromStroke(run(21), [{ x: 10, y: 0 }], 1.5, nid);
+    expect(out).toHaveLength(2);
+    // both fragments are new strokes; the original is removed. Reusing the parent id here made
+    // the save queue's duplicate-append guard eat the fragment.
+    expect(out![0].id).not.toBe("orig");
+    expect(out![1].id).not.toBe("orig");
+    expect(out![0].id).not.toBe(out![1].id);
+    // nothing survives inside the nib
+    for (const frag of out!) for (const p of frag.pts) expect(Math.abs(p.x - 10)).toBeGreaterThan(1.5);
+  });
+
+  it("returns null when the eraser missed — the caller must keep the original untouched", () => {
+    expect(eraseFromStroke(run(10), [{ x: 500, y: 500 }], 5, nid)).toBeNull();
+  });
+
+  it("returns an empty array when the whole stroke is taken", () => {
+    expect(eraseFromStroke(run(6), [{ x: 3, y: 0 }], 40, nid)).toEqual([]);
+  });
+
+  it("drops a lone surviving sample rather than leaving dust", () => {
+    // a 3-point stroke with the middle erased would leave two 1-point runs
+    const out = eraseFromStroke(run(3), [{ x: 1, y: 0 }], 0.6, nid);
+    expect(out).toEqual([]);
+  });
+
+  it("fragments inherit everything except geometry and identity", () => {
+    const s = { ...run(21), tool: "fountain", color: "#A63D63", width: 7, opacity: 0.5 } as Stroke;
+    const out = eraseFromStroke(s, [{ x: 10, y: 0 }], 1.5, nid)!;
+    for (const frag of out) {
+      expect(frag.tool).toBe("fountain");
+      expect(frag.color).toBe("#A63D63");
+      expect(frag.width).toBe(7);
+      expect(frag.opacity).toBe(0.5);
+    }
+  });
+
+  it("a wider stroke is reached from further away — the same reach the ring draws", () => {
+    // reach = radius + width/2; at width 20 the nib grabs from 10 further out
+    const thin = eraseFromStroke(run(21, 2), [{ x: 10, y: 6 }], 1, nid);
+    const fat = eraseFromStroke(run(21, 20), [{ x: 10, y: 6 }], 1, nid);
+    expect(thin).toBeNull();       // 6 away, reach 2 → missed
+    expect(fat).not.toBeNull();    // 6 away, reach 11 → cut
+  });
+
+  it("never invents or loses points: survivors are a subsequence of the original", () => {
+    const s = run(30);
+    const out = eraseFromStroke(s, [{ x: 8, y: 0 }, { x: 20, y: 0 }], 1.5, nid)!;
+    const all = out.flatMap((f) => f.pts);
+    const xs = all.map((p) => p.x);
+    expect([...xs].sort((a, b) => a - b)).toEqual(xs);        // still in order
+    for (const p of all) expect(s.pts).toContain(p);          // same objects, untransformed
   });
 });

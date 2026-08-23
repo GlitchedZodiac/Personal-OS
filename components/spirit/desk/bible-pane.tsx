@@ -211,7 +211,9 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
                 setTimeout(attempt, 0); // a timer, not rAF — rAF starves when the view isn't compositing (background tab, hidden pane)
               }
               }, [selectVerseNow]);
-  const pinned = strokes.length > 0 && !unpinned;
+  // Locked only while ink is actually ON SCREEN — reflowing text under a hidden layer cannot
+  // visibly move anything, so there is nothing to protect and no reason to take the Aa away.
+  const pinned = strokes.length > 0 && !unpinned && overlayVisibility !== "hide";
   const alpha = overlayVisibility === "show" ? 1 : overlayVisibility === "dim" ? 0.22 : 0;
 
   // ——— desk events: open in the reference Bible / main ———
@@ -316,7 +318,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
         creating.current = fetch("/api/spirit/ink", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kind: "overlay", chapterKey, layerKey, title: `${book} ${chapterKey % 1000} · ${layerKey === "my" ? "my layer" : layerContext?.label ?? layerKey}`, layout: { pinnedAt: new Date().toISOString() } }),
+          body: JSON.stringify({ kind: "overlay", chapterKey, layerKey, title: `${book} ${chapterKey % 1000} · ${layerKey === "my" ? "my layer" : layerContext?.label ?? layerKey}`, layout: null }),
         })
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => (d?.page ? { id: d.page.id, chapterKey, layerKey, strokes: [], layout: d.page.layout ?? null } : null))
@@ -620,7 +622,14 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     setInkFuture([]);
     setStrokes(next);
     if (delta.appended?.length) pending.current.append.push(...delta.appended);
-    if (delta.removed?.length) pending.current.remove.push(...delta.removed);
+    if (delta.removed?.length) {
+      const rm = new Set(delta.removed);
+      // A stroke drawn and erased inside one debounce window queued append[X] AND remove[X].
+      // The server applies removals first — against a copy that never had X — then appends it,
+      // so the erased stroke came back on the next load. Cancel the append instead of racing.
+      pending.current.append = pending.current.append.filter((s) => !rm.has(s.id));
+      pending.current.remove.push(...delta.removed);
+    }
     scheduleSave();
   };
   /** step the overlay's ink back or forward; the diff against what is on screen becomes the save */
@@ -662,10 +671,20 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     scheduleSave();
   };
 
+  // The header gains chips CONDITIONALLY — a selection chip, the text-size lock, undo/redo once
+  // there is ink — so its natural width is not a function of the pane alone. Measuring the
+  // breakpoints against the raw pane width is what let the row grow past the pane's right edge
+  // and get scissored off by the pane's overflow:hidden. Spend each optional chip from a BUDGET
+  // instead, so adding one collapses the row's long labels rather than pushing controls off.
+  const chipCost =
+    (sel.start !== null ? 118 : 0) +           // "JONAH 2:1 SELECTED"
+    (strokes.length > 0 && !unpinned && overlayVisibility !== "hide" ? 138 : 0) + // TEXT SIZE LOCKED
+    (inkPast.length || inkFuture.length ? 64 : 0);                                // ⤺ ⤻
+  const budgetW = contentSize.w > 0 ? Math.max(0, contentSize.w - chipCost) : 0;
   // a narrow pane (stacked Bible, ~360px) keeps every control but drops the long labels
-  const narrow = contentSize.w > 0 && contentSize.w < 600;
+  const narrow = budgetW > 0 && budgetW < 600;
   // a third-of-the-desk pane (~240px, three columns): one eye button that cycles, one mode chip that toggles
-  const tiny = contentSize.w > 0 && contentSize.w < 360;
+  const tiny = budgetW > 0 && budgetW < 360;
   const layerLabel = narrow ? "" : layerKey === "my" ? "MY LAYER" : layerContext && layerContext.key === layerKey ? layerContext.label.toUpperCase() : layerKey.toUpperCase();
   const markedOnSelection = sel.start === null ? [] : Array.from(new Set((readerRef.current?.highlightsAt(sel.start, sel.end ?? sel.start) ?? []).map((h) => h.category)));
   const unmarkSelection = () => {
@@ -679,7 +698,8 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const canvasEnabled = overlayVisibility !== "hide";
 
   const headerRight = (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap" }}>
+    // minWidth:0 so this can be squeezed rather than forcing the row wider than the pane
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap", minWidth: 0 }}>
       {role === "reference" && (
         <>
           {!tiny && <span style={{ fontSize: 10, color: "#A9A7AE" }}>follows links</span>}
@@ -688,7 +708,11 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       )}
       {prefs.actionBar === "B" && sel.start !== null && <ActionBarB onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} />}
       {pinned && (
-        <Chip tone="tint" title="type set when first inked — unpin to reflow"><PinIcon /> PAGE PINNED</Chip>
+        // It was called "PAGE PINNED" and the footer claimed the page was "frozen like print"
+        // with a captured type size. None of that was true: the ONLY effect is that the Aa type
+        // sheet will not open, so that changing the size cannot reflow the text out from under
+        // his ink. Name that, and let the chip itself be the way out.
+        <Chip tone="tint" title="Text size is locked so your ink stays on the right words. Tap to unlock." onClick={() => setUnpinned(true)}><PinIcon /> TEXT SIZE LOCKED</Chip>
       )}
       <div style={{ position: "relative" }}>
         <button type="button" onClick={() => setLayersOpen((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${layersOpen ? "#A63D63" : "#E9CFDC"}`, background: layersOpen ? "#F0D3E0" : "#F6E3EB", borderRadius: 99, padding: "4px 10px", cursor: "pointer" }}>
@@ -824,14 +848,6 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
           )}
         </div>
       </div>
-      {pinned && (
-        <div style={{ borderTop: "1px solid #F0EDE8", background: "#FCFAF6", padding: "7px 14px", display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
-          <PinIcon color="#A9A7AE" size={11} />
-          <span style={{ fontSize: 10, color: "#96949B" }}>Frozen like print — type size was set when the page was pinned; unpin to reflow (ink re-anchors by verse).</span>
-          <span style={{ flex: 1 }} />
-          <button type="button" onClick={() => setUnpinned(true)} style={{ fontSize: 10, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>Unpin</button>
-        </div>
-      )}
       {/* hover rail + "which tool" chip (02a) */}
       {hover && canvasEnabled && (
         <span style={{ position: "absolute", left: hover.left + 24, top: hover.top, width: Math.max(40, hover.width - 32), height: 3, borderRadius: 99, background: "#A63D63", opacity: 0.4, pointerEvents: "none", zIndex: 6, animation: "hoverPulse 1.8s ease-in-out infinite" }} />
