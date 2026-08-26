@@ -218,7 +218,8 @@ public final class HealthSyncManager: ObservableObject {
             return
         }
         let task = Task { @MainActor [weak self] in
-            await self?.performSync()
+            guard let self else { return }
+            await self.performSync()
         }
         syncTask = task
         await task.value
