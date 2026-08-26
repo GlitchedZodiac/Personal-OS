@@ -14,11 +14,28 @@ import HealthKit
 public final class HealthSyncManager: ObservableObject {
     public enum Status: Equatable {
         case notAsked, authorized, denied, unavailable
+        /// Connected, but readTypes has grown since he last granted access —
+        /// body composition was added 2026-08-26. Without this state the app
+        /// could NEVER re-ask: bootstrap set .authorized from a stored flag and
+        /// the Connect button only showed for .notAsked.
+        case needsMoreTypes
+    }
+
+    public enum BackfillState: Equatable {
+        case idle, running(sent: Int), done(total: Int), failed(String)
     }
 
     @Published public private(set) var status: Status = .notAsked
     @Published public private(set) var lastSyncAt: Date?
     @Published public private(set) var lastResult: String?
+    /// Split out so a failure is not overwritten by the next partial success.
+    @Published public private(set) var lastError: String?
+    @Published public private(set) var backfill: BackfillState = .idle
+    @Published public private(set) var backgroundDeliveryNote: String?
+
+    /// Bump when readTypes grows, so an existing install re-prompts.
+    private static let requestedTypesVersion = 2
+    private static let versionKey = "health.requestedTypes.version"
 
     private let store = HKHealthStore()
     private let api: MobileAPIClient
@@ -33,6 +50,13 @@ public final class HealthSyncManager: ObservableObject {
             HKQuantityType(.heartRateVariabilitySDNN),
             HKQuantityType(.bodyMass),
             HKCategoryType(.sleepAnalysis),
+            // Added 2026-08-26. His Etekcity scale has been writing these into
+            // Apple Health all along and the app never asked for them, so every
+            // body-fat and BMI reading was thrown away.
+            HKQuantityType(.bodyFatPercentage),
+            HKQuantityType(.bodyMassIndex),
+            HKQuantityType(.leanBodyMass),
+            HKQuantityType(.waistCircumference),
         ]
     }
 
@@ -57,11 +81,23 @@ public final class HealthSyncManager: ObservableObject {
             toShare: [], read: readTypes
         )) == .unnecessary
 
-        if alreadyAsked || UserDefaults.standard.bool(forKey: "health.granted") {
+        let granted = UserDefaults.standard.bool(forKey: "health.granted")
+        let versionSeen = UserDefaults.standard.integer(forKey: Self.versionKey)
+
+        guard alreadyAsked || granted else { return }
+
+        // Self-healing: `alreadyAsked == false` while granted means readTypes
+        // grew since he last saw the sheet. The stored version is belt-and-
+        // braces, because statusForAuthorizationRequest behaviour across OS
+        // versions is not something to bet the whole fix on.
+        if !alreadyAsked || versionSeen < Self.requestedTypesVersion {
+            status = .needsMoreTypes
+        } else {
             status = .authorized
-            startObserversAndDeliver()
-            await syncNow()
         }
+
+        startObserversAndDeliver()
+        await syncNow()
     }
 
     public func requestAccess() async {
@@ -73,6 +109,7 @@ public final class HealthSyncManager: ObservableObject {
             try await store.requestAuthorization(toShare: [], read: readTypes)
             status = .authorized
             UserDefaults.standard.set(true, forKey: "health.granted")
+            UserDefaults.standard.set(Self.requestedTypesVersion, forKey: Self.versionKey)
             startObserversAndDeliver()
             await syncNow()
         } catch {
@@ -103,7 +140,22 @@ public final class HealthSyncManager: ObservableObject {
                 }
             }
             store.execute(query)
-            store.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in }
+            store.enableBackgroundDelivery(for: type, frequency: .hourly) {
+                [weak self] ok, error in
+                guard !ok, let error else { return }
+                Task { @MainActor in
+                    // This error was discarded with `{ _, _ in }` and the
+                    // failure was invisible. It fails because
+                    // com.apple.developer.healthkit.background-delivery is not
+                    // in the entitlements — and a FREE personal team cannot
+                    // sign it (same block as APNs and app groups). Do NOT add
+                    // it to project.yml: an unsignable entitlement breaks
+                    // provisioning outright.
+                    self?.backgroundDeliveryNote =
+                        "Background sync needs the paid Apple Developer Program. "
+                        + "Pitaya syncs every time you open it. (\(error.localizedDescription))"
+                }
+            }
         }
     }
 
@@ -115,18 +167,95 @@ public final class HealthSyncManager: ObservableObject {
     private var postedYesterdayThisLaunch = false
 
     public func syncNow() async {
-        guard status == .authorized else { return }
+        guard status == .authorized || status == .needsMoreTypes else { return }
         do {
             let today = try await postSnapshot(daysAgo: 0)
             if !postedYesterdayThisLaunch {
-                postedYesterdayThisLaunch = true
-                _ = try? await postSnapshot(daysAgo: 1)
+                // Set only on SUCCESS. It used to be set before the attempt,
+                // so one failure meant yesterday was never retried this launch.
+                if (try? await postSnapshot(daysAgo: 1)) != nil {
+                    postedYesterdayThisLaunch = true
+                }
             }
+
+            // The real repair: drain everything HealthKit has received since
+            // our anchor, at ANY sample date. A weigh-in VeSync back-dates to
+            // last week arrives here even though no day-window would find it.
+            let drained = await drainWeighIns()
+
             lastSyncAt = Date()
-            lastResult = today
+            lastError = nil
+            lastResult = drained.isEmpty ? today : "\(today) · \(drained)"
         } catch {
-            lastResult = "Sync failed: \(error.localizedDescription)"
+            lastError = "Sync failed: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Anchored weigh-in drain + backfill
+
+    private static let pageLimit = 200
+    private static let maxPagesPerRun = 40
+
+    /// Pages the anchored query until it runs dry, posting each page and
+    /// advancing the anchor ONLY after the post succeeds.
+    @discardableResult
+    private func drainWeighIns() async -> String {
+        var imported = 0, merged = 0, skipped = 0, orphans = 0, pages = 0
+        let firstRun = UserDefaults.standard.object(forKey: BodyCompositionReader.backfillDoneKey) == nil
+        if firstRun { backfill = .running(sent: 0) }
+
+        while pages < Self.maxPagesPerRun {
+            pages += 1
+            do {
+                let page = try await BodyCompositionReader.nextPage(
+                    store: store,
+                    anchor: HealthAnchorStore.load(BodyCompositionReader.weightType),
+                    limit: Self.pageLimit
+                )
+                orphans += page.orphanedComposition
+
+                if !page.samples.isEmpty {
+                    let result = try await api.postBodySamples(page.samples)
+                    imported += result.imported ?? 0
+                    merged += result.merged ?? 0
+                    skipped += result.skipped ?? 0
+                    if firstRun { backfill = .running(sent: imported + merged + skipped) }
+                }
+
+                // ORDER MATTERS: saving the anchor before a successful post
+                // would permanently orphan this page on a network blip.
+                if let anchor = page.anchor {
+                    HealthAnchorStore.save(anchor, for: BodyCompositionReader.weightType)
+                }
+                if page.isLastPage { break }
+            } catch {
+                if firstRun { backfill = .failed(error.localizedDescription) }
+                lastError = "Weigh-in sync failed: \(error.localizedDescription)"
+                return ""
+            }
+        }
+
+        if firstRun {
+            UserDefaults.standard.set(Date(), forKey: BodyCompositionReader.backfillDoneKey)
+            backfill = .done(total: imported + merged)
+        }
+
+        var parts: [String] = []
+        if imported > 0 { parts.append("\(imported) new weigh-in\(imported == 1 ? "" : "s")") }
+        if merged > 0 { parts.append("\(merged) enriched") }
+        if imported == 0 && merged == 0 && skipped > 0 { parts.append("\(skipped) already known") }
+        // A non-zero orphan count is the only signal the 120s cluster window
+        // is wrong. Say it rather than silently dropping the readings.
+        if orphans > 0 { parts.append("\(orphans) composition sample\(orphans == 1 ? "" : "s") unmatched") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Clears anchors + the backfill marker and re-reads everything. Safe: the
+    /// server's near-twin rule absorbs it all as merges or duplicates.
+    public func rerunBackfill() async {
+        HealthAnchorStore.reset()
+        backfill = .idle
+        await syncNow()
     }
 
     private func postSnapshot(daysAgo: Int) async throws -> String {
@@ -179,7 +308,14 @@ public final class HealthSyncManager: ObservableObject {
         // tell "no sleep data exists" (watch not worn overnight) apart from
         // "sleep is broken" — the 2026-08-14 open question.
         var parts = ["\(payload.steps) steps"]
-        if let weight = weights.last { parts.append("\(weight.weightKg) kg") }
+        // "no weigh-ins" is stated, not implied by absence — the old line just
+        // omitted weight when there were none, so a broken weight sync looked
+        // exactly like a working one. Same instinct as "no sleep samples".
+        if let weight = weights.last {
+            parts.append("\(weight.weightKg) kg")
+        } else {
+            parts.append("no weigh-ins today")
+        }
         if let minutes = payload.sleepMinutes {
             parts.append("\(minutes) min sleep")
         } else {

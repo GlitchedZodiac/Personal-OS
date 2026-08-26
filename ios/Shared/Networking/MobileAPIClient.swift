@@ -147,10 +147,28 @@ public actor MobileAPIClient {
         )
     }
 
-    public func syncDailyHealth(_ payload: DailyHealthSnapshotPayload) async throws {
-        struct AnyResponse: Decodable {}
-        let _: AnyResponse = try await send(
+    /// Returns the server's real counts. This used to decode into
+    /// `struct AnyResponse: Decodable {}` and throw them away, which is why
+    /// nobody could tell whether a weigh-in had actually landed.
+    @discardableResult
+    public func syncDailyHealth(
+        _ payload: DailyHealthSnapshotPayload
+    ) async throws -> BodySyncCounts {
+        try await send(
             path: "/api/mobile/health/daily", method: "POST", body: payload, authorized: true
+        )
+    }
+
+    /// Weigh-ins at any date — the historical backfill path. Separate from the
+    /// daily route because that one upserts a day snapshot and would zero a
+    /// historical day's step count.
+    @discardableResult
+    public func postBodySamples(
+        _ samples: [WeightSamplePayload]
+    ) async throws -> BodySamplesResponse {
+        try await send(
+            path: "/api/mobile/health/body", method: "POST",
+            body: BodySamplesRequest(samples: samples), authorized: true
         )
     }
 

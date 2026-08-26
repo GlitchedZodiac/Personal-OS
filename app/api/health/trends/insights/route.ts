@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { endOfDay, format, startOfDay, subDays } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
+import { describeMeasurement } from "@/lib/body-measurements";
 import { buildCoachStyleGuide, getCoachLanguageLabel } from "@/lib/health-coach";
 import { generateChatText } from "@/lib/openai-text";
 import { COACH_MODEL } from "@/lib/openai";
@@ -40,14 +41,10 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { loggedAt: "asc" },
       }),
+      // All columns, not the old weight/bodyFat/waist trio — a tape-only
+      // check-in used to render as an empty line here.
       prisma.bodyMeasurement.findMany({
         where: { measuredAt: { gte: startDate, lte: endDate } },
-        select: {
-          measuredAt: true,
-          weightKg: true,
-          bodyFatPct: true,
-          waistCm: true,
-        },
         orderBy: { measuredAt: "asc" },
       }),
       prisma.workoutLog.findMany({
@@ -113,12 +110,12 @@ export async function GET(request: NextRequest) {
 
     const measurementSummary = bodyMeasurements
       .map((measurement) => {
-        const parts: string[] = [];
-        if (measurement.weightKg) parts.push(`${measurement.weightKg}kg`);
-        if (measurement.bodyFatPct) parts.push(`${measurement.bodyFatPct}% BF`);
-        if (measurement.waistCm) parts.push(`waist:${measurement.waistCm}cm`);
-        return `${format(new Date(measurement.measuredAt), "yyyy-MM-dd")}: ${parts.join(", ")}`;
+        const described = describeMeasurement(measurement);
+        return described
+          ? `${format(new Date(measurement.measuredAt), "yyyy-MM-dd")}: ${described}`
+          : null;
       })
+      .filter((line): line is string => line !== null)
       .join("\n");
 
     const dataFingerprint = [

@@ -30,6 +30,7 @@
 		310B0256403A7D299CD83E0B /* CustomExerciseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E93231C78E9578B92A14EE /* CustomExerciseCache.swift */; };
 		348ED9F32442F6B9D6D65ECF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 674D825EB1855E75A9381EE7 /* Assets.xcassets */; };
 		3907BAA59C9AC5461171670C /* PRBaselines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DD35A02B11408515079C64 /* PRBaselines.swift */; };
+		392EDA4B47188DF7346C562A /* BodyCompositionReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96288D7647B71E24F48DD549 /* BodyCompositionReader.swift */; };
 		39D5185076FAC8169E6993F8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0B3EC5A28C6DC130B5F45FE1 /* Assets.xcassets */; };
 		3C4D117DD1598B40D7AAC1FA /* WebShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B38DC7F103BB0BBB78466C /* WebShellView.swift */; };
 		3CEB3D4F1FB7CF28281BD4C4 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */; };
@@ -186,6 +187,7 @@
 		8D4B07EA6BEC14C898A027A4 /* SequenceViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SequenceViews.swift; sourceTree = "<group>"; };
 		90514349C02B2B967189761C /* LiveWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveWorkoutView.swift; sourceTree = "<group>"; };
 		93B03235195B45C26E62AD2A /* PersonalOS WatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "PersonalOS WatchWidgets.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		96288D7647B71E24F48DD549 /* BodyCompositionReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyCompositionReader.swift; sourceTree = "<group>"; };
 		977A9107D8035E968679A59C /* MobileAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAPIModels.swift; sourceTree = "<group>"; };
 		9D67C6689A274F536320D83D /* PitayaWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitayaWidgets.swift; sourceTree = "<group>"; };
 		A29139B53372E4565B93E223 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -300,6 +302,7 @@
 		62F1BA4FDF1AE7FA3E9436A8 /* iPhone */ = {
 			isa = PBXGroup;
 			children = (
+				96288D7647B71E24F48DD549 /* BodyCompositionReader.swift */,
 				19835752792B8774D2AD643F /* HealthStore.swift */,
 			);
 			path = iPhone;
@@ -556,6 +559,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				392EDA4B47188DF7346C562A /* BodyCompositionReader.swift in Sources */,
 				480F47558B0D592A5ADB0746 /* CompanionModel.swift in Sources */,
 				192FB618D1D7D216B916DBA0 /* CompanionViews.swift in Sources */,
 				310B0256403A7D299CD83E0B /* CustomExerciseCache.swift in Sources */,
