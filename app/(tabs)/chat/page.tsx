@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { formatStepPrescription } from "@/lib/sequences";
 import {
   getOrCreateMicrophoneStream,
   deactivateMicrophoneStream,
@@ -832,7 +833,7 @@ export default function ChatPage() {
                 {data.restSecondsDefault ? ` · rest ${data.restSecondsDefault}s` : ""}
               </p>
               <div className="mt-2">
-                {((data.steps as { exerciseName: string; sets?: number; reps?: number; seconds?: number; weightKg?: number; restSeconds?: number }[]) ?? []).map(
+                {((data.steps as { exerciseName: string; sets?: number; reps?: number; seconds?: number; toFailure?: boolean; weightKg?: number; restSeconds?: number }[]) ?? []).map(
                   (s, i) => (
                     <div
                       key={i}
@@ -843,13 +844,7 @@ export default function ChatPage() {
                       </span>
                       <span className="text-[12px] tabular-nums text-secondary-foreground">
                         {[
-                          s.sets && s.reps
-                            ? `${s.sets} × ${s.reps}`
-                            : s.reps
-                              ? `${s.reps} reps`
-                              : s.seconds
-                                ? `${s.seconds}s`
-                                : null,
+                          formatStepPrescription(s),
                           s.weightKg ? `${s.weightKg} kg` : null,
                           s.restSeconds ? `rest ${s.restSeconds}s` : null,
                         ]

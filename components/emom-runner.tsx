@@ -109,8 +109,12 @@ function clock(totalSeconds: number) {
 }
 
 function movementLabel(step: SequenceStep) {
-  const dose = step.reps ? `${step.reps}` : step.seconds ? `${step.seconds}s` : "";
+  // A to-failure step reads AFTER the movement ("Bicep Curl — to failure"),
+  // not before it, because "to failure Bicep Curl" is nonsense. Rep and
+  // second doses keep their leading position ("10 Swings").
   const weight = step.weightKg ? ` · ${step.weightKg} kg` : "";
+  if (step.toFailure) return `${step.exerciseName} — to failure${weight}`;
+  const dose = step.reps ? `${step.reps}` : step.seconds ? `${step.seconds}s` : "";
   return `${dose ? dose + " " : ""}${step.exerciseName}${weight}`;
 }
 

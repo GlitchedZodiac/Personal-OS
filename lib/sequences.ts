@@ -13,6 +13,17 @@ export interface SequenceStep {
   sets?: number;
   reps?: number;
   seconds?: number;
+  /**
+   * Work the set until failure instead of to a rep count or a clock.
+   * A step is prescribed exactly one of: reps, seconds, or toFailure.
+   *
+   * Added 2026-08-26. Before it existed the assistant had no way to express
+   * "two sets to failure", so it wrote the words into exerciseName — which
+   * would have minted "Bicep Curl — to failure" as a permanent new movement
+   * in the catalog, and the step still failed validation because it carried
+   * neither reps nor seconds.
+   */
+  toFailure?: boolean;
   weightKg?: number;
   restSeconds?: number;
 }
@@ -29,6 +40,31 @@ export interface SequenceInput {
 function toPositive(value: unknown): number | undefined {
   const n = typeof value === "string" ? Number.parseFloat(value) : (value as number);
   return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/**
+ * A prescription written into the movement name, e.g.
+ * "Bicep Curl — to failure" or "Push-ups (AMRAP)".
+ *
+ * This lives in the validator rather than in one caller's sanitiser because
+ * this module is the single choke point every surface goes through, and the
+ * cost of missing one is permanent: a step carrying a `category` gets minted
+ * as a user exercise on save, so the junk name would then appear in voice
+ * logging, PRs and the watch forever.
+ */
+const FAILURE_SUFFIX =
+  /\s*[—\-–:(]*\s*\b(?:to\s+(?:muscular\s+)?failure|until\s+failure|to\s+fail|amrap|max\s+reps?)\b\s*\)?\s*$/i;
+
+export function parseFailureSuffix(name: string): {
+  name: string;
+  toFailure: boolean;
+} {
+  const stripped = name.replace(FAILURE_SUFFIX, "").trim();
+  // Never strip the name down to nothing — "AMRAP" alone stays as typed.
+  if (stripped && stripped !== name.trim()) {
+    return { name: stripped, toFailure: true };
+  }
+  return { name: name.trim(), toFailure: false };
 }
 
 export function validateSequence(input: SequenceInput):
@@ -60,19 +96,27 @@ export function validateSequence(input: SequenceInput):
   for (const raw of input.steps) {
     if (!raw || typeof raw !== "object") return { ok: false, error: "Invalid step" };
     const step = raw as Record<string, unknown>;
-    const rawName =
+    const suppliedName =
       typeof step.exerciseName === "string" && step.exerciseName.trim()
         ? step.exerciseName.trim()
         : typeof step.exercise === "string"
           ? step.exercise.trim()
           : "";
-    if (!rawName) return { ok: false, error: "Each step needs an exercise" };
+    if (!suppliedName) return { ok: false, error: "Each step needs an exercise" };
+
+    // Pull a prescription out of the name before it reaches the catalog.
+    const parsed = parseFailureSuffix(suppliedName);
+    const rawName = parsed.name;
 
     const def = normalizeExerciseName(rawName);
     const reps = toPositive(step.reps);
     const seconds = toPositive(step.seconds);
-    if (!reps && !seconds) {
-      return { ok: false, error: `"${rawName}" needs reps or seconds` };
+    const toFailure = step.toFailure === true || parsed.toFailure;
+    if (!reps && !seconds && !toFailure) {
+      return {
+        ok: false,
+        error: `"${rawName}" needs reps, seconds, or to-failure`,
+      };
     }
 
     // Catalog normalization must not swallow the per-side qualifier —
@@ -87,8 +131,11 @@ export function validateSequence(input: SequenceInput):
       exercise: def?.id ?? rawName.toLowerCase(),
       exerciseName: displayName,
       sets: toPositive(step.sets),
-      reps,
-      seconds,
+      // To-failure wins: a rep count alongside it is a target, not a stop
+      // condition, and carrying both makes every runner ambiguous.
+      reps: toFailure ? undefined : reps,
+      seconds: toFailure ? undefined : seconds,
+      ...(toFailure ? { toFailure: true as const } : {}),
       weightKg: toPositive(step.weightKg),
       restSeconds: toPositive(step.restSeconds),
     });
@@ -114,4 +161,24 @@ export function validateSequence(input: SequenceInput):
     rounds: rounds ? Math.round(rounds) : null,
     steps,
   };
+}
+
+/**
+ * How a step's prescription reads on screen. One definition so the chat
+ * proposal card, the routines list and the runner cannot drift apart —
+ * they showed nothing at all for a to-failure step before this existed.
+ */
+export function formatStepPrescription(step: {
+  sets?: number | null;
+  reps?: number | null;
+  seconds?: number | null;
+  toFailure?: boolean | null;
+}): string | null {
+  if (step.toFailure) {
+    return step.sets ? `${step.sets} × to failure` : "to failure";
+  }
+  if (step.sets && step.reps) return `${step.sets} × ${step.reps}`;
+  if (step.reps) return `${step.reps} reps`;
+  if (step.seconds) return `${step.seconds}s`;
+  return null;
 }

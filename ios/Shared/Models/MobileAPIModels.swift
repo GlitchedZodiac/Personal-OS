@@ -380,17 +380,34 @@ public struct SequenceStep: Codable, Hashable, Sendable {
     public let exerciseName: String
     public let reps: Int?
     public let seconds: Int?
+    /// Work the set to failure rather than to a rep count or a clock.
+    /// Added 2026-08-26 — a step now carries exactly one of reps, seconds or
+    /// toFailure. Optional so a routine saved before this decodes unchanged.
+    public let toFailure: Bool?
     public let weightKg: Double?
     public let restSeconds: Int?
 
+    /// Whether this step stops at failure rather than at a number.
+    public var isToFailure: Bool { toFailure == true }
+
+    /// Leading dose for a watch label — "10 ", "MAX ", or "".
+    /// "MAX" rather than "to failure": the wrist has no room for three words,
+    /// and it is the word he would say mid-set.
+    public var dosePrefix: String {
+        if isToFailure { return "MAX " }
+        if let reps { return "\(reps) " }
+        return ""
+    }
+
     public init(
         exercise: String, exerciseName: String, reps: Int?, seconds: Int?,
-        weightKg: Double?, restSeconds: Int?
+        toFailure: Bool? = nil, weightKg: Double?, restSeconds: Int?
     ) {
         self.exercise = exercise
         self.exerciseName = exerciseName
         self.reps = reps
         self.seconds = seconds
+        self.toFailure = toFailure
         self.weightKg = weightKg
         self.restSeconds = restSeconds
     }
