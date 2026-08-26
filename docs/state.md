@@ -5,7 +5,285 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-23 (SPIRIT ON IPAD — round 7: **he confirms the pen works** — "incredibly responsive". A splitting eraser, the dead margin explained and removed, a trimmed rail, honest chips, and a V2 design prompt written from a week of real use.)
+**Last updated:** 2026-08-26 (THE AI READS EVERYTHING — the measurement bug found and fixed at four call sites, a 43-dataset read registry, JSON+CSV export finally wired to a UI, and the Apple Health weight sync repaired: anchored queries, full backfill, composition types that were never once requested.)
+
+---
+
+## 2026-08-26 · The AI reads everything · data export · Apple Health weight sync
+
+Three asks, all confirmed as real defects before a line was written.
+
+### 1. "Our AI can't read my measurements even though I have them in there"
+
+**True, and it had THREE causes — the third would have silently defeated a fix
+of the first two.**
+
+- `lib/chat-tools.ts:265,270` filtered `weightKg: { not: null }` on BOTH
+  measurement queries. Every check-in where he taped chest/arms/waist but never
+  stepped on the scale was invisible to the assistant. **His 2026-08-20 tape
+  check-in — neck 39.3, shoulders 50.9, chest 94.4, arms 36.1, forearms 31.3,
+  waist 87.4, hips 91.8, calves 42.7 — was one of those rows.**
+- The projection returned 3 columns of 23. The write tool accepts 11 numeric
+  fields; the read path surfaced 3, so the model could write measurements it
+  could never read back.
+- `lib/ai-prompts.ts:493` literally instructed refusal: *"NOT YOUR JOB: Todos,
+  finances... are out of the app now. If asked, say Pitaya dropped that."*
+  Data access without deleting that produces an assistant that has the numbers
+  and declines to say them.
+
+**New `lib/body-measurements.ts` is the single vocabulary** — `TAPE_FIELDS`
+(all NINE dims), `COMPOSITION_FIELDS`, `hasAnyMeasurementWhere()`,
+`hasTapeWhere()`, and `compactMeasurement()` which drops nulls and keeps
+everything else. The `!= null` test there is load-bearing: `visceralFat: 0` and
+`bodyFatPct: 0` are real readings a falsy check would erase.
+
+Fixed at four call sites, not one: chat, `trends/insights`, `health-coach`, and
+`body/overview` — whose own tape OR listed 7 of 9 dims, so a shoulders-only or
+forearms-only check-in was invisible on **his own Body screen** too.
+
+### 2. The assistant now reads the whole app
+
+`lib/ai/data-registry.ts` + `lib/ai/data-access.ts`. One tool (`get_app_data`)
+over a 43-entry registry; the dataset enum AND the catalog the model reads are
+GENERATED from the registry, so opening a new surface is one line and nothing
+else. The catalog ships inside the tool description rather than behind a
+discovery call, so no turn is ever spent asking what exists.
+
+Reachable now, all previously invisible: Spirit notes/highlights/links/threads/
+reading log/memory/studies/pages (recognised text, never strokes), todos,
+journal, habits, `DailyHealthSnapshot`, and finance.
+
+**Finance reuses `getFinanceReportSummary()` rather than re-deriving.** The
+Finances screen applies a non-obvious active filter (posted + resolved +
+settlement not in provisional/failed/rejected/ignored); a naive `findMany`
+would quote totals that do not match the screen, which he would correctly read
+as the AI being broken. **`getPocketDashboardData()` was deliberately NOT used
+— it calls `ensureCanonicalCashSetup()` and writes.** Read tools do not write.
+
+Excluded by his explicit call: credentials/tokens, audio bytes, `EsvPassage`
+(Crossway licensing forbids a substantially complete copy), `ChatMessage`
+(it IS the history), the finance ingest internals, and
+`FinanceDocument.contentText` — that one is email-derived and therefore
+attacker-influenced while the model can emit proposal tools. The confirm-first
+UX is the structural backstop and is load-bearing, not decorative.
+
+Bounded three ways: `select` always built from an allowlist, a `clip()` pass
+that kills `data:` strings and caps strings/arrays regardless of allowlist, and
+a 24k-char payload cap — tool results are echoed into `input` on every later
+turn, so a fat result is paid for repeatedly. `MAX_TURNS` 5→6 plus a 42s
+wall-clock guard that forces a final text turn rather than letting a slow
+multi-dataset turn hit the 60s ceiling and return nothing.
+
+**Read-only.** No new write tools; that is a separate project.
+
+### 3. Export (JSON + CSV, health + measurements)
+
+`components/health-export-card.tsx` was **built and never rendered anywhere** —
+the JSON export had no UI at all. It now lives on a new `/settings/export`
+page alongside five CSVs, reached from a new row in the settings DATA card.
+
+`lib/csv.ts` (RFC 4180, CRLF, UTF-8 BOM for Excel) + `lib/health-csv.ts` (pure
+projection over `buildHealthExport`'s return — never touches Prisma, hence
+fully fixture-testable). `measurements.csv` carries all 23 columns plus the
+seven skinfold keys unpacked AND the raw JSON, so a future key cannot vanish.
+`daily.csv` **fills the calendar**: `dailyRollups` omits days with zero logs,
+and charting absent days silently compresses a two-week gap into one segment.
+
+### 4. Apple Health weight sync
+
+Five layered causes; the primary one is not the one it looks like.
+
+1. **Composition was never requested.** Zero occurrences of
+   `bodyFatPercentage`/`leanBodyMass`/`bodyMassIndex` anywhere in `ios/`. His
+   Etekcity scale has been writing them into Apple Health all along.
+2. **The query window was today+yesterday only** — a plain `HKSampleQuery`, no
+   anchor, no backfill. VeSync writes to Apple Health when ITS app opens and
+   the samples keep their ORIGINAL date, so a batch landing today but dated
+   last week fell outside every window the app ever queried. **Unreachable
+   forever.** This is the real bug.
+3. Server twin-check **skipped instead of merging**, so an Apple Health sample
+   carrying body fat could never enrich a row he typed by hand.
+4. Every failure was silent: counts returned then discarded by
+   `struct AnyResponse: Decodable {}`, and zero weight simply omitted from the
+   status line rather than named.
+5. Background delivery calls `enableBackgroundDelivery` and throws the error
+   away — the entitlement is absent and a **free personal team cannot sign it**.
+
+The fix: `HKAnchoredObjectQuery` with **no upper date bound** (insertion-
+ordered, so back-dated batches arrive), per-type anchors in
+`ios/iPhone/HealthAnchorStore` persisted **only after a successful POST** — the
+highest-severity ordering rule here, since saving first orphans a page
+permanently on a network blip. New `ios/iPhone/BodyCompositionReader.swift`
+clusters composition onto a `bodyMass` anchor by source + ±120s, greedy
+nearest-first, and **counts unmatched samples as orphans** rather than dropping
+them — that count is the only signal the window is wrong.
+`bodyFatPercentage` is ×100'd: `HKUnit.percent()` returns a FRACTION.
+
+Server: `lib/body-ingest.ts` — one range query instead of N+1, merge-not-skip,
+intra-batch collapse, and an unparseable `measuredAt` is now **rejected** rather
+than stamped `now` (at backfill scale that fallback would fabricate hundreds of
+today-dated weigh-ins). Backfill posts to a NEW `/api/mobile/health/body`,
+because the daily route upserts a day snapshot with `steps: … ?? 0` and would
+have **zeroed historical step counts**.
+
+`needsMoreTypes` status is self-healing — growing `readTypes` automatically
+re-prompts an install that could otherwise never be asked again. A
+`scenePhase` `.active` trigger replaces background delivery honestly; because
+sync is now anchored, ONE foreground pass catches everything since last time at
+any sample date.
+
+**Told him plainly, in the app:** Apple Health has no sample type for muscle
+mass, bone mass, body water, protein, visceral fat, BMR or metabolic age. Nine
+of thirteen composition columns can only ever come from the VeSync CSV. The
+companion says so rather than leaving him to wonder why they stay blank.
+
+### Found while smoking, worth his eye
+
+His shoulder measurements mix conventions — an older row reads 118.5 cm
+(circumference), the newest 50.9 cm, whose own note says *"Shoulder width:
+50.9 cm"*. The arithmetic delta is −67.6 cm. Rather than hide it or invent a
+correction, `buildTapeTrend` flags `suspectMethodChange` when a delta exceeds
+20% and the prompt tells the assistant to name it as a method change, never as
+a body change. **The underlying data is still mixed — his call what to do.**
+
+### Verification
+
+261 unit tests (was 200), 0 TypeScript errors, `next build` green, iOS
+`BUILD SUCCEEDED`. Self-smoke against the real database and over real HTTP:
+the tape-only row now returns from `weight_trend` with 8 dims; widest
+measurement row went 3 → 16 fields; `measurements.csv` exports 233 rows with
+`weightKg` **empty not 0** on the tape row and the comma/quote/newline note
+intact; `daily.csv` 661 rows with **421 filled unlogged days**; unauthenticated
+CSV request 401s; the page's CSV button toasts "233 body measurements rows
+downloaded" off the `X-Row-Count` header.
+
+Two guards worth keeping: a registry↔schema parity test that parses
+`schema.prisma` at test time (a typo'd column would otherwise fail at runtime
+inside a chat turn, invisibly), and a replacement for the old
+"stripped surfaces stay stripped" prompt pin so this policy reversal is
+recorded rather than silently deleted.
+
+---
+
+## 2026-08-26 · Free-team re-sign: Pitaya repushed to phone, iPad, and watch
+
+**The 7-day clock, not a bug.** Michael's Apple ID is a *free personal team*
+(`HDR67SL3JG`), so every provisioning profile it issues is valid for exactly
+**7 days** — the signing certificate is fine for a year
+(`Apple Development: michaelg458@gmail.com`, good to 2027-08-10), but when the
+embedded profile lapses the app stops launching. Nothing in `ios/` changed
+this session; this was a re-sign and reinstall.
+
+**What was actually on disk.** Profiles do NOT live in the classic
+`~/Library/MobileDevice/Provisioning Profiles/` on Xcode 26 — that directory
+does not exist. They are in
+`~/Library/Developer/Xcode/UserData/Provisioning Profiles/`. Found there: the
+two iOS profiles (`pitaya`, `pitaya.phonewidgets`) issued 08-22 and expiring
+**08-29**, and *no watch profiles at all* — `pitaya.watchkitapp` and
+`.watchkitapp.widgets` were gone.
+
+**Refreshing beats reusing.** The first iOS build happily reused the 08-22
+profile and produced an app good for only 3 more days. `-allowProvisioningUpdates`
+will not refresh a profile that is still technically valid. Moving the stale
+profiles aside and rebuilding made Xcode mint new ones — **all four now expire
+2026-09-02**, a full 7 days. That is the difference between a 3-day and a
+7-day repush, so it is worth the extra build.
+
+**Built Release, not Debug.** Safe on device: `MobileAPIClient` defaults to
+`productionBaseURL` (personal-os-plum.vercel.app), and `WebShellView`'s
+`pitaya.devOrigin` override is DEBUG-only *and* requires a UserDefaults key
+that is not set on his devices.
+
+**Self-smoke: launched, not just installed.** Install success proves nothing
+about signing — the signature is only checked at launch. Driving
+`devicectl device process launch` on all three caught the real state:
+
+- **iPad Air 5** — launched ✓
+- **Apple Watch Series 8** — launched ✓ (a first attempt failed with
+  `FBSOpenApplicationErrorDomain error 7 (Locked)`, which is a locked wrist,
+  not a signing fault)
+- **iPhone 17 Pro Max** — refuses with `error 3 (Security)`: *"invalid code
+  signature, inadequate entitlements or its profile has not been explicitly
+  trusted by the user."*
+
+**The iPhone needs a human, and only the iPhone.** The same binary, profile,
+and certificate launched on the iPad — which rules out the build. Verified
+directly rather than assumed: `codesign --verify --deep --strict` reports
+valid and satisfying its Designated Requirement; the profile grants
+`healthkit`, the matching `application-identifier`, and
+`keychain-access-groups = HDR67SL3JG.*` (covers
+`...pitaya.shared`); all 3 devices are in `ProvisionedDevices`. What is left is
+per-device trust state, which iOS drops when a profile expires and which
+cannot be set remotely:
+**Settings → General → VPN & Device Management → Apple Development:
+michaelg458@gmail.com → Trust.**
+
+**The repeatable chore** (every ~7 days; takes about 4 minutes):
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+# 1. force-refresh: move ALL current profiles aside first, or you re-sign stale
+mv ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision /tmp/
+# 2. rebuild both targets for device
+cd ios
+xcodebuild -project PersonalOS.xcodeproj -scheme PersonalOS -configuration Release \
+  -destination 'generic/platform=iOS' -derivedDataPath /tmp/dd-ios \
+  -allowProvisioningUpdates build
+xcodebuild -project PersonalOS.xcodeproj -scheme "PersonalOS Watch" -configuration Release \
+  -destination 'generic/platform=watchOS' -derivedDataPath /tmp/dd-watch \
+  -allowProvisioningUpdates build
+# 3. install (devices are on localNetwork transport — no cable needed)
+xcrun devicectl device install app --device "Zodiacs phone" /tmp/dd-ios/Build/Products/Release-iphoneos/PersonalOS.app
+xcrun devicectl device install app --device iPad             /tmp/dd-ios/Build/Products/Release-iphoneos/PersonalOS.app
+xcrun devicectl device install app --device "Michael's Apple Watch" "/tmp/dd-watch/Build/Products/Release-watchos/PersonalOS Watch.app"
+# 4. ALWAYS launch to verify — install success does not prove the signature
+xcrun devicectl device process launch --device "Zodiacs phone" net.blacksheepglobal.pitaya
+```
+
+Unlock the watch before step 4 or it reports `Locked`. If the phone reports
+`Security`, that is the Trust step above, not a build problem.
+
+### Then: the weekly chore was automated (same day)
+
+**His question — "any way to always trust developer?"** No, and the framing is
+worth correcting: there is no always-trust toggle, and the repeated Trust tap
+is not an independent setting. iOS keys trust to the *certificate*. When every
+profile signed by that cert expires, iOS purges the "Developer App" entry from
+Settings, so the next install lands untrusted. **Renew before the lapse and the
+entry never dies.** He chose "automate now, decide on paid later."
+
+**PROVEN, not asserted.** The hypothesis was tested directly: `--force` re-signed
+the phone with a brand-new profile *while the old one was still valid*, then
+launched it — `launch verified on Zodiacs phone`, **no Trust tap**. That is the
+whole premise of the timer, and it holds.
+
+**What is installed:**
+- `~/.local/bin/pitaya-resign.sh` — checks the soonest Pitaya profile's expiry;
+  exits in under a second unless it is within **3 days**, otherwise rebuilds
+  both targets and installs to every reachable device. Flags: `--check`,
+  `--force`, `--verify`.
+- `~/Library/LaunchAgents/net.blacksheepglobal.pitaya.resign.plist` — daily at
+  **09:30 and 18:30** (two slots to catch the devices on Wi-Fi). Loaded.
+- `~/VibeCoding/personal-os-signing` — a **detached** worktree at `origin/main`,
+  7.8 MB. Detached so it never locks the `main` branch or collides with a lane.
+- Logs: `~/Library/Logs/pitaya-resign.log`.
+
+**Three traps this hit, recorded so nobody re-learns them:**
+1. **Xcode reuses a still-valid profile.** `-allowProvisioningUpdates` will not
+   refresh something that has not expired, so a plain rebuild re-signs with the
+   OLD expiry. Moving the profiles aside first is what mints new 7-day ones.
+   This is the difference between a 3-day and a 7-day repush.
+2. **macOS ships bash 3.2, which has no `mapfile`.** The first draft of the
+   install loop would have silently installed to nothing. Caught by running it,
+   not by reading it. It now uses a tsv file plus `while read` (a pipe would run
+   the loop in a subshell and lose the counters).
+3. **`main` is the current `ios/` tree, not either lane branch.** See the
+   deferred item filed the same day — building from `claude/watch-app` would
+   have shipped a regressed iPhone app.
+
+**Known-soft edge:** the watch is frequently unreachable (asleep / off wrist —
+`RemotePairingError 1001`). The script logs the failure, installs the rest, and
+retries on the next run; the watch keeps whatever valid build it already has.
 
 ---
 
