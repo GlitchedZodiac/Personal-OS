@@ -5,7 +5,7 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-26 (THE AI READS EVERYTHING — the measurement bug found and fixed at four call sites, a 43-dataset read registry, JSON+CSV export finally wired to a UI, and the Apple Health weight sync repaired: anchored queries, full backfill, composition types that were never once requested.)
+**Last updated:** 2026-08-26 (THE AI READS EVERYTHING — shipped to prod; see the addendum for two on-device regressions found after deploy and the corrected recovery number — the measurement bug found and fixed at four call sites, a 43-dataset read registry, JSON+CSV export finally wired to a UI, and the Apple Health weight sync repaired: anchored queries, full backfill, composition types that were never once requested.)
 
 ---
 
@@ -284,6 +284,56 @@ whole premise of the timer, and it holds.
 **Known-soft edge:** the watch is frequently unreachable (asleep / off wrist —
 `RemotePairingError 1001`). The script logs the failure, installs the rest, and
 retries on the next run; the watch keeps whatever valid build it already has.
+
+---
+
+### Addendum, same day: two regressions the device found that the build did not
+
+Shipped to prod, then driven against the real phone. Both of these were mine,
+and neither would ever have appeared in a simulator.
+
+**1. Adding read types silently killed the whole sync.** `bootstrap()` derived
+`alreadyAsked` from `statusForAuthorizationRequest` over the FULL read set.
+Adding the four composition types flipped that call from `.unnecessary` to
+`.shouldRequest`, so `alreadyAsked` went false, the guard fell through to the
+`health.granted` UserDefaults flag, and on an install where that flag was never
+written bootstrap returned early — no snapshot, no weigh-ins, and no error
+anywhere he would see it. The tell was in the data, not the code: the app
+synced at 09:58 on the old build and nothing reached the server after the
+reinstall. Now split into `coreReadTypes` (has he EVER granted anything) and
+`readTypes` (does he still owe us the new ones), so growing the set can never
+flip the first question.
+
+**2. Concurrent syncs wrote 857 duplicate rows into production.** `@MainActor`
+serialises the code but every `await` is a suspension point, so the `syncNow()`
+calls from the `HKObserverQuery` handlers and from the new `scenePhase` hook
+interleaved: each drain read the SAME unsaved anchor, fetched the same page and
+posted it. **The near-twin rule cannot save you there** — its range query runs
+before the other in-flight request has committed, so every racer sees an empty
+window and inserts. `syncNow()` now coalesces onto one Task, and the server
+re-checks for an exact (measuredAt, weightKg) match immediately before insert.
+The real fix is a unique index on a HealthKit sample id; that needs a migration
+and is in deferred-items.
+
+The 857 were removed from prod: only `source=apple_health` rows created inside
+the backfill window, keeping the richest row of each group, verified first that
+no deleted row carried a field its survivor lacked. The 233 pre-existing rows
+were untouched.
+
+**Correct the headline number.** The raw jump was 233 → 1276, but 857 of those
+were the duplicates above. **The real recovery is 186 weigh-ins**, reaching back
+to 2022-07-05 at 110.5 kg and running to 2026-07-19 at 83.7 kg — four years of
+history the today-and-yesterday window could never have reached. Final table:
+419 rows, 0 duplicates, 186 apple_health / 201 vesync / 32 manual.
+
+Composition is still empty (`bodyFatPct`, `bmi`, `leanBodyMass` all 0 rows)
+because the new types have not been granted yet — that needs his tap on
+**Allow body composition**, which is the correct behaviour, not a bug.
+
+**The lesson worth keeping:** the build was green, the tests passed, the symbols
+were verified present in the binary, and the app still did nothing. Only
+querying the database after a real launch showed it. Install success proves
+nothing; a snapshot row with a fresh `updatedAt` proves something.
 
 ---
 
