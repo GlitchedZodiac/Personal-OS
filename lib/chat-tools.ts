@@ -1,3 +1,9 @@
+import {
+  buildTapeTrend,
+  compactMeasurement,
+  hasAnyMeasurementWhere,
+  hasTapeWhere,
+} from "@/lib/body-measurements";
 import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg } from "@/lib/prs";
 import {
@@ -260,12 +266,16 @@ export async function executeGetHealthData(
       // Weight is long-horizon: recent raw rows (with ids, for edits) PLUS a
       // full-history weekly series so "how's my weight going" gets the whole
       // journey (VeSync history: daily readings since Dec 2025), compactly.
-      const [recent, all] = await Promise.all([
+      const [recent, all, tapeRows] = await Promise.all([
+        // ANY reading, not just weight. Filtering on weightKg here is what made
+        // his tape-only check-ins invisible to the AI (2026-08-26).
         prisma.bodyMeasurement.findMany({
-          where: { weightKg: { not: null } },
+          where: hasAnyMeasurementWhere(),
           orderBy: { measuredAt: "desc" },
           take: 20,
         }),
+        // The weekly series stays weight-only — a row with no weight has
+        // nothing to average into a weight trend.
         prisma.bodyMeasurement.findMany({
           where: { weightKg: { not: null } },
           orderBy: { measuredAt: "asc" },
@@ -275,6 +285,14 @@ export async function executeGetHealthData(
             bodyFatPct: true,
             muscleMassKg: true,
           },
+        }),
+        // Tape is sparse and long-horizon: 200+ daily VeSync scale rows would
+        // evict every tape row from the recent-20 window above, so it gets its
+        // own query (same reasoning as app/api/health/body/overview).
+        prisma.bodyMeasurement.findMany({
+          where: hasTapeWhere(),
+          orderBy: { measuredAt: "desc" },
+          take: 40,
         }),
       ]);
 
@@ -307,13 +325,18 @@ export async function executeGetHealthData(
           avgBodyFatPct: avg(b.bf),
           avgMuscleMassKg: avg(b.mm),
         })),
-        measurements: recent.map((m) => ({
-          id: m.id,
-          measuredAt: m.measuredAt.toISOString().slice(0, 10),
-          weightKg: m.weightKg,
-          bodyFatPct: m.bodyFatPct,
-          waistCm: m.waistCm,
-        })),
+        // Every recorded field, nulls dropped — not the old 3-column subset.
+        // The scale contributes composition columns chat can never write, so
+        // the read path has to surface more than the write path accepts.
+        measurements: recent.map((m) =>
+          compactMeasurement({
+            ...m,
+            measuredAt: m.measuredAt.toISOString().slice(0, 10),
+          })
+        ),
+        // latest / previous / delta per tape dimension, so "what are my
+        // measurements" and "how's my weight" both land in one call.
+        tape: buildTapeTrend(tapeRows),
       };
     }
 
