@@ -10,6 +10,7 @@ struct PersonalOSApp: App {
     #if os(iOS)
     @UIApplicationDelegateAdaptor(CompanionAppDelegate.self) private var appDelegate
     @StateObject private var model = CompanionModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -21,6 +22,19 @@ struct PersonalOSApp: App {
                 }
                 .onOpenURL { url in
                     if url.scheme == "pitaya" { model.showSettings = true }
+                }
+                // Sync on every foreground, debounced. WebShellView already
+                // hooks didBecomeActive but only reloads the web view — Health
+                // was never re-read on a warm resume. Matches the pattern in
+                // WatchApp/PitayaWatchApp.swift.
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active else { return }
+                    Task {
+                        let last = model.health.lastSyncAt
+                        if last == nil || Date().timeIntervalSince(last!) > 120 {
+                            await model.health.syncNow()
+                        }
+                    }
                 }
         }
     }

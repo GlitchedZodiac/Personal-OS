@@ -514,11 +514,77 @@ public struct CustomExerciseListResponse: Codable, Sendable {
 public struct WeightSamplePayload: Codable, Hashable, Sendable {
     public let measuredAt: Date
     public let weightKg: Double
+    /// Composition the scale writes alongside the weigh-in. Widened 2026-08-26
+    /// — before that the app never asked HealthKit for ANY of these, so every
+    /// body-fat and BMI reading his scale produced was thrown away.
+    ///
+    /// All optional, and JSONEncoder omits nils, so an older server that only
+    /// knows measuredAt+weightKg still receives exactly what it used to.
+    ///
+    /// NOTE: HealthKit has no sample type for muscle mass, bone mass, body
+    /// water, protein, visceral fat, BMR or metabolic age. Those columns exist
+    /// in body_measurements but can only ever be filled by the VeSync CSV
+    /// import — do not add fields here expecting them to arrive.
+    public let bodyFatPct: Double?
+    public let bmi: Double?
+    public let fatFreeWeightKg: Double?
+    public let waistCm: Double?
+    public let heartRateBpm: Int?
 
-    public init(measuredAt: Date, weightKg: Double) {
+    public init(
+        measuredAt: Date,
+        weightKg: Double,
+        bodyFatPct: Double? = nil,
+        bmi: Double? = nil,
+        fatFreeWeightKg: Double? = nil,
+        waistCm: Double? = nil,
+        heartRateBpm: Int? = nil
+    ) {
         self.measuredAt = measuredAt
         self.weightKg = weightKg
+        self.bodyFatPct = bodyFatPct
+        self.bmi = bmi
+        self.fatFreeWeightKg = fatFreeWeightKg
+        self.waistCm = waistCm
+        self.heartRateBpm = heartRateBpm
     }
+}
+
+/// What the server reports back about a weigh-in push. Every field optional so
+/// an older server's response still decodes.
+///
+/// TRAP: PitayaJSON.decoder()'s date strategy THROWS on an unrecognised date,
+/// and the daily route spreads the whole snapshot row (createdAt, updatedAt)
+/// into its response. Undeclared keys are never decoded, so this is safe — but
+/// do not casually add a `Date` field here.
+public struct BodySyncCounts: Decodable, Hashable, Sendable {
+    public let weightsImported: Int?
+    public let weightsMerged: Int?
+    public let weightsSkipped: Int?
+    public let weightsInvalid: Int?
+
+    public var landed: Int { (weightsImported ?? 0) + (weightsMerged ?? 0) }
+}
+
+/// Request/response for the historical backfill endpoint.
+public struct BodySamplesRequest: Encodable, Sendable {
+    public let samples: [WeightSamplePayload]
+    public let source: String
+
+    public init(samples: [WeightSamplePayload], source: String = "apple_health") {
+        self.samples = samples
+        self.source = source
+    }
+}
+
+public struct BodySamplesResponse: Decodable, Sendable {
+    public let received: Int?
+    public let imported: Int?
+    public let merged: Int?
+    public let skipped: Int?
+    public let invalid: Int?
+
+    public var landed: Int { (imported ?? 0) + (merged ?? 0) }
 }
 
 public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {

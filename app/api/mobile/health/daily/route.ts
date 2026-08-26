@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireMobileSession } from "@/lib/mobile-session";
 import { prisma } from "@/lib/prisma";
-import { NEAR_KG, NEAR_MS } from "@/lib/vesync";
+import type { IncomingBodySample } from "@/lib/body-measurements";
+import { ingestBodySamples } from "@/lib/body-ingest";
 
 // POST — the companion's daily HealthKit push (steps, resting HR, active
 // energy, distance, sleep, HRV) plus optional bodyMass samples.
@@ -23,10 +24,10 @@ function int(value: unknown): number | null {
   return n === null ? null : Math.round(n);
 }
 
-interface WeightSample {
-  measuredAt?: unknown;
-  weightKg?: unknown;
-}
+// Widened 2026-08-26: a weigh-in may now carry body fat, BMI and lean mass
+// from the scale. Older companion builds send only measuredAt+weightKg and
+// still work — the extra keys are simply absent.
+type WeightSample = IncomingBodySample;
 
 export async function POST(request: NextRequest) {
   try {
@@ -92,43 +93,27 @@ export async function POST(request: NextRequest) {
         ? [{ measuredAt: body.weightMeasuredAt, weightKg: body.weightKg }]
         : [];
 
-    let weightsImported = 0;
-    let weightsSkipped = 0;
+    // One shared helper with the backfill endpoint — merge-not-skip, one range
+    // query, intra-batch collapse, and unparseable timestamps rejected rather
+    // than stamped `now`. See lib/body-ingest.ts for why each of those matters.
+    const weights = await ingestBodySamples(samples, { source: "apple_health" });
 
-    for (const sample of samples) {
-      const weightKg = num(sample.weightKg);
-      if (weightKg === null || weightKg <= 0) continue;
-      const measuredAt =
-        typeof sample.measuredAt === "string" && !Number.isNaN(Date.parse(sample.measuredAt))
-          ? new Date(sample.measuredAt)
-          : new Date();
-
-      const twin = await prisma.bodyMeasurement.findFirst({
-        where: {
-          measuredAt: {
-            gte: new Date(measuredAt.getTime() - NEAR_MS),
-            lte: new Date(measuredAt.getTime() + NEAR_MS),
-          },
-          weightKg: {
-            gte: weightKg - NEAR_KG,
-            lte: weightKg + NEAR_KG,
-          },
-        },
-        select: { id: true },
-      });
-
-      if (twin) {
-        weightsSkipped++;
-        continue;
-      }
-
-      await prisma.bodyMeasurement.create({
-        data: { measuredAt, weightKg, source: "apple_health" },
-      });
-      weightsImported++;
+    // These counts used to be returned and then thrown away by the client
+    // (`struct AnyResponse: Decodable {}`), so nobody could tell whether a
+    // weigh-in had landed. The companion decodes them now; log them too.
+    if (samples.length > 0) {
+      console.log(
+        `[health/daily] weigh-ins: ${weights.imported} new, ${weights.merged} merged, ${weights.skipped} duplicate, ${weights.invalid} invalid`
+      );
     }
 
-    return NextResponse.json({ ...snapshot, weightsImported, weightsSkipped });
+    return NextResponse.json({
+      ...snapshot,
+      weightsImported: weights.imported,
+      weightsMerged: weights.merged,
+      weightsSkipped: weights.skipped,
+      weightsInvalid: weights.invalid,
+    });
   } catch (error) {
     console.error("Daily health snapshot sync error:", error);
     return NextResponse.json(
