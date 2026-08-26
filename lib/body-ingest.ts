@@ -99,6 +99,22 @@ export async function ingestBodySamples(
       continue;
     }
 
+    // Belt-and-braces against CONCURRENT requests. The range query above runs
+    // before another in-flight request has committed, so two racing posts of
+    // the same page both see an empty window and both insert -- which is
+    // exactly how 857 duplicate rows were created on 2026-08-26. The client
+    // now coalesces its syncs, and this exact-match re-check (measuredAt is
+    // indexed) closes most of what is left. The real fix is a unique index on
+    // a HealthKit sample id; that needs a migration and is in deferred-items.
+    const exact = await prisma.bodyMeasurement.findFirst({
+      where: { measuredAt: sample.measuredAt, weightKg: sample.weightKg },
+      select: { id: true },
+    });
+    if (exact) {
+      result.skipped++;
+      continue;
+    }
+
     const created = await prisma.bodyMeasurement.create({
       data: {
         measuredAt: sample.measuredAt,

@@ -41,7 +41,18 @@ public final class HealthSyncManager: ObservableObject {
     private let api: MobileAPIClient
     private var observersStarted = false
 
-    private var readTypes: Set<HKObjectType> {
+    /// The set as it stood before 2026-08-26. Load-bearing: it is what tells us
+    /// "he has granted this app Health access at some point", independently of
+    /// whether he has seen the newer types yet.
+    ///
+    /// REGRESSION THIS EXISTS TO PREVENT (caught on device the same day):
+    /// bootstrap() derived `alreadyAsked` from statusForAuthorizationRequest
+    /// over the FULL read set. Adding four types flipped that call from
+    /// .unnecessary to .shouldRequest, so `alreadyAsked` became false, the
+    /// guard fell through to the `health.granted` UserDefaults flag, and on an
+    /// install where that flag was never written the whole sync silently
+    /// stopped — no snapshot, no weigh-ins, no error he would ever see.
+    private var coreReadTypes: Set<HKObjectType> {
         [
             HKQuantityType(.stepCount),
             HKQuantityType(.activeEnergyBurned),
@@ -50,6 +61,11 @@ public final class HealthSyncManager: ObservableObject {
             HKQuantityType(.heartRateVariabilitySDNN),
             HKQuantityType(.bodyMass),
             HKCategoryType(.sleepAnalysis),
+        ]
+    }
+
+    private var readTypes: Set<HKObjectType> {
+        coreReadTypes.union([
             // Added 2026-08-26. His Etekcity scale has been writing these into
             // Apple Health all along and the app never asked for them, so every
             // body-fat and BMI reading was thrown away.
@@ -57,7 +73,7 @@ public final class HealthSyncManager: ObservableObject {
             HKQuantityType(.bodyMassIndex),
             HKQuantityType(.leanBodyMass),
             HKQuantityType(.waistCircumference),
-        ]
+        ])
     }
 
     public init(api: MobileAPIClient) {
@@ -77,23 +93,38 @@ public final class HealthSyncManager: ObservableObject {
         // started and no sync ran until the Allow button was tapped again,
         // every launch. statusForAuthorizationRequest is the supported way
         // to ask "have I already prompted?".
-        let alreadyAsked = (try? await store.statusForAuthorizationRequest(
+        // Has he EVER granted this app Health access? Asked against the core
+        // set, so growing readTypes can never make this answer flip to "no".
+        let everGranted = (try? await store.statusForAuthorizationRequest(
+            toShare: [], read: coreReadTypes
+        )) == .unnecessary
+
+        // Has he seen the CURRENT set, including the composition types?
+        let sawCurrentSet = (try? await store.statusForAuthorizationRequest(
             toShare: [], read: readTypes
         )) == .unnecessary
 
         let granted = UserDefaults.standard.bool(forKey: "health.granted")
         let versionSeen = UserDefaults.standard.integer(forKey: Self.versionKey)
 
-        guard alreadyAsked || granted else { return }
+        guard everGranted || granted else {
+            status = .notAsked
+            return
+        }
 
-        // Self-healing: `alreadyAsked == false` while granted means readTypes
-        // grew since he last saw the sheet. The stored version is belt-and-
-        // braces, because statusForAuthorizationRequest behaviour across OS
-        // versions is not something to bet the whole fix on.
-        if !alreadyAsked || versionSeen < Self.requestedTypesVersion {
-            status = .needsMoreTypes
-        } else {
-            status = .authorized
+        // Self-healing: growing readTypes automatically puts an existing
+        // install into needsMoreTypes so it can be re-prompted — which it
+        // otherwise never could, since the Connect button only shows for
+        // .notAsked. Sync still runs in this state; the core types were
+        // already granted and only the new ones come back empty.
+        status = (sawCurrentSet && versionSeen >= Self.requestedTypesVersion)
+            ? .authorized
+            : .needsMoreTypes
+
+        // Backfill the flag for installs that granted access before it existed,
+        // so this never depends on statusForAuthorizationRequest again.
+        if everGranted && !granted {
+            UserDefaults.standard.set(true, forKey: "health.granted")
         }
 
         startObserversAndDeliver()
@@ -166,7 +197,35 @@ public final class HealthSyncManager: ObservableObject {
     /// day.
     private var postedYesterdayThisLaunch = false
 
+    /// Re-entrancy guard. @MainActor serialises the CODE but every `await` is a
+    /// suspension point, so two syncNow() tasks interleave freely.
+    ///
+    /// THIS COST 857 DUPLICATE ROWS on 2026-08-26. startObserversAndDeliver()
+    /// registers HKObserverQuery handlers that call syncNow(), and the
+    /// scenePhase .active hook calls it too — so on launch several drains ran
+    /// at once, each read the SAME unsaved anchor, each fetched the same page,
+    /// and each POSTed it. The server's near-twin rule cannot save you here:
+    /// its range query runs before the other in-flight request has committed,
+    /// so every racer sees an empty window and inserts.
+    private var syncTask: Task<Void, Never>?
+
+    /// Coalescing entry point: a sync already in flight is awaited rather than
+    /// duplicated. Every caller (bootstrap, observers, scenePhase, the Sync now
+    /// button) goes through here.
     public func syncNow() async {
+        if let running = syncTask {
+            await running.value
+            return
+        }
+        let task = Task { @MainActor [weak self] in
+            await self?.performSync()
+        }
+        syncTask = task
+        await task.value
+        syncTask = nil
+    }
+
+    private func performSync() async {
         guard status == .authorized || status == .needsMoreTypes else { return }
         do {
             let today = try await postSnapshot(daysAgo: 0)
