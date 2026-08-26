@@ -73,7 +73,7 @@ struct SequencesListView: View {
 
     private func recipe(for sequence: SequenceDef) -> String {
         let parts = sequence.steps.prefix(2).map { step in
-            step.reps.map { "\($0) \(shortName(step))" } ?? shortName(step)
+            step.dosePrefix + shortName(step)
         }
         let cadence = sequence.kind == "emom" ? "every :60" : sequence.kind
         return (parts + [cadence]).joined(separator: " · ")
@@ -228,7 +228,7 @@ struct SequenceDetailView: View {
     }
 
     private func stepLine(_ step: SequenceStep) -> String {
-        var line = step.reps.map { "\($0) " } ?? ""
+        var line = step.dosePrefix
         line += step.exerciseName.lowercased()
         if let seconds = step.seconds { line += " · \(seconds)s" }
         if let weight = model.effectiveWeight(for: step) { line += " · \(Fmt.kg(weight)) kg" }
@@ -370,7 +370,7 @@ struct SequenceLiveView: View {
                 }
                 if !dimmed {
                     if let next = model.nextStep(of: sequence) {
-                        Text("next · \(next.reps.map { "\($0) " } ?? "")\(next.exerciseName.lowercased())")
+                        Text("next · \(next.dosePrefix)\(next.exerciseName.lowercased())")
                             .font(Theme.text(8.5))
                             .foregroundStyle(Theme.textTertiary)
                             .lineLimit(1)
@@ -415,7 +415,7 @@ struct SequenceLiveView: View {
         let name = step.exerciseName
             .replacingOccurrences(of: "Kettlebell ", with: "")
             .uppercased()
-        var label = step.reps.map { "\($0) \(name)" } ?? name
+        var label = step.dosePrefix.isEmpty ? name : step.dosePrefix + name
         if let weight = model.effectiveWeight(for: step) {
             label += " · \(Fmt.kg(weight))KG"
         }
@@ -461,7 +461,13 @@ struct CircuitRunnerPage: View {
             Spacer(minLength: 2)
 
             if let step {
-                if let reps = step.reps {
+                if step.isToFailure {
+                    // The big numeral slot still has to say something, or a
+                    // to-failure step reads as a movement with no prescription.
+                    Text("MAX")
+                        .font(Theme.display(30, weight: .bold))
+                        .foregroundStyle(Theme.textBright)
+                } else if let reps = step.reps {
                     Text("\(reps)")
                         .font(Theme.numeric(38))
                         .foregroundStyle(Theme.textBright)

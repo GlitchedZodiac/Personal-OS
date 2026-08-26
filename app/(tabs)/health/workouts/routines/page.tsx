@@ -26,6 +26,8 @@ interface DraftStep {
   sets: string;
   reps: string;
   seconds: string;
+  /** Work to failure instead of to a rep count or a clock (2026-08-26). */
+  toFailure: boolean;
   weightKg: string;
 }
 
@@ -42,6 +44,7 @@ const EMPTY_STEP: DraftStep = {
   sets: "5",
   reps: "10",
   seconds: "",
+  toFailure: false,
   weightKg: "",
 };
 
@@ -134,6 +137,7 @@ export default function RoutinesPage() {
           sets: s.sets ? String(s.sets) : "",
           reps: s.reps ? String(s.reps) : "",
           seconds: s.seconds ? String(s.seconds) : "",
+          toFailure: Boolean(s.toFailure),
           weightKg: s.weightKg ? String(s.weightKg) : "",
         }))
       );
@@ -159,8 +163,11 @@ export default function RoutinesPage() {
             exerciseName: s.exerciseName,
             category: s.category || undefined,
             sets: s.sets || undefined,
-            reps: s.reps || undefined,
-            seconds: s.seconds || undefined,
+            // To-failure is a stop condition, so a rep or second target
+            // alongside it would make every runner ambiguous. Send neither.
+            reps: s.toFailure ? undefined : s.reps || undefined,
+            seconds: s.toFailure ? undefined : s.seconds || undefined,
+            toFailure: s.toFailure || undefined,
             weightKg: s.weightKg || undefined,
           })),
       };
@@ -452,13 +459,37 @@ export default function RoutinesPage() {
                       </span>
                       <input
                         inputMode="decimal"
-                        value={step[field]}
+                        value={
+                          step.toFailure && (field === "reps" || field === "seconds")
+                            ? ""
+                            : step[field]
+                        }
+                        disabled={
+                          step.toFailure && (field === "reps" || field === "seconds")
+                        }
+                        placeholder={
+                          step.toFailure && (field === "reps" || field === "seconds")
+                            ? "—"
+                            : undefined
+                        }
                         onChange={(e) => setStep(i, { [field]: e.target.value })}
-                        className="mt-0.5 w-full rounded-[8px] border border-border bg-background px-2 py-1.5 text-center text-sm tabular-nums outline-none"
+                        className="mt-0.5 w-full rounded-[8px] border border-border bg-background px-2 py-1.5 text-center text-sm tabular-nums outline-none disabled:bg-muted disabled:text-muted-foreground"
                       />
                     </label>
                   ))}
                 </div>
+                <label className="mt-2 flex items-center gap-2 text-[12px] font-semibold text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={step.toFailure}
+                    onChange={(e) => setStep(i, { toFailure: e.target.checked })}
+                    className="h-4 w-4 accent-[#A63D63]"
+                  />
+                  To failure
+                  <span className="font-normal text-muted-foreground">
+                    — no rep or time target
+                  </span>
+                </label>
               </div>
             ))}
           </div>

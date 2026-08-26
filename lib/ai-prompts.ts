@@ -500,6 +500,8 @@ ROUTINES (training design — the product's center):
 - Kinds: circuit ("20 swings, 20 snatches, 20 goblet squats, repeat 3 times, 60-second rests" → kind circuit, rounds 3, restSecondsDefault 60, one step per movement), emom ("20-minute EMOM cycling swings/squats/snatches" → durationMinutes 20), straight sets ("curls then rows then bench, 3×10 each"), tabata.
 - Rest semantics: restSecondsDefault is the rest between ROUNDS on circuits; a step's restSeconds is the rest right after that movement when it differs. Capture both when the user distinguishes them.
 - Steps carry reps (or seconds for timed holds), weightKg when the user prescribes a load ("swings at 20 kg"), sets for straight work. "Each side" belongs in the exercise name.
+- PRESCRIBE EXACTLY ONE OF reps, seconds, or toFailure per step. "Two sets to failure" is sets: 2 with toFailure: true — NOT reps: 0, and NEVER the words "to failure" appended to exerciseName. The name is the movement's identity and gets minted into the app's permanent vocabulary; prescriptions written into it become junk movements that then haunt voice logging, PRs and the watch.
+- OMIT any number you do not have. Do not send 0 for reps, seconds, weightKg, rounds or durationMinutes — 0 is discarded downstream, so it silently means "nothing prescribed".
 - NEW MOVEMENTS: the user invents flows ("one-arm clean squat thruster") and variants tracked separately ("two-hand clean"). Give those steps a category — they're minted into the app's vocabulary on save. For a standalone "add this movement" ask (no routine), propose create_exercise with sensible aliases.
 - To change a routine ("make the swings 24 kg in my EMOM"): get_app_data routines for the id, then update_routine with the complete corrected definition.
 - Saved routines appear in Train → Routines and on the Apple Watch. Confirm-first like every proposal.
@@ -651,10 +653,15 @@ const ROUTINE_STEP_SCHEMA = {
         "REQUIRED when the movement is new to the app (a compound flow like 'one-arm clean squat thruster', or a variant tracked separately like 'two-hand clean') — it gets minted as a user exercise on save. Omit for well-known movements.",
     },
     sets: { type: "number" as const, description: "Sets (straight work)" },
-    reps: { type: "number" as const },
+    reps: { type: "number" as const, description: "Rep target. OMIT when the step is toFailure or timed." },
     seconds: {
       type: "number" as const,
-      description: "For timed holds/intervals instead of reps",
+      description: "For timed holds/intervals instead of reps. OMIT when using reps or toFailure.",
+    },
+    toFailure: {
+      type: "boolean" as const,
+      description:
+        "TRUE when the set is worked to failure / AMRAP / max reps rather than to a rep count or a clock. Prescribe EXACTLY ONE of reps, seconds or toFailure. Never write 'to failure' into exerciseName — the name is the movement's identity and becomes a permanent catalog entry.",
     },
     weightKg: {
       type: "number" as const,
@@ -696,7 +703,7 @@ const ROUTINE_FIELD_PROPS = {
     type: "array" as const,
     items: ROUTINE_STEP_SCHEMA,
     description:
-      "Ordered movements. For an EMOM these are the exercises cycled each minute; for a circuit, one round's sequence.",
+      "Ordered movements. For an EMOM these are the exercises cycled each minute; for a circuit, one round's sequence. OMIT any numeric field you do not have — never send 0. A 0 is discarded downstream, so it reads as 'nothing prescribed' while still looking deliberate.",
   },
   message: {
     type: "string" as const,
