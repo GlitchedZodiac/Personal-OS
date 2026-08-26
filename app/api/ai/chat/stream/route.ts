@@ -4,11 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getUserTimeZone } from "@/lib/server-timezone";
 import { getDateStringInTimeZone, getZonedDateParts } from "@/lib/timezone";
 import { CHAT_SYSTEM_PROMPT, CHAT_RESPONSES_TOOLS } from "@/lib/ai-prompts";
-import {
-  executeGetHealthData,
-  proposalKindFor,
-  sanitizeProposalArgs,
-} from "@/lib/chat-tools";
+import { proposalKindFor, sanitizeProposalArgs } from "@/lib/chat-tools";
+import { type AppDataArgs, executeAppData } from "@/lib/ai/data-access";
 import { normalizeFoodItemsWithTiming } from "@/lib/food-timing";
 import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 
@@ -21,7 +18,15 @@ import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 
 export const maxDuration = 60;
 
-const MAX_TURNS = 5;
+// 6, not 5: a cross-domain question ("how did my spending track against my
+// training") can need a second read round after seeing the first. Costs
+// nothing when unused. The wall-clock guard below is the real backstop.
+const MAX_TURNS = 6;
+
+// maxDuration is 60s. Without a check, a slow multi-dataset turn can hit the
+// Vercel ceiling mid-stream and the user gets NOTHING. Bail at 42s and spend
+// the remainder on one final text turn.
+const SOFT_DEADLINE_MS = 42_000;
 const HISTORY_LIMIT = 20;
 const MAX_IMAGES = 6; // one capture's worth — plate, label, receipt…
 
@@ -175,12 +180,26 @@ export async function POST(request: NextRequest) {
         let input: any[] = [...history, { role: "user", content: userContent }];
         let finalText = "";
 
+        const startedAt = Date.now();
+
         for (let turn = 0; turn < MAX_TURNS; turn++) {
+          // Out of time: stop reading, force one final text turn so he gets an
+          // answer (or an honest "ask me more narrowly") instead of silence.
+          const outOfTime =
+            turn > 0 && Date.now() - startedAt > SOFT_DEADLINE_MS;
+          if (outOfTime) {
+            input.push({
+              role: "system",
+              content:
+                "You are out of time. Answer NOW from what you already retrieved. Do not call any more tools. If you did not get enough, say so in one line and suggest a narrower question.",
+            });
+          }
+
           const response = await openai.responses.create({
             model: CHAT_MODEL,
             instructions,
             input,
-            tools: CHAT_RESPONSES_TOOLS as never,
+            tools: outOfTime ? [] : (CHAT_RESPONSES_TOOLS as never),
             reasoning: { effort: "low" },
             include: ["reasoning.encrypted_content"],
             store: false,
@@ -262,12 +281,14 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
-            if (call.name === "get_health_data") {
-              send({ type: "tool", name: call.name, query: args.query ?? "" });
-              const result = await executeGetHealthData(
-                args as { query?: string; days?: number },
-                timeZone,
-                todayStr
+            // `get_health_data` is still accepted so a turn already in flight
+            // against the previous deploy cannot break mid-stream.
+            if (call.name === "get_app_data" || call.name === "get_health_data") {
+              const dataset = String(args.dataset ?? args.query ?? "");
+              send({ type: "tool", name: "get_app_data", query: dataset });
+              const result = await executeAppData(
+                { ...(args as AppDataArgs), dataset },
+                { timeZone, todayStr }
               );
               input.push({
                 type: "function_call_output",
