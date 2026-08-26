@@ -266,6 +266,27 @@ export default function SettingsPage() {
             Choose file
           </Link>
         </div>
+        {/* Export data — added 2026-08-26. NOTE: the design file's DATA card
+            has two rows; the app already added Strava and this makes four.
+            Deliberate deviation, surfaced to Michael rather than shipped
+            silently (CLAUDE.md port gate, rule 3). */}
+        <div className="flex items-center justify-between border-b border-muted px-4 py-3">
+          <div>
+            <p className="text-[13px] font-semibold text-foreground">
+              Export data
+            </p>
+            <p className="mt-px text-[11px] text-muted-foreground">
+              JSON + CSV — health &amp; measurements
+            </p>
+          </div>
+          <Link
+            href="/settings/export"
+            className="rounded-[8px] border border-[#D9D7DC] px-3.5 py-[7px] text-xs font-semibold text-foreground"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Download
+          </Link>
+        </div>
         <div className="flex items-center justify-between border-b border-muted px-4 py-3">
           <div>
             <p className="text-[13px] font-semibold text-foreground">

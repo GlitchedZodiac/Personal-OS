@@ -885,3 +885,10 @@ export async function buildHealthExport(
     },
   };
 }
+
+/**
+ * The shape buildHealthExport actually returns. Exported so the CSV layer
+ * (lib/health-csv.ts) can project over it with real types instead of `any`.
+ * No cycle: health-export never imports health-csv.
+ */
+export type HealthExportPayload = Awaited<ReturnType<typeof buildHealthExport>>;

@@ -28,7 +28,18 @@ function getTodayFileStamp() {
   return `${year}-${month}-${day}`;
 }
 
-export function HealthExportCard() {
+export interface HealthExportCardProps {
+  /** "all" (default) or a day count, matching /api/health/export?range=. */
+  range?: string;
+  from?: string;
+  to?: string;
+}
+
+export function HealthExportCard({
+  range = "all",
+  from,
+  to,
+}: HealthExportCardProps = {}) {
   const [exporting, setExporting] = useState(false);
   const [copying, setCopying] = useState(false);
 
@@ -48,9 +59,10 @@ export function HealthExportCard() {
       setExporting(true);
       const timeZone =
         Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Bogota";
-      const response = await fetch(
-        `/api/health/export?range=all&timeZone=${encodeURIComponent(timeZone)}`
-      );
+      const params = new URLSearchParams({ range, timeZone });
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      const response = await fetch(`/api/health/export?${params.toString()}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
