@@ -1,7 +1,9 @@
-// Service Worker for Pitaya PWA — v4 (current IA: Today/Chat/Food/
+// Service Worker for Pitaya PWA — v5 (current IA: Today/Chat/Food/
 // Spirit/Journal/Settings; audited 2026-08-14: network-first keeps JS
-// fresh, cache is offline-fallback only)
-const CACHE_NAME = "pitaya-v4";
+// fresh, cache is offline-fallback only; v5 2026-08-28: cross-origin GETs
+// are no longer intercepted — the MapLibre trail view streams thousands of
+// map/terrain tiles that would have grown this cache without bound)
+const CACHE_NAME = "pitaya-v5";
 const OFFLINE_URL = "/dashboard";
 
 // Assets to cache on install — every URL must resolve or install fails,
@@ -47,6 +49,10 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (event.request.method !== "GET") return;
+
+  // Same-origin only: map/terrain tiles (and any other third-party asset)
+  // get the browser's normal HTTP caching, never this cache.
+  if (new URL(event.request.url).origin !== self.location.origin) return;
 
   // Skip API routes - always go to network
   if (event.request.url.includes("/api/")) return;

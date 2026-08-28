@@ -29,6 +29,14 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     @Published public private(set) var z2Seconds: Int = 0
     @Published public private(set) var z2AvgBpm: Int?
     private var z2BpmSum = 0
+    /// Live session steps for the (designed, v3) Effort page — refreshed
+    /// every 15 s by the ticker; the live builder's statistics don't carry
+    /// stepCount reliably, hence the same HKStatisticsQuery as finish().
+    @Published public private(set) var stepCountLive: Int?
+    /// Bumped when the raw streams append — views draw the HR graph off the
+    /// arrays keyed by this, without publishing the arrays themselves.
+    @Published public private(set) var streamRevision = 0
+    private var tickCount = 0
 
     // Raw streams for the server's zone/load enrichment (streams contract
     // 2026-08-11): appended at HealthKit's natural HR cadence, cleared on
@@ -59,6 +67,9 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     /// §03 recovery window: stats/streams freeze while HR keeps flowing.
     private var frozen = false
     private var frozenEnd: Date?
+    /// True only while THIS session records GPS — the gate that keeps the
+    /// long-lived tracker's leftovers out of indoor sessions' saves.
+    private var routeActive = false
 
     public struct Totals: Sendable {
         public let startedAt: Date
@@ -124,6 +135,9 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         z2Seconds = 0
         z2BpmSum = 0
         z2AvgBpm = nil
+        stepCountLive = nil
+        streamRevision = 0
+        tickCount = 0
         latestAltitude = nil
         lastGainAltitude = nil
         elevationGain = 0
@@ -160,6 +174,7 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
 
         if outdoor {
             route.start(store: store, at: start)
+            routeActive = true
         }
 
         phase = .running
@@ -246,10 +261,17 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
             // totals object; the workout just isn't persisted to Health.
         }
 
-        let routeData = await route.finish(for: workout)
+        // Route data belongs ONLY to sessions that started GPS. The tracker
+        // is long-lived and its buffer survives until the next OUTDOOR start,
+        // so finishing it unconditionally attached the previous walk's trail
+        // — and its GPS distance, via the fallback below — to stationary
+        // sessions (prod 08-19/20/26: freestyle rows carrying the prior
+        // walk's exact polyline).
         // HealthKit's distance is authoritative when it has one; GPS covers
         // the gap when it doesn't (and never overrides a real HK reading).
-        let gpsDistance = route.distanceMeters
+        let gpsDistance = routeActive ? route.distanceMeters : 0
+        let routeData = routeActive ? await route.finish(for: workout) : nil
+        routeActive = false
         let bestDistance = (distanceMeters ?? 0) > 0
             ? distanceMeters
             : (gpsDistance > 0 ? gpsDistance : nil)
@@ -377,6 +399,14 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
                     self.z2BpmSum += Int(hr)
                     self.z2AvgBpm = self.z2BpmSum / max(self.z2Seconds, 1)
                 }
+                self.tickCount += 1
+                if self.tickCount % 15 == 0, self.phase == .running, !self.frozen,
+                   let start = self.startedAt {
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        self.stepCountLive = await self.queryStepCount(from: start, to: Date())
+                    }
+                }
             }
         }
     }
@@ -409,6 +439,7 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
                     if collectAltitude {
                         altitudeStream.append(latestAltitude ?? altitudeStream.last ?? 0)
                     }
+                    streamRevision += 1
                 }
             }
         }

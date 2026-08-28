@@ -31,7 +31,13 @@ struct SummaryView: View {
                     tapeCard(summary)
                 }
 
-                if isSaved {
+                if model.syncState == .syncing {
+                    // Mid-save: a busy, un-tappable CTA — never "Done", which
+                    // a queued second tap could hit and dismiss the summary
+                    // while the sync is still in flight.
+                    PitayaCTA(title: "Saving…", primary: true, isBusy: true) {}
+                        .padding(.top, Theme.px(12))
+                } else if isSaved {
                     Text("Full breakdown in Pitaya")
                         .font(Theme.wText(5.75))
                         .foregroundStyle(Theme.textMuted)
@@ -40,8 +46,11 @@ struct SummaryView: View {
                     PitayaCTA(title: "Done", primary: true) { model.dismissSummary() }
                         .padding(.top, Theme.px(10))
                 } else {
-                    // §05: on the summary, Double Tap saves.
+                    // §05: on the summary, Double Tap saves. The click lands
+                    // on the tap itself — the visible "Saving…" flip is
+                    // synchronous in saveWorkout, but fingers want an ack.
                     PitayaCTA(title: "Save workout", primary: true) {
+                        Haptics.minor(.click)
                         Task { await model.saveWorkout() }
                     }
                     .padding(.top, Theme.px(12))

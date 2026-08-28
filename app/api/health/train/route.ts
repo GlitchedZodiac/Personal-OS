@@ -8,6 +8,7 @@ import {
   getWeekStartDateString,
 } from "@/lib/timezone";
 import { sessionVolumeKg } from "@/lib/prs";
+import { GPS_WORKOUT_TYPES } from "@/lib/activities";
 import { volumeTrendPct } from "@/lib/format-training";
 import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
@@ -82,7 +83,13 @@ export async function GET(request: NextRequest) {
         orderBy: { achievedAt: "desc" },
       }),
       prisma.workoutLog.findFirst({
-        where: { distanceMeters: { gt: 0 } },
+        // TRAILS means ground actually covered — typed GPS sessions only. A
+        // bare distance filter once surfaced a freestyle row carrying leaked
+        // GPS distance as the "latest trail".
+        where: {
+          distanceMeters: { gt: 0 },
+          workoutType: { in: [...GPS_WORKOUT_TYPES] },
+        },
         orderBy: { startedAt: "desc" },
         select: {
           id: true,

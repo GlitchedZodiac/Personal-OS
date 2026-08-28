@@ -19,6 +19,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ sent: 0, skipped: "push not configured" });
   }
 
+  // Sender gate (2026-08-28) — same switchboard as the training senders.
+  const { getNotificationPrefs } = await import("@/lib/notification-prefs");
+  const prefs = await getNotificationPrefs();
+  if (!prefs.spiritHomework) {
+    return NextResponse.json({ sent: 0, skipped: "spiritHomework pref off" });
+  }
+
   const carrying = await carriedHomework();
   if (!carrying) {
     return NextResponse.json({ sent: 0, skipped: "nothing carried" });

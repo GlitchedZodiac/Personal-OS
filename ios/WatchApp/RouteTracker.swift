@@ -114,7 +114,19 @@ public final class RouteTracker: NSObject, ObservableObject {
         if let final = points.last, sampled.last?.t != final.t {
             sampled.append(final)
         }
-        return WorkoutRouteData(summaryPolyline: polyline, points: sampled)
+        let result = WorkoutRouteData(summaryPolyline: polyline, points: sampled)
+
+        // The tracker outlives the session. Clearing here (not just on the
+        // next outdoor start) means a finished trail can never be handed out
+        // twice — the leak that stamped a walk's route onto the freestyle
+        // sessions that followed it.
+        points = []
+        coordinates = []
+        distanceMeters = 0
+        lastAccepted = nil
+        self.startedAt = nil
+
+        return result
     }
 
     // MARK: - Ingest

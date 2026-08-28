@@ -197,6 +197,9 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
     public let source: String
     public let syncStatus: String
     public let deviceType: String?
+    /// §Trails (2026-08-28, additive): set when the session started from a
+    /// saved trail. Optional so queue files written by older builds decode.
+    public let trailId: String?
 
     public init(
         externalId: String = UUID().uuidString,
@@ -217,7 +220,8 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         routeData: WorkoutRouteData? = nil,
         source: String = "mobile",
         syncStatus: String = "synced",
-        deviceType: String? = "apple_watch"
+        deviceType: String? = "apple_watch",
+        trailId: String? = nil
     ) {
         self.externalId = externalId
         self.externalSource = externalSource
@@ -238,7 +242,61 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         self.source = source
         self.syncStatus = syncStatus
         self.deviceType = deviceType
+        self.trailId = trailId
     }
+}
+
+// MARK: - Named trails (§Trails, 2026-08-28)
+
+/// GET /api/mobile/trails row — lib/trails.ts TrailPayload field names are
+/// the contract; renames go through deferred-items, never adapted here.
+public struct TrailSummary: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    public let name: String
+    public let aliases: [String]
+    public let distanceMeters: Double?
+    public let elevationGainM: Double?
+    public let summaryPolyline: String?
+    public let startLat: Double?
+    public let startLng: Double?
+    public let runCount: Int
+    public let lastRun: TrailLastRunPayload?
+}
+
+public struct TrailLastRunPayload: Codable, Hashable, Sendable {
+    public let workoutId: String
+    public let workoutExternalId: String?
+    public let startedAt: Date
+    public let durationMinutes: Int
+    public let distanceMeters: Double?
+    public let elevationGainM: Double?
+    public let avgHeartRateBpm: Int?
+}
+
+public struct TrailListResponse: Codable, Sendable {
+    public let trails: [TrailSummary]
+    public let updatedAt: Date
+}
+
+public struct TrailSaveRequest: Codable, Sendable {
+    public let name: String?
+    public let trailId: String?
+    public let workoutExternalId: String?
+    public init(name: String? = nil, trailId: String? = nil, workoutExternalId: String? = nil) {
+        self.name = name
+        self.trailId = trailId
+        self.workoutExternalId = workoutExternalId
+    }
+}
+
+public struct TrailSaveResponse: Codable, Sendable {
+    public struct Ref: Codable, Sendable {
+        public let id: String
+        public let name: String
+    }
+    public let trail: Ref
+    public let created: Bool
+    public let linked: Bool
 }
 
 public struct WorkoutSyncRequest: Codable, Sendable {

@@ -496,6 +496,8 @@ EDITING & DELETING:
 - If the user amends something whose card is still [pending], re-propose the corrected full card. If the card was [saved], the data is in the log — use edit_workout_entry/edit_food_log/delete_entry on the real entry, NEVER log it again (that double-counts).
 
 ROUTINES (training design — the product's center):
+- Outdoor GPS sessions (walk/run/hike) can be NAMED: "that hike was el Cerro de las Tres Cruces" → name_trail with the workout's id from get_app_data recent_workouts. The same name again links instead of duplicating, and repeat runs of a named trail compare automatically.
+- He PLANS his training week in words: "this week Armor Builder Monday, back day Wednesday, Thursday climb Tres Cruces, remind me Wednesday 4pm to stretch first" → ONE plan_training card covering every mentioned day (routineName/trailName when he names them; timed reminders become real pushes). Read what's already planned with get_app_data training_week before proposing, and set replaceWeek when he's re-planning. A saved workout on a planned day marks it done by itself; the 7am nudge covers days he hasn't started.
 - The user trains in routines/flows described in plain language, often from a video or from their head. Your job is to turn that description into a create_routine proposal — any equipment (kettlebell, dumbbell, barbell, bodyweight, machines), not just kettlebell.
 - Kinds: circuit ("20 swings, 20 snatches, 20 goblet squats, repeat 3 times, 60-second rests" → kind circuit, rounds 3, restSecondsDefault 60, one step per movement), emom ("20-minute EMOM cycling swings/squats/snatches" → durationMinutes 20), straight sets ("curls then rows then bench, 3×10 each"), tabata.
 - Rest semantics: restSecondsDefault is the rest between ROUNDS on circuits; a step's restSeconds is the rest right after that movement when it differs. Capture both when the user distinguishes them.
@@ -633,6 +635,108 @@ const DELETE_ENTRY = {
       },
     },
     required: ["entity", "id", "label", "message"],
+    additionalProperties: false,
+  },
+};
+
+const NAME_TRAIL = {
+  type: "function" as const,
+  name: "name_trail",
+  description:
+    "Propose naming the ground a GPS workout covered — 'that hike was el Cerro de las Tres Cruces'. Find the workout via get_app_data recent_workouts (a walk/run/hike; 'my last hike' means the most recent one). If a trail with that name already exists the workout links to it; otherwise the trail is created from the workout's own recording. Repeat visits then compare against the last run of the same trail, and the watch lists it under Saved trails. The user confirms before anything saves.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      name: {
+        type: "string" as const,
+        description: "The trail's name, exactly as the user said it",
+      },
+      workoutId: {
+        type: "string" as const,
+        description: "The GPS workout's id from get_app_data recent_workouts",
+      },
+      label: {
+        type: "string" as const,
+        description: "What's being named, e.g. \"yesterday's 2.3 km hike\"",
+      },
+      message: {
+        type: "string" as const,
+        description: "One-line bubble accompanying the card",
+      },
+    },
+    required: ["name", "workoutId", "label", "message"],
+    additionalProperties: false,
+  },
+};
+
+const PLAN_TRAINING = {
+  type: "function" as const,
+  name: "plan_training",
+  description:
+    "Propose his training week from his words — 'this week: Armor Builder Monday, back day Wednesday, Thursday climb Tres Cruces, and remind me Wednesday 4pm to stretch first'. ONE card lists all the days; on confirm the plans persist, the 7am nudge knows them, and a workout saved on a planned day marks it done automatically. routineName/trailName resolve server-side against his saved routines and named trails. Timed reminders become real push notifications. Set replaceWeek when he is RE-planning — it clears the touched weeks' still-planned days first (done/skipped days survive). The user confirms before anything saves.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      days: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            date: {
+              type: "string" as const,
+              description: "YYYY-MM-DD, his local day",
+            },
+            title: {
+              type: "string" as const,
+              description: "The day's plan in his words — 'Back day', 'Climb Tres Cruces'",
+            },
+            notes: { type: "string" as const },
+            routineName: {
+              type: "string" as const,
+              description: "A saved routine's name, when the day runs one",
+            },
+            trailName: {
+              type: "string" as const,
+              description: "A named trail, when the day is on one",
+            },
+            targetWeightKg: { type: "number" as const },
+            reminders: {
+              type: "array" as const,
+              items: {
+                type: "object" as const,
+                properties: {
+                  atLocal: {
+                    type: "string" as const,
+                    description: "YYYY-MM-DD HH:mm, his local time",
+                  },
+                  title: {
+                    type: "string" as const,
+                    description: "e.g. 'Stretch first'",
+                  },
+                },
+                required: ["atLocal", "title"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["date", "title"],
+          additionalProperties: false,
+        },
+      },
+      replaceWeek: {
+        type: "boolean" as const,
+        description: "Clear the touched weeks' still-planned days before writing",
+      },
+      label: {
+        type: "string" as const,
+        description: "e.g. 'Week of Aug 31 — 4 training days'",
+      },
+      message: {
+        type: "string" as const,
+        description: "One-line bubble accompanying the card",
+      },
+    },
+    required: ["days", "label", "message"],
     additionalProperties: false,
   },
 };
@@ -908,4 +1012,6 @@ export const CHAT_RESPONSES_TOOLS = [
   CREATE_EXERCISE,
   EDIT_WORKOUT_ENTRY,
   SAVE_FOOD_PRODUCT,
+  NAME_TRAIL,
+  PLAN_TRAINING,
 ];

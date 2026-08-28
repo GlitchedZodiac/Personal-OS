@@ -19,6 +19,14 @@
     {
       "path": "/api/cron/spirit-reminder",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/reminder-push",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/training-nudge",
+      "schedule": "0 12 * * *"
     }
   ]
 }

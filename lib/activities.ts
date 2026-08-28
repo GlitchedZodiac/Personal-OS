@@ -18,6 +18,29 @@ const OUTDOOR_TYPES = new Set([
   "treadmill_run",
 ]);
 
+// GPS trails belong only to genuinely outdoor, in-motion types. Watch builds
+// before 2026-08-28 could attach a stale tracker buffer to stationary
+// sessions (prod 08-19/20/26: freestyle rows carried the prior walk's exact
+// polyline) — so writers strip instead of trusting the client.
+export const GPS_WORKOUT_TYPES = new Set([
+  "run",
+  "walk",
+  "hike",
+  "trail_run",
+  "cycling",
+  "ride",
+]);
+
+export function routeDataAllowed(workoutType: string): boolean {
+  return GPS_WORKOUT_TYPES.has(workoutType);
+}
+
+// Structured indoor types whose distance is noise for card typing: HealthKit
+// estimates arm-swing distance for freestyle/HIIT, and the stale-GPS leak
+// stamped real kilometres onto strength rows. A kettlebell session with
+// 900 m on it is still a kettlebell session.
+const STRUCTURED_INDOOR_TYPES = new Set(["freestyle", "strength", "other"]);
+
 export interface RunMetrics {
   sequenceId?: string;
   sequenceName?: string;
@@ -30,6 +53,7 @@ export interface RunMetrics {
   hrStream?: number[];
   timeStream?: number[];
   altitudeStream?: number[];
+  routeAnalytics?: import("@/lib/route-analytics").RouteAnalytics;
 }
 
 export function activityTypeOf(workout: {
@@ -38,9 +62,10 @@ export function activityTypeOf(workout: {
   metricsData: unknown;
 }): ActivityType {
   const m = (workout.metricsData ?? {}) as RunMetrics;
-  if (OUTDOOR_TYPES.has(workout.workoutType) || (workout.distanceMeters ?? 0) > 0) {
-    return "out";
-  }
-  if (m.emom || m.roundsCompleted != null) return "cir";
-  return "kb";
+  if (OUTDOOR_TYPES.has(workout.workoutType)) return "out";
+  const structured = m.emom || m.roundsCompleted != null ? "cir" : "kb";
+  if (STRUCTURED_INDOOR_TYPES.has(workout.workoutType)) return structured;
+  // Untyped/legacy rows: distance still reads as outdoor work.
+  if ((workout.distanceMeters ?? 0) > 0) return "out";
+  return structured;
 }

@@ -74,6 +74,7 @@
 		9D732791423DF4AD53F31380 /* FamiljenGrotesk-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DE19A2C40C78F1DB0C5E021D /* FamiljenGrotesk-Medium.ttf */; };
 		A02A6000CD7F80F1C1B81CF8 /* PitayaGlyphs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79984AFEC08AF2C2C87E907E /* PitayaGlyphs.swift */; };
 		A53892D00B54F88E67367D8E /* PitayaVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2020045D700AEC8774E254 /* PitayaVector.swift */; };
+		A5D589471A1C07CFE2DC11D6 /* WorkoutSyncFlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13FE648160AE79EAE9A42C20 /* WorkoutSyncFlight.swift */; };
 		AEAFA601122A895042F1281E /* PersonalOS PhoneWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 192D161054DC382C11CA0031 /* PersonalOS PhoneWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B00B0A7ABDF2552A868200C3 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B00C978153160C55EFA8A /* Theme.swift */; };
 		B207070B7B7A1738BBF3F1F1 /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */; };
@@ -153,6 +154,7 @@
 		0B3EC5A28C6DC130B5F45FE1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		12D0C5609A11F08C551F2A60 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		1377A069127D2D8A55879B3B /* SetLoggerPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetLoggerPage.swift; sourceTree = "<group>"; };
+		13FE648160AE79EAE9A42C20 /* WorkoutSyncFlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutSyncFlight.swift; sourceTree = "<group>"; };
 		192D161054DC382C11CA0031 /* PersonalOS PhoneWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = "PersonalOS PhoneWidgets.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		19835752792B8774D2AD643F /* HealthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStore.swift; sourceTree = "<group>"; };
 		1CCA7A8E4A219091B7D66C37 /* ExerciseCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseCatalog.swift; sourceTree = "<group>"; };
@@ -293,6 +295,7 @@
 				FAABEEDD8A9DD0E43F18673C /* Smoke.swift */,
 				D79068F331997CA47450480A /* WatchPrefs.swift */,
 				2FAD62BC2C3D39E29DAEB3A3 /* WorkoutRecorder.swift */,
+				13FE648160AE79EAE9A42C20 /* WorkoutSyncFlight.swift */,
 				C3803332AC85DD368948FF1A /* Fonts */,
 				0DD4F18CE1D1882FFDE5BA1F /* Views */,
 			);
@@ -640,6 +643,7 @@
 				45C3E5F95B4ADB9FA3531DB7 /* VoiceConfirmViews.swift in Sources */,
 				CD188B25C1A6BDF8283345BF /* WatchPrefs.swift in Sources */,
 				267048DC6977B56F65B7C242 /* WorkoutRecorder.swift in Sources */,
+				A5D589471A1C07CFE2DC11D6 /* WorkoutSyncFlight.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

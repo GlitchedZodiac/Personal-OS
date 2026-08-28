@@ -7,6 +7,7 @@ import {
   Download,
   FileSpreadsheet,
   Loader2,
+  Map as MapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -37,9 +38,56 @@ export default function ExportDataPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState<HealthCsvDatasetKey | null>(null);
+  const [gpxBusy, setGpxBusy] = useState(false);
 
   const custom = range === "custom";
   const effectiveRange = custom ? "all" : range;
+
+  /** from/to for the GPX endpoint: custom dates pass through, day-count
+      ranges become a from date, "all" sends nothing. */
+  function gpxRangeParams() {
+    const params = new URLSearchParams();
+    if (custom) {
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      return params;
+    }
+    const days = Number(range);
+    if (Number.isFinite(days) && days > 0) {
+      const start = new Date(Date.now() - days * 86_400_000);
+      params.set("from", start.toISOString().slice(0, 10));
+    }
+    return params;
+  }
+
+  async function downloadGpx() {
+    try {
+      setGpxBusy(true);
+      const res = await fetch(`/api/health/export/gpx?${gpxRangeParams().toString()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const trackCount = res.headers.get("X-Track-Count");
+      const named = /filename="([^"]+)"/.exec(
+        res.headers.get("Content-Disposition") ?? ""
+      )?.[1];
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = named ?? "pitaya-gps-tracks.gpx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(href);
+      toast.success(
+        trackCount ? `${trackCount} GPS track(s) downloaded` : "GPX downloaded"
+      );
+    } catch (error) {
+      console.error("GPX export failed:", error);
+      toast.error("Failed to export GPX");
+    } finally {
+      setGpxBusy(false);
+    }
+  }
 
   function buildParams(extra: Record<string, string> = {}) {
     const timeZone =
@@ -145,6 +193,35 @@ export default function ExportDataPage() {
         from={custom ? from : undefined}
         to={custom ? to : undefined}
       />
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <MapIcon className="h-4 w-4" />
+            GPS tracks (GPX)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-start justify-between gap-3">
+          <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+            Every walk, run and hike in range as one GPX file — the standard
+            track format any mapping tool opens. Watch recordings carry
+            elevation and timestamps.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={gpxBusy}
+            onClick={downloadGpx}
+          >
+            {gpxBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            GPX
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-3">
