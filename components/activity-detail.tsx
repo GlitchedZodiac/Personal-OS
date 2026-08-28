@@ -666,6 +666,16 @@ export default function ActivityDetail({
           Pitaya
         </div>
 
+        {det.type === "out" && det.polyline && (
+          <a
+            href={`/api/health/workouts/gpx?id=${encodeURIComponent(det.id)}`}
+            download
+            className="mx-auto mt-3 block text-center text-[12.5px] font-semibold text-[#3E7A54]"
+          >
+            Download GPX track
+          </a>
+        )}
+
         {/* his ask: delete a wrong workout — confirm-first, PRs rebuild
             server-side on the next backfill */}
         <button

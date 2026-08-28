@@ -270,3 +270,46 @@ describe("no field left behind", () => {
     }
   });
 });
+
+describe("workout-sets dataset (2026-08-28)", () => {
+  function setsFixture(): HealthExportPayload {
+    const payload = fixture() as unknown as {
+      rawData: { workoutLogs: unknown[] };
+    };
+    payload.rawData.workoutLogs = [
+      {
+        id: "w-sets",
+        startedAt: "2026-08-19T22:00:00.000Z",
+        workoutType: "strength",
+        metricsData: { sequenceName: "KB Block A" },
+        exercises: [
+          { name: "Kettlebell Swing", sets: 3, reps: 15, weightKg: 24 },
+          { name: "Goblet Squat", sets: 2, reps: 10, weightKg: 20 },
+          { name: "Carry", sets: 1 }, // no reps/weight — nulls, never NaN
+        ],
+      },
+      { id: "w-empty", startedAt: "2026-08-20T12:00:00.000Z", workoutType: "walk", exercises: [] },
+    ];
+    return payload as unknown as HealthExportPayload;
+  }
+
+  it("expands one row per set with volume and the honesty column", () => {
+    const { csv, rowCount } = buildHealthCsv(setsFixture(), "workout-sets");
+    expect(rowCount).toBe(6); // 3 + 2 + 1; the empty workout adds none
+    const rows = records(csv);
+    const header = rows[0];
+    expect(header).toEqual([
+      "workoutId", "date", "startTime", "workoutType", "sequenceName",
+      "exerciseName", "setNumber", "reps", "weightKg", "volumeKg", "granularity",
+    ]);
+    const swings = rows.filter((r) => r[5] === "Kettlebell Swing");
+    expect(swings).toHaveLength(3);
+    expect(swings.map((r) => r[6])).toEqual(["1", "2", "3"]);
+    expect(swings[0][9]).toBe("360"); // 15 × 24
+    expect(swings[0][4]).toBe("KB Block A");
+    expect(new Set(rows.slice(1).map((r) => r[10]))).toEqual(new Set(["aggregated"]));
+    const carry = rows.find((r) => r[5] === "Carry")!;
+    expect(carry[7]).toBe(""); // reps null
+    expect(carry[9]).toBe(""); // volume null
+  });
+});

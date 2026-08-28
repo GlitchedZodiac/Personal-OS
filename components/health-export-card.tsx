@@ -42,6 +42,9 @@ export function HealthExportCard({
 }: HealthExportCardProps = {}) {
   const [exporting, setExporting] = useState(false);
   const [copying, setCopying] = useState(false);
+  // The API has always supported ?includeWorkoutRoutes=true; until 2026-08-28
+  // nothing in the UI could set it — GPS data could not leave the app.
+  const [includeRoutes, setIncludeRoutes] = useState(false);
 
   const prompt = useMemo(
     () =>
@@ -62,6 +65,7 @@ export function HealthExportCard({
       const params = new URLSearchParams({ range, timeZone });
       if (from) params.set("from", from);
       if (to) params.set("to", to);
+      if (includeRoutes) params.set("includeWorkoutRoutes", "true");
       const response = await fetch(`/api/health/export?${params.toString()}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -108,6 +112,15 @@ export function HealthExportCard({
               measurements, weigh-ins, hydration, progress photos, trends, and
               rollups.
             </p>
+            <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={includeRoutes}
+                onChange={(e) => setIncludeRoutes(e.target.checked)}
+                className="h-3.5 w-3.5 accent-cyan-500"
+              />
+              Include GPS tracks (full route coordinates — larger file)
+            </label>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 onClick={handleExport}

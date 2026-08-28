@@ -16,6 +16,7 @@ export type HealthCsvDatasetKey =
   | "daily"
   | "food-logs"
   | "workouts"
+  | "workout-sets"
   | "water-logs";
 
 type Row = Record<string, unknown>;
@@ -178,6 +179,46 @@ function workoutRows(payload: HealthExportPayload): CsvValue[][] {
   });
 }
 
+const WORKOUT_SET_HEADERS = [
+  "workoutId", "date", "startTime", "workoutType", "sequenceName",
+  "exerciseName", "setNumber", "reps", "weightKg", "volumeKg", "granularity",
+] as const;
+
+function workoutSetRows(payload: HealthExportPayload): CsvValue[][] {
+  const timeZone = payload.requestedRange.timeZone;
+  const out: CsvValue[][] = [];
+  for (const row of asRows(payload.rawData?.workoutLogs)) {
+    const entries = Array.isArray(row.exercises) ? (row.exercises as Row[]) : [];
+    if (entries.length === 0) continue;
+    const { date, time } = localParts(row.startedAt, timeZone);
+    const metrics = (row.metricsData ?? null) as Row | null;
+    const sequenceName =
+      typeof metrics?.sequenceName === "string" ? metrics.sequenceName : null;
+    for (const entry of entries) {
+      const sets =
+        typeof entry.sets === "number" && entry.sets > 0
+          ? Math.min(Math.round(entry.sets), 200)
+          : 1;
+      const reps = num(entry.reps);
+      const weightKg = num(entry.weightKg ?? entry.weight);
+      for (let setNumber = 1; setNumber <= sets; setNumber++) {
+        out.push([
+          str(row.id), date, time, str(row.workoutType), sequenceName,
+          str(entry.name), setNumber, reps, weightKg,
+          typeof reps === "number" && typeof weightKg === "number"
+            ? reps * weightKg
+            : null,
+          // Honesty column: entries arrive as {sets × reps × weight} groups
+          // (the watch aggregates per-set logs before sync), so rows are a
+          // uniform expansion — not per-set capture.
+          "aggregated",
+        ]);
+      }
+    }
+  }
+  return out;
+}
+
 const WATER_HEADERS = ["id", "date", "time", "loggedAtUtc", "amountMl"] as const;
 
 function waterRows(payload: HealthExportPayload): CsvValue[][] {
@@ -226,6 +267,14 @@ export const HEALTH_CSV_DATASETS: Record<HealthCsvDatasetKey, HealthCsvDataset> 
     description: "Every session with duration, heart rate, distance and source.",
     headers: WORKOUT_HEADERS,
     build: workoutRows,
+  },
+  "workout-sets": {
+    key: "workout-sets",
+    label: "Workout sets",
+    description:
+      "One row per set with movement, reps and weight — training history for a spreadsheet.",
+    headers: WORKOUT_SET_HEADERS,
+    build: workoutSetRows,
   },
   "water-logs": {
     key: "water-logs",
