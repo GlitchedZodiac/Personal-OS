@@ -90,6 +90,11 @@ export const REGISTRY: readonly DatasetSpec[] = [
     summary: "Named GPS trails with run counts and last-run stats.",
   },
   {
+    key: "training_week",
+    kind: "curated",
+    summary: "This + next week's planned training days with status.",
+  },
+  {
     key: "workout_history",
     kind: "curated",
     summary: "Full-history weekly training series for coaching.",

@@ -4,10 +4,12 @@ import {
   hasAnyMeasurementWhere,
   hasTapeWhere,
 } from "@/lib/body-measurements";
+import { getTrainingWeek } from "@/lib/planner";
 import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg } from "@/lib/prs";
 import { listTrails } from "@/lib/trails";
 import {
+  addDaysToDateString,
   getDateStringInTimeZone,
   getUtcDayBoundsForTimeZone,
   getWeekStartDateString,
@@ -288,6 +290,15 @@ export async function executeGetHealthData(
       };
     }
 
+    case "training_week": {
+      const thisWeek = await getTrainingWeek(timeZone);
+      const nextWeek = await getTrainingWeek(
+        timeZone,
+        addDaysToDateString(thisWeek.weekStart, 7)
+      );
+      return { today: todayStr, thisWeek, nextWeek };
+    }
+
     case "weight_trend": {
       // Weight is long-horizon: recent raw rows (with ids, for edits) PLUS a
       // full-history weekly series so "how's my weight going" gets the whole
@@ -504,7 +515,8 @@ export type ProposalKind =
   | "exercise"
   | "edit_workout"
   | "product"
-  | "trail";
+  | "trail"
+  | "plan_week";
 
 export function proposalKindFor(toolName: string): ProposalKind | null {
   switch (toolName) {
@@ -532,6 +544,8 @@ export function proposalKindFor(toolName: string): ProposalKind | null {
       return "product";
     case "name_trail":
       return "trail";
+    case "plan_training":
+      return "plan_week";
     default:
       return null;
   }

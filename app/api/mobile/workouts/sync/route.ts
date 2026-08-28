@@ -1,7 +1,10 @@
 import { Prisma } from "@prisma/client";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { routeDataAllowed } from "@/lib/activities";
 import { requireMobileSession } from "@/lib/mobile-session";
+import { getNotificationPrefs } from "@/lib/notification-prefs";
+import { markPlannedDone } from "@/lib/planner";
+import { sendPush } from "@/lib/push";
 import {
   analyzeRoute,
   type RouteAnalytics,
@@ -288,6 +291,51 @@ export async function POST(request: NextRequest) {
     // trip. Additive — created/updated/total/prs are unchanged. Never lets a
     // summary hiccup fail a sync that already persisted. Hero metrics stay
     // AFTER the loop: z2WeeklyMinutes must count the rows just written.
+    // Off the critical path, after the response: a saved session on a
+    // planned day completes the plan, and a fresh PR earns its (pref-gated)
+    // celebration push. Neither may tax the watch's wait or fail the sync.
+    const newestSaved = items
+      .map((item) => ({
+        startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
+        sequenceId:
+          (item.metricsData as { sequenceId?: string } | undefined)?.sequenceId ??
+          null,
+      }))
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
+    after(async () => {
+      try {
+        const timeZone = (await timeZonePromise) || "America/Bogota";
+        if (newestSaved) {
+          await markPlannedDone({
+            startedAt: newestSaved.startedAt,
+            timeZone,
+            sequenceId: newestSaved.sequenceId,
+          });
+        }
+      } catch (error) {
+        console.warn("Planned-done hook failed:", (error as Error)?.message);
+      }
+      try {
+        const firstPR = prResults[0]?.newPRs[0];
+        if (firstPR) {
+          const prefs = await getNotificationPrefs();
+          if (prefs.prCelebration) {
+            const unit = firstPR.unit === "kg-reps" ? "kg total" : firstPR.unit;
+            await sendPush({
+              title: `PR · ${firstPR.exerciseName}`,
+              body: `${firstPR.value} ${unit}${
+                firstPR.previousValue != null ? ` — was ${firstPR.previousValue}` : ""
+              }`,
+              url: "/health/workouts",
+              tag: "pr-celebration",
+            });
+          }
+        }
+      } catch (error) {
+        console.warn("PR push failed:", (error as Error)?.message);
+      }
+    });
+
     let summary: HeroMetrics | null = null;
     const routine: RoutineCoda | null = await routinePromise;
     try {

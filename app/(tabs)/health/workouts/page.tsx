@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useDataLoggedListener } from "@/components/use-data-logged";
 import { SheetPortal } from "@/components/sheet-portal";
+import { TrainingWeek } from "@/components/training-week";
 import {
   EmomRunner,
   runnerCues,
@@ -449,6 +450,11 @@ export default function TrainPage() {
           Routines
         </button>
       </div>
+
+      {/* THIS WEEK · PLANNED (2026-08-28) — the chat-dictated week; renders
+          nothing until a week exists. Notably this is the "weekly plan
+          target" the overview card's design always wanted. */}
+      <TrainingWeek />
 
       {/* THIS WEEK · OVERVIEW (design 2026-08-11 rev). Surfaced deviation:
           the design's "4 of 5 planned" needs a weekly plan target that

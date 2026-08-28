@@ -14,6 +14,27 @@ vi.mock("@/lib/mobile-session", () => ({
   })),
 }));
 
+// The route schedules post-response hooks with next/server's after(), which
+// throws outside a real request scope — stub it (the hooks' own libs are
+// mocked below anyway).
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return { ...actual, after: vi.fn() };
+});
+
+vi.mock("@/lib/planner", () => ({
+  markPlannedDone: vi.fn(async () => null),
+}));
+
+vi.mock("@/lib/notification-prefs", () => ({
+  getNotificationPrefs: vi.fn(async () => ({ prCelebration: false })),
+}));
+
+vi.mock("@/lib/push", () => ({
+  sendPush: vi.fn(async () => ({ sent: 0, pruned: 0, failed: 0 })),
+  pushConfigured: vi.fn(() => false),
+}));
+
 type Row = { id: string } & Record<string, unknown>;
 const rows: Row[] = [];
 const byKey = new Map<string, Row>();

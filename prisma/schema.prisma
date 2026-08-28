@@ -101,6 +101,27 @@ model WorkoutLog {
   @@map("workout_logs")
 }
 
+// One planned training day — the dynamic week he dictates to the AI ("this
+// week: X routine, back day, Thursday climb Tres Cruces"). Day-level on
+// purpose; timed sub-reminders ("stretch first at 4pm") ride the existing
+// Reminder rows. A saved workout on the day flips status to done.
+model PlannedWorkout {
+  id             String   @id @default(uuid())
+  localDate      String // YYYY-MM-DD in his timezone
+  title          String
+  notes          String?
+  sequenceId     String?
+  trailId        String?
+  targetWeightKg Float?
+  status         String   @default("planned") // planned | done | skipped
+  source         String   @default("chat") // chat | manual
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([localDate])
+  @@map("planned_workouts")
+}
+
 // A named piece of ground he covers repeatedly — "el Cerro de las Tres
 // Cruces". Workouts link to it so a run can be compared with the last run of
 // the SAME trail. Reference stats seed from the first linked workout.

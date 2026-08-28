@@ -59,6 +59,14 @@ const KIND_TITLES: Record<string, string> = {
   edit_workout: "WORKOUT FIX",
   product: "SAVE TO MY USUALS",
   trail: "NAME THIS TRAIL",
+  plan_week: "THE WEEK, PLANNED",
+};
+
+const weekdayLabel = (day: string) => {
+  const d = new Date(`${day}T12:00:00`);
+  return Number.isFinite(d.getTime())
+    ? d.toLocaleDateString("en-US", { weekday: "short", day: "numeric" })
+    : day;
 };
 
 // ————— Quick filters —————
@@ -709,6 +717,22 @@ export default function ChatPage() {
         followUp = body.created
           ? `${String(body.trail?.name ?? data.name)} saved — the watch lists it under Saved trails now.`
           : `Linked to ${String(body.trail?.name ?? data.name)} — repeat runs compare from here.`;
+      } else if (kind === "plan_week") {
+        const res = await fetch("/api/health/planner", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            days: data.days,
+            replaceWeek: data.replaceWeek === true,
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Save failed");
+        const created = Number(body.created ?? 0);
+        const reminders = Number(body.remindersCreated ?? 0);
+        followUp = `${created} day${created === 1 ? "" : "s"} planned${
+          reminders ? ` · ${reminders} reminder${reminders === 1 ? "" : "s"} set` : ""
+        } — the week strip on Train has it, and the 7am nudge knows.`;
       } else if (kind === "delete") {
         const entity = String(data.entity ?? "food");
         const endpoint =
@@ -900,6 +924,48 @@ export default function ChatPage() {
               <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#8C2F51]">
                 names {String(data.label ?? "the workout")}
               </p>
+            </div>
+          )}
+
+          {kind === "plan_week" && Array.isArray(data.days) && (
+            <div className="py-1">
+              {(data.days as Array<{
+                date?: string;
+                title?: string;
+                routineName?: string;
+                trailName?: string;
+                targetWeightKg?: number;
+                reminders?: Array<{ atLocal?: string; title?: string }>;
+              }>).map((d, i) => (
+                <div
+                  key={i}
+                  className="flex items-start justify-between border-b border-muted py-2.5 last:border-b-0"
+                >
+                  <div className="min-w-0 pr-2">
+                    <p className="text-[13.5px] font-semibold text-foreground">
+                      {String(d.title ?? "")}
+                      {d.targetWeightKg ? ` · ${d.targetWeightKg} kg` : ""}
+                    </p>
+                    {(d.routineName || d.trailName) && (
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {d.routineName ?? d.trailName}
+                      </p>
+                    )}
+                    {Array.isArray(d.reminders) && d.reminders.length > 0 && (
+                      <p className="mt-0.5 text-[11px] text-[#8C2F51]">
+                        {d.reminders
+                          .map((r) =>
+                            `${String(r.atLocal ?? "").slice(11)} ${String(r.title ?? "")}`.trim()
+                          )
+                          .join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
+                    {weekdayLabel(String(d.date ?? ""))}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
 

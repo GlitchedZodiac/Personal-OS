@@ -1,8 +1,10 @@
 import { Prisma } from "@prisma/client";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { routeDataAllowed } from "@/lib/activities";
+import { markPlannedDone } from "@/lib/planner";
 import { prisma } from "@/lib/prisma";
 import { detectAndRecordPRs } from "@/lib/prs";
+import { getUserTimeZone } from "@/lib/server-timezone";
 
 function toNullableNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
@@ -108,6 +110,22 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.warn("PR detection failed:", (error as Error)?.message);
     }
+
+    // A logged session on a planned day completes the plan — after the
+    // response, never blocking the save.
+    after(async () => {
+      try {
+        const timeZone = await getUserTimeZone(null);
+        const metrics = entry.metricsData as { sequenceId?: string } | null;
+        await markPlannedDone({
+          startedAt: entry.startedAt,
+          timeZone,
+          sequenceId: metrics?.sequenceId ?? null,
+        });
+      } catch (hookError) {
+        console.warn("Planned-done hook failed:", (hookError as Error)?.message);
+      }
+    });
 
     return NextResponse.json({ ...entry, newPRs });
   } catch (error) {
