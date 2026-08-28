@@ -37,6 +37,9 @@ type MobileWorkoutPayload = {
   source?: string;
   syncStatus?: string;
   deviceType?: string | null;
+  // Additive (2026-08-28, §Trails): set when the session was started from a
+  // saved trail on the wrist.
+  trailId?: string;
 };
 
 function toNullableNumber(value: unknown) {
@@ -119,6 +122,26 @@ export async function POST(request: NextRequest) {
         )
       : Promise.resolve(null);
 
+    // Trail links ride the item only when the id is real — an unknown id is
+    // dropped silently rather than failing the save.
+    const requestedTrailIds = [
+      ...new Set(
+        items
+          .map((i) => (typeof i.trailId === "string" ? i.trailId.trim() : ""))
+          .filter(Boolean)
+      ),
+    ];
+    const validTrailIds = new Set(
+      requestedTrailIds.length
+        ? (
+            await prisma.trail.findMany({
+              where: { id: { in: requestedTrailIds } },
+              select: { id: true },
+            })
+          ).map((t) => t.id)
+        : []
+    );
+
     for (const item of items) {
       const externalSource =
         typeof item.externalSource === "string" && item.externalSource.trim().length > 0
@@ -183,6 +206,10 @@ export async function POST(request: NextRequest) {
           typeof item.source === "string" && item.source.trim().length > 0
             ? item.source.trim()
             : "mobile",
+        // Present only when valid, so a retry without it never clears a link.
+        ...(typeof item.trailId === "string" && validTrailIds.has(item.trailId.trim())
+          ? { trailId: item.trailId.trim() }
+          : {}),
       };
 
       let workoutId: string;

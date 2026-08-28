@@ -6,6 +6,7 @@ import {
 } from "@/lib/body-measurements";
 import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg } from "@/lib/prs";
+import { listTrails } from "@/lib/trails";
 import {
   getDateStringInTimeZone,
   getUtcDayBoundsForTimeZone,
@@ -262,6 +263,31 @@ export async function executeGetHealthData(
       };
     }
 
+    case "trails": {
+      // Polyline excluded on purpose — coordinates are bulk the model can't
+      // use; names, counts and last-run stats are the conversation.
+      const trails = await listTrails();
+      return {
+        trails: trails.map((t) => ({
+          id: t.id,
+          name: t.name,
+          aliases: t.aliases,
+          distanceMeters: t.distanceMeters,
+          elevationGainM: t.elevationGainM,
+          runCount: t.runCount,
+          lastRun: t.lastRun
+            ? {
+                startedAt: t.lastRun.startedAt,
+                durationMinutes: t.lastRun.durationMinutes,
+                distanceMeters: t.lastRun.distanceMeters,
+                elevationGainM: t.lastRun.elevationGainM,
+                avgHeartRateBpm: t.lastRun.avgHeartRateBpm,
+              }
+            : null,
+        })),
+      };
+    }
+
     case "weight_trend": {
       // Weight is long-horizon: recent raw rows (with ids, for edits) PLUS a
       // full-history weekly series so "how's my weight going" gets the whole
@@ -477,7 +503,8 @@ export type ProposalKind =
   | "routine_update"
   | "exercise"
   | "edit_workout"
-  | "product";
+  | "product"
+  | "trail";
 
 export function proposalKindFor(toolName: string): ProposalKind | null {
   switch (toolName) {
@@ -503,6 +530,8 @@ export function proposalKindFor(toolName: string): ProposalKind | null {
       return "edit_workout";
     case "save_food_product":
       return "product";
+    case "name_trail":
+      return "trail";
     default:
       return null;
   }

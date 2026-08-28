@@ -58,6 +58,7 @@ const KIND_TITLES: Record<string, string> = {
   exercise: "NEW MOVEMENT",
   edit_workout: "WORKOUT FIX",
   product: "SAVE TO MY USUALS",
+  trail: "NAME THIS TRAIL",
 };
 
 // ————— Quick filters —————
@@ -697,6 +698,17 @@ export default function ChatPage() {
         });
         if (!res.ok) throw new Error("Save failed");
         followUp = `${String(data.foodDescription ?? "Product")} is in My usuals — one tap next time.`;
+      } else if (kind === "trail") {
+        const res = await fetch("/api/health/trails", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: data.name, workoutId: data.workoutId }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Save failed");
+        followUp = body.created
+          ? `${String(body.trail?.name ?? data.name)} saved — the watch lists it under Saved trails now.`
+          : `Linked to ${String(body.trail?.name ?? data.name)} — repeat runs compare from here.`;
       } else if (kind === "delete") {
         const entity = String(data.entity ?? "food");
         const endpoint =
@@ -874,6 +886,20 @@ export default function ChatPage() {
                   also answers to {(data.aliases as string[]).join(", ")}
                 </p>
               )}
+            </div>
+          )}
+
+          {kind === "trail" && (
+            <div className="py-2">
+              <p
+                className="text-[15px] font-bold text-foreground"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {String(data.name ?? "Trail")}
+              </p>
+              <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#8C2F51]">
+                names {String(data.label ?? "the workout")}
+              </p>
             </div>
           )}
 

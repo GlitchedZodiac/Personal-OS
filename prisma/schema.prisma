@@ -85,6 +85,9 @@ model WorkoutLog {
   exercises        Json? // Array of { name, sets, reps, weight }
   stravaActivityId String?
   source           String    @default("manual") // manual, voice, strava
+  // Named-trails spine (2026-08-28): links repeat runs of the same ground.
+  trailId          String?
+  trail            Trail?    @relation(fields: [trailId], references: [id], onDelete: SetNull)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -94,7 +97,27 @@ model WorkoutLog {
   // find-then-create check (same race class as the 857-duplicate weigh-ins).
   @@unique([externalSource, externalId])
   @@index([syncStatus])
+  @@index([trailId])
   @@map("workout_logs")
+}
+
+// A named piece of ground he covers repeatedly — "el Cerro de las Tres
+// Cruces". Workouts link to it so a run can be compared with the last run of
+// the SAME trail. Reference stats seed from the first linked workout.
+model Trail {
+  id              String       @id @default(uuid())
+  name            String
+  aliases         String[]     @default([])
+  distanceMeters  Float?
+  elevationGainM  Float?
+  summaryPolyline String?
+  startLat        Float?
+  startLng        Float?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  workouts        WorkoutLog[]
+
+  @@map("trails")
 }
 
 model WaterLog {
