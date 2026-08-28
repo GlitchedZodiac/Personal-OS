@@ -7,6 +7,20 @@ TestFlight** (no more MacBook cable, no more 7-day expiry — the iPad build
 dies ~2026-08-30 without this), and unlock the capabilities the free personal
 team blocked (APNs, App Groups).
 
+> **2026-08-28 UPDATE, same day (execution):** the plan below assumed the paid
+> membership would arrive as a NEW team. It didn't — Individual enrollment
+> **upgraded team HDR67SL3JG in place** (proof: App Store Connect
+> `bundleIds.seedId` == HDR67SL3JG via his API key). So **Phases 0–1 were
+> unnecessary** (no team swap, no Xcode Accounts visit — the ASC API key
+> authenticates signing AND upload headless), and the delete-and-reinstall
+> consequence is void: same team ⇒ same signing prefix ⇒ TestFlight replaces
+> the dev builds **in place, keeping the PIN session and Health grants**.
+> Executed instead: he created the two app records ("Pitaya Personal" iOS,
+> "Pitaya Watch" watchOS) + the `pitaya-upload` App Manager API key;
+> `ios/scripts/testflight-upload.sh` + `asc-api.mjs` do the rest. The
+> TestFlight "redeem invitation code" screen is for external testers —
+> internal builds just appear once assigned; no code exists or is needed.
+
 Facts this plan is grounded in:
 
 - `ios/project.yml` pins `DEVELOPMENT_TEAM: HDR67SL3JG` — the **free personal

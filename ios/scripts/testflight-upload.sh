@@ -28,11 +28,12 @@ ASC_ISSUER_ID="${ASC_ISSUER_ID:?set ASC_ISSUER_ID (App Store Connect issuer id)}
 KEY_PATH="${ASC_KEY_PATH:-$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8}"
 [ -f "$KEY_PATH" ] || { echo "API key not found at $KEY_PATH" >&2; exit 1; }
 
+# 2026-08-28 discovery: Individual enrollment upgraded the existing personal
+# team IN PLACE — HDR67SL3JG is the paid team (ASC bundleIds seedId matches),
+# so no team swap ever happened and no free-team guard applies.
 TEAM_ID="$(sed -n 's/^ *DEVELOPMENT_TEAM: *//p' "$IOS_DIR/project.yml" | head -1)"
-if [ -z "$TEAM_ID" ] || [ "$TEAM_ID" = "HDR67SL3JG" ]; then
-  echo "DEVELOPMENT_TEAM in project.yml is '$TEAM_ID' — still the free" >&2
-  echo "personal team (or unset). Swap in the paid Team ID first" >&2
-  echo "(docs/apple-developer-setup.md phase 1), then re-run." >&2
+if [ -z "$TEAM_ID" ]; then
+  echo "DEVELOPMENT_TEAM missing from project.yml" >&2
   exit 1
 fi
 
