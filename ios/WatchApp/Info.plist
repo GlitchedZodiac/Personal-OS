@@ -20,6 +20,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Pitaya reads heart rate, calories, and steps to show live workout metrics and sync your training.</string>
 	<key>NSHealthUpdateUsageDescription</key>

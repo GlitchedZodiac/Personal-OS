@@ -60,6 +60,9 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: net.blacksheepglobal.pitaya
             CFBundleURLSchemes: [pitaya]
+        # Standard HTTPS only — declares the export-compliance exemption so
+        # App Store Connect never asks the encryption question per upload.
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: iOSApp/PersonalOS.entitlements
       properties:
@@ -117,6 +120,8 @@ targets:
           Pitaya saves workouts you record on the watch to Apple Health.
         NSMotionUsageDescription: >-
           Pitaya reads elevation from the barometer during outdoor workouts.
+        # Same export-compliance exemption as the iOS app (HTTPS only).
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: WatchApp/PersonalOSWatch.entitlements
       properties:

@@ -6,9 +6,10 @@ first. Update the top of this file whenever a session ships.
 ---
 
 **Last updated:** 2026-08-28 (Apple Developer Program ENROLLED — the
-TestFlight/paid-team follow-through plan is `docs/apple-developer-setup.md`;
-no code shipped, docs only. Previous entry: THE AI READS EVERYTHING,
-2026-08-26, shipped to prod.)
+TestFlight/paid-team follow-through plan is `docs/apple-developer-setup.md`,
+plus the `ios/` prep that needs no Team ID: `ITSAppUsesNonExemptEncryption`
+on both app targets and `ios/scripts/testflight-upload.sh`. Previous entry:
+THE AI READS EVERYTHING, 2026-08-26, shipped to prod.)
 
 ---
 
@@ -42,8 +43,21 @@ follow-through, no code changes:
   (`MobileAPIClient.productionBaseURL` is hardcoded today) — filed as
   if/when, not built.
 
-Watch lane heads-up: the project.yml team swap + `ITSAppUsesNonExemptEncryption`
-Info key are `ios/**` one-liners waiting on the Team ID.
+Second pass same day (Michael: "how much can you do yourself?") — the
+Team-ID-independent `ios/**` prep landed on this branch, parity with
+`claude/watch-app` verified empty first: `ITSAppUsesNonExemptEncryption: false`
+on both app targets (project.yml + regenerated Info.plists) and
+**`ios/scripts/testflight-upload.sh`** — archive + upload of both schemes,
+authenticated end-to-end by an App Store Connect API key
+(`ASC_KEY_ID`/`ASC_ISSUER_ID` env + `.p8` under
+`~/.appstoreconnect/private_keys/`), `manageAppVersionAndBuildNumber` so
+build numbers never need manual bumps, and a guard that refuses to run while
+project.yml still carries the free team. Marked UNTESTED until the first
+real upload. The paid team is not yet visible to local Xcode
+(`IDEProvisioningTeamByIdentifier` is empty — he hasn't opened Accounts
+since enrolling), so the team swap waits on one 2-minute Xcode visit or a
+pasted Team ID; everything after that (swap, bundle-ID registration via API,
+upload, TestFlight group) is session-runnable.
 
 ## 2026-08-26 · The AI reads everything · data export · Apple Health weight sync
 
