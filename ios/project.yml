@@ -34,6 +34,13 @@ targets:
     dependencies:
       - target: PersonalOS PhoneWidgets
         embed: true
+      # 2026-08-28, Michael's call: the watch app ships EMBEDDED in the
+      # iPhone app — one archive, one TestFlight listing — because Apple's
+      # xcodebuild cannot export a watch-only archive for the App Store
+      # (Organizer can, the CLI can't; confirmed against Xcode 26.6).
+      # WKRunsIndependentlyOfCompanionApp keeps it fully usable phone-free.
+      - target: PersonalOS Watch
+        embed: true
     info:
       path: iOSApp/Info.plist
       properties:
@@ -96,9 +103,11 @@ targets:
       properties:
         CFBundleDisplayName: Pitaya
         WKApplication: true
-        # Standalone watch app — no iOS companion required (the iOS target
-        # above is a sibling, not a host; revisit if we ever embed).
-        WKWatchOnly: true
+        # Embedded companion since 2026-08-28 (the "revisit if we ever
+        # embed" moment arrived: watch-only archives can't be CLI-exported
+        # to the App Store). Still launches and runs with no phone around:
+        WKRunsIndependentlyOfCompanionApp: true
+        WKCompanionAppBundleIdentifier: net.blacksheepglobal.pitaya
         WKBackgroundModes: [workout-processing, location]
         # CoreLocation validates against UIBackgroundModes even on watchOS —
         # without it, allowsBackgroundLocationUpdates throws (crashed a sim
@@ -137,12 +146,11 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.blacksheepglobal.pitaya.watchkitapp
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # xcodegen defaults watchOS apps to SKIP_INSTALL=YES (companion-era,
-        # when the iOS app embedded them). This app is standalone: without
-        # this override an archive has an EMPTY Products dir → "generic
-        # archive" → no export method is valid (hit 2026-08-28, first
-        # TestFlight upload).
-        SKIP_INSTALL: "NO"
+        # Now that the iOS app embeds this target (2026-08-28), xcodegen's
+        # default SKIP_INSTALL=YES is correct: the phone archive owns the
+        # install. (Standalone-era history: SKIP_INSTALL=NO was briefly
+        # needed here, and watch-only archives still couldn't be CLI-
+        # exported for the App Store — which is why we embedded.)
 
   PersonalOS WatchWidgets:
     type: app-extension

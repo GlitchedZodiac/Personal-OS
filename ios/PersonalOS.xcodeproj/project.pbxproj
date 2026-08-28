@@ -92,6 +92,7 @@
 		E055B584F27FDA5F0F34016F /* OfflineWorkoutQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAEC773756A1B60F422B51E /* OfflineWorkoutQueue.swift */; };
 		E06EFC014ED687F2AFB317AF /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5327746B0D266318DF89D2DF /* SessionStore.swift */; };
 		E1112713A4A1BFAF3893AB61 /* BellRackSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A369B79979560A206B14E9 /* BellRackSheet.swift */; };
+		E6D72BC2A61461E1BEB00B49 /* PersonalOS Watch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2D2267F0F55DAA9167B98D75 /* PersonalOS Watch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E9FECD01D5CAB3831E763075 /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C6EB2277A83ECAFF6D5C13 /* RouteModels.swift */; };
 		F00FF746AAAD6C758063B052 /* FamiljenGrotesk-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C877F517D2C66C9CB8017AB8 /* FamiljenGrotesk-Bold.ttf */; };
 		F402B3B9F8678025DB562512 /* HeroSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226F5F09DE55F1A25DE33584 /* HeroSnapshot.swift */; };
@@ -118,6 +119,13 @@
 			remoteGlobalIDString = 75897E2E37A1C9CCC2DDB78D;
 			remoteInfo = "PersonalOS WatchWidgets";
 		};
+		F1B7E966F6D8768E2884B0CC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D7C951264FC5DCA3AF9A15DB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AD4D41AF62428EAB5D82B96C;
+			remoteInfo = "PersonalOS Watch";
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -130,6 +138,17 @@
 				AEAFA601122A895042F1281E /* PersonalOS PhoneWidgets.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		04CE0E5EAB3A62FF46B073DB /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				E6D72BC2A61461E1BEB00B49 /* PersonalOS Watch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2F4DEEECA9EB129DFE9F7F3A /* Embed Foundation Extensions */ = {
@@ -393,11 +412,13 @@
 				0C643070322A965CD35F1302 /* Sources */,
 				366560F08F26FE43B560B218 /* Resources */,
 				019B806F621D155F135C7B75 /* Embed Foundation Extensions */,
+				04CE0E5EAB3A62FF46B073DB /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				911000A457C04D1386C22C16 /* PBXTargetDependency */,
+				A20700FF94DE2B781A8B13A7 /* PBXTargetDependency */,
 			);
 			name = PersonalOS;
 			packageProductDependencies = (
@@ -671,6 +692,11 @@
 			target = E11540A79B6F5FB2E9597669 /* PersonalOS PhoneWidgets */;
 			targetProxy = 16F105793D90B5D7FF5D9CF4 /* PBXContainerItemProxy */;
 		};
+		A20700FF94DE2B781A8B13A7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AD4D41AF62428EAB5D82B96C /* PersonalOS Watch */;
+			targetProxy = F1B7E966F6D8768E2884B0CC /* PBXContainerItemProxy */;
+		};
 		D4A506651BAABB2C0ABB3AEB /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 75897E2E37A1C9CCC2DDB78D /* PersonalOS WatchWidgets */;
@@ -833,7 +859,7 @@
 				INFOPLIST_FILE = WatchApp/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = net.blacksheepglobal.pitaya.watchkitapp;
 				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;
 			};
 			name = Release;
@@ -846,7 +872,7 @@
 				INFOPLIST_FILE = WatchApp/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = net.blacksheepglobal.pitaya.watchkitapp;
 				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;
 			};
 			name = Debug;

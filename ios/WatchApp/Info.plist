@@ -51,7 +51,9 @@
 		<string>workout-processing</string>
 		<string>location</string>
 	</array>
-	<key>WKWatchOnly</key>
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>net.blacksheepglobal.pitaya</string>
+	<key>WKRunsIndependentlyOfCompanionApp</key>
 	<true/>
 </dict>
 </plist>

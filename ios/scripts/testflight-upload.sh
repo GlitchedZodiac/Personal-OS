@@ -79,8 +79,11 @@ ship() { # scheme, platform, slug
 }
 
 case "$TARGET" in
-  ios)   ship "PersonalOS" iOS ios ;;
-  watch) ship "PersonalOS Watch" watchOS watch ;;
-  all)   ship "PersonalOS" iOS ios; ship "PersonalOS Watch" watchOS watch ;;
-  *) echo "usage: $0 [ios|watch|all]" >&2; exit 2 ;;
+  ios|all) ship "PersonalOS" iOS ios ;;
+  watch)
+    echo "Since 2026-08-28 the watch app ships EMBEDDED in the iOS archive" >&2
+    echo "(xcodebuild cannot export watch-only archives for the App Store)." >&2
+    echo "Run with 'ios' — one archive carries both apps." >&2
+    exit 2 ;;
+  *) echo "usage: $0 [ios]" >&2; exit 2 ;;
 esac
