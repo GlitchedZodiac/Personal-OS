@@ -29,6 +29,14 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     @Published public private(set) var z2Seconds: Int = 0
     @Published public private(set) var z2AvgBpm: Int?
     private var z2BpmSum = 0
+    /// Live session steps for the (designed, v3) Effort page — refreshed
+    /// every 15 s by the ticker; the live builder's statistics don't carry
+    /// stepCount reliably, hence the same HKStatisticsQuery as finish().
+    @Published public private(set) var stepCountLive: Int?
+    /// Bumped when the raw streams append — views draw the HR graph off the
+    /// arrays keyed by this, without publishing the arrays themselves.
+    @Published public private(set) var streamRevision = 0
+    private var tickCount = 0
 
     // Raw streams for the server's zone/load enrichment (streams contract
     // 2026-08-11): appended at HealthKit's natural HR cadence, cleared on
@@ -127,6 +135,9 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         z2Seconds = 0
         z2BpmSum = 0
         z2AvgBpm = nil
+        stepCountLive = nil
+        streamRevision = 0
+        tickCount = 0
         latestAltitude = nil
         lastGainAltitude = nil
         elevationGain = 0
@@ -388,6 +399,14 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
                     self.z2BpmSum += Int(hr)
                     self.z2AvgBpm = self.z2BpmSum / max(self.z2Seconds, 1)
                 }
+                self.tickCount += 1
+                if self.tickCount % 15 == 0, self.phase == .running, !self.frozen,
+                   let start = self.startedAt {
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        self.stepCountLive = await self.queryStepCount(from: start, to: Date())
+                    }
+                }
             }
         }
     }
@@ -420,6 +439,7 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
                     if collectAltitude {
                         altitudeStream.append(latestAltitude ?? altitudeStream.last ?? 0)
                     }
+                    streamRevision += 1
                 }
             }
         }

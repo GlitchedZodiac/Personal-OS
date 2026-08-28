@@ -114,6 +114,40 @@ public actor MobileAPIClient {
         )
     }
 
+    // MARK: - Trails (§Trails, 2026-08-28)
+
+    /// Saved trails, optionally ranked by proximity to a just-finished
+    /// track's start (the "save this track?" suggestions).
+    public func fetchTrails(
+        nearLat: Double? = nil, nearLng: Double? = nil, distanceMeters: Double? = nil
+    ) async throws -> TrailListResponse {
+        var query: [URLQueryItem] = []
+        if let nearLat { query.append(URLQueryItem(name: "nearLat", value: String(nearLat))) }
+        if let nearLng { query.append(URLQueryItem(name: "nearLng", value: String(nearLng))) }
+        if let distanceMeters {
+            query.append(URLQueryItem(name: "distanceMeters", value: String(distanceMeters)))
+        }
+        return try await send(
+            path: "/api/mobile/trails",
+            query: query,
+            method: "GET",
+            body: Optional<Int>.none,
+            authorized: true
+        )
+    }
+
+    /// Create-or-link by name, or link straight to a suggested trailId.
+    public func saveTrail(
+        name: String? = nil, trailId: String? = nil, workoutExternalId: String?
+    ) async throws -> TrailSaveResponse {
+        try await send(
+            path: "/api/mobile/trails",
+            method: "POST",
+            body: TrailSaveRequest(name: name, trailId: trailId, workoutExternalId: workoutExternalId),
+            authorized: true
+        )
+    }
+
     /// AI-created custom exercises — merged into the on-watch catalog.
     public func fetchExercises() async throws -> CustomExerciseListResponse {
         try await send(
