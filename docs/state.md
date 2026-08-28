@@ -80,8 +80,9 @@ project.yml still carries the free team. Third pass same day — EXECUTED end-to
   there; `UIBackgroundModes: [location]` is what CoreLocation checks).
   **Smoke flag: confirm outdoor-walk GPS route recording on the next real
   walk.**
-- Combined iOS+watch build uploaded clean; awaiting/confirming processing at
-  session end. Ship-an-update contract from now on:
+- **Combined iOS+watch build 2 uploaded and CONFIRMED VALID** — live on
+  TestFlight, auto-distributed to the internal group. Ship-an-update
+  contract from now on:
   `ASC_KEY_ID=XZ64H3U47U ASC_ISSUER_ID=<issuer> ios/scripts/testflight-upload.sh ios`
   — ASC manages build numbers, TestFlight auto-distributes, 90-day expiry
   means upload at least quarterly.
