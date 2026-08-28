@@ -52,12 +52,39 @@ authenticated end-to-end by an App Store Connect API key
 (`ASC_KEY_ID`/`ASC_ISSUER_ID` env + `.p8` under
 `~/.appstoreconnect/private_keys/`), `manageAppVersionAndBuildNumber` so
 build numbers never need manual bumps, and a guard that refuses to run while
-project.yml still carries the free team. Marked UNTESTED until the first
-real upload. The paid team is not yet visible to local Xcode
-(`IDEProvisioningTeamByIdentifier` is empty — he hasn't opened Accounts
-since enrolling), so the team swap waits on one 2-minute Xcode visit or a
-pasted Team ID; everything after that (swap, bundle-ID registration via API,
-upload, TestFlight group) is session-runnable.
+project.yml still carries the free team. Third pass same day — EXECUTED end-to-end. What the first real run taught:
+
+- **Same team**: enrollment upgraded HDR67SL3JG in place (ASC bundleIds
+  seedId proves it) — no swap, no Xcode visit, no device reinstall ever
+  needed. The script's free-team guard was wrong and is gone.
+- **Cloud signing needs an Admin API key**: App Manager (`pitaya-upload`,
+  MSZT9NJJP4) does every API operation but cannot mint the Apple
+  Distribution cert; a second key (`pitaya-admin`, XZ64H3U47U) signs and
+  uploads. Both .p8s live in `~/.appstoreconnect/private_keys/`.
+- `ios/scripts/asc-api.mjs` (zero-dep ES256-JWT ASC client) verified his app
+  records (**Pitaya Personal** 6806347708 iOS · **Pitaya Watch** 6806347894
+  watchOS), created Internal groups with `hasAccessToAllBuilds` on both, and
+  added him as tester. **iOS build 1 uploaded and reached VALID** — his
+  green light to install from TestFlight went out.
+- **Watch-only archives cannot be CLI-exported for the App Store** (Xcode
+  26.6 offers only release-testing/enterprise/debugging; legacy `app-store`
+  rejected too). Michael's call via decision prompt: **embed the watch app
+  in the iPhone app** (`WKRunsIndependentlyOfCompanionApp: true` keeps it
+  phone-free; the `.watchkitapp` bundle id was already companion-shaped).
+  One archive now ships both; "Pitaya Watch" record is vestigial, zero
+  builds.
+- En route: xcodegen's standalone-era `SKIP_INSTALL=YES` default made a
+  product-less "generic archive" (fixed, then superseded by the embed); the
+  script now always `clean archive`s; and App Store validation rejected
+  `location` inside `WKBackgroundModes` (error 90362 — never a legal value
+  there; `UIBackgroundModes: [location]` is what CoreLocation checks).
+  **Smoke flag: confirm outdoor-walk GPS route recording on the next real
+  walk.**
+- Combined iOS+watch build uploaded clean; awaiting/confirming processing at
+  session end. Ship-an-update contract from now on:
+  `ASC_KEY_ID=XZ64H3U47U ASC_ISSUER_ID=<issuer> ios/scripts/testflight-upload.sh ios`
+  — ASC manages build numbers, TestFlight auto-distributes, 90-day expiry
+  means upload at least quarterly.
 
 ## 2026-08-26 · The AI reads everything · data export · Apple Health weight sync
 
