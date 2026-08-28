@@ -255,6 +255,10 @@ public final class AppModel: ObservableObject {
     private var prFlashTask: Task<Void, Never>?
     private var workoutStartedAt = Date()
     private var pendingItem: WorkoutSyncItem?
+    /// The externalId whose PR verdict the summary is waiting on. Stored so
+    /// the reconcile survives whichever serialized flight actually lands the
+    /// response (a Save's items can ride a drain another caller started).
+    private var pendingPRReconcileId: String?
     private var activeSequence: SequenceDef?
     private var engineTask: Task<Void, Never>?
     private var sequencePausedAccum: TimeInterval = 0
@@ -1128,9 +1132,22 @@ public final class AppModel: ObservableObject {
     /// Michael's ask: explicit Save (vs the old auto-save) so test sessions
     /// and forgotten-running workouts can be thrown away.
     public func saveWorkout() async {
-        guard let item = pendingItem else { return }
+        guard let item = pendingItem, syncState != .syncing else { return }
+        // Flip the UI before the first await — the dead window between the
+        // tap and any visible state change is what invited second taps.
+        syncState = .syncing
+        do {
+            guard let queue else { throw CocoaError(.fileWriteUnknown) }
+            try await queue.enqueue(item)
+        } catch {
+            // Keep pendingItem so Save reappears and a retry re-enqueues.
+            // The old `try?` here dropped the workout silently and left the
+            // button a permanent no-op.
+            syncState = .failed("couldn't save — try again")
+            Haptics.key(.failure)
+            return
+        }
         pendingItem = nil
-        try? await queue?.enqueue(item)
         await drainQueue(reconcilePRsFor: item.externalId)
 
         // His 08-20 note: "I should just be able to click save, maybe a
@@ -1232,6 +1249,20 @@ public final class AppModel: ObservableObject {
         emomPRRound = nil
     }
 
+    #if DEBUG
+    // MARK: - Smoke seams (DEBUG builds only)
+
+    /// The unsaved summary's idempotency key, exposed so the DOUBLESAVE
+    /// smoke can count its rows server-side after the race.
+    var pendingItemExternalId: String? { pendingItem?.externalId }
+
+    /// Server-side truth for the smoke: how many rows carry this externalId.
+    func debugCountWorkouts(externalId: String) async -> Int? {
+        guard let list = try? await api.fetchWorkouts(limit: 20) else { return nil }
+        return list.entries.filter { $0.externalId == externalId }.count
+    }
+    #endif
+
     // MARK: - Idle nudge
 
     private func resetLiveState() {
@@ -1302,18 +1333,30 @@ public final class AppModel: ObservableObject {
 
     public func drainQueue(reconcilePRsFor externalId: String? = nil) async {
         guard let queue else { return }
-        let pending = await queue.load()
-        queuedCount = pending.count
-        guard !pending.isEmpty else { return }
+        if let externalId { pendingPRReconcileId = externalId }
+        queuedCount = await queue.count()
+        guard queuedCount > 0 else {
+            // A serialized flight elsewhere can drain the queue between a
+            // Save's enqueue and this count — the items are safe on the
+            // server; never leave that Save stuck on the spinner.
+            if syncState == .syncing {
+                syncState = .synced
+                lastSyncCheckAt = Date()
+            }
+            return
+        }
 
         syncState = .syncing
-        do {
-            let response = try await api.syncWorkouts(pending)
-            try? await queue.removeSynced(pending)
+        // Every drain in the process — including the cold-wake standalone
+        // path — serializes through WorkoutSyncFlight; overlapping drains
+        // were the duplicate-save race.
+        let outcome = await WorkoutSyncFlight.run(queue: queue, api: api)
+        if let response = outcome.response {
             syncState = .synced
             queuedCount = 0
             lastSyncCheckAt = Date()
-            reconcileSummaryPRs(from: response, matching: externalId)
+            reconcileSummaryPRs(from: response, matching: pendingPRReconcileId)
+            pendingPRReconcileId = nil
             // §02/§03 codas: hero metrics for the wrist surfaces, routine
             // verdict + last-run for the summary deltas — the server's
             // lastRun replaces the local baseline (server wins on drift).
@@ -1326,9 +1369,16 @@ public final class AppModel: ObservableObject {
             }
             // §02: every sync refreshes the complication timeline.
             WidgetCenter.shared.reloadAllTimelines()
-        } catch {
-            syncState = .queued(pending.count)
-            queuedCount = pending.count
+        } else if outcome.pendingCount > 0 {
+            syncState = .queued(outcome.pendingCount)
+            queuedCount = outcome.pendingCount
+        } else {
+            // Our items rode a flight we queued behind: pushed, but the
+            // response went to that caller. Only this save's PR reconcile
+            // and codas are skipped — the local estimates stand.
+            syncState = .synced
+            queuedCount = 0
+            lastSyncCheckAt = Date()
         }
     }
 

@@ -13,13 +13,22 @@ struct PitayaCTA: View {
     /// §05: this CTA wears the Double Tap gesture — pinch glyph inside the
     /// label (1m), dimming to 45% after three fires. Exactly one per screen.
     var primary: Bool = false
+    /// In-flight state: spinner in the glyph slot, dimmed, and dead to both
+    /// finger taps and the wrist gesture. Plain engineering state until the
+    /// v3 design round hands it a slice.
+    var isBusy: Bool = false
     let action: () -> Void
     @ObservedObject private var coach = DoubleTapCoach.shared
 
     var body: some View {
         let button = Button(action: fire) {
             HStack(spacing: primary ? Theme.px(9) : 5) {
-                if primary {
+                if isBusy {
+                    ProgressView()
+                        .tint(Theme.textBright)
+                        .scaleEffect(0.7)
+                        .frame(width: Theme.px(17), height: Theme.px(17))
+                } else if primary {
                     DoubleTapGlyph(color: Theme.prText, size: Theme.px(17))
                         .opacity(coach.glyphDimmed ? 0.45 : 1)
                 } else if let icon {
@@ -33,6 +42,8 @@ struct PitayaCTA: View {
             .background(background, in: Capsule())
         }
         .buttonStyle(.plain)
+        .disabled(isBusy)
+        .opacity(isBusy ? 0.7 : 1)
 
         if primary {
             button.handGestureShortcut(.primaryAction)
@@ -42,6 +53,7 @@ struct PitayaCTA: View {
     }
 
     private func fire() {
+        guard !isBusy else { return }
         if primary { coach.recordFire() }
         action()
     }

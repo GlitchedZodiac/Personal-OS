@@ -27,6 +27,19 @@ public actor MobileAPIClient {
 
     public static let productionBaseURL = URL(string: "https://personal-os-plum.vercel.app")!
 
+    /// Stock URLSession waits 60 s before failing a dead request — on the
+    /// wrist that read as "Save did nothing" until it flipped to queued.
+    /// Fail fast into the honest offline state instead; the disk queue plus
+    /// the server's unique (externalSource, externalId) upsert make every
+    /// retry free.
+    public static let tunedSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 60
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }()
+
     private let baseURL: URL
     private let session: URLSession
     private let sessionStore: any SessionStore
@@ -35,7 +48,7 @@ public actor MobileAPIClient {
 
     public init(
         baseURL: URL = MobileAPIClient.productionBaseURL,
-        session: URLSession = .shared,
+        session: URLSession = MobileAPIClient.tunedSession,
         sessionStore: any SessionStore
     ) {
         self.baseURL = baseURL

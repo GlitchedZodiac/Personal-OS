@@ -114,6 +114,34 @@ enum Smoke {
             return
         }
 
+        // DOUBLESAVE: the duplicate-save regression harness. Finish a session,
+        // then race two Save taps AND a background drain — the tap guard plus
+        // WorkoutSyncFlight must collapse them so the server holds exactly
+        // ONE row for the item's externalId.
+        if env["PITAYA_SMOKE_DOUBLESAVE"] == "1", model.phase == .home {
+            model.externalSourceOverride = "watch_smoke"
+            await model.refreshHistory()
+            await model.startWorkout(.kettlebell, useRecorder: false)
+            model.weightKg = 16
+            model.reps = 10
+            model.logSet()
+            await model.finishWorkout(.kettlebell)
+            guard let externalId = model.pendingItemExternalId else {
+                log("doublesave: no pending item after finish — FAIL")
+                return
+            }
+            log("doublesave: racing two saves + a background drain…")
+            async let firstSave: Void = model.saveWorkout()
+            async let secondSave: Void = model.saveWorkout()
+            let background = Task { await model.drainQueue() }
+            _ = await (firstSave, secondSave)
+            await background.value
+            let rows = await model.debugCountWorkouts(externalId: externalId)
+            log("doublesave: rows=\(rows.map(String.init) ?? "fetch-failed") state=\(String(describing: model.syncState))")
+            log(rows == 1 ? "doublesave PASS" : "doublesave FAIL")
+            return
+        }
+
         // §03 deltas proof: run the sample circuit twice, saving both — the
         // second summary must carry "· vs <first run>" with per-stat deltas
         // (volume/time equal ⇒ ghost "="). Ends holding the saved summary.
