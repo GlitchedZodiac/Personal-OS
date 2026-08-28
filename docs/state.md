@@ -5,9 +5,45 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-26 (THE AI READS EVERYTHING — shipped to prod; see the addendum for two on-device regressions found after deploy and the corrected recovery number — the measurement bug found and fixed at four call sites, a 43-dataset read registry, JSON+CSV export finally wired to a UI, and the Apple Health weight sync repaired: anchored queries, full backfill, composition types that were never once requested.)
+**Last updated:** 2026-08-28 (Apple Developer Program ENROLLED — the
+TestFlight/paid-team follow-through plan is `docs/apple-developer-setup.md`;
+no code shipped, docs only. Previous entry: THE AI READS EVERYTHING,
+2026-08-26, shipped to prod.)
 
 ---
+
+## 2026-08-28 · Apple Developer Program enrolled — setup plan written (docs only)
+
+Michael enrolled in the $99 program (deferred #81, his 08-22 "let's buy it").
+This session wrote **`docs/apple-developer-setup.md`** — the grounded
+follow-through, no code changes:
+
+- **Phase 1**: swap `DEVELOPMENT_TEAM` in `ios/project.yml` (still the free
+  personal team HDR67SL3JG) to the new paid Team ID + `xcodegen generate` —
+  pending because only Michael can read the new ID off his Membership page.
+  Team change = **delete-and-reinstall on every device** (signature + keychain
+  prefix change → re-PIN, re-grant Health, re-add widgets). Health data and
+  the server are unaffected.
+- **Phases 2–3**: App Store Connect records (iOS app + the standalone
+  `WKWatchOnly` watch app = **two records**, or embed later — flagged as a
+  Michael decision) → TestFlight internal testing → OTA updates to iPhone,
+  iPad, and Watch with no cable and no 7-day expiry (iPad build was due to
+  die ~08-30, deferred #55 — TestFlight is the exit).
+- **Phase 4**: what the paid team unlocks — the `aps-environment` entitlement
+  (server's `PushDevice` + `/api/mobile/push/register` + companion token flow
+  have been waiting on it, deferred #183; sender + .p8 key still to build)
+  and App Groups (Smart Stack live tile, deferred #119.1).
+- **Phase 5**: the second-user question answered honestly — TestFlight makes
+  *distribution* trivial (internal tester, or external with the PIN-in-review-
+  notes caveat), but the app is architecturally single-user (one PIN, no
+  `userId` on any of 43 models; a second person's Health sync would collide
+  with his `DailyHealthSnapshot` rows). Recommended shape if it ever happens:
+  a deployment per person + a server-URL field on the pairing screen
+  (`MobileAPIClient.productionBaseURL` is hardcoded today) — filed as
+  if/when, not built.
+
+Watch lane heads-up: the project.yml team swap + `ITSAppUsesNonExemptEncryption`
+Info key are `ios/**` one-liners waiting on the Team ID.
 
 ## 2026-08-26 · The AI reads everything · data export · Apple Health weight sync
 
