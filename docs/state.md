@@ -5,7 +5,163 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-26 (THE AI READS EVERYTHING — shipped to prod; see the addendum for two on-device regressions found after deploy and the corrected recovery number — the measurement bug found and fixed at four call sites, a 43-dataset read registry, JSON+CSV export finally wired to a UI, and the Apple Health weight sync repaired: anchored queries, full backfill, composition types that were never once requested.)
+**Last updated:** 2026-08-28 (EXERCISE V3 — the duplicate-save race killed at
+both ends, the stale-GPS leak that stamped walk trails onto freestyle rows
+found and rooted out, named trails live with his Tres Cruces hike linked, a
+real MapLibre terrain map with 3D + moving/stopped/breaks/splits analytics,
+GPX + per-set export, the AI-dictated training week with four push senders —
+and the watch's new in-workout pages deliberately parked behind a Claude
+Design round: `docs/design/watch-v3-prompt.md`.)
+
+---
+
+## 2026-08-28 · Exercise v3: save reliability, trails, terrain maps, the planned week
+
+Branch `claude/apple-watch-exercise-ux-1ed863` (== `origin/main` at start;
+both watch branches are strict ancestors — all work happens here now, and
+`docs/watch-contract.md` Lane homes says so). Eight commits, each
+self-smoked; three additive prod migrations applied via the build's
+`migrate deploy`. **Watch UI pages are NOT in this session by his call** —
+the swipe pages went to design first (prompt below), with all their
+engineering pre-plumbed so the port is views-only.
+
+### 1. The sporadic duplicate save — dead at both ends
+
+His report: Save sometimes shows nothing, tap again → two rows. Diagnosis
+matched the 857-weigh-in incident exactly, on two layers at once:
+
+- **Watch:** `drainQueue()` had THREE overlapping call sites plus the
+  model-less cold-wake drain in `BackgroundRefresh` — four drains sharing one
+  queue file with no single-flight, interleaving across awaits and POSTing
+  the same items twice. All four now serialize through
+  `ios/WatchApp/WorkoutSyncFlight.swift` (the HealthStore `syncTask` idiom,
+  process-wide, callers serialize rather than coalesce).
+- **Server:** the route's find-then-create raced, and
+  `(externalSource, externalId)` was a plain INDEX. It is `@@unique` now
+  (migration dedupes first — the 08-28 audit found zero, but the migration
+  runs unattended and had to be self-sufficient), and the route creates then
+  resolves P2002 into an update. Two concurrent curls of one externalId →
+  `created:1` + `updated:1`, one row. New `PITAYA_SMOKE_DOUBLESAVE` races two
+  saves + a background drain against prod: `rows=1`.
+
+The "nothing happened" half: Save flips `syncState = .syncing`
+SYNCHRONOUSLY on the tap (the dead window invited second taps), the CTA gets
+a busy/disabled state so a queued tap can't hit Done mid-sync, enqueue
+failures surface as a reachable `.failed` with `pendingItem` RETAINED (the
+old `try?` silently lost the workout and left Save a permanent no-op), the
+API client fails dead requests in 15 s instead of 60, and server-side the
+sync route gets `maxDuration 60`, `lastSeenAt` behind `after()`, and the
+routine-coda/timezone reads overlapped with the insert loop.
+
+### 2. The freestyle "trail" was REAL — a stale-GPS leak
+
+His complaint was literally true. `RouteTracker` outlives the session and
+only clears on the next OUTDOOR start, while `WorkoutRecorder.finish()`
+read the route (and the GPS distance fallback) unconditionally — so the
+08-18 walk's polyline sat byte-identical on BOTH the 08-19 and 08-20
+freestyle rows, 08-26 freestyle = that day's walk, and one strength row
+carried a leaked 913 m. Root fix: a `routeActive` gate + the tracker clears
+its buffer on finish. Guards for the old build still installed: both write
+paths strip routeData off non-GPS workoutTypes (additive `strippedRoutes`
+count), the activity detail never returns a polyline for stationary types,
+the TRAILS card only picks typed GPS sessions, `activityTypeOf` stops
+promoting freestyle/strength to outdoor cards on distance, and absent
+routeData stores SQL NULL (DbNull) so audits stop lying. **Historical rows
+keep their leaked values pending his explicit go** — the repair SQL is in
+deferred-items; display is already honest without it.
+
+### 3. Named trails (deferred 08-20, shipped — web half)
+
+`Trail` model + `WorkoutLog.trailId`, one create-or-link brain in
+`lib/trails.ts` (case-insensitive name+aliases, seeds from the workout's own
+recording, 300 m trailhead + similar-length match scoring for wrist
+suggestions), `GET/POST /api/mobile/trails` (bearer, near-ranked),
+`/api/health/trails` CRUD, additive `items[].trailId` on sync, a
+confirm-first `name_trail` chat proposal, and a `trails` dataset in the AI
+registry. Self-smoked on his real rows: the 08-27 Tres Cruces ascent minted
+the trail (2.2 km / +390 m / trailhead coords), the lowercase re-name
+LINKED the descent instead of duplicating — runCount 2. Wrist surfaces
+(save-track prompt, Saved trails list) ride the design round.
+
+### 4. Route analytics + the terrain map
+
+`lib/route-analytics.ts` reads what the watch stored all along and nothing
+ever read — full-res `routeData.points[]` — into moving/stopped seconds,
+breaks (≥30 s stops with coordinates), per-km splits with climb, Minetti
+grade-adjusted pace, windowed max speed. Runs on sync; a backfill route
+filled history (4 point-bearing rows). His ascent reads honestly now:
+**31:40 moving, 10:39 stopped across 3 breaks, GAP 6:48/km vs 16:56 raw.**
+
+The activity detail became a real route
+(`/health/workouts/activities/[id]`, actDet extracted to
+`components/activity-detail.tsx`, old `?id=` links redirect) and GPS
+sessions render a real basemap: MapLibre + OpenFreeMap vector tiles + AWS
+Terrarium hillshade (all keyless, $0), route + break dots sized by stop
+length, 2D/3D terrain toggle, SVG fallback when tiles are unreachable.
+Traps that cost real hours, recorded: layers attach on `style.load` (never
+`"load"`, which waits for every tile), **Turbopack 404s MapLibre's worker
+chunk as text/html which silently kills the whole tile pipeline** — the
+worker + shared chunk are self-hosted in `public/` (re-copy on upgrade!) —
+and `sw.js` v5 stops intercepting cross-origin GETs so tiles can't bloat
+the PWA cache. SPLITS — the card the design had to omit for lack of data —
+exists now, with BREAKS below it. 3D framing wants one on-device polish
+pass (deferred-items).
+
+### 5. Export: GPS finally leaves the app
+
+`lib/gpx.ts` (GPX 1.1; watch rows carry `<ele>`/`<time>`, Strava rows
+coordinates-only, bulk = one multi-track file), per-workout GPX on every GPS
+activity + a bulk card on `/settings/export`, the JSON export's
+`includeWorkoutRoutes` flag finally has its checkbox, and CSV gains
+`workout-sets` — one row per set with an honesty column (`aggregated`; true
+per-set capture filed in deferred-items). Smoke: the ascent GPX carries all
+509 points; bulk = 22 tracks; sets CSV = 193 rows.
+
+### 6. The week he dictates + notifications live
+
+His AskUserQuestion answer upgraded the planned-workout nudge into a
+feature: `PlannedWorkout` (day-level, `localDate` in his zone) written by a
+confirm-first `plan_training` chat card — "this week Armor Builder Monday,
+Thursday climb Tres Cruces, remind me Wednesday 4pm to stretch first" —
+with routine/trail names resolved server-side and timed reminders becoming
+real Reminder rows. A saved workout on a planned day marks it done (hooks on
+both writers, post-response). Train grows a THIS/NEXT WEEK · PLANNED strip
+(renders nothing until a week exists; falls forward to next week — he plans
+on Fridays); `get_app_data training_week` reads it back.
+
+Senders, each gated by `lib/notification-prefs` and flipped on the new
+`/settings/notifications` page (reached from the DATA card; Spirit's cron
+now honors the same switchboard): due reminders via a `*/15` cron
+(claim-first vs the foreground poll; **dues >48 h old are claimed silently —
+the table carried MONTHS of pre-push "Weekly Report" rows** that would have
+blasted the first subscribed device), the 7 am planned-day nudge (silent
+once he's trained), PR celebrations on watch saves, weekly-report-ready
+(tagged by week-start so the twice-listed cron replaces, not stacks).
+
+**Found in smoke: prod has ZERO push subscriptions.** Nothing delivers —
+not even Spirit's — until he flips the This-device toggle on his phone.
+Top of his checklist.
+
+### 7. The design round (his mid-plan call)
+
+The new swipe pages (Effort, live map), the zone-change pulse, the
+BPM-synced heart, the trail-save prompt and the saving states are a DESIGN
+deliverable first: `docs/design/watch-v3-prompt.md` is ready to run in
+Claude Design; slices land in `docs/design/watch-v3/` and implementation is
+then a port. Pre-plumbed so that port is views-only: recorder
+`stepCountLive` (15 s ticker) + `streamRevision`, `TrailSummary` +
+`fetchTrails`/`saveTrail` + `WorkoutSyncItem.trailId` (inert), watchOS
+target 11.0 (SwiftUI Map is available).
+
+**Numbers:** 305 vitest green (27 files; new: sync dedupe incl. a raced
+create, activities typing, trails, route-analytics, gpx, workout-sets,
+planner). Both Xcode schemes build; DOUBLESAVE + FREESTYLE smokes green on
+the sim against prod. Docs: watch-contract Lane homes corrected (the 08-09
+split table was actively misleading), §Trails + `toFailure` + the unique
+key added; deferred-items pruned of two obsolete merge instructions and
+grown six new entries. **The wrist runs the old build until the next
+re-sign** — the automation builds from `origin/main`, so the save fix
+reaches the watch after merge, on its 09:30/18:30 cycle.
 
 ---
 
