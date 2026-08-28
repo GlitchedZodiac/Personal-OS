@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { routeDataAllowed } from "@/lib/activities";
 import { prisma } from "@/lib/prisma";
 import { detectAndRecordPRs } from "@/lib/prs";
 
@@ -16,13 +17,14 @@ function toNullableDate(value: unknown) {
 }
 
 function buildWorkoutMutation(body: Record<string, unknown>) {
+  const workoutType =
+    typeof body.workoutType === "string" && body.workoutType.trim().length > 0
+      ? body.workoutType.trim()
+      : "other";
   return {
     startedAt: toNullableDate(body.startedAt) || new Date(),
     endedAt: toNullableDate(body.endedAt),
-    workoutType:
-      typeof body.workoutType === "string" && body.workoutType.trim().length > 0
-        ? body.workoutType.trim()
-        : "other",
+    workoutType,
     durationMinutes: Math.max(0, Number(body.durationMinutes || 0)),
     description:
       typeof body.description === "string" ? body.description : null,
@@ -41,7 +43,11 @@ function buildWorkoutMutation(body: Record<string, unknown>) {
         ? null
         : Math.round(Number(body.maxHeartRateBpm)),
     elevationGainM: toNullableNumber(body.elevationGainM),
-    routeData: (body.routeData as Prisma.InputJsonValue) ?? undefined,
+    // Same guard as the mobile sync: trails only on GPS-legitimate types.
+    routeData:
+      body.routeData != null && routeDataAllowed(workoutType)
+        ? (body.routeData as Prisma.InputJsonValue)
+        : undefined,
     metricsData: (body.metricsData as Prisma.InputJsonValue) ?? undefined,
     exercises: (body.exercises as Prisma.InputJsonValue) ?? undefined,
     deviceType:

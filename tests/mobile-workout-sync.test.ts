@@ -157,6 +157,23 @@ describe("POST /api/mobile/workouts/sync dedupe", () => {
     expect(rows).toHaveLength(2);
   });
 
+  it("strips routeData from stationary types and keeps it on GPS types", async () => {
+    const route = { summaryPolyline: "abc", points: [{ lat: 1, lng: 2, t: 0 }] };
+    const res = await POST(
+      syncRequest([
+        { ...walkItem("ext-free"), workoutType: "freestyle", routeData: route },
+        { ...walkItem("ext-hike"), workoutType: "hike", routeData: route },
+      ])
+    );
+    const body = await res.json();
+    expect(body.strippedRoutes).toBe(1);
+
+    const freestyle = rows.find((r) => r.externalId === "ext-free");
+    const hike = rows.find((r) => r.externalId === "ext-hike");
+    expect(freestyle?.routeData).toBe(Prisma.DbNull);
+    expect(hike?.routeData).toEqual(route);
+  });
+
   it("keeps the frozen response contract", async () => {
     const res = await POST(syncRequest([walkItem("ext-contract")]));
     const body = await res.json();

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg, type RawExercise } from "@/lib/prs";
-import { activityTypeOf, type RunMetrics } from "@/lib/activities";
+import { activityTypeOf, routeDataAllowed, type RunMetrics } from "@/lib/activities";
 
 // GET ?id= — everything the activity detail screen shows (design 2026-08-11
 // rev): stats, per-movement segments with time-vs-last-run comparison,
@@ -63,7 +63,12 @@ export async function GET(request: NextRequest) {
 
     const prCount = await prisma.personalRecord.count({ where: { workoutLogId: w.id } });
 
-    const routeData = (w.routeData ?? {}) as { summaryPolyline?: string };
+    // Display-side half of the freestyle-integrity guard: rows written by
+    // pre-2026-08-28 watch builds can still carry a leaked trail — a
+    // stationary type never renders one, whatever is in the column.
+    const routeData = routeDataAllowed(w.workoutType)
+      ? ((w.routeData ?? {}) as { summaryPolyline?: string })
+      : {};
 
     return NextResponse.json({
       id: w.id,

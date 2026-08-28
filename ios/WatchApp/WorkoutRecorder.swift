@@ -59,6 +59,9 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     /// §03 recovery window: stats/streams freeze while HR keeps flowing.
     private var frozen = false
     private var frozenEnd: Date?
+    /// True only while THIS session records GPS — the gate that keeps the
+    /// long-lived tracker's leftovers out of indoor sessions' saves.
+    private var routeActive = false
 
     public struct Totals: Sendable {
         public let startedAt: Date
@@ -160,6 +163,7 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
 
         if outdoor {
             route.start(store: store, at: start)
+            routeActive = true
         }
 
         phase = .running
@@ -246,10 +250,17 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
             // totals object; the workout just isn't persisted to Health.
         }
 
-        let routeData = await route.finish(for: workout)
+        // Route data belongs ONLY to sessions that started GPS. The tracker
+        // is long-lived and its buffer survives until the next OUTDOOR start,
+        // so finishing it unconditionally attached the previous walk's trail
+        // — and its GPS distance, via the fallback below — to stationary
+        // sessions (prod 08-19/20/26: freestyle rows carrying the prior
+        // walk's exact polyline).
         // HealthKit's distance is authoritative when it has one; GPS covers
         // the gap when it doesn't (and never overrides a real HK reading).
-        let gpsDistance = route.distanceMeters
+        let gpsDistance = routeActive ? route.distanceMeters : 0
+        let routeData = routeActive ? await route.finish(for: workout) : nil
+        routeActive = false
         let bestDistance = (distanceMeters ?? 0) > 0
             ? distanceMeters
             : (gpsDistance > 0 ? gpsDistance : nil)

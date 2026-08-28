@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { routeDataAllowed } from "@/lib/activities";
 import { requireMobileSession } from "@/lib/mobile-session";
 import { prisma } from "@/lib/prisma";
 import { detectAndRecordPRs, type NewPR } from "@/lib/prs";
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
 
     let created = 0;
     let updated = 0;
+    let strippedRoutes = 0;
     // Per-item PR results, keyed by externalId (or index when absent) so the
     // watch can celebrate server-confirmed records after sync.
     const prResults: Array<{ externalId: string | null; newPRs: NewPR[] }> = [];
@@ -127,14 +129,21 @@ export async function POST(request: NextRequest) {
           ? item.externalId.trim()
           : null;
 
+      const workoutType =
+        typeof item.workoutType === "string" && item.workoutType.trim().length > 0
+          ? item.workoutType.trim()
+          : "other";
+      // GPS trails only ride genuinely outdoor types — pre-2026-08-28 watch
+      // builds could attach a stale tracker buffer to stationary sessions.
+      // Strip, never reject: a sync must not lose a workout.
+      const routeAllowed = routeDataAllowed(workoutType);
+      if (item.routeData != null && !routeAllowed) strippedRoutes++;
+
       const data = {
         startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
         endedAt: item.endedAt ? new Date(item.endedAt) : null,
         durationMinutes: Math.max(0, Number(item.durationMinutes || 0)),
-        workoutType:
-          typeof item.workoutType === "string" && item.workoutType.trim().length > 0
-            ? item.workoutType.trim()
-            : "other",
+        workoutType,
         description:
           typeof item.description === "string" ? item.description : null,
         caloriesBurned: toNullableNumber(item.caloriesBurned),
@@ -152,7 +161,12 @@ export async function POST(request: NextRequest) {
             ? null
             : Math.round(Number(item.maxHeartRateBpm)),
         elevationGainM: toNullableNumber(item.elevationGainM),
-        routeData: item.routeData ?? Prisma.JsonNull,
+        // DbNull (SQL NULL), not JsonNull: a JSON-level null made every
+        // "routeData IS NOT NULL" audit lie.
+        routeData:
+          item.routeData != null && routeAllowed
+            ? item.routeData
+            : Prisma.DbNull,
         metricsData: enrichMetrics(item.metricsData) ?? Prisma.JsonNull,
         exercises: item.exercises ?? Prisma.JsonNull,
         deviceType:
@@ -231,6 +245,9 @@ export async function POST(request: NextRequest) {
       created,
       updated,
       total: items.length,
+      // Additive (2026-08-28): items whose routeData was dropped because the
+      // workoutType can't legitimately carry a GPS trail.
+      strippedRoutes,
       prs: prResults,
       summary,
       routine,
