@@ -20,6 +20,22 @@ team blocked (APNs, App Groups).
 > `ios/scripts/testflight-upload.sh` + `asc-api.mjs` do the rest. The
 > TestFlight "redeem invitation code" screen is for external testers —
 > internal builds just appear once assigned; no code exists or is needed.
+>
+> Three execution findings, same day: (1) headless **cloud signing needs an
+> Admin API key** — App Manager covers everything except minting the Apple
+> Distribution certificate, so a second key (`pitaya-admin`, XZ64H3U47U)
+> does signing+upload; (2) App Manager keys DID suffice for the API side —
+> internal groups created with `hasAccessToAllBuilds` on both apps, Michael
+> added as tester; (3) **xcodebuild cannot export a watch-only archive for
+> the App Store** (offers only release-testing/enterprise/debugging;
+> Organizer-only otherwise) — so, his call, **the watch app became an
+> embedded companion** (`WKRunsIndependentlyOfCompanionApp: true`, still
+> phone-free on the wrist). One archive now ships both apps to the ONE
+> "Pitaya Personal" listing; the "Pitaya Watch" app record never received a
+> build and is vestigial (safe to remove in ASC someday). Along the way:
+> a standalone-era xcodegen default (`SKIP_INSTALL=YES` on watch apps)
+> produced an empty "generic archive" — fixed, then superseded by the
+> embed; the upload script always `clean archive`s.
 
 Facts this plan is grounded in:
 

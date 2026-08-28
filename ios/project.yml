@@ -108,7 +108,11 @@ targets:
         # to the App Store). Still launches and runs with no phone around:
         WKRunsIndependentlyOfCompanionApp: true
         WKCompanionAppBundleIdentifier: net.blacksheepglobal.pitaya
-        WKBackgroundModes: [workout-processing, location]
+        # NOTE 2026-08-28: "location" is NOT a valid WKBackgroundModes value
+        # — App Store validation rejects it (error 90362; dev installs never
+        # validated so it survived). Background location during workouts is
+        # carried by workout-processing + the UIBackgroundModes entry below.
+        WKBackgroundModes: [workout-processing]
         # CoreLocation validates against UIBackgroundModes even on watchOS —
         # without it, allowsBackgroundLocationUpdates throws (crashed a sim
         # walk before this was here).
