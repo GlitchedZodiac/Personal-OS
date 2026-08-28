@@ -131,12 +131,20 @@ on Fridays); `get_app_data training_week` reads it back.
 
 Senders, each gated by `lib/notification-prefs` and flipped on the new
 `/settings/notifications` page (reached from the DATA card; Spirit's cron
-now honors the same switchboard): due reminders via a `*/15` cron
-(claim-first vs the foreground poll; **dues >48 h old are claimed silently —
-the table carried MONTHS of pre-push "Weekly Report" rows** that would have
-blasted the first subscribed device), the 7 am planned-day nudge (silent
-once he's trained), PR celebrations on watch saves, weekly-report-ready
-(tagged by week-start so the twice-listed cron replaces, not stacks).
+now honors the same switchboard): due reminders via cron (claim-first vs
+the foreground poll; **dues >48 h old are claimed silently — the table
+carried MONTHS of pre-push "Weekly Report" rows** that would have blasted
+the first subscribed device), the 7 am planned-day nudge (silent once he's
+trained), PR celebrations on watch saves, weekly-report-ready (tagged by
+week-start so the twice-listed cron replaces, not stacks).
+
+**Merge-day correction:** the reminder cron shipped as `*/15` and **Vercel
+rejected the entire production deployment in five seconds** — Hobby crons
+are daily-precision (the five existing daily crons proved nothing about the
+plan tier). The plan's own fallback applied: `0 11 * * *` (6am Bogotá daily
+sweep; the foreground poll stays the same-moment path). Real 15-minute
+delivery = Vercel Pro or a free GitHub-Actions pinger — his call, in
+deferred-items.
 
 **Found in smoke: prod has ZERO push subscriptions.** Nothing delivers —
 not even Spirit's — until he flips the This-device toggle on his phone.

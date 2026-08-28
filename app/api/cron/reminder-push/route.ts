@@ -5,6 +5,13 @@
 // double-deliver, and a re-run never repeats. Every row here is something he
 // (or an automation he configured) asked to be reminded of — the lib/push.ts
 // rule holds.
+//
+// CADENCE (2026-08-28): scheduled */15 originally — Vercel rejected the
+// whole deployment in 5 seconds (Hobby crons are daily-precision; the plan's
+// own fallback applied). Now a daily 11:00 UTC (6am Bogotá) sweep; the
+// foreground poll stays the same-moment path while a tab is open. Restoring
+// 15-min delivery = Vercel Pro, or a free GitHub-Actions pinger hitting this
+// route with CRON_SECRET — Michael's call, filed in deferred-items.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getNotificationPrefs } from "@/lib/notification-prefs";
