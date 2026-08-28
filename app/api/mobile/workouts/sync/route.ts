@@ -2,6 +2,11 @@ import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { routeDataAllowed } from "@/lib/activities";
 import { requireMobileSession } from "@/lib/mobile-session";
+import {
+  analyzeRoute,
+  type RouteAnalytics,
+  type RoutePointIn,
+} from "@/lib/route-analytics";
 import { prisma } from "@/lib/prisma";
 import { detectAndRecordPRs, type NewPR } from "@/lib/prs";
 import { buildStreamMetrics } from "@/lib/strava";
@@ -93,6 +98,21 @@ export async function POST(request: NextRequest) {
       return { ...m, ...computed } as Prisma.InputJsonValue;
     };
 
+    // Route analytics (2026-08-28): moving/stopped time, breaks, splits and
+    // grade-adjusted pace from the full-res GPS buffer — additive key, same
+    // server-owns-analytics policy as the zone math above.
+    const withRouteAnalytics = (
+      metrics: Prisma.InputJsonValue | undefined,
+      analytics: RouteAnalytics | null
+    ): Prisma.InputJsonValue | undefined => {
+      if (!analytics) return metrics;
+      const base =
+        metrics && typeof metrics === "object" && !Array.isArray(metrics)
+          ? (metrics as Record<string, unknown>)
+          : {};
+      return { ...base, routeAnalytics: analytics } as unknown as Prisma.InputJsonValue;
+    };
+
     // The routine coda belongs to the newest synced run that names a
     // sequence; its own startedAt is the cutoff so lastRun = the run BEFORE
     // this one, not itself. That also means it never needs to see this sync's
@@ -161,6 +181,13 @@ export async function POST(request: NextRequest) {
       // Strip, never reject: a sync must not lose a workout.
       const routeAllowed = routeDataAllowed(workoutType);
       if (item.routeData != null && !routeAllowed) strippedRoutes++;
+      const routePoints =
+        routeAllowed && item.routeData && typeof item.routeData === "object"
+          ? (item.routeData as { points?: unknown }).points
+          : null;
+      const routeAnalytics = Array.isArray(routePoints)
+        ? analyzeRoute(routePoints as RoutePointIn[])
+        : null;
 
       const data = {
         startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
@@ -190,7 +217,9 @@ export async function POST(request: NextRequest) {
           item.routeData != null && routeAllowed
             ? item.routeData
             : Prisma.DbNull,
-        metricsData: enrichMetrics(item.metricsData) ?? Prisma.JsonNull,
+        metricsData:
+          withRouteAnalytics(enrichMetrics(item.metricsData), routeAnalytics) ??
+          Prisma.JsonNull,
         exercises: item.exercises ?? Prisma.JsonNull,
         deviceType:
           typeof item.deviceType === "string" && item.deviceType.trim().length > 0

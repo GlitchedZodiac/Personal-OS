@@ -70,6 +70,20 @@ export async function GET(request: NextRequest) {
       ? ((w.routeData ?? {}) as { summaryPolyline?: string })
       : {};
 
+    // Named-trail context + route analytics (2026-08-28) — both additive.
+    const trail = w.trailId
+      ? await (async () => {
+          const [t, runCount] = await Promise.all([
+            prisma.trail.findUnique({
+              where: { id: w.trailId! },
+              select: { id: true, name: true },
+            }),
+            prisma.workoutLog.count({ where: { trailId: w.trailId! } }),
+          ]);
+          return t ? { id: t.id, name: t.name, runCount } : null;
+        })()
+      : null;
+
     return NextResponse.json({
       id: w.id,
       type,
@@ -97,6 +111,8 @@ export async function GET(request: NextRequest) {
       zonePct: m.timeInZones?.pct ?? null,
       altitudeStream: Array.isArray(m.altitudeStream) ? m.altitudeStream : null,
       polyline: routeData.summaryPolyline ?? null,
+      routeAnalytics: m.routeAnalytics ?? null,
+      trail,
     });
   } catch (error) {
     console.error("Activity detail error:", error);

@@ -53,6 +53,7 @@ export interface RunMetrics {
   hrStream?: number[];
   timeStream?: number[];
   altitudeStream?: number[];
+  routeAnalytics?: import("@/lib/route-analytics").RouteAnalytics;
 }
 
 export function activityTypeOf(workout: {
