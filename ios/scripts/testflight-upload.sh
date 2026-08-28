@@ -64,9 +64,13 @@ ship() { # scheme, platform, slug
   local scheme="$1" platform="$2" slug="$3"
   local archive="$BUILD/$slug.xcarchive"
   echo "=== [$slug] archiving '$scheme' ==="
+  # clean is load-bearing: an incremental archive can reuse a product signed
+  # by an earlier non-install build, carrying get-task-allow into the archive
+  # — which silently removes app-store-connect from the export methods
+  # (hit 2026-08-28 on the watch app after the SKIP_INSTALL fix).
   xcodebuild -project "$IOS_DIR/PersonalOS.xcodeproj" -scheme "$scheme" \
     -destination "generic/platform=$platform" -archivePath "$archive" \
-    "${AUTH[@]}" archive
+    "${AUTH[@]}" clean archive
   echo "=== [$slug] uploading to App Store Connect ==="
   xcodebuild -exportArchive -archivePath "$archive" \
     -exportOptionsPlist "$PLIST" -exportPath "$BUILD/$slug-export" \
