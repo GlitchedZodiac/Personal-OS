@@ -89,7 +89,10 @@ model WorkoutLog {
   updatedAt        DateTime  @updatedAt
 
   @@index([startedAt])
-  @@index([externalSource, externalId])
+  // Unique, not a plain index: the watch's idempotency key must be enforced by
+  // the DB — two in-flight syncs of the same item both passed the route's old
+  // find-then-create check (same race class as the 857-duplicate weigh-ins).
+  @@unique([externalSource, externalId])
   @@index([syncStatus])
   @@map("workout_logs")
 }

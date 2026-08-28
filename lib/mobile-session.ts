@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { after, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createOpaqueToken, hashOpaqueToken } from "@/lib/security";
 
@@ -91,10 +91,13 @@ export async function requireMobileSession(request: NextRequest) {
 
   if (!session) return null;
 
-  await prisma.deviceSession.update({
-    where: { id: session.id },
-    data: { lastSeenAt: new Date() },
-  });
+  // lastSeenAt is bookkeeping — flush it after the response instead of taxing
+  // every mobile request with a second DB round trip before any real work.
+  after(() =>
+    prisma.deviceSession
+      .update({ where: { id: session.id }, data: { lastSeenAt: new Date() } })
+      .catch(() => {})
+  );
 
   return session;
 }

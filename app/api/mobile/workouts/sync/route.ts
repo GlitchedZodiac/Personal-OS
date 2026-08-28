@@ -12,6 +12,10 @@ import {
 } from "@/lib/mobile-summary";
 import { getUserTimeZone } from "@/lib/server-timezone";
 
+// A cold start plus a multi-item queue drain can outlive the 10s default —
+// which the watch experienced as "tapped Save, nothing happened".
+export const maxDuration = 60;
+
 type MobileWorkoutPayload = {
   externalId?: string;
   externalSource?: string;
@@ -84,6 +88,35 @@ export async function POST(request: NextRequest) {
       return { ...m, ...computed } as Prisma.InputJsonValue;
     };
 
+    // The routine coda belongs to the newest synced run that names a
+    // sequence; its own startedAt is the cutoff so lastRun = the run BEFORE
+    // this one, not itself. That also means it never needs to see this sync's
+    // inserts — start it (and the timezone read) now so their DB work overlaps
+    // the insert loop instead of extending the watch's wait afterwards.
+    const routineRun = items
+      .map((item) => ({
+        sequenceId: (item.metricsData as { sequenceId?: string } | undefined)
+          ?.sequenceId,
+        startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
+      }))
+      .filter(
+        (r): r is { sequenceId: string; startedAt: Date } =>
+          typeof r.sequenceId === "string" && r.sequenceId.length > 0
+      )
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
+    const timeZonePromise = getUserTimeZone(null).catch((error: unknown) => {
+      console.warn("Sync timezone read failed:", (error as Error)?.message);
+      return null;
+    });
+    const routinePromise: Promise<RoutineCoda | null> = routineRun
+      ? buildRoutineCoda(routineRun.sequenceId, routineRun.startedAt).catch(
+          (error: unknown) => {
+            console.warn("Sync routine coda failed:", (error as Error)?.message);
+            return null;
+          }
+        )
+      : Promise.resolve(null);
+
     for (const item of items) {
       const externalSource =
         typeof item.externalSource === "string" && item.externalSource.trim().length > 0
@@ -140,21 +173,24 @@ export async function POST(request: NextRequest) {
 
       let workoutId: string;
       if (externalId) {
-        const existing = await prisma.workoutLog.findFirst({
-          where: { externalSource, externalId },
-          select: { id: true },
-        });
-
-        if (existing) {
-          await prisma.workoutLog.update({
-            where: { id: existing.id },
+        // Atomicity lives in the DB: (externalSource, externalId) is unique,
+        // so a raced or retried POST loses the create and lands as an update.
+        // The find-then-create this replaces let two in-flight queue drains
+        // both see "not found" and both insert.
+        try {
+          const entry = await prisma.workoutLog.create({ data });
+          created++;
+          workoutId = entry.id;
+        } catch (error) {
+          const isDup =
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002";
+          if (!isDup) throw error;
+          const entry = await prisma.workoutLog.update({
+            where: { externalSource_externalId: { externalSource, externalId } },
             data,
           });
           updated++;
-          workoutId = existing.id;
-        } else {
-          const entry = await prisma.workoutLog.create({ data });
-          created++;
           workoutId = entry.id;
         }
       } else {
@@ -180,32 +216,13 @@ export async function POST(request: NextRequest) {
     // Watch Round 1+2 handoff (spec § API dependencies): the response carries
     // everything the wrist Summary + complication need, so no second round
     // trip. Additive — created/updated/total/prs are unchanged. Never lets a
-    // summary hiccup fail a sync that already persisted.
+    // summary hiccup fail a sync that already persisted. Hero metrics stay
+    // AFTER the loop: z2WeeklyMinutes must count the rows just written.
     let summary: HeroMetrics | null = null;
-    let routine: RoutineCoda | null = null;
+    const routine: RoutineCoda | null = await routinePromise;
     try {
-      const timeZone = await getUserTimeZone(null);
-      // The routine coda belongs to the newest synced run that names a
-      // sequence; its own startedAt is the cutoff so lastRun = the run BEFORE
-      // this one, not itself.
-      const routineRun = items
-        .map((item) => ({
-          sequenceId: (item.metricsData as { sequenceId?: string } | undefined)
-            ?.sequenceId,
-          startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
-        }))
-        .filter(
-          (r): r is { sequenceId: string; startedAt: Date } =>
-            typeof r.sequenceId === "string" && r.sequenceId.length > 0
-        )
-        .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
-
-      [summary, routine] = await Promise.all([
-        buildHeroMetrics(timeZone),
-        routineRun
-          ? buildRoutineCoda(routineRun.sequenceId, routineRun.startedAt)
-          : Promise.resolve(null),
-      ]);
+      const timeZone = await timeZonePromise;
+      if (timeZone) summary = await buildHeroMetrics(timeZone);
     } catch (error) {
       console.warn("Sync summary enrichment failed:", (error as Error)?.message);
     }
