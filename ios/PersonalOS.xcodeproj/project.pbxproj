@@ -833,7 +833,7 @@
 				INFOPLIST_FILE = WatchApp/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = net.blacksheepglobal.pitaya.watchkitapp;
 				SDKROOT = watchos;
-				SKIP_INSTALL = YES;
+				SKIP_INSTALL = NO;
 				TARGETED_DEVICE_FAMILY = 4;
 			};
 			name = Release;
@@ -846,7 +846,7 @@
 				INFOPLIST_FILE = WatchApp/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = net.blacksheepglobal.pitaya.watchkitapp;
 				SDKROOT = watchos;
-				SKIP_INSTALL = YES;
+				SKIP_INSTALL = NO;
 				TARGETED_DEVICE_FAMILY = 4;
 			};
 			name = Debug;
