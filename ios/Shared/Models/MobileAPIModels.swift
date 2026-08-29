@@ -261,6 +261,8 @@ public struct TrailSummary: Codable, Hashable, Identifiable, Sendable {
     public let startLng: Double?
     public let runCount: Int
     public let lastRun: TrailLastRunPayload?
+    /// Round 3 §05: present only on near-ranked queries — "94% match".
+    public let matchPct: Int?
 }
 
 public struct TrailLastRunPayload: Codable, Hashable, Sendable {
@@ -541,6 +543,12 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     /// Barometric climb, mirrored into metricsData for the phone's
     /// freestyle analytics (also sent top-level on the sync item).
     public let elevationGainM: Double?
+    /// Round 3 §07 (additive): per-km seconds banked live on the wrist —
+    /// distinct from the server's GPS-derived routeAnalytics.splits.
+    public let splits: [Int]?
+    /// Round 3 §07 (additive): the 60 s HR-recovery drop and its window.
+    public let hrrDelta: Int?
+    public let hrrSeconds: Int?
 
     public init(
         sequenceId: String? = nil, sequenceName: String? = nil,
@@ -548,7 +556,10 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
         hrStream: [Int]? = nil, timeStream: [Int]? = nil,
         altitudeStream: [Double]? = nil,
         timeInZones: WorkoutZoneBreakdown? = nil,
-        elevationGainM: Double? = nil
+        elevationGainM: Double? = nil,
+        splits: [Int]? = nil,
+        hrrDelta: Int? = nil,
+        hrrSeconds: Int? = nil
     ) {
         self.sequenceId = sequenceId
         self.sequenceName = sequenceName
@@ -559,11 +570,45 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
         self.altitudeStream = altitudeStream
         self.timeInZones = timeInZones
         self.elevationGainM = elevationGainM
+        self.splits = splits
+        self.hrrDelta = hrrDelta
+        self.hrrSeconds = hrrSeconds
     }
 
     public var isEmpty: Bool {
         sequenceId == nil && stepSeconds == nil && hrStream == nil
-            && timeInZones == nil
+            && timeInZones == nil && splits == nil && hrrDelta == nil
+    }
+
+    /// Round 3 §07: the HRR numbers land up to 60 s after the item was
+    /// built — clone with the capture attached.
+    public func withHRR(delta: Int, seconds: Int) -> WorkoutMetricsData {
+        WorkoutMetricsData(
+            sequenceId: sequenceId, sequenceName: sequenceName,
+            roundsCompleted: roundsCompleted, stepSeconds: stepSeconds,
+            hrStream: hrStream, timeStream: timeStream,
+            altitudeStream: altitudeStream, timeInZones: timeInZones,
+            elevationGainM: elevationGainM, splits: splits,
+            hrrDelta: delta, hrrSeconds: seconds
+        )
+    }
+}
+
+public extension WorkoutSyncItem {
+    /// Same item, new metrics — the externalId survives, so a re-enqueue
+    /// after sync lands as an idempotent UPDATE on the server.
+    func replacingMetrics(_ metricsData: WorkoutMetricsData?) -> WorkoutSyncItem {
+        WorkoutSyncItem(
+            externalId: externalId, externalSource: externalSource,
+            startedAt: startedAt, endedAt: endedAt,
+            durationMinutes: durationMinutes, workoutType: workoutType,
+            description: description, caloriesBurned: caloriesBurned,
+            distanceMeters: distanceMeters, stepCount: stepCount,
+            avgHeartRateBpm: avgHeartRateBpm, maxHeartRateBpm: maxHeartRateBpm,
+            elevationGainM: elevationGainM, exercises: exercises,
+            metricsData: metricsData, routeData: routeData, source: source,
+            syncStatus: syncStatus, deviceType: deviceType, trailId: trailId
+        )
     }
 }
 

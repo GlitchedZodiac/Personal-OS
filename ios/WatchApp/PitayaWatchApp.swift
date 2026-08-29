@@ -63,6 +63,10 @@ struct RootView: View {
                 SequenceLiveView(sequence: sequence)
             case .summary:
                 SummaryView()
+            case .hrr:
+                RecoveryView()
+            case .trailPrompt:
+                SaveTrackView()
             case .doubleTapCoach:
                 DoubleTapCoachView()
             case .voiceWeight:

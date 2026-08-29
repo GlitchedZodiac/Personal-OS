@@ -29,14 +29,63 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     @Published public private(set) var z2Seconds: Int = 0
     @Published public private(set) var z2AvgBpm: Int?
     private var z2BpmSum = 0
-    /// Live session steps for the (designed, v3) Effort page — refreshed
-    /// every 15 s by the ticker; the live builder's statistics don't carry
-    /// stepCount reliably, hence the same HKStatisticsQuery as finish().
+    /// Live session steps (Round 3 §01) — CMPedometer callback, because the
+    /// live builder's statistics don't carry stepCount (HK stays finish-only).
     @Published public private(set) var stepCountLive: Int?
+    /// Live cadence, steps/min (Round 3 §01) — CMPedometer currentCadence.
+    @Published public private(set) var cadenceSpm: Int?
+    /// Trailing-5-min burn rate, kcal/h, floor 0 (Round 3 §01).
+    @Published public private(set) var kcalPerHour: Int?
+    /// Instantaneous served zone for chips (Round 3 §00) — classified per HR
+    /// sample against the injected boundaries; nil until zones + HR exist.
+    @Published public private(set) var currentZone: Int?
+    /// §03 zone-change publisher output: a CONFIRMED crossing (5 consecutive
+    /// samples, 20 s cooldown, Z5 entry exempt, never paused, never in the
+    /// first 60 s). The haptic fires here; the bloom rides the publish.
+    @Published public private(set) var zoneEvent: ZoneEvent?
+    /// §07 km split — banner + haptic ride the publish; seconds accumulate
+    /// into `splitSeconds` for metricsData.splits.
+    @Published public private(set) var splitEvent: SplitEvent?
+    public private(set) var splitSeconds: [Int] = []
+    /// §07 elevation crest — bumps at every +100 m of barometric gain
+    /// (hikes only); value = how many hundreds are banked.
+    @Published public private(set) var crestEvent: Int?
     /// Bumped when the raw streams append — views draw the HR graph off the
     /// arrays keyed by this, without publishing the arrays themselves.
     @Published public private(set) var streamRevision = 0
-    private var tickCount = 0
+    /// Served zone boundaries — injected by AppModel before start so the
+    /// publisher and chips never invent numbers (nil = zone surfaces quiet).
+    public var hrZones: HeartRateZones?
+
+    public struct ZoneEvent: Equatable, Sendable {
+        public let id: UUID
+        public let from: Int
+        public let to: Int
+        public var up: Bool { to > from }
+    }
+
+    public struct SplitEvent: Equatable, Sendable {
+        public let id: UUID
+        public let km: Int
+        public let seconds: Int
+        /// vs the mean of the PRIOR splits; nil on the first km.
+        public let deltaVsAverage: Int?
+    }
+
+    /// §02 "/ KM · NOW" — pace over the trailing 60 s, seconds per km.
+    @Published public private(set) var paceNowSecPerKm: Int?
+
+    private var pedometer: CMPedometer?
+    private var kcalTrail: [(t: TimeInterval, kcal: Double)] = []
+    private var distTrail: [(t: TimeInterval, meters: Double)] = []
+    private var confirmedZone: Int?
+    private var zoneCandidate: Int?
+    private var zoneCandidateRun = 0
+    private var lastZoneEventAt: Date?
+    private var lastSplitElapsed: TimeInterval = 0
+    private var splitKmBanked = 0
+    private var crestBanked = 0
+    private var activityKind: HKWorkoutActivityType = .other
 
     // Raw streams for the server's zone/load enrichment (streams contract
     // 2026-08-11): appended at HealthKit's natural HR cadence, cleared on
@@ -107,12 +156,18 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     ) async throws {
         guard phase == .idle else { return }
         phase = .requestingAuth
+        #if DEBUG
+        print("PITAYA-SMOKE: recorder.start requesting HK auth…")
+        #endif
         do {
             try await requestAuthorization()
         } catch {
             phase = .idle
             throw error
         }
+        #if DEBUG
+        print("PITAYA-SMOKE: recorder.start auth ok")
+        #endif
 
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = activityType
@@ -136,8 +191,25 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         z2BpmSum = 0
         z2AvgBpm = nil
         stepCountLive = nil
+        cadenceSpm = nil
+        kcalPerHour = nil
+        kcalTrail = []
+        currentZone = nil
+        zoneEvent = nil
+        confirmedZone = nil
+        zoneCandidate = nil
+        zoneCandidateRun = 0
+        lastZoneEventAt = nil
+        splitEvent = nil
+        splitSeconds = []
+        lastSplitElapsed = 0
+        splitKmBanked = 0
+        crestEvent = nil
+        crestBanked = 0
+        paceNowSecPerKm = nil
+        distTrail = []
         streamRevision = 0
-        tickCount = 0
+        activityKind = activityType
         latestAltitude = nil
         lastGainAltitude = nil
         elevationGain = 0
@@ -157,6 +229,15 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
                         self.elevationGain += delta
                         self.lastGainAltitude = altitude
                         self.elevationGainLive = self.elevationGain
+                        // §07 crest: every +100 m banked, hikes only.
+                        if self.activityKind == .hiking {
+                            let hundreds = Int(self.elevationGain / 100)
+                            if hundreds > self.crestBanked {
+                                self.crestBanked = hundreds
+                                Haptics.key(.click)
+                                self.crestEvent = hundreds
+                            }
+                        }
                     } else if delta < -0.5 {
                         self.lastGainAltitude = altitude
                     }
@@ -170,11 +251,36 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         let start = Date()
         startedAt = start
         session.startActivity(with: start)
+        #if DEBUG
+        print("PITAYA-SMOKE: recorder.start beginCollection…")
+        #endif
         try await builder.beginCollection(at: start)
+        #if DEBUG
+        print("PITAYA-SMOKE: recorder.start collection live")
+        #endif
 
         if outdoor {
             route.start(store: store, at: start)
             routeActive = true
+        }
+
+        // Round 3 §01: live steps + cadence come from CMPedometer — only for
+        // step-shaped work (walk/run/hike/treadmill); a kettlebell session
+        // shows effort numbers instead.
+        let stepKinds: Set<HKWorkoutActivityType> = [.walking, .running, .hiking]
+        if stepKinds.contains(activityType), CMPedometer.isStepCountingAvailable() {
+            let pedometer = CMPedometer()
+            pedometer.startUpdates(from: start) { [weak self] data, _ in
+                guard let data else { return }
+                let steps = data.numberOfSteps.intValue
+                let cadence = data.currentCadence.map { Int($0.doubleValue * 60) }
+                Task { @MainActor [weak self] in
+                    guard let self, !self.frozen else { return }
+                    self.stepCountLive = steps
+                    self.cadenceSpm = cadence
+                }
+            }
+            self.pedometer = pedometer
         }
 
         phase = .running
@@ -244,6 +350,8 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         stopTicker()
         altimeter?.stopRelativeAltitudeUpdates()
         altimeter = nil
+        pedometer?.stopUpdates()
+        pedometer = nil
         // Sensors quiet BEFORE the workout closes: a live route insert racing
         // finishWorkout() deadlocked the save (caught in sim, 2026-08-11).
         route.stop()
@@ -269,9 +377,13 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         // walk's exact polyline).
         // HealthKit's distance is authoritative when it has one; GPS covers
         // the gap when it doesn't (and never overrides a real HK reading).
-        let gpsDistance = routeActive ? route.distanceMeters : 0
-        let routeData = routeActive ? await route.finish(for: workout) : nil
-        routeActive = false
+        // Ownership check: the HK awaits above can stall long enough for a
+        // deadlined completeRecovery() to reset and a NEW session to start —
+        // this late continuation must not drain the new session's tracker.
+        let ownsRoute = routeActive && self.session === session
+        let gpsDistance = ownsRoute ? route.distanceMeters : 0
+        let routeData = ownsRoute ? await route.finish(for: workout) : nil
+        if ownsRoute { routeActive = false }
         let bestDistance = (distanceMeters ?? 0) > 0
             ? distanceMeters
             : (gpsDistance > 0 ? gpsDistance : nil)
@@ -289,13 +401,18 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
             routeData: routeData
         )
 
-        self.session = nil
-        self.builder = nil
-        self.startedAt = nil
-        frozen = false
-        frozenEnd = nil
-        elapsed = totals.durationSeconds
-        phase = .idle
+        // Only reset if this call still owns the live session — a deadlined
+        // completeRecovery() may have already reset (and a NEW session may be
+        // running); a late finish must never clobber that state.
+        if self.session === session {
+            self.session = nil
+            self.builder = nil
+            self.startedAt = nil
+            frozen = false
+            frozenEnd = nil
+            elapsed = totals.durationSeconds
+            phase = .idle
+        }
         return totals
     }
 
@@ -314,10 +431,23 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         }
     }
 
+    /// The HRR screen's clock: when the frozen window ends (freeze + 60 s),
+    /// nil once the capture has closed.
+    public var recoveryEndsAt: Date? {
+        guard frozen, let frozenEnd else { return nil }
+        return frozenEnd.addingTimeInterval(60)
+    }
+
+    public var isInRecovery: Bool { frozen }
+
     /// The workout's numbers END here (duration/kcal/streams freeze at this
     /// instant); HR keeps flowing so completeRecovery() can watch the
     /// descent. Returns snapshot totals so the summary renders immediately.
-    /// Indoor sessions only (route/altimeter never ran).
+    /// Round 3 §07 opened the window to every kind with HR: the sensors
+    /// close at the freeze so the recovery minute never adds track, climb or
+    /// steps, and the ROUTE rides this snapshot (the sync item is built from
+    /// it). The Apple Health route attachment is skipped on this path —
+    /// Pitaya's own payload is the product (RouteTracker's own rule).
     public func beginRecoveryWindow() async -> Totals? {
         guard let builder, startedAt != nil, phase == .running || phase == .paused
         else { return nil }
@@ -325,6 +455,17 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         frozen = true
         frozenEnd = end
         stopTicker()
+        pedometer?.stopUpdates()
+        pedometer = nil
+        altimeter?.stopRelativeAltitudeUpdates()
+        altimeter = nil
+        route.stop()
+        let gpsDistance = routeActive ? route.distanceMeters : 0
+        let routeData = routeActive ? await route.finish(for: nil) : nil
+        routeActive = false
+        let bestDistance = (distanceMeters ?? 0) > 0
+            ? distanceMeters
+            : (gpsDistance > 0 ? gpsDistance : nil)
 
         return Totals(
             startedAt: startedAt ?? end,
@@ -333,10 +474,10 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
             activeCalories: activeCalories,
             avgHeartRate: avgHeartRate,
             maxHeartRate: maxHeartRate,
-            distanceMeters: distanceMeters,
+            distanceMeters: bestDistance,
             stepCount: await queryStepCount(from: startedAt ?? end, to: end),
-            elevationGainMeters: nil,
-            routeData: nil
+            elevationGainMeters: elevationGain > 1 ? (elevationGain * 10).rounded() / 10 : nil,
+            routeData: routeData
         )
     }
 
@@ -358,7 +499,38 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
                 if i < 5 { try? await Task.sleep(nanoseconds: 12_000_000_000) }
             }
         }
-        _ = await finish() // closes at frozenEnd; events/title flush inside
+        // The samples are the product; HealthKit teardown is bookkeeping.
+        // endCollection/finishWorkout/step-query can stall without throwing
+        // (watch sim wedges healthd routinely; RouteTracker carries the same
+        // scar for finishRoute) — and a stalled finish() would strand the
+        // HRR screen at 0:00 AND leave phase == .ending, refusing the next
+        // session. Deadline it: 8 s, then reset local state and move on
+        // while the close keeps trying in the background.
+        #if DEBUG
+        print("PITAYA-SMOKE: recovery sampled n=\(samples.count)")
+        #endif
+        let close = Task { _ = await self.finish() }
+        let closed = await withTaskGroup(of: Bool.self) { group in
+            group.addTask { await close.value; return true }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                return false
+            }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
+        #if DEBUG
+        print("PITAYA-SMOKE: recovery close closed=\(closed)")
+        #endif
+        if !closed {
+            session = nil
+            builder = nil
+            startedAt = nil
+            frozen = false
+            frozenEnd = nil
+            phase = .idle
+        }
 
         guard let first = samples.first, let last = samples.last, samples.count >= 2
         else { return nil }
@@ -399,16 +571,124 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
                     self.z2BpmSum += Int(hr)
                     self.z2AvgBpm = self.z2BpmSum / max(self.z2Seconds, 1)
                 }
-                self.tickCount += 1
-                if self.tickCount % 15 == 0, self.phase == .running, !self.frozen,
-                   let start = self.startedAt {
-                    Task { @MainActor [weak self] in
-                        guard let self else { return }
-                        self.stepCountLive = await self.queryStepCount(from: start, to: Date())
-                    }
-                }
+                // Round 3 §01 burn rate + §02 live pace + §07 km splits ride
+                // the 1 Hz tick.
+                self.updateBurnRate()
+                self.updateLivePace()
+                self.checkSplit()
             }
         }
+    }
+
+    /// §01: kcal delta over the trailing 5 minutes, floored at 0; a paused
+    /// session reads 0 outright.
+    private func updateBurnRate() {
+        if phase == .paused { kcalPerHour = 0; return }
+        guard !frozen, let builder, let nowKcal = activeCalories else { return }
+        let now = builder.elapsedTime
+        let windowStart = max(0, now - 300)
+        guard let base = kcalTrail.first(where: { $0.t >= windowStart }) ?? kcalTrail.first,
+              now - base.t > 30
+        else { return }
+        kcalPerHour = max(0, Int((nowKcal - base.kcal) / (now - base.t) * 3600))
+        while let first = kcalTrail.first, first.t < windowStart - 10 {
+            kcalTrail.removeFirst()
+        }
+    }
+
+    /// §02 "/ KM · NOW": distance covered in the trailing 60 s → sec/km.
+    /// Paused sessions read nil (the map face shows "—:——").
+    private func updateLivePace() {
+        guard routeActive || activityKind == .walking else { return }
+        guard phase == .running, !frozen, let builder else {
+            if phase == .paused { paceNowSecPerKm = nil }
+            return
+        }
+        let hkMeters = distanceMeters ?? 0
+        let meters = hkMeters > 0 ? hkMeters : route.distanceMeters
+        let now = builder.elapsedTime
+        distTrail.append((t: now, meters: meters))
+        while let first = distTrail.first, first.t < now - 70 {
+            distTrail.removeFirst()
+        }
+        guard let base = distTrail.first(where: { $0.t >= now - 60 }) ?? distTrail.first,
+              now - base.t >= 20
+        else { return }
+        let covered = meters - base.meters
+        guard covered > 5 else {
+            paceNowSecPerKm = nil // standing still: no honest pace to claim
+            return
+        }
+        let pace = (now - base.t) / (covered / 1000)
+        paceNowSecPerKm = pace.isFinite && pace < 3600 ? Int(pace) : nil
+    }
+
+    /// §07 km split — banked against the best live distance, outdoor only.
+    private func checkSplit() {
+        guard routeActive, phase == .running, !frozen, let builder else { return }
+        let hkMeters = distanceMeters ?? 0
+        let meters = hkMeters > 0 ? hkMeters : route.distanceMeters
+        let km = Int(meters / 1000)
+        guard km > splitKmBanked else { return }
+        let elapsed = builder.elapsedTime
+        let seconds = Int(elapsed - lastSplitElapsed)
+        lastSplitElapsed = elapsed
+        splitKmBanked = km
+        splitSeconds.append(seconds)
+        let prior = splitSeconds.dropLast()
+        let delta: Int? = prior.isEmpty ? nil : seconds - prior.reduce(0, +) / prior.count
+        Haptics.key(.notification)
+        splitEvent = SplitEvent(id: UUID(), km: km, seconds: seconds, deltaVsAverage: delta)
+    }
+
+    /// §03 ZonePublisher: instantaneous zone always publishes for the chips;
+    /// a CROSSING needs 5 consecutive samples in the new zone, never fires
+    /// paused/frozen or in the first 60 s, honors a 20 s cooldown (crossings
+    /// inside it still move the confirmed zone, silently — latest wins), and
+    /// a Z5 entry is exempt from the cooldown. The haptic fires here, before
+    /// the visuals land.
+    private func classifyZone(bpm: Double) {
+        guard let zones = hrZones, let zone = zones.zone(for: bpm) else { return }
+        currentZone = zone
+        guard !frozen, phase == .running else { return }
+
+        guard let confirmed = confirmedZone else {
+            if zoneCandidate == zone { zoneCandidateRun += 1 } else {
+                zoneCandidate = zone
+                zoneCandidateRun = 1
+            }
+            if zoneCandidateRun >= 5 {
+                confirmedZone = zone
+                zoneCandidate = nil
+                zoneCandidateRun = 0
+            }
+            return
+        }
+        guard zone != confirmed else {
+            zoneCandidate = nil
+            zoneCandidateRun = 0
+            return
+        }
+        if zoneCandidate == zone { zoneCandidateRun += 1 } else {
+            zoneCandidate = zone
+            zoneCandidateRun = 1
+        }
+        guard zoneCandidateRun >= 5 else { return }
+        zoneCandidate = nil
+        zoneCandidateRun = 0
+
+        guard (builder?.elapsedTime ?? 0) >= 60 else {
+            confirmedZone = zone
+            return
+        }
+        if zone != 5, let last = lastZoneEventAt, Date().timeIntervalSince(last) < 20 {
+            confirmedZone = zone
+            return
+        }
+        confirmedZone = zone
+        lastZoneEventAt = Date()
+        Haptics.key(zone > confirmed ? .directionUp : .directionDown)
+        zoneEvent = ZoneEvent(id: UUID(), from: confirmed, to: zone)
     }
 
     private func stopTicker() {
@@ -423,6 +703,10 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         if types.contains(hrType), let stats = builder.statistics(for: hrType) {
             let bpm = HKUnit.count().unitDivided(by: .minute())
             heartRate = stats.mostRecentQuantity()?.doubleValue(for: bpm)
+            // §00/§03: chips + the crossing publisher classify every sample
+            // (stays live through the recovery window for the HRR screen —
+            // the publisher gates itself on frozen/paused internally).
+            if let hr = heartRate { classifyZone(bpm: hr) }
             // Recovery window (§03): the live bpm keeps updating for the
             // descent sample, but the workout's own numbers are frozen.
             guard !frozen else { return }
@@ -449,6 +733,10 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         let kcalType = HKQuantityType(.activeEnergyBurned)
         if types.contains(kcalType), let stats = builder.statistics(for: kcalType) {
             activeCalories = stats.sumQuantity()?.doubleValue(for: .kilocalorie())
+            // §01 burn-rate trail (trimmed by updateBurnRate to the window).
+            if let kcal = activeCalories {
+                kcalTrail.append((t: builder.elapsedTime, kcal: kcal))
+            }
         }
 
         let distType = HKQuantityType(.distanceWalkingRunning)

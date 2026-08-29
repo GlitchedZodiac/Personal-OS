@@ -58,7 +58,42 @@ public final class RouteTracker: NSObject, ObservableObject {
             manager.allowsBackgroundLocationUpdates = true
         }
         manager.startUpdatingLocation()
+        startFakeFeedIfAsked()
     }
+
+    #if DEBUG
+    /// `PITAYA_SMOKE_FAKEGPS=<m/s>` — the watch SIMULATOR never delivers
+    /// simctl-fed locations to CoreLocation (verified 2026-08-28: both
+    /// `location set` and route-mode `location start` leave the app fix-less
+    /// while a real device gets fixes instantly). This seam synthesizes a
+    /// steady NE track from the Tres Cruces trailhead so map/split/trail-
+    /// prompt flows can be driven headless. DEBUG builds only; inert without
+    /// the env var.
+    private var fakeFeed: Timer?
+    private func startFakeFeedIfAsked() {
+        guard let speed = ProcessInfo.processInfo
+            .environment["PITAYA_SMOKE_FAKEGPS"].flatMap(Double.init), speed > 0
+        else { return }
+        isAuthorized = true
+        var tick = 0
+        fakeFeed = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            tick += 1
+            let meters = Double(tick) * speed
+            let location = CLLocation(
+                coordinate: CLLocationCoordinate2D(
+                    latitude: 3.45483 + (meters * 0.8) / 111_320,
+                    longitude: -76.54292 + (meters * 0.6) / 111_320
+                ),
+                altitude: 1500 + meters * 0.05,
+                horizontalAccuracy: 5, verticalAccuracy: 8,
+                timestamp: Date()
+            )
+            Task { @MainActor in self?.ingest([location]) }
+        }
+    }
+    #else
+    private func startFakeFeedIfAsked() {}
+    #endif
 
     private static let declaresLocationBackgroundMode: Bool = {
         for key in ["UIBackgroundModes", "WKBackgroundModes"] {
@@ -74,6 +109,10 @@ public final class RouteTracker: NSObject, ObservableObject {
         manager.stopUpdatingLocation()
         manager.allowsBackgroundLocationUpdates = false
         hasFix = false
+        #if DEBUG
+        fakeFeed?.invalidate()
+        fakeFeed = nil
+        #endif
     }
 
     /// Attach the recorded route to the saved workout (Apple Health) and

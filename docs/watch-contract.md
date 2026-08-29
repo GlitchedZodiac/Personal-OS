@@ -29,7 +29,7 @@ entries, newest first).
 | Exercise catalog + canonical ids | Main (`lib/exercises.ts`) | Watch mirrors normalizer in Swift | Ids are append-only and stable; watch re-syncs its mirror when the file changes (state.md announces changes) |
 | PR detection + records | Main (`lib/prs.ts`, `personal_records`) | Watch celebrates | Server is the source of truth. Sync response now returns `prs: [{externalId, newPRs}]` per item; `GET /api/mobile/prs` (bearer) serves baselines — watch may drop its top-100 rebuild fallback |
 | Workout storage + sync | Main (`/api/mobile/workouts*`) | Watch offline queue | Existing payload shape frozen; additive changes only, announced in state.md. **(externalSource, externalId) is DB-unique since 2026-08-28** — sync create is atomic (P2002 → update), so retries land as updates, never duplicates. Additive since 08-28: `items[].trailId`, `strippedRoutes` in the response, and server-side `metricsData.routeAnalytics` (moving/stopped/breaks/splits) computed from `routeData.points[]`. routeData is stripped server-side for non-GPS workoutTypes |
-| Named trails | Main (`lib/trails.ts`, `trails` table) | Watch "save this track?" + Saved trails list | `GET /api/mobile/trails` (bearer; `?nearLat&nearLng&distanceMeters` ranks suggestions by trailhead proximity + similar length) returns `{trails: [{id, name, aliases, distanceMeters, elevationGainM, summaryPolyline, startLat, startLng, runCount, lastRun}], updatedAt}`; `POST /api/mobile/trails {name \| trailId, workoutExternalId}` create-or-links (case-insensitive on name+aliases, never duplicates). Wrist UI ports after the v3 design round (docs/design/watch-v3-prompt.md); shared models `TrailSummary`/`WorkoutSyncItem.trailId` shipped inert 2026-08-28 |
+| Named trails | Main (`lib/trails.ts`, `trails` table) | Watch "save this track?" + Saved trails list | `GET /api/mobile/trails` (bearer; `?nearLat&nearLng&distanceMeters` ranks suggestions by trailhead proximity + similar length) returns `{trails: [{id, name, aliases, distanceMeters, elevationGainM, summaryPolyline, startLat, startLng, runCount, lastRun}], updatedAt}`; `POST /api/mobile/trails {name \| trailId, workoutExternalId}` create-or-links (case-insensitive on name+aliases, never duplicates). Wrist UI SHIPPED 2026-08-28b (Round 3 port): save-track prompt post-sync, Saved trails in the Hike menu, ghost overlay + "vs your last run here" baselines; near-ranked rows carry `matchPct` (50–99) |
 | Device auth | Main (`/api/mobile/auth/*`) | Watch Keychain | Current: PIN-on-wrist pairing (shipped, design-styled). Future: pairing-code flow (below) |
 | Sequences (routines) | Main builds model + API + iPhone builder UI in the **Train stage** | Watch renders/runs them | Contract below — watch builds wrist UI only after `/api/mobile/sequences` ships |
 | Recovery/HRV/sleep ingestion | Watch captures (HealthKit) → posts | Main stores + Body screen renders | Uses `/api/mobile/health/daily` (existing); extend additively when Body stage lands |
@@ -109,6 +109,26 @@ HealthKit gives (the server downsamples to ≤120 points for storage).
 `hike` (existing `walk`/`run`/`trail_run` unchanged). Treadmill types
 render a distance-hero header instead of a GPS map; `stepCount` is
 already an accepted column — send it when HealthKit has it.
+
+**Round 3 additions (2026-08-28b, watch → main, additive):** the watch now
+also sends inside `metricsData` when it has them —
+
+```
+metricsData: {
+  splits:     [Int],  // per-km elapsed seconds, outdoor kinds (§07 3i)
+  hrrDelta:   Int,    // BPM drop over the 60 s recovery window (§07 HRR)
+  hrrSeconds: Int,    // window length actually measured (≤ 60)
+}
+```
+
+`hrrDelta`/`hrrSeconds` may arrive AFTER the row exists: the watch
+re-syncs the same `(externalSource, externalId)` with the enriched
+metrics and the atomic upsert lands it as an update. The server stores
+these verbatim today; surfacing them (recovery card, splits table
+cross-check vs routeAnalytics.splits) is main-lane backlog. Also
+additive since 08-28b: `GET /api/mobile/trails?nearLat…` rows carry
+`matchPct` (50–99, null when not near-ranked) — the wrist prints it in
+save-track suggestions ("94% match").
 
 ## Companion contract (added 2026-08-12 — main lane LIVE, build against it)
 

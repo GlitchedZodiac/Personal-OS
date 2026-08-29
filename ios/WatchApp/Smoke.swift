@@ -7,6 +7,19 @@
 //   SIMCTL_CHILD_PITAYA_SMOKE_AUTORUN=1     then record + log sets + sync
 //
 // Output lines are prefixed PITAYA-SMOKE for log scraping.
+//
+// Watch-SIMULATOR facts (learned 2026-08-28, cost an afternoon):
+// - simctl location (set AND route-mode start) never reaches CoreLocation in
+//   the watch sim. Use PITAYA_SMOKE_FAKEGPS=<m/s> (RouteTracker seam) for any
+//   flow that needs fixes — it walks NE from the Tres Cruces trailhead.
+// - HealthKit's live builder generates SYNTHETIC heart rate (~70-95 bpm) and
+//   a token distance during recorder sessions — so BPM UI renders, but
+//   distance-gated moments (km splits) won't fire off HK's number.
+// - healthd WEDGES between runs that opened an HKWorkoutSession: the next
+//   launch's beginCollection() awaits forever. Reboot between full-flow runs:
+//   xcrun simctl shutdown <udid> && xcrun simctl boot <udid>. On-close stalls
+//   (endCollection/finishWorkout) are survived in-app by completeRecovery's
+//   8 s deadline; none of this affects real hardware.
 
 #if os(watchOS)
 import Foundation
@@ -184,6 +197,21 @@ enum Smoke {
             log("freestyle: zones=\(model.zones.map { "\($0.tops)" } ?? "MISSING")")
 
             await model.startWorkout(.freestyle)
+
+            #if DEBUG
+            // Visual runs want the Effort graph alive DURING the session.
+            if ProcessInfo.processInfo.environment["PITAYA_SMOKE_INJECT_EARLY"] == "1",
+               model.recorder.hrStream.isEmpty {
+                let hr = (0..<600).map { i -> Int in
+                    let t = Double(i) / 600.0
+                    return Int(105 + 80 * min(t * 1.6, 1.0))
+                }
+                let time = (0..<600).map { $0 * 2 }
+                model.recorder.injectSyntheticStreams(hr: hr, time: time)
+                log("freestyle: injected \(hr.count) synthetic HR samples (early)")
+            }
+            #endif
+
             try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
 
             #if DEBUG

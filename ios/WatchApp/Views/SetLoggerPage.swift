@@ -11,7 +11,11 @@ struct SetLoggerPage: View {
     @State private var showPicker = false
     @State private var crownIndex: Double = 0
 
-    private var detents: [Int] { prefs.dialDetents }
+    /// Round 3 §08: a Weight Training free session overrides the bell rack
+    /// with 2.5 kg plate steps for this session only.
+    private var detents: [Double] {
+        model.weightDetentOverride ?? prefs.dialDetents.map(Double.init)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -88,14 +92,14 @@ struct SetLoggerPage: View {
         )
         .onChange(of: crownIndex) { _, newValue in
             let index = max(0, min(detents.count - 1, Int(newValue.rounded())))
-            model.weightKg = Double(detents[index])
+            model.weightKg = detents[index]
         }
         .onAppear {
             let nearest = detents.enumerated().min {
-                abs(Double($0.element) - model.weightKg) < abs(Double($1.element) - model.weightKg)
+                abs($0.element - model.weightKg) < abs($1.element - model.weightKg)
             }?.offset ?? 0
             crownIndex = Double(nearest)
-            model.weightKg = Double(detents[nearest])
+            model.weightKg = detents[nearest]
         }
         .sheet(isPresented: $showPicker) {
             ExercisePickerView()
