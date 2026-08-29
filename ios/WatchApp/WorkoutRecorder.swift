@@ -34,6 +34,13 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
     @Published public private(set) var stepCountLive: Int?
     /// Live cadence, steps/min (Round 3 §01) — CMPedometer currentCadence.
     @Published public private(set) var cadenceSpm: Int?
+    /// Session cadence accumulation (2026-08-29, Strava-replacement round):
+    /// the live number was never persisted — the mean now rides the sync.
+    private var cadenceSum = 0
+    private var cadenceCount = 0
+    public var avgCadenceSpm: Int? {
+        cadenceCount > 0 ? cadenceSum / cadenceCount : nil
+    }
     /// Trailing-5-min burn rate, kcal/h, floor 0 (Round 3 §01).
     @Published public private(set) var kcalPerHour: Int?
     /// Instantaneous served zone for chips (Round 3 §00) — classified per HR
@@ -192,6 +199,8 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         z2AvgBpm = nil
         stepCountLive = nil
         cadenceSpm = nil
+        cadenceSum = 0
+        cadenceCount = 0
         kcalPerHour = nil
         kcalTrail = []
         currentZone = nil
@@ -278,6 +287,10 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
                     guard let self, !self.frozen else { return }
                     self.stepCountLive = steps
                     self.cadenceSpm = cadence
+                    if let cadence, cadence > 0 {
+                        self.cadenceSum += cadence
+                        self.cadenceCount += 1
+                    }
                 }
             }
             self.pedometer = pedometer

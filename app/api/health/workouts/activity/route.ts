@@ -281,6 +281,16 @@ export async function GET(request: NextRequest) {
       // numbers + the honest time-under-load for seconds-based steps.
       loadScore: typeof m.loadScore === "number" ? m.loadScore : null,
       relativeEffort: typeof m.relativeEffort === "number" ? m.relativeEffort : null,
+      // Strava parity (2026-08-29): wrist cadence, plus legacy Strava
+      // moving/elapsed keys as fallbacks for rows without routeAnalytics.
+      avgCadenceSpm:
+        typeof m.avgCadenceSpm === "number"
+          ? m.avgCadenceSpm
+          : typeof m.avgCadence === "number"
+            ? Math.round(m.avgCadence * 2) // Strava stores one-leg cadence
+            : null,
+      movingTimeFallbackSeconds:
+        typeof m.movingTime === "number" ? m.movingTime : null,
       timeUnderLoadSeconds:
         type !== "out" ? timeUnderLoadSeconds(w.exercises) || null : null,
       packKg: w.packKg,

@@ -1207,7 +1207,8 @@ public final class AppModel: ObservableObject {
             elevationGainM: isFreestyle && recorder.elevationGain > 1
                 ? (recorder.elevationGain * 10).rounded() / 10 : nil,
             // §07: per-km seconds banked live on the wrist.
-            splits: recorder.splitSeconds.isEmpty ? nil : recorder.splitSeconds
+            splits: recorder.splitSeconds.isEmpty ? nil : recorder.splitSeconds,
+            avgCadenceSpm: recorder.avgCadenceSpm
         )
 
         pendingItem = WorkoutSyncItem(

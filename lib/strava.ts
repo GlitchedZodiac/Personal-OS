@@ -141,6 +141,7 @@ export function buildStreamMetrics(
   const hr = streams.heartrate ?? [];
   const time = streams.time ?? [];
   const zones = timeInZones(hr, time);
+  const loadScore = trainingLoad(zones) ?? undefined;
   return {
     hrStream: hr.length ? downsample(hr) : undefined,
     timeStream: time.length ? downsample(time) : undefined,
@@ -148,8 +149,11 @@ export function buildStreamMetrics(
       ? downsample(streams.altitude)
       : undefined,
     timeInZones: zones ?? undefined,
-    loadScore: trainingLoad(zones) ?? undefined,
-    relativeEffort,
+    loadScore,
+    // Strava retirement (2026-08-29): every HR-carrying row gets an effort
+    // number. Strava rows keep their sufferScore; native rows use Pitaya's
+    // own TRIMP — the same scale family, ours to own going forward.
+    relativeEffort: relativeEffort ?? loadScore,
   };
 }
 

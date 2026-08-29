@@ -36,7 +36,7 @@ export async function POST() {
           ? (row.metricsData as Record<string, unknown>)
           : {};
       const existing = metrics.routeAnalytics as { version?: number } | undefined;
-      if (existing && (existing.version ?? 1) >= 2) {
+      if (existing && (existing.version ?? 1) >= 3) {
         skippedExisting++;
         continue;
       }
@@ -61,7 +61,36 @@ export async function POST() {
       updated++;
     }
 
-    return NextResponse.json({ processed, updated, skippedExisting, skippedNoPoints });
+    // Strava-retirement pass (2026-08-29): every HR row gets an effort
+    // number — relativeEffort = Pitaya's own loadScore where Strava never
+    // supplied one. Bounded, idempotent.
+    let effortStamped = 0;
+    const effortRows = await prisma.workoutLog.findMany({
+      where: { metricsData: { path: ["loadScore"], gt: 0 } },
+      select: { id: true, metricsData: true },
+      take: 500,
+    });
+    for (const row of effortRows) {
+      const m = row.metricsData as Record<string, unknown>;
+      if (typeof m.relativeEffort === "number") continue;
+      const load = Number(m.loadScore);
+      if (!Number.isFinite(load) || load <= 0) continue;
+      await prisma.workoutLog.update({
+        where: { id: row.id },
+        data: {
+          metricsData: { ...m, relativeEffort: Math.round(load) } as unknown as Prisma.InputJsonValue,
+        },
+      });
+      effortStamped++;
+    }
+
+    return NextResponse.json({
+      processed,
+      updated,
+      skippedExisting,
+      skippedNoPoints,
+      effortStamped,
+    });
   } catch (error) {
     console.error("Route analytics backfill error:", error);
     return NextResponse.json({ error: "Backfill failed" }, { status: 500 });

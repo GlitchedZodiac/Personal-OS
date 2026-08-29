@@ -156,7 +156,14 @@ describe("analyzeRoute", () => {
     expect(a.maxAltM).toBeGreaterThan(1035);
     expect(a.totalElevGainM).toBeGreaterThan(30);
     expect(a.totalElevLossM).toBeGreaterThan(30);
-    expect(a.version).toBe(2);
+    expect(a.version).toBe(3);
+    // v3 derived streams: aligned, bounded, signed grade.
+    expect(a.velocitySeries!.length).toBeGreaterThan(0);
+    expect(a.velocitySeries!.length).toBeLessThanOrEqual(120);
+    expect(a.gradeSeries!.length).toBe(a.velocitySeries!.length);
+    expect(Math.max(...a.velocitySeries!)).toBeLessThan(3);
+    expect(Math.max(...a.gradeSeries!)).toBeGreaterThan(2); // ~4% climb half
+    expect(Math.min(...a.gradeSeries!)).toBeLessThan(-2); // ~4% descent half
   });
 
   it("returns null for unusable inputs", () => {

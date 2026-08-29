@@ -80,8 +80,6 @@ export default function SettingsPage() {
   const [newPin, setNewPin] = useState("");
   const [pinBusy, setPinBusy] = useState(false);
 
-  const [strava, setStrava] = useState<{ connected: boolean; athleteName?: string } | null>(null);
-  const [stravaSyncing, setStravaSyncing] = useState(false);
 
   const loadDevices = useCallback(() => {
     fetch("/api/health/devices")
@@ -93,10 +91,6 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchServerSettings().then(setSettings);
     loadDevices();
-    fetch("/api/strava/status")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setStrava)
-      .catch(() => setStrava(null));
   }, [loadDevices]);
 
   const update = useCallback(async (partial: Partial<AppSettings>) => {
@@ -154,18 +148,6 @@ export default function SettingsPage() {
       }
     } finally {
       setPinBusy(false);
-    }
-  };
-
-  const syncStrava = async () => {
-    setStravaSyncing(true);
-    try {
-      const res = await fetch("/api/strava/sync", { method: "POST" });
-      const body = await res.json().catch(() => ({}));
-      if (res.ok) toast.success(`Synced ${body.imported ?? 0} activities`);
-      else toast.error(body.error || "Sync failed");
-    } finally {
-      setStravaSyncing(false);
     }
   };
 
@@ -344,33 +326,19 @@ export default function SettingsPage() {
             Export
           </button>
         </div>
+        {/* Strava retired 2026-08-29 (his call): the watch records natively
+            now — no sync button, no token babysitting. History stays. */}
         <div className="flex items-center justify-between px-4 py-3">
           <div>
             <p className="text-[13px] font-semibold text-foreground">Strava</p>
             <p className="mt-px text-[11px] text-muted-foreground">
-              {strava?.connected
-                ? `Connected${strava.athleteName ? ` · ${strava.athleteName}` : ""}`
-                : "GPS source until the watch takes over"}
+              retired — the watch records everything natively; imports through
+              Aug 7 are kept
             </p>
           </div>
-          {strava?.connected ? (
-            <button
-              onClick={syncStrava}
-              disabled={stravaSyncing}
-              className="rounded-[8px] border border-[#D9D7DC] px-3.5 py-[7px] text-xs font-semibold text-foreground"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              {stravaSyncing ? "…" : "Sync"}
-            </button>
-          ) : (
-            <a
-              href="/api/strava/auth"
-              className="rounded-[8px] border border-[#D9D7DC] px-3.5 py-[7px] text-xs font-semibold text-foreground"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              Connect
-            </a>
-          )}
+          <span className="rounded-[8px] border border-[#E3E1E5] px-3.5 py-[7px] text-xs font-semibold text-muted-foreground">
+            Archived
+          </span>
         </div>
       </div>
 

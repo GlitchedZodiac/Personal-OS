@@ -56,6 +56,8 @@ export interface ActivityDetailData {
   loadScore: number | null;
   relativeEffort: number | null;
   timeUnderLoadSeconds: number | null;
+  avgCadenceSpm: number | null;
+  movingTimeFallbackSeconds: number | null;
   hrStream: number[] | null;
   zonePct: number[] | null;
   zoneSeconds: number[] | null;
@@ -573,16 +575,29 @@ export default function ActivityDetail({
             ? ([["DESCENT", `−${fmt(Math.round(det.descentM))} m`]] as [string, string][])
             : []),
           ["STEPS", det.stepCount ? fmt(det.stepCount) : "—"],
+          ...(det.avgCadenceSpm
+            ? ([["CADENCE", `${det.avgCadenceSpm} spm`]] as [string, string][])
+            : []),
           ["AVG HR", hr(det.avgHeartRateBpm)],
         ];
       }
       return [
         ["DISTANCE", `${((det.distanceMeters ?? 0) / 1000).toFixed(1)} km`],
         ["ELEV GAIN", det.elevationGainM ? `+${Math.round(det.elevationGainM)} m` : "—"],
-        ["MOVING TIME", `${det.durationMinutes}:00`],
+        // Old Strava imports carry a real moving_time even without
+        // routeAnalytics — prefer it over the rounded duration.
+        [
+          "MOVING TIME",
+          det.movingTimeFallbackSeconds
+            ? mmss(det.movingTimeFallbackSeconds)
+            : `${det.durationMinutes}:00`,
+        ],
         ["STEPS", det.stepCount ? fmt(det.stepCount) : "—"],
         ["CALORIES", det.caloriesBurned ? String(Math.round(det.caloriesBurned)) : "—"],
         ["AVG HR", hr(det.avgHeartRateBpm)],
+        ...(det.avgCadenceSpm
+          ? ([["CADENCE", `${det.avgCadenceSpm} spm`]] as [string, string][])
+          : []),
       ];
     }
     if (det.type === "cir") {
