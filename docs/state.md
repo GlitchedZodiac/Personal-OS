@@ -5,10 +5,55 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-29 (V4 FEEDBACK ROUND — see the entry below:
-analytics honesty, hike metrics + pack load, the dock hides, the on-page
-movement editor, watch legibility floor, strength reports, token-ROI
-hygiene, and the MCP proposal.)
+**Last updated:** 2026-08-29b (THE MCP IS LIVE — `/api/mcp`, 20 tools, his
+Claude account connects as a custom connector. Same day, earlier: the v4
+feedback round below.)
+
+---
+
+## 2026-08-29b · The Claude connector (MCP Stage 1, full surface)
+
+His call, hours after the proposal: "build the full MCP — beyond being
+cool it'll identify where the gaps are." Branch `claude/mcp-stage1`.
+
+**Live at `POST /api/mcp`** — stateless Streamable HTTP (hand-rolled
+JSON-RPC core in `lib/mcp/server.ts`, pure + unit-tested; no SDK, no
+sessions, no Redis — the five methods a tools-only server needs). Bearer
+auth reuses the DeviceSession machinery (`deviceType: "mcp"`, year-long,
+hashed at rest, revocable from the existing Devices list); minting is
+cookie-gated at **Settings → Claude connector** (`/settings/claude`, token
+shown once with the claude.ai connect steps). `/api/mcp` joined the proxy
+allowlist as a self-authenticating route.
+
+**20 tools** (`lib/mcp/tools.ts` — every handler calls the same libs the
+web routes call: normalizers, validateSequence, PR detection/rebuild,
+planWeek, createOrLinkTrail):
+- `query_data` — the full 48-dataset registry, identical to in-app
+  get_app_data (allowlists + clip budget included).
+- Recipes (his word for usuals): `list/save/rename/delete_recipe` +
+  `log_recipe` with id → exact → **fuzzy fold-match** resolution and
+  per-serving product scaling ("rename" didn't exist anywhere before).
+- `log_food` (1–20 items, source "mcp"), `edit_food`.
+- `log_workout` (normalized exercises, PR detection, packKg),
+  `edit_workout` (attach/assignments/match+set/packKg, PR rebuild),
+  `delete_entry` (food/workout/measurement, PR rebuild on workout).
+- `log_measurement` (weight + 9 tape fields, never zero-fills),
+  `log_water`, `set_reminder`.
+- `create_routine`/`update_routine` (minting + validation, same endpoint
+  semantics as the web editor), `plan_training`/`get_training_week`,
+  `name_trail` (defaults to the latest GPS workout).
+- **`report_gap`** — the roadmap generator: when his Claude lacks a
+  capability, it files a 🧩 todo (category "app").
+
+**Self-smoked end-to-end on the live server**: 401 without/with-wrong
+token, initialize (version echo), 202 notification, 20-tool list, real
+reads (it saw that morning's actual walk), save→rename→fuzzy-log→delete
+recipe round-trip with usageCount bump, report_gap → todo, malformed-JSON
+400 — every smoke row deleted and the smoke token revoked after. Tests
+325/325 (9 new protocol/handler tests).
+
+**His one step**: claude.ai → Settings → Connectors → Add custom
+connector → the URL + token from Settings → Claude connector.
 
 ---
 

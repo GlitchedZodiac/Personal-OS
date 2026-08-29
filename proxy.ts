@@ -10,12 +10,14 @@ import { isAuthenticatedRequest } from "@/lib/auth";
  *  - /api/auth            PIN login (rate-limited internally)
  *  - /api/cron/*          Vercel crons — verify `Bearer CRON_SECRET` themselves
  *  - /api/mobile/*        iOS/watch — verify bearer device-session tokens
+ *  - /api/mcp             Claude connector — verifies the same bearer tokens
  *  - OAuth callbacks      arrive from Strava/Google without our cookie
  */
 const PUBLIC_API_PREFIXES = [
   "/api/auth",
   "/api/cron/",
   "/api/mobile/",
+  "/api/mcp",
   "/api/strava/callback",
   "/api/finance/google/callback",
 ];

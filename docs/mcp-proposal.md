@@ -1,10 +1,28 @@
 # Pitaya as an MCP server — users bring their own AI
 
-*Proposal, 2026-08-29 (Michael's pick: proposal only this round, no code).
-The idea: expose the app's data over the Model Context Protocol so a
-Claude account (his, and eventually any user's) can read and write Pitaya
-directly. The app stops paying for inference; the user's own AI — which
-they already pay for and which knows them — becomes the interface.*
+> **STAGE 1 SHIPPED 2026-08-29** (his same-day "build the full MCP" call).
+> Live at `POST /api/mcp` — stateless Streamable HTTP, bearer-token auth
+> via a year-long revocable DeviceSession (minted at Settings → Claude
+> connector), **20 tools**: `query_data` over the whole registry +
+> recipes (save/rename/log/delete with fuzzy matching), food log/edit,
+> workouts log/edit (packKg included), delete_entry, measurements, water,
+> reminders, routines create/update, plan_training + get_training_week,
+> name_trail, and `report_gap` — the gap-finder that files missing
+> capabilities onto the todo list (🧩). Writes stamp `source: "mcp"`.
+> Core is hand-rolled (lib/mcp/server.ts + tools.ts, unit-tested) — no
+> SDK, no sessions, no Redis; swap in the SDK if
+> sampling/resources/subscriptions are ever needed.
+>
+> **To connect (Michael):** Settings → Claude connector → Mint → then
+> claude.ai → Settings → Connectors → Add custom connector → paste the
+> URL, and the token under Advanced. The doc below remains the Stage 2
+> (multi-user) blueprint.
+
+*Original proposal, 2026-08-29. The idea: expose the app's data over the
+Model Context Protocol so a Claude account (his, and eventually any
+user's) can read and write Pitaya directly. The app stops paying for
+inference; the user's own AI — which they already pay for and which knows
+them — becomes the interface.*
 
 ## Why this is unusually cheap to build here
 

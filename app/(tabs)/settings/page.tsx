@@ -287,6 +287,25 @@ export default function SettingsPage() {
             Download
           </Link>
         </div>
+        {/* Claude connector (MCP) — added 2026-08-29; same deliberate
+            DATA-card deviation as the rows above. */}
+        <div className="flex items-center justify-between border-b border-muted px-4 py-3">
+          <div>
+            <p className="text-[13px] font-semibold text-foreground">
+              Claude connector
+            </p>
+            <p className="mt-px text-[11px] text-muted-foreground">
+              your Claude account, reading &amp; writing Pitaya
+            </p>
+          </div>
+          <Link
+            href="/settings/claude"
+            className="rounded-[8px] border border-[#D9D7DC] px-3.5 py-[7px] text-xs font-semibold text-foreground"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Connect
+          </Link>
+        </div>
         {/* Notifications — added 2026-08-28 with the training senders; same
             deliberate DATA-card deviation as the export row above. */}
         <div className="flex items-center justify-between border-b border-muted px-4 py-3">
