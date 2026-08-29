@@ -1103,6 +1103,23 @@ model PersonalRecord {
   @@map("personal_records")
 }
 
+// One-time OAuth authorization codes (2026-08-29, the Claude connector's
+// sign-in flow). Short-lived, single-use; the real credential they exchange
+// into is a DeviceSession.
+model OAuthCode {
+  id            String    @id @default(uuid())
+  codeHash      String    @unique
+  clientId      String
+  redirectUri   String
+  codeChallenge String
+  scope         String?
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@map("oauth_codes")
+}
+
 model ChatMessage {
   id        String   @id @default(uuid())
   role      String // user | assistant | proposal

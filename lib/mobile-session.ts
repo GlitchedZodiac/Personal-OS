@@ -77,8 +77,15 @@ export async function refreshDeviceSession(refreshToken: string) {
 
 export function getBearerToken(request: NextRequest) {
   const auth = request.headers.get("authorization") || "";
-  if (!auth.toLowerCase().startsWith("bearer ")) return null;
-  return auth.slice(7).trim() || null;
+  if (auth.toLowerCase().startsWith("bearer ")) {
+    return auth.slice(7).trim() || null;
+  }
+  // claude.ai's connector dialog can't send a custom Authorization header —
+  // its "no-OAuth" path sends the token as an extra request header instead
+  // (2026-08-29). Accept the two conventional names.
+  const apiToken =
+    request.headers.get("api-token") || request.headers.get("x-api-key") || "";
+  return apiToken.trim() || null;
 }
 
 export async function requireMobileSession(request: NextRequest) {

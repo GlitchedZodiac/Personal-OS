@@ -94,11 +94,38 @@ export default function ClaudeConnectorPage() {
         Every action uses your own Claude subscription; Pitaya spends nothing.
       </p>
 
+      {/* The easy path: claude.ai detects the OAuth flow from the URL alone
+          and walks through /oauth/authorize — one Approve tap, no pasting. */}
+      <div className="mt-5 rounded-[16px] bg-card p-4">
+        <p className="text-[10.5px] font-bold tracking-[0.14em] text-[#3E7A54]">
+          THE EASY WAY — SIGN IN, NOTHING TO PASTE
+        </p>
+        <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-[12px] leading-[1.6] text-muted-foreground">
+          <li>claude.ai → Settings → Connectors → Add custom connector</li>
+          <li>
+            Paste only the URL:{" "}
+            <button
+              onClick={() =>
+                copy(`${window.location.origin}/api/mcp`, "Connector URL")
+              }
+              className="font-mono text-[11.5px] font-semibold text-foreground underline decoration-dotted"
+            >
+              {typeof window !== "undefined" ? `${window.location.origin}/api/mcp` : "/api/mcp"}
+            </button>
+          </li>
+          <li>Leave Authentication on “Always required (Detected)” and the OAuth client on Anthropic’s hosted metadata</li>
+          <li>Claude opens Pitaya’s approve screen — unlock with your PIN, tap Approve, done</li>
+        </ol>
+      </div>
+
+      <p className="mt-6 text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+        FALLBACK — MANUAL TOKEN (NO SIGN-IN)
+      </p>
       {!minted ? (
         <button
           onClick={mint}
           disabled={busy}
-          className="mt-5 w-full rounded-[12px] bg-[#232227] py-3 text-[13px] font-semibold text-white disabled:opacity-60"
+          className="mt-2 w-full rounded-[12px] bg-[#232227] py-3 text-[13px] font-semibold text-white disabled:opacity-60"
           style={{ fontFamily: "var(--font-display)" }}
         >
           {busy ? "Minting…" : "Mint a connector token"}
@@ -133,7 +160,14 @@ export default function ClaudeConnectorPage() {
           <ol className="mt-4 list-decimal space-y-1.5 pl-5 text-[12px] leading-[1.6] text-muted-foreground">
             <li>claude.ai → Settings → Connectors → Add custom connector</li>
             <li>Paste the server URL</li>
-            <li>Advanced settings → paste the token as the Bearer / API token</li>
+            <li>
+              Set Authentication to <b>None</b> (“servers that use an API key”)
+            </li>
+            <li>
+              Under Additional request headers, add header{" "}
+              <span className="font-mono">api-token</span> with the token as
+              its value
+            </li>
             <li>Ask Claude: “what did I train this week?”</li>
           </ol>
         </div>

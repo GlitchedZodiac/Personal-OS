@@ -38,3 +38,37 @@ export function hashOpaqueToken(token: string) {
     .update(token)
     .digest("hex");
 }
+
+/// Compact HMAC-signed payloads (2026-08-29, OAuth): `payload.sig` where
+/// payload is base64url JSON. Lets the stateless DCR endpoint mint client
+/// ids that carry their own redirect allowlist, verifiable without a table.
+export function signCompact(payload: object): string {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto
+    .createHmac(PIN_HASH_ALGO, getAppSecret())
+    .update(body)
+    .digest("base64url");
+  return `${body}.${sig}`;
+}
+
+export function verifyCompact<T = unknown>(value: string): T | null {
+  const dot = value.lastIndexOf(".");
+  if (dot <= 0) return null;
+  const body = value.slice(0, dot);
+  const sig = value.slice(dot + 1);
+  const expected = crypto
+    .createHmac(PIN_HASH_ALGO, getAppSecret())
+    .update(body)
+    .digest("base64url");
+  if (
+    Buffer.byteLength(sig) !== Buffer.byteLength(expected) ||
+    !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
+  ) {
+    return null;
+  }
+  try {
+    return JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as T;
+  } catch {
+    return null;
+  }
+}
