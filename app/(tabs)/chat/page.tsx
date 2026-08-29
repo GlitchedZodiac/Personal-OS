@@ -60,6 +60,7 @@ const KIND_TITLES: Record<string, string> = {
   product: "SAVE TO MY USUALS",
   trail: "NAME THIS TRAIL",
   plan_week: "THE WEEK, PLANNED",
+  reminder: "PROPOSED REMINDER",
 };
 
 const weekdayLabel = (day: string) => {
@@ -736,6 +737,23 @@ export default function ChatPage() {
         followUp = `${created} day${created === 1 ? "" : "s"} planned${
           reminders ? ` · ${reminders} reminder${reminders === 1 ? "" : "s"} set` : ""
         } — the week strip on Train has it, and the 7am nudge knows.`;
+      } else if (kind === "reminder") {
+        const res = await fetch("/api/reminders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: data.title,
+            remindAt: data.remindAt,
+            url: "/dashboard",
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Save failed");
+        followUp = `Reminder set — ${new Date(String(data.remindAt)).toLocaleString("en-US", {
+          weekday: "short",
+          hour: "numeric",
+          minute: "2-digit",
+        })}.`;
       } else if (kind === "delete") {
         const entity = String(data.entity ?? "food");
         const endpoint =
@@ -813,6 +831,15 @@ export default function ChatPage() {
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
                     {it.proteinG}P · {it.carbsG}C · {it.fatG}F
                   </p>
+                  {/* v4: fold-matched against saved usuals server-side */}
+                  {(() => {
+                    const raw = (data.items as { usual?: { foodDescription: string } }[])?.[i];
+                    return raw?.usual ? (
+                      <p className="mt-0.5 text-[10.5px] font-semibold text-[#3E7A54]">
+                        ≈ your usual · {raw.usual.foodDescription}
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
                 {editing ? (
                   <span className="flex items-center gap-2">
@@ -1099,6 +1126,12 @@ export default function ChatPage() {
                     .map(([k, v]) => `${k.replace(/G$/, "")} ${v}`)
                     .join(" · ")}
                 </>
+              ) : kind === "reminder" ? (
+                <>
+                  Remind you:{" "}
+                  <span className="font-semibold">{String(data.title ?? "…")}</span>
+                  {fmtWhen(data.remindAt) ? ` · ${fmtWhen(data.remindAt)}` : ""}
+                </>
               ) : (
                 Object.entries(data)
                   .filter(([k, v]) => k !== "message" && v != null && typeof v !== "object")
@@ -1149,6 +1182,40 @@ export default function ChatPage() {
                 {editing ? "Done" : "Edit"}
               </button>
             )}
+            {/* v4: single-item card matching a saved usual — the zero-drift
+                path: log the usual's exact macros, discard the estimate */}
+            {kind === "food" &&
+              items.length === 1 &&
+              (() => {
+                const usual = (data.items as { usual?: Record<string, unknown> }[])?.[0]?.usual;
+                if (!usual) return null;
+                return (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch("/api/health/favorites", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            ...usual,
+                            logNow: true,
+                            loggedAt: (data.items as { loggedAt?: string }[])?.[0]?.loggedAt,
+                          }),
+                        });
+                        if (!res.ok) throw new Error();
+                        await resolveCard(msg.id, "rejected");
+                        toast.success("Logged your usual — exact saved macros");
+                      } catch {
+                        toast.error("Couldn't log the usual");
+                      }
+                    }}
+                    className="flex-1 rounded-[10px] border border-[#BFDCC9] bg-[#EAF3ED] py-[11px] text-[13px] font-semibold text-[#3E7A54]"
+                    style={{ fontFamily: "var(--font-display)" }}
+                  >
+                    Log usual
+                  </button>
+                );
+              })()}
             <button
               onClick={() => resolveCard(msg.id, "rejected")}
               className="flex-1 rounded-[10px] border border-border py-[11px] text-[13px] font-semibold text-muted-foreground"

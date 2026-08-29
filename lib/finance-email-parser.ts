@@ -1,4 +1,5 @@
 import { hasOpenAIKey, openai, CHAT_MODEL } from "@/lib/openai";
+import { recordAIUsage } from "@/lib/ai-usage";
 import type { FinanceInboxParsedTransaction, FinanceTransactionType } from "@/lib/finance-inbox";
 
 export const FINANCE_CATEGORY_OPTIONS = [
@@ -246,6 +247,13 @@ export async function parseTransactionsFromEmail(input: {
           content: `Sender: ${input.sender || "unknown"}\nSubject: ${input.subject || "no subject"}\n\nEmail content:\n${compactBody}`,
         },
       ],
+    });
+
+    recordAIUsage({
+      surface: "finance_email",
+      model: CHAT_MODEL,
+      inputTokens: response.usage?.prompt_tokens ?? 0,
+      outputTokens: response.usage?.completion_tokens ?? 0,
     });
 
     const parsed = JSON.parse(response.choices[0].message.content || "{}");

@@ -366,7 +366,7 @@ export const WATER_LOG_FUNCTION = {
 
 export const REMINDER_FUNCTION = {
   name: "set_reminder",
-  description: "Set a timed reminder that will push a notification at the specified time. Use when the user explicitly wants to be reminded at a certain time.",
+  description: "Propose a timed reminder that will push a notification at the specified time. Use when the user explicitly wants to be reminded at a certain time. Like every write, this shows a confirm card and saves only after the user taps Confirm.",
   parameters: {
     type: "object" as const,
     properties: {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  PROPOSAL_TOOL_NAMES,
   proposalKindFor,
   sanitizeMeasurementArgs,
   sanitizeProposalArgs,
@@ -38,12 +37,18 @@ describe("chat 2b tool surface", () => {
     expect(names).not.toContain("general_response");
   });
 
-  it("classifies every proposal tool and no read tool", () => {
-    for (const name of PROPOSAL_TOOL_NAMES) {
-      expect(proposalKindFor(name)).not.toBeNull();
+  it("classifies every write tool and no read tool", () => {
+    // The tool list itself is the authority (the old PROPOSAL_TOOL_NAMES
+    // set drifted and was deleted 2026-08-29): every tool except the read
+    // tool must map to a proposal kind — writes ALWAYS confirm-first.
+    for (const tool of CHAT_RESPONSES_TOOLS) {
+      if (tool.name === "get_app_data") continue;
+      expect(proposalKindFor(tool.name), tool.name).not.toBeNull();
     }
     expect(proposalKindFor("get_app_data")).toBeNull();
-    expect(proposalKindFor("set_reminder")).toBeNull();
+    // set_reminder joined the confirm-first shape 2026-08-29 — it was the
+    // one tool that wrote immediately.
+    expect(proposalKindFor("set_reminder")).toBe("reminder");
     expect(proposalKindFor("log_food")).toBe("food");
     expect(proposalKindFor("edit_food_log")).toBe("edit_food");
     expect(proposalKindFor("delete_entry")).toBe("delete");

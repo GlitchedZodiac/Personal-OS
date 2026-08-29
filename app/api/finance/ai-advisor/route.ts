@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai, CHAT_MODEL } from "@/lib/openai";
+import { recordAIUsage } from "@/lib/ai-usage";
 import { getFinanceReportSummary } from "@/lib/finance/reports";
 import {
   capDemoCompletionTokens,
@@ -46,6 +47,12 @@ export async function GET(req: NextRequest) {
       ],
     });
     await recordDemoAISpend(response.usage);
+    recordAIUsage({
+      surface: "finance_advisor",
+      model: getDemoChatModel(CHAT_MODEL),
+      inputTokens: response.usage?.prompt_tokens ?? 0,
+      outputTokens: response.usage?.completion_tokens ?? 0,
+    });
 
     return NextResponse.json({
       type,

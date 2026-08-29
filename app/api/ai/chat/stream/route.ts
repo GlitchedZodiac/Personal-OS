@@ -7,6 +7,7 @@ import { CHAT_SYSTEM_PROMPT, CHAT_RESPONSES_TOOLS } from "@/lib/ai-prompts";
 import { proposalKindFor, sanitizeProposalArgs } from "@/lib/chat-tools";
 import { type AppDataArgs, executeAppData } from "@/lib/ai/data-access";
 import { normalizeFoodItemsWithTiming } from "@/lib/food-timing";
+import { matchUsual } from "@/lib/food-match";
 import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 
 // Chat 2b — the Responses-API agentic loop with SSE streaming.
@@ -27,7 +28,10 @@ const MAX_TURNS = 6;
 // Vercel ceiling mid-stream and the user gets NOTHING. Bail at 42s and spend
 // the remainder on one final text turn.
 const SOFT_DEADLINE_MS = 42_000;
-const HISTORY_LIMIT = 20;
+// 12, down from 20 (2026-08-29): chat input averaged 7.1k tokens/call and
+// the replayed history was a big slice of it — a food log doesn't need last
+// week's conversation. Proposals are already compressed to one line each.
+const HISTORY_LIMIT = 12;
 const MAX_IMAGES = 6; // one capture's worth — plate, label, receipt…
 
 interface FunctionCallItem {
@@ -251,15 +255,44 @@ export async function POST(request: NextRequest) {
               // Zero-filled measurement fields never reach the card or the DB.
               args = sanitizeProposalArgs(call.name, args);
               if (call.name === "log_food") {
-                args = {
-                  ...args,
-                  items: normalizeFoodItemsWithTiming(
-                    args.items as never,
-                    message,
-                    timeZone,
-                    now
-                  ),
-                };
+                const items = normalizeFoodItemsWithTiming(
+                  args.items as never,
+                  message,
+                  timeZone,
+                  now
+                );
+                // v4 (token ROI): fuzzy-match each item against saved usuals
+                // so the card can offer the zero-token path. Deterministic,
+                // one small query, never blocks the proposal.
+                let annotated = items as Array<Record<string, unknown>>;
+                try {
+                  const usuals = await prisma.favoriteFoods.findMany({
+                    select: {
+                      id: true,
+                      foodDescription: true,
+                      mealType: true,
+                      calories: true,
+                      proteinG: true,
+                      carbsG: true,
+                      fatG: true,
+                      kind: true,
+                      servingLabel: true,
+                    },
+                    take: 40,
+                  });
+                  if (usuals.length > 0) {
+                    annotated = (items as Array<Record<string, unknown>>).map((it) => {
+                      const desc = String(it.foodDescription ?? "");
+                      const match = desc ? matchUsual(desc, usuals) : null;
+                      if (!match) return it;
+                      const full = usuals.find((u) => u.id === match.id);
+                      return full ? { ...it, usual: full } : it;
+                    });
+                  }
+                } catch {
+                  // favorites unavailable — the card just shows no shortcut
+                }
+                args = { ...args, items: annotated };
               }
               // Same ordering guard as the assistant row — a proposal must
               // not land ahead of the message that prompted it.
@@ -298,31 +331,9 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
-            if (call.name === "set_reminder") {
-              const remindAt = new Date(String(args.remindAt ?? ""));
-              if (Number.isFinite(remindAt.getTime())) {
-                await prisma.reminder.create({
-                  data: {
-                    title: String(args.title ?? "Reminder"),
-                    body: String(args.title ?? "Reminder"),
-                    remindAt,
-                    url: "/dashboard",
-                  },
-                });
-                input.push({
-                  type: "function_call_output",
-                  call_id: call.call_id,
-                  output: `Reminder created for ${remindAt.toISOString()}.`,
-                });
-              } else {
-                input.push({
-                  type: "function_call_output",
-                  call_id: call.call_id,
-                  output: "Invalid remindAt datetime — ask the user to clarify the time.",
-                });
-              }
-              continue;
-            }
+            // (set_reminder's inline write was removed 2026-08-29 — it now
+            // rides proposalKindFor like every other write: card → confirm
+            // → POST /api/reminders.)
 
             input.push({
               type: "function_call_output",

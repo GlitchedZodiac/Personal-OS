@@ -158,6 +158,7 @@ vs. Previous week:
 - Workouts: ${prevTotalWorkouts} (${totalWorkouts - prevTotalWorkouts > 0 ? "+" : ""}${totalWorkouts - prevTotalWorkouts} change)`;
 
       const completion = await generateChatText({
+        surface: "weekly_report_trends",
         messages: [
           {
             role: "system",
