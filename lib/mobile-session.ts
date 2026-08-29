@@ -13,6 +13,11 @@ export async function createDeviceSession(input: {
   deviceLabel: string;
   platform?: string | null;
   deviceType?: string | null;
+  /// MCP connector tokens (2026-08-29) live longer than phone sessions —
+  /// a pasted claude.ai credential shouldn't die monthly. Revocation is
+  /// the control, not expiry.
+  accessTtlDays?: number;
+  refreshTtlDays?: number;
 }) {
   const accessToken = createOpaqueToken();
   const refreshToken = createOpaqueToken();
@@ -24,8 +29,8 @@ export async function createDeviceSession(input: {
       deviceType: input.deviceType || null,
       tokenHash: hashOpaqueToken(accessToken),
       refreshTokenHash: hashOpaqueToken(refreshToken),
-      expiresAt: addDays(SESSION_TTL_DAYS),
-      refreshExpiresAt: addDays(REFRESH_TTL_DAYS),
+      expiresAt: addDays(input.accessTtlDays ?? SESSION_TTL_DAYS),
+      refreshExpiresAt: addDays(input.refreshTtlDays ?? REFRESH_TTL_DAYS),
       lastSeenAt: new Date(),
     },
   });
