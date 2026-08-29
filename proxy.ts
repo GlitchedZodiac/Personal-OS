@@ -11,6 +11,9 @@ import { isAuthenticatedRequest } from "@/lib/auth";
  *  - /api/cron/*          Vercel crons — verify `Bearer CRON_SECRET` themselves
  *  - /api/mobile/*        iOS/watch — verify bearer device-session tokens
  *  - /api/mcp             Claude connector — verifies the same bearer tokens
+ *  - /api/oauth/token     OAuth exchange — its credential is the PKCE code /
+ *  - /api/oauth/register    rotating refresh token; register is policy-gated.
+ *                           (/api/oauth/approve is NOT here — cookie-gated.)
  *  - OAuth callbacks      arrive from Strava/Google without our cookie
  */
 const PUBLIC_API_PREFIXES = [
@@ -18,6 +21,8 @@ const PUBLIC_API_PREFIXES = [
   "/api/cron/",
   "/api/mobile/",
   "/api/mcp",
+  "/api/oauth/token",
+  "/api/oauth/register",
   "/api/strava/callback",
   "/api/finance/google/callback",
 ];

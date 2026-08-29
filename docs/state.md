@@ -5,9 +5,50 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-29b (THE MCP IS LIVE — `/api/mcp`, 20 tools, his
-Claude account connects as a custom connector. Same day, earlier: the v4
-feedback round below.)
+**Last updated:** 2026-08-29c (MCP OAUTH — the claude.ai dialog has no
+bearer field; the server now speaks the real MCP auth story and the
+connect is URL-only + a PIN approve. Same day: the connector itself and
+the v4 round below.)
+
+---
+
+## 2026-08-29c · OAuth for the connector — connect becomes one Approve tap
+
+Michael hit the truth in the claude.ai dialog: no bearer-token field
+exists; it probes the endpoint, reads our 401 as "Always required
+(Detected)", and expects the MCP OAuth story. His `api-token` header
+attempt also failed because the server only read `Authorization`. Branch
+`claude/mcp-oauth`. Both paths fixed:
+
+**The OAuth story (the easy way, now real):** `/api/mcp` 401s carry
+`WWW-Authenticate` → RFC 9728 protected-resource metadata (origin +
+path-suffixed `/api/mcp` forms) → RFC 8414 AS metadata → **CIMD**
+(client_id as Anthropic's hosted-metadata URL, fetched + honored, 10 min
+cache) and stateless **DCR** (`/api/oauth/register` mints HMAC-signed
+client ids embedding their redirect set — no client table) →
+`/oauth/authorize`, a bare PIN-gated approve screen (inline PIN when the
+cookie's absent; one Approve tap; Deny returns `access_denied`) →
+single-use PKCE-S256 codes (new `oauth_codes` table, 5 min TTL,
+claim-then-verify so replays lose races too) → `/api/oauth/token`
+(form-encoded per spec, JSON tolerated) exchanging into ordinary
+**DeviceSessions** (deviceType "mcp", 30 d access / 365 d rotating
+refresh — the existing refresh lib does the rotation). Redirect policy
+allows only claude.ai/claude.com/anthropic.com + localhost tooling —
+CIMD/DCR vouching is necessary but not sufficient. proxy allowlists
+exactly `/api/oauth/token` + `/api/oauth/register`; approve stays
+cookie-gated.
+
+**The fallback:** `getBearerToken` now also reads `api-token` /
+`x-api-key` headers, so the dialog's Authentication-None + custom-header
+path works with a minted token. Settings → Claude connector rewritten:
+the URL-only OAuth path is the headline; the token is the fallback.
+
+Smoked live end-to-end simulating claude.ai: discovery chain →
+DCR (evil redirect rejected) → approve (401 without cookie) → token
+exchange → **code replay rejected** → MCP with the OAuth token → the
+`api-token` header path → refresh rotation (old token dies) — smoke
+session revoked after. Tests 330/330 (oauth policy/PKCE/single-use
+suite added). His connect is now: paste the URL, tap Approve.
 
 ---
 

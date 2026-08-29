@@ -13,9 +13,27 @@
 > SDK, no sessions, no Redis; swap in the SDK if
 > sampling/resources/subscriptions are ever needed.
 >
-> **To connect (Michael):** Settings → Claude connector → Mint → then
-> claude.ai → Settings → Connectors → Add custom connector → paste the
-> URL, and the token under Advanced. The doc below remains the Stage 2
+> **OAUTH SHIPPED 2026-08-29b** — the claude.ai dialog turned out to have
+> no bearer-token field (it probes the 401, says "Detected", and expects
+> the real MCP OAuth story), so the server now speaks it: RFC 9728
+> protected-resource metadata (+ the /api/mcp path-suffixed form and the
+> WWW-Authenticate pointer on 401), RFC 8414 AS metadata, **CIMD**
+> (client_id as Anthropic's hosted metadata URL — fetched and honored),
+> stateless **DCR** (HMAC-signed client ids carrying their redirect set),
+> PKCE-S256 single-use codes (5 min, replay-burned, table
+> `oauth_codes`), and a token endpoint that exchanges into ordinary
+> DeviceSessions with rotating refresh tokens. Redirect policy allows
+> only Anthropic surfaces + localhost tooling. The sign-in screen is
+> `/oauth/authorize` — PIN-gated, one Approve tap. Fallback for the
+> no-OAuth path: Authentication "None" + an `api-token` request header
+> (now accepted alongside Authorization).
+>
+> **To connect (Michael):** claude.ai → Settings → Connectors → Add
+> custom connector → paste ONLY the URL
+> (`https://personal-os-plum.vercel.app/api/mcp`) → leave Authentication
+> on "Always required (Detected)" and the OAuth client on Anthropic's
+> hosted metadata → Claude opens Pitaya's approve screen → unlock with
+> your PIN → Approve. Nothing to paste. The doc below remains the Stage 2
 > (multi-user) blueprint.
 
 *Original proposal, 2026-08-29. The idea: expose the app's data over the

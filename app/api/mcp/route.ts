@@ -20,13 +20,22 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   const session = await requireMobileSession(request);
   if (!session) {
+    // The WWW-Authenticate pointer is what makes claude.ai's "Detected"
+    // OAuth flow work: 401 → resource metadata → our authorization server
+    // → the /oauth/authorize sign-in → a token. (RFC 9728 §5.1.)
+    const origin = new URL(request.url).origin;
     return NextResponse.json(
       {
         jsonrpc: "2.0",
         id: null,
         error: { code: -32001, message: "Unauthorized — bearer token required" },
       },
-      { status: 401 }
+      {
+        status: 401,
+        headers: {
+          "WWW-Authenticate": `Bearer realm="pitaya", resource_metadata="${origin}/.well-known/oauth-protected-resource/api/mcp"`,
+        },
+      }
     );
   }
 
