@@ -250,7 +250,7 @@ struct SummaryView: View {
                     .font(Theme.wDisplay(11))
                     .foregroundStyle(color)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                    .minimumScaleFactor(0.8)
                 if let delta {
                     Text(deltaText(delta))
                         .font(Theme.wText(5.5, weight: .semibold))

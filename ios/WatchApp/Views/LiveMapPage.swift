@@ -245,7 +245,7 @@ struct LiveMapPage: View {
                 .foregroundStyle(tint)
                 .animation(.easeInOut(duration: 0.22), value: tint)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.8)
             Text(label)
                 .font(Theme.r3Text(9, weight: .semibold))
                 .foregroundStyle(Theme.textTertiary)

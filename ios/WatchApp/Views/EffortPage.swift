@@ -152,7 +152,7 @@ struct EffortPage: View {
                 .monospacedDigit()
                 .foregroundStyle(Theme.textBright)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.8)
             Text(label)
                 .font(Theme.r3Text(9.5, weight: .semibold))
                 .kerning(0.57) // .12em of 9.5px

@@ -174,6 +174,7 @@ struct ReadyView: View {
                                 .foregroundStyle(Theme.textMuted)
                         }
                         .frame(width: Theme.px(26), height: Theme.px(26))
+                        .pitayaTappable(minWidth: Theme.minTap)
                     }
                     .buttonStyle(.plain)
                     Text("Ready")

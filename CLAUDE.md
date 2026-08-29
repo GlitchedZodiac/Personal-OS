@@ -112,6 +112,28 @@ implementation is a **port, not an interpretation**:
 5. Screens not yet rebuilt to the design are listed in `docs/state.md` as
    pending stages — that's the only sanctioned gap between design and app.
 
+## Watch legibility floor (codified 2026-08-29 — his "tiny menus" call)
+
+Round 3's raw px/2 type silently dropped the app's wrist legibility factor
+and shipped 4.5–7 pt labels; the rest-screen Skip was a bare ≈24×14 pt hit
+region. The standard, enforced in `ios/Shared/Theme.swift`:
+
+1. **Type**: design-canvas px/2 is verbatim for GEOMETRY (`Theme.r3()`);
+   TYPE goes through the legibility curve (`Theme.r3TypeSize`: <12 pt
+   boosts ×1.40625, ceiling 12, floor 7). This is a documented standard,
+   not a silent PORT-GATE deviation — new design rounds inherit it unless
+   Michael says otherwise for a specific screen.
+2. **Tap targets**: every tappable control presents ≥38 pt of hit area
+   (`Theme.minTap`). Any `.buttonStyle(.plain)` control is either a
+   PitayaCTA/tile or wears `.pitayaTappable()` INSIDE the Button label
+   (modifiers outside the label don't grow the target). Inline header
+   chips/segments may use the documented 32 pt exception.
+3. **Never** `.minimumScaleFactor` below 0.8 on meaning-bearing text, and
+   padding that sizes a control lives inside the label, not outside.
+
+New watch UI that violates the floor is a defect, same class as PORT-GATE
+misses.
+
 ## Parallel lanes
 
 Two Claude sessions may run against this repo at once:
