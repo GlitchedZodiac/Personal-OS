@@ -110,6 +110,18 @@ Effort/map per their own specs; Controls has no header) · sequence runners
 keep their 2-page carousel (the spec's carousel list doesn't name them;
 halfway + bloom ride the runner).
 
+**Hardening the sim run forced (post-spec, real-device relevant):** the
+HRR screen resolves on its own when the capture doesn't qualify — HR
+rose after the effort, or the sensor gapped — instead of stranding at
+0:00 until a manual Skip (no verdict shows; the chain just continues to
+the trail prompt/summary). And `completeRecovery` deadlines its
+HealthKit close at 8 s with ownership guards, so a stalled
+`endCollection` can neither hold that screen hostage nor leave the
+recorder refusing the next session. Found because the watch SIM wedges
+healthd routinely; the guards are cheap insurance on hardware. Sim
+facts + the new `PITAYA_SMOKE_FAKEGPS` seam are documented in
+`Smoke.swift`'s header.
+
 Builds green on both schemes; 305 web tests (server matchPct added to
 lib/trails' near queries); sim smokes + screenshots below. The wrist gets
 it at the next `pitaya-resign.sh --force` after merge.
