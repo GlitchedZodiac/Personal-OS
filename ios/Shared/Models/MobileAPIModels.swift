@@ -259,6 +259,9 @@ public struct TrailSummary: Codable, Hashable, Identifiable, Sendable {
     public let summaryPolyline: String?
     public let startLat: Double?
     public let startLng: Double?
+    /// Direction awareness (2026-08-29): where the trail ENDS.
+    public let endLat: Double?
+    public let endLng: Double?
     public let runCount: Int
     public let lastRun: TrailLastRunPayload?
     /// Round 3 §05: present only on near-ranked queries — "94% match".

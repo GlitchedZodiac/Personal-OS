@@ -12,7 +12,8 @@ import { GPS_WORKOUT_TYPES } from "@/lib/activities";
 import { volumeTrendPct } from "@/lib/format-training";
 import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
-import { buildMovementHistories, tonnageByMovement } from "@/lib/strength-history";
+import { tonnageByMovement } from "@/lib/strength-history";
+import { getMovementHistoriesCached } from "@/lib/strength-history-db";
 
 const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -265,13 +266,7 @@ export async function GET(request: NextRequest) {
       achievedAt: r.achievedAt.toISOString(),
       workoutLogId: r.workoutLogId,
     }));
-    const movementTonnage = tonnageByMovement(
-      buildMovementHistories(
-        workouts.map((w) => ({ id: w.id, startedAt: w.startedAt, exercises: w.exercises }))
-      ),
-      8,
-      6
-    );
+    const movementTonnage = tonnageByMovement(await getMovementHistoriesCached(), 8, 6);
 
     return NextResponse.json({
       date: todayStr,

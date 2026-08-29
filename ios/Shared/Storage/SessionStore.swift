@@ -84,14 +84,26 @@ public actor KeychainSessionStore: SessionStore {
         return q
     }
 
+    /// In-memory copy (2026-08-29): the Keychain was hit — SecItemCopy +
+    /// JSON decode — on EVERY authorized request (×7 during launch alone).
+    /// One process-lifetime read is enough; save/clear keep it honest.
+    private var cached: StoredSession?
+    private var cacheLoaded = false
+
     public func load() -> StoredSession? {
-        if let session = copyItem(group: accessGroup) { return session }
+        if cacheLoaded { return cached }
+        cacheLoaded = true
+        if let session = copyItem(group: accessGroup) {
+            cached = session
+            return session
+        }
         // Migration: sessions saved before keychain sharing live in the
         // app's default group — invisible to the widget. Move them over so
         // Michael's existing pairing survives without a re-pair.
         guard accessGroup != nil, let legacy = copyItem(group: nil) else { return nil }
         SecItemDelete(query(group: nil) as CFDictionary)
         try? save(legacy)
+        cached = legacy
         return legacy
     }
 
@@ -108,6 +120,8 @@ public actor KeychainSessionStore: SessionStore {
 
     public func save(_ session: StoredSession) throws {
         let data = try PitayaJSON.encoder().encode(session)
+        cached = session
+        cacheLoaded = true
 
         var update = query(group: accessGroup)
         let attributes: [String: Any] = [kSecValueData as String: data]
@@ -127,6 +141,8 @@ public actor KeychainSessionStore: SessionStore {
     }
 
     public func clear() {
+        cached = nil
+        cacheLoaded = true
         // No group restriction: wipes shared and legacy copies alike.
         SecItemDelete(query(group: nil) as CFDictionary)
         if accessGroup != nil {

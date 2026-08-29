@@ -10,6 +10,11 @@ export type TrailNear = {
   lat: number;
   lng: number;
   distanceMeters?: number | null;
+  /// Direction awareness (2026-08-29): where the candidate track ENDED.
+  /// A descent starts at the ascent's trailhead-adjacent summit lot and
+  /// still passed the old start-only check — the end point disambiguates.
+  endLat?: number | null;
+  endLng?: number | null;
 };
 
 export type TrailLastRun = {
@@ -31,6 +36,8 @@ export type TrailPayload = {
   summaryPolyline: string | null;
   startLat: number | null;
   startLng: number | null;
+  endLat: number | null;
+  endLng: number | null;
   runCount: number;
   lastRun: TrailLastRun | null;
   /// Round 3 §05 — present only on near-ranked queries ("94% match").
@@ -65,12 +72,17 @@ export function haversineMeters(
 }
 
 /// Suggestion score for "save this track?": a trail matches when it STARTS
-/// within 300 m; a similar total distance (±20%) strengthens the match.
-/// Null = not a candidate.
+/// within 300 m AND — when both end points are known — ENDS within 300 m of
+/// the trail's end (direction-aware since 2026-08-29: the Tres Cruces
+/// DESCENT began near the ascent trailhead and start-only matching linked
+/// it, poisoning "vs your last run"). A similar total distance (±20%)
+/// strengthens the match. Null = not a candidate.
 export function trailMatchScore(
   trail: {
     startLat: number | null;
     startLng: number | null;
+    endLat?: number | null;
+    endLng?: number | null;
     distanceMeters: number | null;
   },
   near: TrailNear
@@ -78,6 +90,15 @@ export function trailMatchScore(
   if (trail.startLat == null || trail.startLng == null) return null;
   const startGap = haversineMeters(trail.startLat, trail.startLng, near.lat, near.lng);
   if (startGap > 300) return null;
+  if (
+    trail.endLat != null &&
+    trail.endLng != null &&
+    near.endLat != null &&
+    near.endLng != null
+  ) {
+    const endGap = haversineMeters(trail.endLat, trail.endLng, near.endLat, near.endLng);
+    if (endGap > 300) return null;
+  }
   let score = 1 - startGap / 300;
   if (near.distanceMeters && trail.distanceMeters) {
     const rel =
@@ -85,6 +106,28 @@ export function trailMatchScore(
     if (rel <= 0.2) score += 1 - rel;
   }
   return score;
+}
+
+/// Does a linked run actually traverse the trail's direction? Used to keep
+/// direction-mismatched links (descents, reversed out-and-backs) out of
+/// lastRun/prevRun comparisons without unlinking history.
+export function runMatchesTrailDirection(
+  trail: { endLat?: number | null; endLng?: number | null },
+  runEnd: { lat: number; lng: number } | null
+): boolean {
+  if (trail.endLat == null || trail.endLng == null || runEnd == null) return true;
+  return haversineMeters(trail.endLat, trail.endLng, runEnd.lat, runEnd.lng) <= 300;
+}
+
+/// Cheap column-only direction proxy for comparison surfaces that don't
+/// load routes: a climb trail's genuine run carries most of its gain; a
+/// descent (positive-only barometric accumulation) carries almost none.
+export function runProfileMatchesTrail(
+  trailGainM: number | null | undefined,
+  runGainM: number | null | undefined
+): boolean {
+  if (trailGainM == null || trailGainM < 100) return true;
+  return (runGainM ?? 0) >= trailGainM * 0.25;
 }
 
 type StoredRoute = {
@@ -111,12 +154,13 @@ export async function listTrails(near?: TrailNear): Promise<TrailPayload[]> {
     }),
   ]);
 
+  const gainById = new Map(trails.map((t) => [t.id, t.elevationGainM]));
   const runCount = new Map<string, number>();
   const lastRun = new Map<string, TrailLastRun>();
   for (const w of linked) {
     if (!w.trailId) continue;
     runCount.set(w.trailId, (runCount.get(w.trailId) ?? 0) + 1);
-    if (!lastRun.has(w.trailId)) {
+    if (!lastRun.has(w.trailId) && runProfileMatchesTrail(gainById.get(w.trailId), w.elevationGainM)) {
       lastRun.set(w.trailId, {
         workoutId: w.id,
         workoutExternalId: w.externalId,
@@ -138,6 +182,8 @@ export async function listTrails(near?: TrailNear): Promise<TrailPayload[]> {
     summaryPolyline: t.summaryPolyline,
     startLat: t.startLat,
     startLng: t.startLng,
+    endLat: t.endLat,
+    endLng: t.endLng,
     runCount: runCount.get(t.id) ?? 0,
     lastRun: lastRun.get(t.id) ?? null,
     matchPct: null,
@@ -212,9 +258,11 @@ export async function createOrLinkTrail(input: {
     trail = all.find((t) => trailNameMatches(t, name)) ?? null;
     if (!trail) {
       const route = (workout?.routeData ?? null) as StoredRoute;
-      const first = route?.points?.find(
-        (p) => typeof p.lat === "number" && typeof p.lng === "number"
-      );
+      const valid = (p: { lat?: number; lng?: number }) =>
+        typeof p.lat === "number" && typeof p.lng === "number";
+      const first = route?.points?.find(valid);
+      // Direction awareness: the founding run's END becomes the trail's end.
+      const last = route?.points ? [...route.points].reverse().find(valid) : undefined;
       const createdTrail = await prisma.trail.create({
         data: {
           name,
@@ -223,6 +271,8 @@ export async function createOrLinkTrail(input: {
           summaryPolyline: route?.summaryPolyline ?? null,
           startLat: first?.lat ?? null,
           startLng: first?.lng ?? null,
+          endLat: last?.lat ?? null,
+          endLng: last?.lng ?? null,
         },
         select: { id: true, name: true },
       });

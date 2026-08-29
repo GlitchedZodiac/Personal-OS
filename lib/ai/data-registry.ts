@@ -75,7 +75,8 @@ export const REGISTRY: readonly DatasetSpec[] = [
   {
     key: "recent_workouts",
     kind: "curated",
-    summary: "Recent workouts with ids, exercises, routine-run metadata.",
+    summary:
+      "Recent workouts: ids, exercises, distance/elevation/HR/kcal, pack, GPS analytics (moving, pace, grade-adjusted, climb/descent, altitude), effort, HRR, cadence, provenance.",
   },
   {
     key: "weight_trend",
@@ -136,12 +137,14 @@ export const REGISTRY: readonly DatasetSpec[] = [
   {
     key: "daily_health",
     kind: "table",
-    summary: "Apple Health days: steps, sleep, resting HR, HRV, energy.",
+    summary:
+      "Apple Health days: steps, sleep, resting HR, HRV, respiratory, wrist temp, VO2Max, SpO2.",
     model: "dailyHealthSnapshot",
     fields: [
       "id", "localDate", "timeZone", "steps", "restingHeartRateBpm",
       "activeEnergyKcal", "walkingRunningDistanceMeters", "sleepMinutes",
-      "sleepDeepMinutes", "sleepRemMinutes", "hrvMs", "source",
+      "sleepDeepMinutes", "sleepRemMinutes", "hrvMs",
+      "respiratoryRateBrpm", "wristTempC", "vo2Max", "spo2Pct", "source",
     ],
     orderBy: { localDate: "desc" },
   },

@@ -317,6 +317,10 @@ public final class AppModel: ObservableObject {
             ExerciseCatalog.setCustom(cached)
         }
         zones = ZonesCache.load()
+        // 2026-08-29: home paints from last-good lists instantly; the
+        // parallel refresh settles the truth.
+        if let cached = SequencesCache.load() { sequences = cached }
+        if let cached = TrailsCache.load() { trails = cached }
         AppModel.shared = self
     }
 
@@ -398,26 +402,37 @@ public final class AppModel: ObservableObject {
             // Offline is fine — cached baselines stand.
         }
 
-        if let served = try? await api.fetchZones() {
+        // The five remaining fetches are independent — PARALLEL since
+        // 2026-08-29 (they ran serially: six round trips of dead time on
+        // every launch, pairing, and summary dismissal).
+        async let zonesTask = api.fetchZones()
+        async let sequencesTask = api.fetchSequences()
+        async let trailsTask = api.fetchTrails()
+        async let exercisesTask = api.fetchExercises()
+        async let workoutsTask = api.fetchWorkouts(limit: 50)
+
+        if let served = try? await zonesTask {
             zones = served.zones
             ZonesCache.save(served.zones)
         }
 
-        if let list = try? await api.fetchSequences() {
+        if let list = try? await sequencesTask {
             sequences = list.sequences
+            SequencesCache.save(list.sequences)
             #if DEBUG
             sequences.append(contentsOf: debugInjected)
             #endif
         }
 
         // §05: saved trails for the Hike submenu + save-track suggestions.
-        if let list = try? await api.fetchTrails() {
+        if let list = try? await trailsTask {
             trails = list.trails
+            TrailsCache.save(list.trails)
         }
 
         // AI-created custom exercises → merged into the catalog/normalizer,
         // cached for offline cold-starts.
-        if let list = try? await api.fetchExercises() {
+        if let list = try? await exercisesTask {
             let defs = list.exercises.map { row in
                 ExerciseDef(
                     id: row.id,
@@ -431,7 +446,7 @@ public final class AppModel: ObservableObject {
         }
 
         do {
-            let list = try await api.fetchWorkouts(limit: 50)
+            let list = try await workoutsTask
             recentRows = list.entries
             historyCount = list.entries.count
             lastKettlebell = list.entries.first {
@@ -771,6 +786,30 @@ public final class AppModel: ObservableObject {
         // live recorder (it was kettlebell-only) — the post-save HRR screen
         // rides it, and the sensors freeze at End either way.
         let totals = await beginRecoveryOrFinish()
+
+        // Phantom guard (2026-08-29, his call: auto-discard silently): an
+        // accidental start — under 4 minutes with nothing logged and no real
+        // ground covered — never reaches the summary and never syncs. Six
+        // 1-minute stubs were polluting his session counts.
+        let elapsed = totals?.durationSeconds ?? recorder.elapsed
+        let covered = totals?.distanceMeters ?? 0
+        // Smokes are exempt via their existing marker — a 65 s scripted walk
+        // must still reach save.
+        if elapsed < 240, loggedSets.isEmpty, covered < 150,
+           externalSourceOverride == nil {
+            recoveryTask?.cancel()
+            recoveryTask = nil
+            Task { await recorder.abortRecoveryIfNeeded() }
+            #if DEBUG
+            print("PITAYA-SMOKE: phantom auto-discarded \(Int(elapsed))s \(kind.rawValue)")
+            #endif
+            Haptics.minor(.click)
+            resetLiveState()
+            clearSummaryExtras()
+            phase = .home
+            return
+        }
+
         prepareSummary(
             kind: kind,
             totals: totals,
@@ -1020,7 +1059,11 @@ public final class AppModel: ObservableObject {
                     emomRound = round
                     markActivity()
                 }
-                emomSecondsLeft = 60 - (Int(elapsed) % 60)
+                // 2026-08-29: only publish when the displayed second actually
+                // changes — the 250 ms loop was invalidating the whole view
+                // tree at 4 Hz for a 1 Hz value.
+                let secondsLeft = 60 - (Int(elapsed) % 60)
+                if secondsLeft != emomSecondsLeft { emomSecondsLeft = secondsLeft }
             }
 
             try? await Task.sleep(nanoseconds: 250_000_000)
@@ -1187,10 +1230,19 @@ public final class AppModel: ObservableObject {
         let zoneBreakdown: WorkoutZoneBreakdown? = isFreestyle
             ? zones.flatMap { StreamMath.timeInZones(hr: rawHR, time: rawTime, zones: $0) }
             : nil
-        let hrStream = isFreestyle ? StreamMath.downsample(rawHR) : rawHR
-        let timeStream = isFreestyle ? StreamMath.downsample(rawTime) : rawTime
+        // 2026-08-29: non-freestyle used to ship RAW second-by-second
+        // arrays (~3×3600 ints for an hour) that the server immediately
+        // reduced to ≤120 — ≤600 keeps full analytic headroom at a sixth
+        // of the payload.
+        let hrStream = isFreestyle
+            ? StreamMath.downsample(rawHR)
+            : StreamMath.downsample(rawHR, limit: 600)
+        let timeStream = isFreestyle
+            ? StreamMath.downsample(rawTime)
+            : StreamMath.downsample(rawTime, limit: 600)
         let altitudeStream = isFreestyle
-            ? StreamMath.downsample(rawAltitude) : rawAltitude
+            ? StreamMath.downsample(rawAltitude)
+            : StreamMath.downsample(rawAltitude, limit: 600)
 
         freestyleZoneSeconds = zoneBreakdown?.seconds
 
@@ -1329,6 +1381,7 @@ public final class AppModel: ObservableObject {
             trailSuggestions = []
             return
         }
+        let end = track.last
         // Rank the cached list locally (same rule the server uses: trailhead
         // within ~300 m, similar length strengthens) — max 2, best first.
         let distance = item.distanceMeters
@@ -1340,6 +1393,15 @@ public final class AppModel: ObservableObject {
                         lat1: lat, lng1: lng, lat2: start.lat, lng2: start.lng
                     )
                     guard gap <= 300 else { return nil }
+                    // Direction awareness (2026-08-29): when both ends are
+                    // known, a track that ENDS far from the trail's end is
+                    // a different traversal — the descent bug.
+                    if let tEndLat = trail.endLat, let tEndLng = trail.endLng, let end {
+                        let endGap = Self.haversineMeters(
+                            lat1: tEndLat, lng1: tEndLng, lat2: end.lat, lng2: end.lng
+                        )
+                        guard endGap <= 300 else { return nil }
+                    }
                     var score = 1 - gap / 300
                     if let mine = distance, let theirs = trail.distanceMeters, theirs > 0 {
                         let rel = abs(mine - theirs) / theirs
@@ -1360,7 +1422,8 @@ public final class AppModel: ObservableObject {
             id: trail.id, name: trail.name, aliases: trail.aliases,
             distanceMeters: trail.distanceMeters, elevationGainM: trail.elevationGainM,
             summaryPolyline: trail.summaryPolyline, startLat: trail.startLat,
-            startLng: trail.startLng, runCount: trail.runCount,
+            startLng: trail.startLng, endLat: trail.endLat, endLng: trail.endLng,
+            runCount: trail.runCount,
             lastRun: trail.lastRun, matchPct: max(50, matchPct)
         )
     }
@@ -1508,7 +1571,25 @@ public final class AppModel: ObservableObject {
         activeSequence = nil
         clearSummaryExtras()
         phase = .home
-        Task { await refreshHistory() }
+        // 2026-08-29: leaving the summary used to re-run the whole
+        // six-fetch refresh — only workouts + PRs can have changed here.
+        Task { await refreshWorkoutsAndPRs() }
+    }
+
+    /// The targeted post-save refresh: history rows + PR baselines only.
+    private func refreshWorkoutsAndPRs() async {
+        async let prsTask = api.fetchPRs()
+        async let workoutsTask = api.fetchWorkouts(limit: 50)
+        if let prList = try? await prsTask {
+            baselines = PRBaselines(records: prList.records)
+            prExerciseCount = Set(prList.records.map(\.exercise)).count
+            await prCache?.save(baselines.best)
+        }
+        if let list = try? await workoutsTask {
+            recentRows = list.entries
+            historyCount = list.entries.count
+        }
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func clearSummaryExtras() {

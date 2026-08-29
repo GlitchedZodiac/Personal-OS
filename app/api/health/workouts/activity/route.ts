@@ -3,13 +3,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg, type RawExercise } from "@/lib/prs";
 import { activityTypeOf, routeDataAllowed, type RunMetrics } from "@/lib/activities";
-import { DEFAULT_HR_ZONE_TOPS } from "@/lib/zones";
+import { getZoneTops } from "@/lib/server-zones";
 import type { RouteAnalytics } from "@/lib/route-analytics";
-import {
-  buildMovementHistories,
-  movementContext,
-  timeUnderLoadSeconds,
-} from "@/lib/strength-history";
+import { movementContext, timeUnderLoadSeconds } from "@/lib/strength-history";
+import { getMovementHistoriesCached } from "@/lib/strength-history-db";
+import { runProfileMatchesTrail } from "@/lib/trails";
 
 // GET ?id= — everything the activity detail screen shows (design 2026-08-11
 // rev): stats, per-movement segments with time-vs-last-run comparison,
@@ -58,19 +56,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Per-movement context (2026-08-29, the strength round): "best 32 ·
-    // last time 24" per row, from the whole logged history. Strength rows
-    // only — one bounded query, folded in memory.
+    // last time 24" per row. Speed round: the 400-row per-view fetch became
+    // a shared 60 s memo (lib/strength-history-db).
     const histories =
-      type !== "out" && exercises.length > 0
-        ? buildMovementHistories(
-            await prisma.workoutLog.findMany({
-              where: { exercises: { not: Prisma.DbNull } },
-              orderBy: { startedAt: "desc" },
-              take: 400,
-              select: { id: true, startedAt: true, exercises: true },
-            })
-          )
-        : null;
+      type !== "out" && exercises.length > 0 ? await getMovementHistoriesCached() : null;
     const startedIso = w.startedAt.toISOString();
 
     const segments = exercises.map((e, i) => {
@@ -109,7 +98,7 @@ export async function GET(request: NextRequest) {
           const [t, runs] = await Promise.all([
             prisma.trail.findUnique({
               where: { id: w.trailId! },
-              select: { id: true, name: true },
+              select: { id: true, name: true, elevationGainM: true },
             }),
             prisma.workoutLog.findMany({
               where: { trailId: w.trailId! },
@@ -147,7 +136,14 @@ export async function GET(request: NextRequest) {
                   : null,
             };
           };
-          const prevRow = runs.find((r) => r.id !== w.id && r.startedAt < w.startedAt);
+          // Direction-aware (2026-08-29): a descent linked to a climb trail
+          // must not become the comparison baseline — the audit's +13.5 m
+          // "last run" on a +390 m trail.
+          const sameDirection = (r: (typeof runs)[number]) =>
+            runProfileMatchesTrail(t.elevationGainM, r.elevationGainM);
+          const prevRow = runs.find(
+            (r) => r.id !== w.id && r.startedAt < w.startedAt && sameDirection(r)
+          );
           return {
             id: t.id,
             name: t.name,
@@ -270,7 +266,7 @@ export async function GET(request: NextRequest) {
       hrStream: Array.isArray(m.hrStream) ? m.hrStream : null,
       zonePct: m.timeInZones?.pct ?? null,
       zoneSeconds: m.timeInZones?.seconds ?? null,
-      zoneTops: [...DEFAULT_HR_ZONE_TOPS],
+      zoneTops: await getZoneTops(),
       altitudeStream: Array.isArray(m.altitudeStream) ? m.altitudeStream : null,
       altitudeSeries,
       altitudeAbsolute,

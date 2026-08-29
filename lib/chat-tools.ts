@@ -111,7 +111,23 @@ export async function executeGetHealthData(
             roundsCompleted?: number;
             stepSeconds?: number[];
             emom?: { roundsCompleted?: number; totalRounds?: number };
+            hrrDelta?: number;
+            hrrSeconds?: number;
+            avgCadenceSpm?: number;
+            routeAnalytics?: {
+              movingSeconds?: number;
+              stoppedSeconds?: number;
+              avgMovingPaceSecPerKm?: number | null;
+              gradeAdjustedPaceSecPerKm?: number | null;
+              totalElevGainM?: number;
+              totalElevLossM?: number;
+              minAltM?: number | null;
+              maxAltM?: number | null;
+              maxSpeedMps?: number | null;
+              breaks?: unknown[];
+            };
           };
+          const ra = m.routeAnalytics;
           return {
             id: w.id,
             startedAt: w.startedAt.toISOString(),
@@ -120,10 +136,43 @@ export async function executeGetHealthData(
             durationMinutes: w.durationMinutes,
             volumeKg: sessionVolumeKg(w.exercises),
             exercises: w.exercises,
+            // 2026-08-29 (the audit's blindness fixed): the physical facts
+            // and provenance the external auditor couldn't see.
+            distanceMeters: w.distanceMeters,
+            elevationGainM: w.elevationGainM,
+            avgHeartRateBpm: w.avgHeartRateBpm,
+            maxHeartRateBpm: w.maxHeartRateBpm,
+            caloriesBurned: w.caloriesBurned,
+            stepCount: w.stepCount,
+            packKg: w.packKg,
+            trailId: w.trailId,
+            source: w.externalSource ?? w.source,
+            createdAt: w.createdAt.toISOString(),
             // zone analytics when an HR stream existed (Strava/watch)
             zonePct: m.timeInZones?.pct,
             loadScore: m.loadScore,
             relativeEffort: m.relativeEffort,
+            hrr:
+              typeof m.hrrDelta === "number"
+                ? { delta: m.hrrDelta, seconds: m.hrrSeconds ?? 60 }
+                : undefined,
+            avgCadenceSpm: m.avgCadenceSpm,
+            // GPS analytics summary (moving/stopped, reconciled + grade-
+            // adjusted pace, climb/descent, absolute altitude, top speed)
+            routeAnalytics: ra
+              ? {
+                  movingSeconds: ra.movingSeconds,
+                  stoppedSeconds: ra.stoppedSeconds,
+                  avgMovingPaceSecPerKm: ra.avgMovingPaceSecPerKm,
+                  gradeAdjustedPaceSecPerKm: ra.gradeAdjustedPaceSecPerKm,
+                  totalElevGainM: ra.totalElevGainM,
+                  totalElevLossM: ra.totalElevLossM,
+                  minAltM: ra.minAltM,
+                  maxAltM: ra.maxAltM,
+                  maxSpeedMps: ra.maxSpeedMps,
+                  breakCount: ra.breaks?.length,
+                }
+              : undefined,
             // routine-run metadata (watch circuit/EMOM runs; web runner)
             sequenceId: m.sequenceId,
             sequenceName: m.sequenceName,

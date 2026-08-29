@@ -131,6 +131,35 @@ export interface StravaStreams {
   heartrate?: number[];
   time?: number[];
   altitude?: number[];
+  /// [lat, lng] pairs — present when the streams call asked for latlng.
+  latlng?: [number, number][];
+}
+
+/// Reconstruct the wrist's routeData.points shape from Strava streams —
+/// the key that lets the EXISTING route analyzer (moving/stopped, breaks,
+/// grade-adjusted pace, VAM, absolute altitude) run on historical Strava
+/// rows. Downsampled to ~1 point / 5 s like the wrist.
+export function buildRoutePoints(streams: StravaStreams): Array<{
+  lat: number;
+  lng: number;
+  alt: number | null;
+  t: number;
+}> {
+  const latlng = streams.latlng ?? [];
+  const time = streams.time ?? [];
+  if (latlng.length < 2 || latlng.length !== time.length) return [];
+  const points: Array<{ lat: number; lng: number; alt: number | null; t: number }> = [];
+  let lastT = -5;
+  for (let i = 0; i < latlng.length; i++) {
+    const t = time[i];
+    if (t - lastT < 5 && i !== latlng.length - 1) continue;
+    lastT = t;
+    const [lat, lng] = latlng[i];
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    const alt = streams.altitude?.[i];
+    points.push({ lat, lng, alt: Number.isFinite(alt ?? NaN) ? (alt as number) : null, t });
+  }
+  return points;
 }
 
 // Full-resolution streams drive the math; downsampled copies get stored.
@@ -158,14 +187,18 @@ export function buildStreamMetrics(
 }
 
 export async function fetchActivityStreams(
-  activityId: number | string
+  activityId: number | string,
+  accessTokenOverride?: string
 ): Promise<StravaStreams | null> {
-  const accessToken = await getValidAccessToken();
+  // 2026-08-29: callers doing a batch pass one token instead of a DB read
+  // per activity. latlng joins the keys — it reconstructs routeData.points
+  // and unlocks the route analyzer for historical Strava rows.
+  const accessToken = accessTokenOverride ?? (await getValidAccessToken());
   if (!accessToken) return null;
 
   try {
     const res = await fetch(
-      `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=heartrate,time,altitude&key_by_type=true`,
+      `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=heartrate,time,altitude,latlng,velocity_smooth,grade_smooth,cadence&key_by_type=true`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     if (!res.ok) return null;
@@ -174,6 +207,7 @@ export async function fetchActivityStreams(
       heartrate: data.heartrate?.data,
       time: data.time?.data,
       altitude: data.altitude?.data,
+      latlng: data.latlng?.data,
     };
   } catch (err) {
     console.error("Strava streams fetch error:", err);

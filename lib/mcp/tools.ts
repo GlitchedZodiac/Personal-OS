@@ -21,6 +21,7 @@ import { executeAppData, type AppDataArgs } from "@/lib/ai/data-access";
 import { REGISTRY } from "@/lib/ai/data-registry";
 import { routeDataAllowed } from "@/lib/activities";
 import { matchUsual } from "@/lib/food-match";
+import { findRecentDuplicate } from "@/lib/workout-dedupe";
 import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded, mintUnknownExercises } from "@/lib/user-exercises";
 import { validateSequence } from "@/lib/sequences";
@@ -429,11 +430,25 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
             })
             .filter((e): e is NonNullable<typeof e> => e !== null)
         : undefined;
+      // Double-submit guard (2026-08-29): a transport retry or a re-emitted
+      // tool call must not write a twin row.
+      const startedAt = isoDate(args.startedAt) ?? new Date();
+      const durationMinutes = Math.max(0, num(args.durationMinutes) ?? 0);
+      const dupe = await findRecentDuplicate({
+        startedAt,
+        workoutType,
+        durationMinutes,
+        description: str(args.description) || null,
+        exercises,
+      });
+      if (dupe) {
+        return { workout: dupe, newPRs: [], deduped: true };
+      }
       const entry = await prisma.workoutLog.create({
         data: {
-          startedAt: isoDate(args.startedAt) ?? new Date(),
+          startedAt,
           workoutType,
-          durationMinutes: Math.max(0, num(args.durationMinutes) ?? 0),
+          durationMinutes,
           description: str(args.description) || null,
           caloriesBurned: posNum(args.caloriesBurned),
           distanceMeters: routeDataAllowed(workoutType) ? posNum(args.distanceMeters) : null,

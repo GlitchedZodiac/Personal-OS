@@ -4,6 +4,7 @@ import { routeDataAllowed } from "@/lib/activities";
 import { markPlannedDone } from "@/lib/planner";
 import { prisma } from "@/lib/prisma";
 import { detectAndRecordPRs } from "@/lib/prs";
+import { findRecentDuplicate } from "@/lib/workout-dedupe";
 import { getUserTimeZone } from "@/lib/server-timezone";
 
 function toNullableNumber(value: unknown) {
@@ -93,10 +94,24 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
+    const data = buildWorkoutMutation(body);
 
-    const entry = await prisma.workoutLog.create({
-      data: buildWorkoutMutation(body),
-    });
+    // Double-submit guard (2026-08-29): a Confirm re-tap after a committed-
+    // but-unacknowledged POST used to write a twin row.
+    if (!data.externalId) {
+      const existing = await findRecentDuplicate({
+        startedAt: data.startedAt,
+        workoutType: data.workoutType,
+        durationMinutes: data.durationMinutes,
+        description: data.description,
+        exercises: data.exercises,
+      });
+      if (existing) {
+        return NextResponse.json({ ...existing, newPRs: [], deduped: true });
+      }
+    }
+
+    const entry = await prisma.workoutLog.create({ data });
 
     // PR detection — metering strength progress is why the app exists.
     // Never let it break workout logging.

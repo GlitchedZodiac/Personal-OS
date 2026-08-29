@@ -128,6 +128,9 @@ model PlannedWorkout {
 // A named piece of ground he covers repeatedly — "el Cerro de las Tres
 // Cruces". Workouts link to it so a run can be compared with the last run of
 // the SAME trail. Reference stats seed from the first linked workout.
+// endLat/endLng added 2026-08-29: matching was direction-blind — an
+// out-and-back start put a DESCENT within 300 m of the trailhead and it
+// linked as a run of the ascent (the +13.5 m lastRun on a +390 m trail).
 model Trail {
   id              String       @id @default(uuid())
   name            String
@@ -137,6 +140,8 @@ model Trail {
   summaryPolyline String?
   startLat        Float?
   startLng        Float?
+  endLat          Float?
+  endLng          Float?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   workouts        WorkoutLog[]
@@ -332,6 +337,11 @@ model DailyHealthSnapshot {
   sleepDeepMinutes             Int?
   sleepRemMinutes              Int?
   hrvMs                        Float? // heartRateVariabilitySDNN, daily average
+  // Zero-effort extras (2026-08-29) — the watch measures these on its own.
+  respiratoryRateBrpm          Float?
+  wristTempC                   Float?
+  vo2Max                       Float?
+  spo2Pct                      Float?
   source                       String   @default("apple_health")
   rawData                      Json?
   createdAt                    DateTime @default(now())
@@ -1100,6 +1110,10 @@ model PersonalRecord {
   updatedAt     DateTime @updatedAt
 
   @@unique([exercise, kind])
+  // 2026-08-29 (speed round): today/train/activity filter and sort on
+  // these; both were sequential scans.
+  @@index([kind, achievedAt])
+  @@index([workoutLogId])
   @@map("personal_records")
 }
 
@@ -1144,6 +1158,7 @@ model Sequence {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  @@index([isArchived, updatedAt])
   @@map("sequences")
 }
 

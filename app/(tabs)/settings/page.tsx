@@ -342,6 +342,50 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* HR zones as configuration (2026-08-29): the bands every zone
+          number is computed against — no longer a hidden constant. */}
+      <div className="mt-3 rounded-[16px] border border-border bg-card p-4">
+        <p className="text-[13px] font-semibold text-foreground">Heart-rate zones</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          upper bound of Z1–Z4 (bpm); Z5 is everything above. The watch and
+          every zone chart read these.
+        </p>
+        <div className="mt-3 flex items-center gap-2">
+          {settings.hrZoneTops.map((top, i) => (
+            <div key={i} className="flex-1">
+              <p className="text-[9.5px] font-semibold tracking-[0.1em] text-muted-foreground">
+                Z{i + 1} ≤
+              </p>
+              <Input
+                type="number"
+                value={top}
+                onChange={(e) => {
+                  const next = [...settings.hrZoneTops] as typeof settings.hrZoneTops;
+                  next[i] = Number(e.target.value) || 0;
+                  setSettings((prev) => ({ ...prev, hrZoneTops: next }));
+                }}
+                onBlur={() => {
+                  const t = settings.hrZoneTops;
+                  const valid =
+                    t.every((v) => v > 40 && v < 230) &&
+                    t.every((v, j) => j === 0 || v > t[j - 1]);
+                  if (valid) {
+                    update({ hrZoneTops: t });
+                  } else {
+                    toast.error("Zones must ascend, between 40 and 230 bpm");
+                  }
+                }}
+                className="mt-1 h-9 text-center text-[13px] tabular-nums"
+              />
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-[10px] leading-[1.5] text-muted-foreground">
+          Past workouts keep the zone splits computed when they synced;
+          changing bands only affects new sessions.
+        </p>
+      </div>
+
       {/* APP */}
       <p className="micro-label mb-2 mt-[18px]">App</p>
       <div className="grid gap-px overflow-hidden rounded-[14px] border border-border bg-border">
