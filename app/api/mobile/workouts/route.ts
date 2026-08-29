@@ -15,9 +15,48 @@ export async function GET(request: NextRequest) {
       200
     );
 
-    const entries = await prisma.workoutLog.findMany({
+    // Slim payload (2026-08-29): this used to return WHOLE rows — routeData
+    // points and full metricsData streams for 50 workouts — of which the
+    // wrist decodes three metricsData keys. Selecting the decoded columns
+    // and trimming metricsData to those keys cuts the launch payload by an
+    // order of magnitude. The watch's decoder was always lenient.
+    const rows = await prisma.workoutLog.findMany({
       orderBy: { startedAt: "desc" },
       take: limit,
+      select: {
+        id: true,
+        startedAt: true,
+        endedAt: true,
+        durationMinutes: true,
+        workoutType: true,
+        description: true,
+        caloriesBurned: true,
+        distanceMeters: true,
+        avgHeartRateBpm: true,
+        maxHeartRateBpm: true,
+        externalSource: true,
+        externalId: true,
+        source: true,
+        exercises: true,
+        metricsData: true,
+      },
+    });
+    const entries = rows.map((row) => {
+      const m = (row.metricsData ?? null) as {
+        sequenceId?: unknown;
+        sequenceName?: unknown;
+        timeInZones?: { seconds?: unknown };
+      } | null;
+      return {
+        ...row,
+        metricsData: m
+          ? {
+              sequenceId: m.sequenceId,
+              sequenceName: m.sequenceName,
+              timeInZones: m.timeInZones ? { seconds: m.timeInZones.seconds } : undefined,
+            }
+          : null,
+      };
     });
 
     return NextResponse.json({

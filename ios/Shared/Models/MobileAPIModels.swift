@@ -259,6 +259,9 @@ public struct TrailSummary: Codable, Hashable, Identifiable, Sendable {
     public let summaryPolyline: String?
     public let startLat: Double?
     public let startLng: Double?
+    /// Direction awareness (2026-08-29): where the trail ENDS.
+    public let endLat: Double?
+    public let endLng: Double?
     public let runCount: Int
     public let lastRun: TrailLastRunPayload?
     /// Round 3 §05: present only on near-ranked queries — "94% match".
@@ -549,6 +552,9 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     /// Round 3 §07 (additive): the 60 s HR-recovery drop and its window.
     public let hrrDelta: Int?
     public let hrrSeconds: Int?
+    /// 2026-08-29 (additive): session-mean step cadence from CMPedometer —
+    /// collected live since Round 3, persisted now (Strava parity).
+    public let avgCadenceSpm: Int?
 
     public init(
         sequenceId: String? = nil, sequenceName: String? = nil,
@@ -559,7 +565,8 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
         elevationGainM: Double? = nil,
         splits: [Int]? = nil,
         hrrDelta: Int? = nil,
-        hrrSeconds: Int? = nil
+        hrrSeconds: Int? = nil,
+        avgCadenceSpm: Int? = nil
     ) {
         self.sequenceId = sequenceId
         self.sequenceName = sequenceName
@@ -573,6 +580,7 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
         self.splits = splits
         self.hrrDelta = hrrDelta
         self.hrrSeconds = hrrSeconds
+        self.avgCadenceSpm = avgCadenceSpm
     }
 
     public var isEmpty: Bool {
@@ -589,7 +597,8 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
             hrStream: hrStream, timeStream: timeStream,
             altitudeStream: altitudeStream, timeInZones: timeInZones,
             elevationGainM: elevationGainM, splits: splits,
-            hrrDelta: delta, hrrSeconds: seconds
+            hrrDelta: delta, hrrSeconds: seconds,
+            avgCadenceSpm: avgCadenceSpm
         )
     }
 }

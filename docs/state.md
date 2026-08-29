@@ -5,10 +5,87 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-29c (MCP OAUTH — the claude.ai dialog has no
-bearer field; the server now speaks the real MCP auth story and the
-connect is URL-only + a PIN approve. Same day: the connector itself and
-the v4 round below.)
+**Last updated:** 2026-08-29d (V5 — PITAYA REPLACES STRAVA: native parity
+from the watch's own collection, the audit's data-quality bugs root-fixed
+with approved repairs run, sleep/HRV ingestion fixed + four new zero-effort
+metrics, and a real speed round on both the wrist and the phone. Earlier
+same day: MCP OAuth, the connector, and the v4 round below.)
+
+---
+
+## 2026-08-29d · v5 — better data, faster app (the audit round)
+
+His MCP connector audited Pitaya against Strava and handed back bugs +
+gaps; his directive: **no features, no effort retaining Strava — replace
+it.** Branch `claude/v5-data-speed`.
+
+**Native Strava parity (from our own collection):** every HR row now
+carries `relativeEffort` (Pitaya's own TRIMP when Strava never supplied
+sufferScore; 75 historical rows stamped) · `routeAnalytics` v3 adds
+derived `velocitySeries`/`gradeSeries` (≤120 pts, signed grade — the
+audit's #1 "streams" ask, zero new collection) · the wrist now persists
+`metricsData.avgCadenceSpm` (session mean, collected live since Round 3)
+· old Strava rows' real moving_time backs the MOVING TIME tile · the
+Settings Strava row says the truth: retired, watch records natively.
+
+**The one-shot that paid off:** the dormant refresh token still worked —
+`backfill-streams` v2 fetched latlng+streams for **all 80 historical
+Strava rows**, reconstructed `routeData.points[]`, and ran the SAME route
+analyzer watch rows get. The Apr 28 and Aug 1 Tres Cruces baselines now
+carry moving time, reconciled+grade-adjusted pace, VAM, breaks, absolute
+1,0xx–1,459 m altitude — and both were direction-verified (start gap
+158 m/13 m, end gap 12 m/7 m) and linked to the trail: **the Aug 27 climb's
+VS YOUR LAST RUN points at Aug 1, with Apr 28 in the run list — one
+algorithm across both systems.** (In-Pitaya moving times differ from
+Strava's own definition — consistent internally, which is what comparison
+needs.) No ongoing Strava dependency: a dead token would have reported
+`tokenDead` and stopped.
+
+**Data-quality (all repairs approved + run, rows printed in-session):**
+2 duplicate pairs deleted (pre-Aug-28 watch race residue with distinct
+minted ids) · 4 empty phantom starts + 1 stray smoke row deleted (the
+Aug 22 stub with logged swings KEPT) · the Tres Cruces descent unlinked ·
+the pending Aug-28 route-leak SQL run (9 routes, 4 distances, 3 literal
+nulls). Guards so none of it recurs: a ±120 s content-signature
+**double-submit guard** on the NULL-externalId paths (web POST + MCP) ·
+**phantom auto-discard** on the wrist (his pick: <4 min, no sets, <150 m
+→ silent discard; smokes exempt; PITAYA_SMOKE_PHANTOM passes both halves)
+· **direction-aware trails** (Trail.endLat/endLng seeded + backfilled,
+end-within-300 m in the matcher and the wrist ranking, profile check in
+lastRun/prevRun).
+
+**Zero-effort collection:** the daily upsert is null-preserving (a
+sleepless daytime sync erased good sleep rows — the audit's "every sleep
+field null" cause #1) · inBed-only nights count as time-in-bed ·
+HRV = overnight-window MEAN (18:00→noon) with daytime fallback · 3
+stranded pre-08-17 HRV days promoted from rawData · four new columns the
+watch measures alone: respiratoryRateBrpm, wristTempC, vo2Max, spo2Pct
+(companion read-types v3 → one re-prompt on his phone). The honest half:
+stage sleep + nightly HRV require wearing the watch to bed.
+
+**Speed:** wrist — the 6-call serial launch chain is parallel;
+sequences/trails have last-good disk caches (instant warm home);
+dismissSummary refreshes only workouts+PRs; all kinds downsample streams
+to ≤600 pre-sync; `/api/mobile/workouts` sheds routeData+streams (the
+wrist reads 3 scalars — ~10× launch payload cut); Keychain reads once per
+process; EffortGraph lost its per-sample identity churn and
+binary-searches its draw window; EMOM publishes 1 Hz not 4; autoPan gates
+before its four O(n) passes. Web — new indexes (PersonalRecord
+kind+achievedAt / workoutLogId, Sequence, and JSONB expression indexes on
+metricsData sequenceId/loadScore); pin-gate memoizes auth-ok 10 min (the
+serial /api/auth hop per navigation is gone); movement histories are one
+bounded strength-only query behind a shared 60 s memo; sw v6 serves
+/_next/static cache-first.
+
+**Registry/MCP widening:** `recent_workouts` now exposes distance,
+elevation, HR, kcal, steps, packKg, trail, provenance, createdAt, HRR,
+cadence, and the routeAnalytics summary — everything the external audit
+couldn't see. **Zones are configuration**: settings-backed `hrZoneTops`
+(defaults = his real bands), editable in Settings, served to the watch;
+history keeps its at-sync splits (recompute = filed follow-up).
+
+Tests 330/330; both Xcode schemes green; prod backfills drained (analytics
+v3: 48 GPS rows; streams v2: 80/80; effort: 75).
 
 ---
 

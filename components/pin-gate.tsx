@@ -23,7 +23,22 @@ export function PinGate({ children }: PinGateProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // 2026-08-29 (speed round): every navigation into the tabs serialized an
+    // /api/auth round trip before ANY page could mount. A 10-minute
+    // sessionStorage memo skips the hop; a real 401 on any API call still
+    // lands the user back here, and the memo self-expires.
+    try {
+      const okUntil = Number(sessionStorage.getItem("pitaya:auth-ok-until"));
+      if (Number.isFinite(okUntil) && okUntil > Date.now()) {
+        setIsAuthenticated(true);
+        setIsChecking(false);
+        return;
+      }
+    } catch {
+      // storage unavailable — fall through to the network check
+    }
     checkAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkAuth = async () => {
@@ -31,6 +46,11 @@ export function PinGate({ children }: PinGateProps) {
       const res = await fetch("/api/auth");
       if (res.ok) {
         setIsAuthenticated(true);
+        try {
+          sessionStorage.setItem("pitaya:auth-ok-until", String(Date.now() + 10 * 60_000));
+        } catch {
+          // best effort
+        }
       } else if (res.status === 503) {
         setPinConfigured(false);
         setError(demoText("APP_PIN is not configured yet", "APP_PIN todavia no esta configurado"));
@@ -56,6 +76,11 @@ export function PinGate({ children }: PinGateProps) {
 
       if (res.ok) {
         setSuccess(true);
+        try {
+          sessionStorage.setItem("pitaya:auth-ok-until", String(Date.now() + 10 * 60_000));
+        } catch {
+          // best effort
+        }
         setTimeout(() => setIsAuthenticated(true), 400);
       } else if (res.status === 429) {
         setError(demoText("Too many attempts. Wait a few minutes.", "Demasiados intentos. Espera unos minutos."));

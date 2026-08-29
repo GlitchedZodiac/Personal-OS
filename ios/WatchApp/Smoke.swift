@@ -127,6 +127,37 @@ enum Smoke {
             return
         }
 
+        // PHANTOM: the auto-discard guard (2026-08-29). A ~10 s accidental
+        // start with nothing logged must vanish (no summary, no sync); the
+        // same start under the smoke marker must still reach the summary
+        // (the exemption that keeps scripted walks alive). Runs with NO
+        // externalSourceOverride on purpose — if the guard regresses, the
+        // fallback discard below keeps prod clean and logs FAIL.
+        if env["PITAYA_SMOKE_PHANTOM"] == "1", model.phase == .home {
+            log("phantom: starting 10s accidental session…")
+            await model.startWorkout(.walk, useRecorder: true)
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            await model.finishWorkout(.walk)
+            if model.phase == .home && model.summary == nil {
+                log("phantom PASS — discarded, no summary, nothing queued")
+            } else {
+                log("phantom FAIL — reached \(String(describing: model.phase)); discarding manually")
+                model.discardWorkout()
+            }
+            // Exemption half: the smoke marker must bypass the guard.
+            model.externalSourceOverride = "watch_smoke"
+            await model.startWorkout(.walk, useRecorder: true)
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            await model.finishWorkout(.walk)
+            if model.summary != nil {
+                log("phantom exemption PASS — smoke session reached summary")
+                model.discardWorkout()
+            } else {
+                log("phantom exemption FAIL — smoke session was discarded")
+            }
+            return
+        }
+
         // DOUBLESAVE: the duplicate-save regression harness. Finish a session,
         // then race two Save taps AND a background drain — the tap guard plus
         // WorkoutSyncFlight must collapse them so the server holds exactly

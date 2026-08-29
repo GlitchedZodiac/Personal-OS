@@ -74,16 +74,29 @@ export async function POST(request: NextRequest) {
       sleepDeepMinutes: int(field("sleepDeepMinutes")),
       sleepRemMinutes: int(field("sleepRemMinutes")),
       hrvMs: num(field("hrvMs")),
+      // Zero-effort extras (2026-08-29) — the watch measures these alone.
+      respiratoryRateBrpm: num(field("respiratoryRateBrpm")),
+      wristTempC: num(field("wristTempC")),
+      vo2Max: num(field("vo2Max")),
+      spo2Pct: num(field("spo2Pct")),
       rawData: {
         deviceSessionId: session.id,
         payload: body.rawData ?? null,
       },
     };
 
+    // Null-preserving update (2026-08-29): an observer-triggered daytime
+    // sync reads no sleep and used to NULL the morning's good values — the
+    // audit's "every sleep field is null" had this as a cause. On update,
+    // only non-null values overwrite; steps/rawData always refresh.
+    const nonNull = Object.fromEntries(
+      Object.entries(metrics).filter(([k, v]) => k === "steps" || k === "rawData" || v != null)
+    );
+
     const snapshot = await prisma.dailyHealthSnapshot.upsert({
       where: { localDate_timeZone_source: { localDate, timeZone, source } },
       create: { localDate, timeZone, source, ...metrics },
-      update: metrics,
+      update: nonNull,
     });
 
     // ——— body-mass samples → body_measurements (dedup, never duplicate) ———

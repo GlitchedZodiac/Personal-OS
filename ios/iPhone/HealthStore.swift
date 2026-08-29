@@ -34,7 +34,7 @@ public final class HealthSyncManager: ObservableObject {
     @Published public private(set) var backgroundDeliveryNote: String?
 
     /// Bump when readTypes grows, so an existing install re-prompts.
-    private static let requestedTypesVersion = 2
+    private static let requestedTypesVersion = 3
     private static let versionKey = "health.requestedTypes.version"
 
     private let store = HKHealthStore()
@@ -73,6 +73,12 @@ public final class HealthSyncManager: ObservableObject {
             HKQuantityType(.bodyMassIndex),
             HKQuantityType(.leanBodyMass),
             HKQuantityType(.waistCircumference),
+            // Added 2026-08-29 (the zero-effort round): the watch measures
+            // all four on its own — the app just never asked.
+            HKQuantityType(.respiratoryRate),
+            HKQuantityType(.appleSleepingWristTemperature),
+            HKQuantityType(.vo2Max),
+            HKQuantityType(.oxygenSaturation),
         ])
     }
 
@@ -334,15 +340,53 @@ public final class HealthSyncManager: ObservableObject {
             .restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute()),
             from: day, to: now
         )
-        let hrv = try await latest(
+        // 2026-08-29: HRV was a single latest() inside the calendar day —
+        // sparse and noisy. The overnight window (prev 18:00 → noon) with a
+        // MEAN of samples is what recovery math wants; the daytime window
+        // remains the fallback so a late sync still catches something.
+        let hrvWindowStart = calendar.date(byAdding: .hour, value: -6, to: day) ?? day
+        let hrvWindowEnd = min(calendar.date(byAdding: .hour, value: 12, to: day) ?? now, now)
+        var hrv = try await meanQuantity(
             .heartRateVariabilitySDNN, unit: HKUnit.secondUnit(with: .milli),
-            from: day, to: now
+            from: hrvWindowStart, to: hrvWindowEnd
         )
+        if hrv == nil {
+            hrv = try await latest(
+                .heartRateVariabilitySDNN, unit: HKUnit.secondUnit(with: .milli),
+                from: day, to: now
+            )
+        }
         // Every body-mass reading of the day, with its real timestamp — not
         // just the latest. The server dedups by near-twin rule, so sending
         // all of them can only add missing weigh-ins.
         let weights = try await weightSamples(from: day, to: now)
         let sleep = await sleepBreakdown(endingOn: day)
+
+        // Zero-effort extras (2026-08-29): the watch measures these on its
+        // own. Overnight windows for the sleep-adjacent pair; VO2Max keeps
+        // its last reading for up to 30 days (Apple updates it rarely).
+        let respiratory = (try? await meanQuantity(
+            .respiratoryRate, unit: HKUnit.count().unitDivided(by: .minute()),
+            from: hrvWindowStart, to: hrvWindowEnd
+        )) ?? nil
+        let wristTemp = (try? await meanQuantity(
+            .appleSleepingWristTemperature, unit: .degreeCelsius(),
+            from: hrvWindowStart, to: hrvWindowEnd
+        )) ?? nil
+        let vo2Max = (try? await latest(
+            .vo2Max,
+            unit: HKUnit.literUnit(with: .milli)
+                .unitDivided(by: HKUnit.gramUnit(with: .kilo).unitMultiplied(by: .minute())),
+            from: calendar.date(byAdding: .day, value: -30, to: day) ?? day, to: now
+        )) ?? nil
+        let spo2 = (try? await meanQuantity(
+            .oxygenSaturation, unit: .percent(), from: day, to: now
+        )) ?? nil
+        var extras: [String: Double] = [:]
+        if let respiratory { extras["respiratoryRateBrpm"] = (respiratory * 10).rounded() / 10 }
+        if let wristTemp { extras["wristTempC"] = (wristTemp * 100).rounded() / 100 }
+        if let vo2Max { extras["vo2Max"] = (vo2Max * 10).rounded() / 10 }
+        if let spo2 { extras["spo2Pct"] = ((spo2 * 100) * 10).rounded() / 10 }
 
         let formatter = DateFormatter()
         formatter.calendar = calendar
@@ -360,7 +404,8 @@ public final class HealthSyncManager: ObservableObject {
             sleepDeepMinutes: sleep.flatMap { $0.deep > 0 ? Int($0.deep.rounded()) : nil },
             sleepRemMinutes: sleep.flatMap { $0.rem > 0 ? Int($0.rem.rounded()) : nil },
             hrvMs: hrv.map { ($0 * 10).rounded() / 10 },
-            weightSamples: weights.isEmpty ? nil : weights
+            weightSamples: weights.isEmpty ? nil : weights,
+            rawData: extras.isEmpty ? nil : extras
         )
         try await api.syncDailyHealth(payload)
 
@@ -409,15 +454,25 @@ public final class HealthSyncManager: ObservableObject {
                 limit: HKObjectQueryNoLimit,
                 sortDescriptors: nil
             ) { _, samples, _ in
-                var total = 0.0, deep = 0.0, rem = 0.0
+                var total = 0.0, deep = 0.0, rem = 0.0, inBed = 0.0
                 for sample in (samples as? [HKCategorySample]) ?? [] {
                     let seconds = sample.endDate.timeIntervalSince(sample.startDate)
                     switch HKCategoryValueSleepAnalysis(rawValue: sample.value) {
                     case .asleepDeep: deep += seconds; total += seconds
                     case .asleepREM: rem += seconds; total += seconds
                     case .asleepCore, .asleepUnspecified: total += seconds
-                    default: break // inBed / awake don't count
+                    case .inBed: inBed += seconds
+                    default: break // awake doesn't count
                     }
+                }
+                // 2026-08-29: iPhone-schedule-only nights write inBed with no
+                // stages — that used to read as "no sleep" and every column
+                // stayed null. Time-in-bed is an honest fallback total.
+                if total == 0, inBed > 0 {
+                    continuation.resume(
+                        returning: SleepBreakdown(total: inBed / 60, deep: 0, rem: 0)
+                    )
+                    return
                 }
                 continuation.resume(
                     returning: total > 0
@@ -466,6 +521,29 @@ public final class HealthSyncManager: ObservableObject {
                 }
                 continuation.resume(
                     returning: result?.sumQuantity()?.doubleValue(for: unit) ?? 0
+                )
+            }
+            store.execute(query)
+        }
+    }
+
+    /// Mean over the window (2026-08-29) — HRV wants the overnight average,
+    /// not one arbitrary sample. nil when the window holds nothing.
+    private func meanQuantity(
+        _ id: HKQuantityTypeIdentifier, unit: HKUnit, from: Date, to: Date
+    ) async throws -> Double? {
+        try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsQuery(
+                quantityType: HKQuantityType(id),
+                quantitySamplePredicate: HKQuery.predicateForSamples(withStart: from, end: to),
+                options: .discreteAverage
+            ) { _, result, error in
+                if let error, (error as? HKError)?.code != .errorNoData {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(
+                    returning: result?.averageQuantity()?.doubleValue(for: unit)
                 )
             }
             store.execute(query)

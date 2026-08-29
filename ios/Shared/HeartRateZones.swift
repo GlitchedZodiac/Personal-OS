@@ -58,6 +58,34 @@ public enum ZonesCache {
     }
 }
 
+/// Last-good disk caches for the launch-critical lists (2026-08-29, the
+/// speed round): home used to render with empty sequences/trails until six
+/// serial network calls finished — a cold launch now paints from these and
+/// the parallel refresh settles the truth.
+public enum SequencesCache {
+    private static let key = "sequences.lastGood"
+    public static func load() -> [SequenceDef]? {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode([SequenceDef].self, from: data)
+    }
+    public static func save(_ sequences: [SequenceDef]) {
+        guard let data = try? JSONEncoder().encode(sequences) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+}
+
+public enum TrailsCache {
+    private static let key = "trails.lastGood"
+    public static func load() -> [TrailSummary]? {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode([TrailSummary].self, from: data)
+    }
+    public static func save(_ trails: [TrailSummary]) {
+        guard let data = try? JSONEncoder().encode(trails) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+}
+
 // MARK: - Stream shaping
 
 public enum StreamMath {

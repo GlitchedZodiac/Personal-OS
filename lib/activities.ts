@@ -60,6 +60,12 @@ export interface RunMetrics {
   hrrSeconds?: number;
   /// Per-km elapsed seconds banked live on the wrist (outdoor kinds).
   splits?: number[];
+  /// Session-mean step cadence from the wrist (2026-08-29, Strava parity).
+  avgCadenceSpm?: number;
+  /// Strava-only legacy keys still read as fallbacks on old imported rows.
+  movingTime?: number;
+  elapsedTime?: number;
+  avgCadence?: number;
 }
 
 export function activityTypeOf(workout: {

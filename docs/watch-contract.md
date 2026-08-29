@@ -126,6 +126,18 @@ re-syncs the same `(externalSource, externalId)` with the enriched
 metrics and the atomic upsert lands it as an update. Surfaced on the web
 activity page since 2026-08-29 (the RECOVERY card, quick/typical/slow).
 
+**v5 additions (2026-08-29d, additive):** items may carry
+`metricsData.avgCadenceSpm` (session-mean steps/min from CMPedometer).
+Streams are downsampled to ≤600 on-wrist for every kind now (the server
+reduces to ≤120 for storage; ≤600 keeps full analytic headroom at a sixth
+of the payload). `GET /api/mobile/workouts` responses SLIMMED: routeData
+and stream keys no longer ride the list (the wrist decodes
+sequenceId/sequenceName/timeInZones.seconds only — lenient decoders
+unaffected). `GET /api/mobile/trails` rows now include `endLat`/`endLng`
+(direction-aware matching; send `nearEndLat`/`nearEndLng` on near
+queries). Sub-4-minute no-content sessions are auto-discarded ON the
+wrist and never sync.
+
 **packKg (2026-08-29, additive, main-lane column):** `WorkoutLog.packKg`
 records carried load for hikes (0–60). Web + chat edit it today; when the
 wrist adds a pre-hike pack entry, send it as a top-level `packKg` on the

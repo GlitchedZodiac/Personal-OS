@@ -49,6 +49,11 @@ export interface AppSettings {
   workoutGoals: WorkoutGoals;
   timeZone: string;
   finance: FinanceSettings;
+  /// HR zone upper bounds Z1–Z4 (Z5 = above). Default = the age-derived
+  /// bands his Strava profile carried; editable since 2026-08-29. NOTE:
+  /// stored timeInZones results were computed under the bands active at
+  /// sync time — changing these does not recompute history (filed).
+  hrZoneTops: [number, number, number, number];
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -81,6 +86,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     injuries: "",
   },
   timeZone: DEFAULT_TIME_ZONE,
+  hrZoneTops: [122, 152, 167, 182],
   finance: {
     defaultCurrency: "COP",
     syncIntervalMinutes: 15,

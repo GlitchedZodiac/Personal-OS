@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rebuildPersonalRecords } from "@/lib/prs";
+import { invalidateMovementHistories } from "@/lib/strength-history-db";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
 import { normalizeExerciseName } from "@/lib/exercises";
 import {
@@ -125,6 +126,7 @@ export async function PATCH(request: NextRequest) {
       where: { id },
       data: { exercises: edit.exercises, ...(packPatch ?? {}) },
     });
+    invalidateMovementHistories();
 
     // Rebuild rather than re-detect: detection only ever raises records, but
     // a correction can need to LOWER one.

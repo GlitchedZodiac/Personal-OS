@@ -195,7 +195,10 @@ private struct EffortGraph: View {
             .offset(y: Theme.r3(14))
         }
         .overlay(alignment: .topLeading) { nowDot }
-        .id(recorder.streamRevision) // redraw snaps per sample — no tween
+        // 2026-08-29: the old `.id(streamRevision)` forced a full
+        // teardown/rebuild of the ZStack per HR sample (and restarted the
+        // now-dot's repeatForever each time). The Canvas below observes
+        // recorder's published data and redraws on its own.
     }
 
     /// §01 now-dot: r 4.5 in zone fill, opacity 1→0.35→1 over 1 s. The one
@@ -282,12 +285,18 @@ private struct EffortGraph: View {
         guard hr.count > 1, hr.count == time.count else { return }
         let cutoff = TimeInterval(time.last ?? 0) - Self.window
 
+        // 2026-08-29: binary-search the window start instead of walking the
+        // whole session per redraw — a 2 h hike only ever draws ~600 points.
+        var lo = 0, hi = time.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if TimeInterval(time[mid]) < cutoff { lo = mid + 1 } else { hi = mid }
+        }
+
         var path = Path()
         var started = false
-        for index in 0..<hr.count {
-            let t = TimeInterval(time[index])
-            guard t >= cutoff else { continue }
-            let point = position(bpm: Double(hr[index]), t: t, size: size)
+        for index in lo..<hr.count {
+            let point = position(bpm: Double(hr[index]), t: TimeInterval(time[index]), size: size)
             if started { path.addLine(to: point) } else { path.move(to: point); started = true }
         }
 

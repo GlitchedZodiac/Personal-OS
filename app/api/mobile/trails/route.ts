@@ -17,9 +17,19 @@ export async function GET(request: NextRequest) {
   const lat = Number(sp.get("nearLat"));
   const lng = Number(sp.get("nearLng"));
   const dist = Number(sp.get("distanceMeters"));
+  // Direction awareness (2026-08-29): the wrist also sends where the track
+  // ENDED, so a descent stops matching the ascent trail.
+  const endLat = Number(sp.get("nearEndLat"));
+  const endLng = Number(sp.get("nearEndLng"));
   const near =
     Number.isFinite(lat) && Number.isFinite(lng)
-      ? { lat, lng, distanceMeters: Number.isFinite(dist) ? dist : null }
+      ? {
+          lat,
+          lng,
+          distanceMeters: Number.isFinite(dist) ? dist : null,
+          endLat: Number.isFinite(endLat) ? endLat : null,
+          endLng: Number.isFinite(endLng) ? endLng : null,
+        }
       : undefined;
 
   const trails = await listTrails(near);

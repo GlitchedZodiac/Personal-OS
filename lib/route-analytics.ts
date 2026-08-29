@@ -34,7 +34,7 @@ export interface RouteSplit {
 }
 
 export interface RouteAnalytics {
-  version: 2;
+  version: 3;
   elapsedSeconds: number;
   movingSeconds: number;
   stoppedSeconds: number;
@@ -55,6 +55,12 @@ export interface RouteAnalytics {
   maxAltM: number | null;
   totalElevGainM: number;
   totalElevLossM: number;
+  /// v3 (2026-08-29, the Strava-replacement round): per-segment speed and
+  /// grade series, downsampled ≤120 — the "streams" the audit ranked #1,
+  /// derived from points the app already stores. Aligned with each other;
+  /// speeds in m/s, grades in percent (signed).
+  velocitySeries: number[] | null;
+  gradeSeries: number[] | null;
 }
 
 export interface AnalyzeOptions {
@@ -138,6 +144,9 @@ export function analyzeRoute(
 
   // Cumulative series for the rolling max-speed window.
   const cumDist: number[] = [0];
+  // v3 derived streams: one sample per accepted segment.
+  const velocitySamples: number[] = [];
+  const gradeSamples: number[] = [];
 
   // Break accumulation.
   const breaks: RouteBreak[] = [];
@@ -220,6 +229,11 @@ export function analyzeRoute(
       }
       altCoveredMeters += d;
     }
+
+    velocitySamples.push(Math.round((d / dt) * 100) / 100);
+    gradeSamples.push(
+      d > 1 ? Math.max(-45, Math.min(45, Math.round((dAlt / d) * 1000) / 10)) : 0
+    );
 
     if (moving) {
       closeStopRun();
@@ -312,8 +326,15 @@ export function analyzeRoute(
   const totalElevLossM =
     Math.round(splits.reduce((s, x) => s + x.elevLossM, 0) * 10) / 10;
 
+  const cap = (values: number[]): number[] | null => {
+    if (values.length === 0) return null;
+    if (values.length <= 120) return values;
+    const step = values.length / 120;
+    return Array.from({ length: 120 }, (_, i) => values[Math.floor(i * step)]);
+  };
+
   return {
-    version: 2,
+    version: 3,
     elapsedSeconds,
     movingSeconds,
     stoppedSeconds,
@@ -328,5 +349,7 @@ export function analyzeRoute(
     maxAltM: maxAltM != null ? Math.round(maxAltM) : null,
     totalElevGainM,
     totalElevLossM,
+    velocitySeries: cap(velocitySamples),
+    gradeSeries: gradeSamples.some((g) => g !== 0) ? cap(gradeSamples) : null,
   };
 }

@@ -107,6 +107,14 @@ struct LiveMapPage: View {
     /// is non-interactive, so this state is the truth).
     private func autoPan() {
         guard !dimmed, let head = route.coordinates.last else { return }
+        // 2026-08-29: cheap gate first — regionSpan() makes four O(n) passes
+        // and used to run on every GPS fix even when the camera stayed put.
+        // ~55 m of latitude is comfortably inside any span/3 we ever show.
+        if let centeredOn,
+           abs(head.latitude - centeredOn.latitude) < 0.0005,
+           abs(head.longitude - centeredOn.longitude) < 0.0005 {
+            return
+        }
         let span = regionSpan()
         if let centeredOn {
             let dLat = abs(head.latitude - centeredOn.latitude)
