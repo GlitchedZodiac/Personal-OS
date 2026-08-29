@@ -33,6 +33,8 @@ export type TrailPayload = {
   startLng: number | null;
   runCount: number;
   lastRun: TrailLastRun | null;
+  /// Round 3 §05 — present only on near-ranked queries ("94% match").
+  matchPct: number | null;
 };
 
 const norm = (value: string) => value.trim().toLowerCase();
@@ -127,7 +129,7 @@ export async function listTrails(near?: TrailNear): Promise<TrailPayload[]> {
     }
   }
 
-  const payload = trails.map((t) => ({
+  const payload: TrailPayload[] = trails.map((t) => ({
     id: t.id,
     name: t.name,
     aliases: t.aliases,
@@ -138,6 +140,7 @@ export async function listTrails(near?: TrailNear): Promise<TrailPayload[]> {
     startLng: t.startLng,
     runCount: runCount.get(t.id) ?? 0,
     lastRun: lastRun.get(t.id) ?? null,
+    matchPct: null,
   }));
 
   if (near) {
@@ -152,7 +155,15 @@ export async function listTrails(near?: TrailNear): Promise<TrailPayload[]> {
       if (b.score != null) return 1;
       return a.index - b.index;
     });
-    return scored.map((s) => s.t);
+    // §05 "94% match": score spans ~0–2 → clamp to a 50–99% display band
+    // (the wrist's local ranking uses the same formula).
+    return scored.map((s) => ({
+      ...s.t,
+      matchPct:
+        s.score != null
+          ? Math.max(50, Math.min(99, Math.round((s.score / 2) * 100)))
+          : null,
+    }));
   }
   return payload;
 }
