@@ -54,10 +54,30 @@ enum Glyphs {
     static let trail = ["M3 18 L9 8 L13 13.5 L16 9.5 L21 18 Z"]
     /// Walking figure body (head is a circle drawn by the view).
     static let walkBody = ["M13 8 l-3 5 4 3 v5 M10 13 l-3 2 M14 16 l4 2"]
-    /// Filled heart — live metrics.
+    /// Filled heart — live metrics. Round 3 §09 path, shared by the Effort
+    /// page, live map and the rewritten BeatingHeart at their new sizes.
     static let heart = [
-        "M12 21 C5.5 15 2.5 10.8 2.5 7.2 A4.6 4.6 0 0 1 12 5.2 A4.6 4.6 0 0 1 21.5 7.2 C21.5 10.8 18.5 15 12 21 Z"
+        "M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z"
     ]
+    /// Freestyle pulse trace — Round 3 §09.
+    static let freestyle = ["M3 13h3l2.2-5.4 3.3 10.8 2.3-7.2 1.4 1.8H21"]
+    /// Trail bookmark — saved-trail rows + suggestions (Round 3 §09).
+    static let trailBookmark = [
+        "M6.5 3.5h11v17l-5.5-4.2L6.5 20.5Z",
+        "M9 9.5c2-1.5 4 1.5 6 0",
+    ]
+    /// Dictation mic — the "New trail…" row (Round 3 §09).
+    static let mic = [
+        "M12 3.5a2.8 2.8 0 0 1 2.8 2.8v4.4a2.8 2.8 0 0 1-5.6 0V6.3A2.8 2.8 0 0 1 12 3.5Z",
+        "M6.2 10.7a5.8 5.8 0 0 0 11.6 0",
+        "M12 16.5v3.7",
+    ]
+    /// Burn-rate flame — Effort page vocabulary (Round 3 §09).
+    static let flame = [
+        "M12 3.6c1.1 2.5-.3 4-1.5 5.4-1.3 1.5-2.6 3.1-2.6 5.2a6.1 6.1 0 0 0 12.2 0c0-3.5-2.4-5.2-3.5-7.6-.7 1.2-1.8 2-1.8 3.6 0-2.5-1-4.7-2.8-6.6Z"
+    ]
+    /// Km-split flag — split banner (Round 3 §09).
+    static let splitFlag = ["M7 20.5V4", "M7 4.5h10l-2.6 3.6L17 11.7H7"]
     /// Check — paired + saved headers.
     static let check = ["M4.5 12.5 L10 18 L19.5 6.5"]
     /// End ✕ — controls.
@@ -76,29 +96,63 @@ enum Glyphs {
     static let pencil = ["M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"]
 }
 
-/// Barbell — the Weight Training row (Michael's 2026-08-20 category).
-///
-/// NOT EXTRACTED: the design file has no barbell, because the category
-/// didn't exist when it was drawn. Built to match the kettlebell's own
-/// grammar — 24×24 box, 2.1 stroke, rounded caps — and flagged for the next
-/// design pass. THE PORT GATE: replace this verbatim the moment a slice
-/// lands; do not reach for an SF Symbol in the meantime.
+/// Barbell — Round 3 §09, verbatim: bar strokes + four plate rects
+/// (x, y, w, h, r 1.1). The 2026-08-20 provisional grammar version is
+/// retired; the slice landed.
 struct BarbellGlyph: View {
     var color: Color = Theme.accent
     var size: CGFloat = 13
 
+    private static let plates: [(Double, Double, Double, Double)] = [
+        (4.6, 8.2, 2.3, 7.6), (6.9, 6.2, 2.3, 11.6),
+        (17.1, 8.2, 2.3, 7.6), (14.8, 6.2, 2.3, 11.6),
+    ]
+
     var body: some View {
-        PitayaGlyph(
-            paths: [
-                "M7.5 12 H16.5",          // the bar
-                "M5.5 8.5 V15.5",         // inner plates
-                "M18.5 8.5 V15.5",
-                "M2.75 10.25 V13.75",     // outer plates
-                "M21.25 10.25 V13.75",
-            ],
-            color: color,
-            size: size
-        )
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 24
+            let scale = CGAffineTransform(scaleX: u, y: u)
+            let stroke = StrokeStyle(lineWidth: 2.1 * u, lineCap: .round, lineJoin: .round)
+            let bar = svgPath("M2.8 12h1.6 M19.6 12h1.6 M9.2 12h5.6").applying(scale)
+            context.stroke(Path(bar.cgPath), with: .color(color), style: stroke)
+            for (x, y, w, h) in Self.plates {
+                context.stroke(
+                    Path(roundedRect: CGRect(x: x * u, y: y * u, width: w * u, height: h * u),
+                         cornerRadius: 1.1 * u),
+                    with: .color(color), style: stroke
+                )
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// Cadence — Round 3 §09: two rounded rects, counter-rotated (footfalls).
+struct CadenceGlyph: View {
+    var color: Color = Theme.accent
+    var size: CGFloat = 13
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let u = canvasSize.width / 24
+            let stroke = StrokeStyle(lineWidth: 2.1 * u, lineCap: .round, lineJoin: .round)
+            let feet: [(CGRect, Double, Double, Double)] = [
+                (CGRect(x: 5.2, y: 3.6, width: 5, height: 9.2), -13, 7.7, 8.2),
+                (CGRect(x: 13.9, y: 11, width: 5, height: 9.2), 11, 16.4, 15.6),
+            ]
+            for (rect, degrees, cx, cy) in feet {
+                let scaled = CGRect(
+                    x: rect.minX * u, y: rect.minY * u,
+                    width: rect.width * u, height: rect.height * u
+                )
+                let rotation = CGAffineTransform(translationX: cx * u, y: cy * u)
+                    .rotated(by: degrees * .pi / 180)
+                    .translatedBy(x: -cx * u, y: -cy * u)
+                let path = Path(roundedRect: scaled, cornerRadius: 2.5 * u).applying(rotation)
+                context.stroke(path, with: .color(color), style: stroke)
+            }
+        }
+        .frame(width: size, height: size)
     }
 }
 

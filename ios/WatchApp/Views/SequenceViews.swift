@@ -35,6 +35,38 @@ struct SequencesListView: View {
                     .foregroundStyle(Theme.textMuted)
                     .padding(.horizontal, 6)
 
+                // Round 3 §08: Weight Training gets a free session — the
+                // kettlebell machinery (crown weight, tap reps, PR line)
+                // with 2.5 kg plate detents instead of bell stops.
+                if discipline == .weights {
+                    Button {
+                        Task {
+                            await model.startWorkout(.kettlebell, plateDetents: true)
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            ZStack {
+                                Circle().fill(Theme.accentDim)
+                                BarbellGlyph(color: Theme.accent, size: 15)
+                            }
+                            .frame(width: 31, height: 31)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("Free session")
+                                    .font(Theme.text(11.5, weight: .semibold))
+                                    .foregroundStyle(Theme.textBright)
+                                Text("bar · plates · PRs")
+                                    .font(Theme.text(8.5))
+                                    .foregroundStyle(Theme.textTertiary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 9)
+                        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 ForEach(routines) { sequence in
                     Button {
                         model.openSequence(sequence)
@@ -310,6 +342,8 @@ struct SequenceLiveView: View {
             ControlsPage(recorder: model.recorder, kind: .kettlebell, isSequence: true).tag(1)
         }
         .tabViewStyle(.verticalPage)
+        .overlay { ZoneBloomOverlay(recorder: model.recorder) }
+        .overlay { halfwayOverlay }
         .overlay {
             if model.idleNudgeActive {
                 IdleNudgeOverlay(onEnd: { Task { await model.endSequenceEarly() } })
@@ -318,11 +352,64 @@ struct SequenceLiveView: View {
         .overlay {
             CountdownOverlay()
         }
+        .onChange(of: model.emomRound) { _, round in
+            // Round 3 §07: the halfway moment rides the round-N/2 boundary.
+            let total = max(sequence.durationMinutes ?? sequence.steps.count, 1)
+            guard sequence.kind == "emom", total >= 4, round == total / 2 + 1 else { return }
+            playHalfway(down: round - 1, toGo: total - (round - 1))
+        }
     }
 
     /// §10 AOD twin ("Always-On dimmed state"): ring 13→4 px in the dimmed
     /// palette, countdown → session clock, weight + HR leave, move stays.
     @Environment(\.isLuminanceReduced) private var dimmed
+
+    // §07 halfway state — copy rises 12 px in, blush diamond sweeps at
+    // y 200 px over 700 ms, whole moment 1.4 s, haptic .success.
+    @State private var halfwayCopy: (down: Int, toGo: Int)?
+    @State private var halfwayRisen = false
+    @State private var diamondSwept = false
+
+    private func playHalfway(down: Int, toGo: Int) {
+        guard !dimmed else { return }
+        Haptics.key(.success)
+        halfwayCopy = (down, toGo)
+        halfwayRisen = false
+        diamondSwept = false
+        withAnimation(Theme.Motion.arrival) { halfwayRisen = true }
+        withAnimation(.linear(duration: 0.7)) { diamondSwept = true }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            withAnimation(Theme.Motion.exit) { halfwayRisen = false }
+            try? await Task.sleep(nanoseconds: 260_000_000)
+            halfwayCopy = nil
+        }
+    }
+
+    @ViewBuilder
+    private var halfwayOverlay: some View {
+        if let copy = halfwayCopy, !dimmed {
+            let width = WKInterfaceDevice.current().screenBounds.width
+            ZStack {
+                PitayaMark(size: Theme.r3(26), color: Theme.prText)
+                    .position(
+                        x: diamondSwept ? width + Theme.r3(30) : -Theme.r3(30),
+                        y: Theme.r3(200)
+                    )
+                VStack(spacing: Theme.r3(6)) {
+                    Text("HALFWAY")
+                        .font(Theme.r3Display(34, weight: .bold))
+                        .foregroundStyle(Theme.prText)
+                    Text("\(copy.down) down · \(copy.toGo) to go")
+                        .font(Theme.r3Text(13, weight: .semibold))
+                        .foregroundStyle(Theme.accentWashSub)
+                }
+                .offset(y: halfwayRisen ? 0 : Theme.r3(12))
+                .opacity(halfwayRisen ? 1 : 0)
+            }
+            .allowsHitTesting(false)
+        }
+    }
 
     private var runner: some View {
         let totalRounds = max(sequence.durationMinutes ?? sequence.steps.count, 1)

@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#131216; -webkit-font-smoothing:antialiased; }
+    a { color:#DC74A0; text-decoration:none; } a:hover { color:#E795B4; }
+    @keyframes beatSnap { 0% { transform:scale(1); } 9% { transform:scale(1.16); } 34% { transform:scale(1); } 100% { transform:scale(1); } }
+    @keyframes beatLub { 0% { transform:scale(1); } 8% { transform:scale(1.12); } 16% { transform:scale(1.03); } 26% { transform:scale(1.18); } 48% { transform:scale(1); } 100% { transform:scale(1); } }
+    @keyframes glowBeat { 0% { opacity:0.18; } 10% { opacity:0.85; } 40% { opacity:0.18; } 100% { opacity:0.18; } }
+    @keyframes dotBlip { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+    @keyframes gpsBlink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+    @keyframes posPulse { 0% { transform:scale(0.55); opacity:0.8; } 100% { transform:scale(2.1); opacity:0; } }
+    @keyframes washUp { 0%,52% { opacity:0; } 56%,76% { opacity:1; } 86%,100% { opacity:0; } }
+    @keyframes numUp { 0%,52% { opacity:0; transform:translateY(26px) scale(0.86); } 58% { opacity:1; transform:translateY(-3px) scale(1.05); } 61%,74% { opacity:1; transform:translateY(0) scale(1); } 82%,100% { opacity:0; transform:translateY(-10px) scale(0.9); } }
+    @keyframes washDown { 0%,52% { opacity:0; } 55.5%,71% { opacity:1; } 80%,100% { opacity:0; } }
+    @keyframes numDown { 0%,52% { opacity:0; transform:translateY(-26px) scale(0.86); } 58% { opacity:1; transform:translateY(3px) scale(1.05); } 61%,69% { opacity:1; transform:translateY(0) scale(1); } 77%,100% { opacity:0; transform:translateY(10px) scale(0.9); } }
+    @keyframes chipSwapOut { 0%,58% { opacity:1; } 62%,100% { opacity:0; } }
+    @keyframes chipSwapIn { 0%,58% { opacity:0; transform:scale(1); } 62% { opacity:1; transform:scale(1.26); } 70%,100% { opacity:1; transform:scale(1); } }
+    @keyframes bloomUp { 0%,52% { opacity:0; transform:translateY(40px); } 57% { opacity:1; transform:translateY(0); } 72% { opacity:0.85; } 84%,100% { opacity:0; transform:translateY(0); } }
+    @keyframes bloomDown { 0%,52% { opacity:0; transform:translateY(-40px); } 57% { opacity:1; transform:translateY(0); } 68% { opacity:0.8; } 80%,100% { opacity:0; transform:translateY(0); } }
+    @keyframes splitBanner { 0%,6% { opacity:0; transform:translateY(-72px); } 12% { opacity:1; transform:translateY(0); } 58% { opacity:1; transform:translateY(0); } 66%,100% { opacity:0; transform:translateY(-72px); } }
+    @keyframes ringDrain { 0%,8% { stroke-dashoffset:0; } 92%,100% { stroke-dashoffset:100; } }
+    @keyframes hrrN1 { 0%,30% { opacity:1; } 34%,100% { opacity:0; } }
+    @keyframes hrrN2 { 0%,30% { opacity:0; } 34%,62% { opacity:1; } 66%,100% { opacity:0; } }
+    @keyframes hrrN3 { 0%,62% { opacity:0; } 66%,100% { opacity:1; } }
+    @keyframes hrrVerdict { 0%,86% { opacity:0; } 92%,100% { opacity:1; } }
+    @keyframes sparkDraw { 0%,8% { stroke-dashoffset:340; } 92%,100% { stroke-dashoffset:0; } }
+    @keyframes sweepDiamond { 0%,50% { transform:translateX(-260px) rotate(45deg); opacity:0; } 54% { opacity:1; } 68% { transform:translateX(260px) rotate(45deg); opacity:1; } 70%,100% { transform:translateX(260px) rotate(45deg); opacity:0; } }
+    @keyframes washFlash { 0%,50% { opacity:0; } 54%,64% { opacity:1; } 76%,100% { opacity:0; } }
+    @keyframes halfLine { 0%,52% { opacity:0; transform:translateY(12px); } 58%,76% { opacity:1; transform:translateY(0); } 84%,100% { opacity:0; transform:translateY(0); } }
+    @keyframes contourRipple { 0%,60%,100% { transform:translateY(0); } 68% { transform:translateY(-7px); } 76% { transform:translateY(0); } }
+    @keyframes crestNumA { 0%,60% { opacity:1; } 66%,100% { opacity:0; } }
+    @keyframes crestNumB { 0%,60% { opacity:0; transform:translateY(8px); } 66%,100% { opacity:1; transform:translateY(0); } }
+    @keyframes seedA { 0%,55% { transform:translate(0,0) rotate(45deg) scale(1); opacity:0; } 58% { opacity:1; } 90%,100% { transform:translate(-44px,-58px) rotate(45deg) scale(0.3); opacity:0; } }
+    @keyframes seedB { 0%,55% { transform:translate(0,0) rotate(45deg) scale(1); opacity:0; } 58% { opacity:1; } 90%,100% { transform:translate(4px,-74px) rotate(45deg) scale(0.3); opacity:0; } }
+    @keyframes seedC { 0%,55% { transform:translate(0,0) rotate(45deg) scale(1); opacity:0; } 58% { opacity:1; } 90%,100% { transform:translate(48px,-52px) rotate(45deg) scale(0.35); opacity:0; } }
+    @keyframes spinDiamond { from { transform:rotate(45deg); } to { transform:rotate(405deg); } }
+    @keyframes bpmTintOut { 0%,56% { opacity:1; } 62%,100% { opacity:0; } }
+    @keyframes bpmTintIn { 0%,56% { opacity:0; } 62%,100% { opacity:1; } }
+  </style>
+</helmet>
+<section id="t3" data-screen-label="Watch Round 3 — in-workout v3" style="min-height:100vh; box-sizing:border-box; padding:64px 72px 96px; font-family:'Instrument Sans',sans-serif; background:#131216;">
+
+  <div style="margin-bottom:20px; max-width:1020px;">
+    <div style="display:flex; align-items:center; gap:10px; font-size:12px; letter-spacing:0.2em; font-weight:600; color:#DC74A0;"><svg width="11" height="11" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#DC74A0"></rect></svg> PITAYA · WATCHOS — ROUND 3 · IN-WORKOUT V3</div>
+    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:38px; font-weight:700; color:#F2F1F2; letter-spacing:-0.02em; margin-top:8px;">The motion layer — and the two pages it lives on</div>
+    <div style="font-size:14px; color:#96949B; margin-top:8px; line-height:1.65; max-width:800px;">Designed against the real recorder: <span style="color:#A5A3AA;">WorkoutRecorder</span> streams (hrStream at ~1 Hz, activeCalories, elevationGainLive), <span style="color:#A5A3AA;">RouteTracker</span> (hasFix / isAuthorized / live coordinates), the <span style="color:#A5A3AA;">syncState</span> machine, and his zone boundaries from watch-contract.md (Z1 &lt;122 · Z2 123–152 · Z3 153–167 · Z4 168–182 · Z5 183+). Canvas is <span style="color:#A5A3AA;">45&nbsp;mm (396×484)</span> this round; 41&nbsp;mm adaptations noted per screen. Options are lettered <span style="color:#DC74A0;">3a–3h</span> — pick like Round 1, the rest condenses out. Demos loop live; every timing in the spec tables is normative.</div>
+  </div>
+
+  <div style="background:#17161A; border:1px solid #232227; border-radius:18px; padding:22px 26px; margin-bottom:28px; max-width:1020px;">
+    <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">WHERE THIS ROUND TOUCHES WHAT SHIPS</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px 28px; margin-top:14px; font-size:13px; color:#A5A3AA; line-height:1.55;">
+      <div><span style="color:#DC74A0; font-weight:600;">1 · Effort joins every carousel</span> — a new page in LiveWorkoutView's TabView, all kinds. The metrics page stays exactly as shipped. <a href="#s1">§01</a></div>
+      <div><span style="color:#DC74A0; font-weight:600;">2 · Live map, outdoor kinds</span> — MapKit enters the watch target; this round designs the overlay chrome only, never the tiles. <a href="#s2">§02</a></div>
+      <div><span style="color:#DC74A0; font-weight:600;">3 · The heart stops lying</span> — BeatingHeart animates a fixed 0.5 s today; it syncs to live BPM and takes zone tint. <a href="#s4">§04</a></div>
+      <div><span style="color:#DC74A0; font-weight:600;">4 · ZoneBar takes the ramp</span> — the active segment is flat pink today; segments adopt the Z1→Z5 colors below. <a href="#s0">§00</a></div>
+      <div><span style="color:#DC74A0; font-weight:600;">5 · Zone-change becomes a moment</span> — new: recorder publishes zone crossings (5 s debounce); the screen and the wrist both answer. <a href="#s3">§03</a></div>
+      <div><span style="color:#DC74A0; font-weight:600;">6 · Save gets its treatment</span> — syncState already has syncing/failed; they've been shipping undesigned. Plus the Save-track prompt post-sync, outdoor only. <a href="#s5">§05</a>·<a href="#s6">§06</a></div>
+      <div><span style="color:#66646C; font-weight:600;">Riders fold in</span> — Freestyle row, Weight-training row + barbell glyph, Hike submenu. <a href="#s8">§08</a></div>
+      <div><span style="color:#66646C; font-weight:600;">Series 8 budget</span> — 60 Hz, transform/opacity only (no blur, no filter animation on-watch), everything event-driven; GPS owns the battery, motion never does. AOD animates nothing, ever.</div>
+    </div>
+  </div>
+
+  <!-- ══════════ 00 FOUNDATIONS ══════════ -->
+  <div id="s0" style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:6px;">00 — FOUNDATIONS FOR THE ROUND</div>
+  <div style="font-size:13px; color:#66646C; margin-bottom:24px; max-width:820px;">Three vocabularies every slice below draws from — the zone ramp (new tokens into Theme.swift), the motion ladder, and the haptic map. Plus the carousel as one system.</div>
+  <div style="display:flex; flex-wrap:wrap; gap:20px; margin-bottom:26px; align-items:stretch;">
+    <div style="flex:none; width:452px; background:#17161A; border:1px solid #232227; border-radius:18px; padding:20px 24px; box-sizing:border-box;">
+      <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">ZONE RAMP — COOL → HOT <span style="color:#55535A; letter-spacing:0; font-weight:400;">(Theme.zone1…zone5)</span></div>
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <div style="flex:1;"><div style="height:54px; border-radius:12px; background:#7FA6C9;"></div><div style="font-size:11px; font-weight:600; color:#F2F1F2; margin-top:7px;">Z1 · #7FA6C9</div><div style="font-size:10px; color:#66646C; line-height:1.5;">RECOVERY<br>&lt;122 · dim #14212B</div></div>
+        <div style="flex:1;"><div style="height:54px; border-radius:12px; background:#8FBF9C;"></div><div style="font-size:11px; font-weight:600; color:#F2F1F2; margin-top:7px;">Z2 · #8FBF9C</div><div style="font-size:10px; color:#66646C; line-height:1.5;">EASY<br>123–152 · dim #1E2A22</div></div>
+        <div style="flex:1;"><div style="height:54px; border-radius:12px; background:#C97D9C;"></div><div style="font-size:11px; font-weight:600; color:#F2F1F2; margin-top:7px;">Z3 · #C97D9C</div><div style="font-size:10px; color:#66646C; line-height:1.5;">AEROBIC<br>153–167 · dim #26161C</div></div>
+        <div style="flex:1;"><div style="height:54px; border-radius:12px; background:#DC74A0;"></div><div style="font-size:11px; font-weight:600; color:#F2F1F2; margin-top:7px;">Z4 · #DC74A0</div><div style="font-size:10px; color:#66646C; line-height:1.5;">THRESHOLD<br>168–182 · dim #2A1420</div></div>
+        <div style="flex:1;"><div style="height:54px; border-radius:12px; background:#FFD9E8;"></div><div style="font-size:11px; font-weight:600; color:#F2F1F2; margin-top:7px;">Z5 · #FFD9E8</div><div style="font-size:10px; color:#66646C; line-height:1.5;">MAX<br>183+ · dim #3D1526</div></div>
+      </div>
+      <div style="font-size:11.5px; color:#8A8890; line-height:1.6; margin-top:12px;">Honors the shipped conventions — Z2 chips were already mint, Z3–4 pink, Z5 "blush flash". Z1 borrows the water blue (cool = rest). Chip text is #131216 on every fill. Dims are the wash backgrounds for bands and takeovers; three already exist as tokens. The web keeps its own light ramp (lib/zones.ts) — this one is OLED-first.</div>
+    </div>
+    <div style="flex:none; width:300px; background:#17161A; border:1px solid #232227; border-radius:18px; padding:20px 24px; box-sizing:border-box;">
+      <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">MOTION LADDER</div>
+      <div style="display:grid; gap:0; margin-top:10px; font-size:12.5px; color:#A5A3AA;">
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #232227;"><span>Attack (beat, tick)</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">90 ms · ease-out</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #232227;"><span>Wash in</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">140 ms · ease-out</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #232227;"><span>Arrival spring</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">350 ms · (.34,1.4,.5,1)</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #232227;"><span>Settle / morph</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">450 ms · ease-in-out</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #232227;"><span>Exit</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">260 ms · ease-in</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0;"><span>Hold (takeovers)</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">≤ 900 ms</span></div>
+      </div>
+      <div style="font-size:11.5px; color:#8A8890; line-height:1.6; margin-top:10px;">Rules: nothing full-screen lives past 2 s; motion fires on events (beat, crossing, split, boundary), never idles; transform + opacity only — glow is a pre-baked radial sprite, not a filter.</div>
+    </div>
+    <div style="flex:none; width:300px; background:#17161A; border:1px solid #232227; border-radius:18px; padding:20px 24px; box-sizing:border-box;">
+      <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">HAPTIC MAP <span style="color:#55535A; letter-spacing:0; font-weight:400;">(WKHaptic)</span></div>
+      <div style="display:grid; gap:0; margin-top:10px; font-size:12.5px; color:#A5A3AA;">
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #232227;"><span>Up-zone</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">.directionUp</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #232227;"><span>Down-zone</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">.directionDown</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #232227;"><span>Km split</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">.notification</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #232227;"><span>Save · HRR done · PR</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">.success</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #232227;"><span>Save failed</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">.failure</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #232227;"><span>EMOM boundary <span style="color:#55535A;">(ships)</span></span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">.start ×2</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0;"><span>Crest · countdown tick</span><span style="font-family:ui-monospace,Menlo,monospace; color:#F2F1F2;">.click</span></div>
+      </div>
+      <div style="font-size:11.5px; color:#8A8890; line-height:1.6; margin-top:10px;">One meaning per pattern — the wrist is readable without looking. All of these respect Settings → Haptics ("key moments" keeps every row here; "everything" adds per-beat ticks at Z5 only).</div>
+    </div>
+  </div>
+  <div style="max-width:1092px; background:#17161A; border:1px solid #232227; border-radius:18px; padding:20px 26px; margin-bottom:64px; box-sizing:border-box;">
+    <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">THE CAROUSEL, WHOLE — VERTICAL SWIPE ORDER PER KIND</div>
+    <div style="display:flex; gap:34px; margin-top:16px; flex-wrap:wrap;">
+      <div style="flex:none;">
+        <div style="font-size:12px; font-weight:600; color:#F2F1F2; margin-bottom:8px;">Kettlebell</div>
+        <div style="display:grid; gap:6px;">
+          <div style="font-size:12px; color:#96949B; background:#131216; border:1px solid #232227; border-radius:99px; padding:6px 14px; text-align:center;">Metrics</div>
+          <div style="font-size:12px; color:#96949B; background:#131216; border:1px solid #232227; border-radius:99px; padding:6px 14px; text-align:center;">Set logger</div>
+          <div style="font-size:12px; font-weight:600; color:#DC74A0; background:#2A1420; border:1px solid #A63D63; border-radius:99px; padding:6px 14px; text-align:center;">Effort ◆</div>
+          <div style="font-size:12px; color:#96949B; background:#131216; border:1px solid #232227; border-radius:99px; padding:6px 14px; text-align:center;">Controls</div>
+        </div>
+      </div>
+      <div style="flex:none;">
+        <div style="font-size:12px; font-weight:600; color:#F2F1F2; margin-bottom:8px;">Outdoor · walk / run / hike</div>
+        <div style="display:grid; gap:6px;">
+          <div style="font-size:12px; color:#96949B; background:#131216; border:1px solid #232227; border-radius:99px; padding:6px 14px; text-align:center;">Metrics</div>
+          <div style="font-size:12px; font-weight:600; color:#DC74A0; background:#2A1420; border:1px solid #A63D63; border-radius:99px; padding:6px 14px; text-align:center;">Live map ◆</div>
+          <div style="font-size:12px; color:#96949B; background:#131216; border:1px solid #232227; border-radius:99px; padding:6px 14px; text-align:center;">Trail stats</div>
+          <div style="font-size:12px; font-weight:600; color:#DC74A0; background:#2A1420; border:1px solid #A63D63; border-radius:99px; padding:6px 14px; text-align:center;">Effort ◆</div>
+          <div style="font-size:12px; color:#96949B; background:#131216; border:1px solid #232227; border-radius:99px; padding:6px 14px; text-align:center;">Controls</div>
+        </div>
+      </div>
+      <div style="flex:none;">
+        <div style="font-size:12px; font-weight:600; color:#F2F1F2; margin-bottom:8px;">Treadmill</div>
+        <div style="display:grid; gap:6px;">
+          <div style="font-size:12px; color:#96949B; background:#131216; border:1px solid #232227; border-radius:99px; padding:6px 14px; text-align:center;">Metrics</div>
+          <div style="font-size:12px; font-weight:600; color:#DC74A0; background:#2A1420; border:1px solid #A63D63; border-radius:99px; padding:6px 14px; text-align:center;">Effort ◆</div>
+          <div style="font-size:12px; color:#96949B; background:#131216; border:1px solid #232227; border-radius:99px; padding:6px 14px; text-align:center;">Controls</div>
+        </div>
+      </div>
+      <div style="flex:none;">
+        <div style="font-size:12px; font-weight:600; color:#F2F1F2; margin-bottom:8px;">Freestyle</div>
+        <div style="display:grid; gap:6px;">
+          <div style="font-size:12px; color:#96949B; background:#131216; border:1px solid #232227; border-radius:99px; padding:6px 14px; text-align:center;">Freestyle face <span style="color:#66646C;">· keeps End</span></div>
+          <div style="font-size:12px; font-weight:600; color:#DC74A0; background:#2A1420; border:1px solid #A63D63; border-radius:99px; padding:6px 14px; text-align:center;">Effort ◆</div>
+        </div>
+      </div>
+      <div style="flex:1; min-width:260px; font-size:12.5px; color:#8A8890; line-height:1.65; align-self:center;">◆ = this round. Effort slots <span style="color:#A5A3AA;">after the working pages, before Controls</span> — a deliberate swipe, never in the way of logging. Live map sits directly under Metrics on outdoor kinds: one flick answers "where am I", two answer "how hard". Implementation is tag order in LiveWorkoutView's TabView — the recorder already feeds every number on both new pages.</div>
+    </div>
+  </div>
+
+  <!-- ══════════ 01 EFFORT PAGE ══════════ -->
+  <div id="s1" style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:6px;">01 — EFFORT PAGE <span style="color:#55535A; letter-spacing:0; font-weight:400;">(new swipe page, all kinds)</span></div>
+  <div style="font-size:13px; color:#66646C; margin-bottom:24px; max-width:820px;">"How hard am I working" — last ~10 min of hrStream over zone bands, live BPM + zone chip, calories + burn rate, steps + cadence. <span style="color:#A5A3AA;">The step cells are kind-aware:</span> walk / run / hike / treadmill show STEPS + STEPS/MIN; kettlebell, weight training and freestyle swap in AVG + PEAK BPM — steps mean nothing mid-swing. Two layouts: <a href="#3a">3a</a> reads the story, <a href="#3b">3b</a> reads the needle.</div>
+  <div style="display:flex; flex-wrap:wrap; gap:44px; margin-bottom:36px; align-items:flex-start;">
+
+    <div id="3a" data-screen-label="3a Effort — strip chart" style="flex:none;">
+      <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:12px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">3a</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">The strip chart — ten minutes of truth</span></div>
+      <div style="position:relative;">
+        <div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div>
+        <div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:46px 30px 34px; display:flex; flex-direction:column;">
+              <div style="display:flex; align-items:center;"><span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#DC74A0;">EFFORT</span><span style="margin-left:auto; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#66646C; font-variant-numeric:tabular-nums;">42:19</span></div>
+              <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+                <svg width="26" height="26" viewBox="0 0 24 24" style="animation:beatSnap 0.357s ease-out infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg>
+                <span style="font-family:'Familjen Grotesk',sans-serif; font-size:66px; font-weight:700; color:#FFF; line-height:0.95; font-variant-numeric:tabular-nums;">168</span>
+                <div style="margin-left:auto; text-align:right;">
+                  <span style="display:inline-block; font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#131216; background:#DC74A0; border-radius:9px; padding:4px 11px;">Z4</span>
+                  <div style="font-size:9.5px; letter-spacing:0.14em; font-weight:600; color:#DC74A0; margin-top:4px;">THRESHOLD</div>
+                </div>
+              </div>
+              <div style="position:relative; flex:1; margin-top:12px; min-height:0;">
+                <svg width="336" height="100%" viewBox="0 0 336 158" preserveAspectRatio="none" style="position:absolute; inset:0; height:100%;">
+                  <rect x="0" y="0" width="336" height="17.6" fill="rgba(255,217,232,0.10)"></rect>
+                  <rect x="0" y="17.6" width="336" height="20.3" fill="rgba(220,116,160,0.11)"></rect>
+                  <rect x="0" y="37.9" width="336" height="20.3" fill="rgba(201,125,156,0.10)"></rect>
+                  <rect x="0" y="58.2" width="336" height="40.6" fill="rgba(143,191,156,0.08)"></rect>
+                  <rect x="0" y="98.8" width="336" height="59.2" fill="rgba(127,166,201,0.06)"></rect>
+                  <line x1="0" y1="17.6" x2="336" y2="17.6" stroke="rgba(255,255,255,0.05)" stroke-width="1"></line>
+                  <line x1="0" y1="37.9" x2="336" y2="37.9" stroke="rgba(255,255,255,0.05)" stroke-width="1"></line>
+                  <line x1="0" y1="58.2" x2="336" y2="58.2" stroke="rgba(255,255,255,0.05)" stroke-width="1"></line>
+                  <line x1="0" y1="98.8" x2="336" y2="98.8" stroke="rgba(255,255,255,0.05)" stroke-width="1"></line>
+                  <text x="330" y="12" text-anchor="end" font-size="9" font-weight="600" fill="rgba(255,217,232,0.5)" font-family="Instrument Sans">Z5</text>
+                  <text x="330" y="31" text-anchor="end" font-size="9" font-weight="600" fill="rgba(220,116,160,0.55)" font-family="Instrument Sans">Z4</text>
+                  <text x="330" y="52" text-anchor="end" font-size="9" font-weight="600" fill="rgba(201,125,156,0.55)" font-family="Instrument Sans">Z3</text>
+                  <text x="330" y="76" text-anchor="end" font-size="9" font-weight="600" fill="rgba(143,191,156,0.5)" font-family="Instrument Sans">Z2</text>
+                  <path d="M0 128 C24 122 36 106 56 100 C76 94 84 76 104 72 C122 68 130 82 150 78 C170 74 182 55 204 51 C222 48 230 59 250 55 C272 51 284 38 306 33 L328 30" fill="none" stroke="#F2F1F2" stroke-width="2.6" stroke-linecap="round"></path>
+                  <circle cx="328" cy="30" r="4.5" fill="#DC74A0" style="animation:dotBlip 1s ease-in-out infinite;"></circle>
+                </svg>
+                <span style="position:absolute; left:0; bottom:-2px; font-size:9px; letter-spacing:0.12em; color:#55535A;">−10 MIN</span>
+                <span style="position:absolute; right:0; bottom:-2px; font-size:9px; letter-spacing:0.12em; color:#55535A;">NOW</span>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px 14px; margin-top:16px; justify-items:center; text-align:center;">
+                <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">486</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">KCAL</div></div>
+                <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">688</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">KCAL / H</div></div>
+                <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">6,240</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">STEPS</div></div>
+                <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">164</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">STEPS / MIN</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:430px; margin-top:14px; font-size:12.5px; color:#8A8890; line-height:1.6;">Graph = last 10 min of <span style="color:#A5A3AA;">hrStream/timeStream</span> (already recorded at ~1 Hz), redrawn once per new sample — never a display-link. Bands sit at HIS boundaries served by /api/mobile/zones. Trace is ink-white so the bands do the color talking; the now-dot breathes 1 s. Burn rate = kcal delta over the trailing 5 min, floor 0. Steps + cadence come from CMPedometer's live callback (recorder queries HK steps only at finish today — pedometer is the live source). <span style="color:#A5A3AA;">41 mm:</span> graph drops to 122 px tall, BPM 58 px, stat grid unchanged.</div>
+    </div>
+
+    <div id="3b" data-screen-label="3b Effort — the dial" style="flex:none;">
+      <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:12px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">3b</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">The dial — a gauge you read in one second</span></div>
+      <div style="position:relative;">
+        <div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div>
+        <div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:46px 30px 34px; display:flex; flex-direction:column; align-items:center;">
+              <div style="display:flex; align-items:center; width:100%;"><span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#DC74A0;">EFFORT</span><span style="margin-left:auto; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#66646C; font-variant-numeric:tabular-nums;">42:19</span></div>
+              <div style="position:relative; width:260px; height:150px; margin-top:16px;">
+                <svg width="260" height="150" viewBox="0 0 260 150">
+                  <path d="M28 138 A102 102 0 0 1 232 138" pathLength="100" fill="none" stroke="#7FA6C9" stroke-width="11" stroke-linecap="round" stroke-dasharray="13 100"></path>
+                  <path d="M28 138 A102 102 0 0 1 232 138" pathLength="100" fill="none" stroke="#8FBF9C" stroke-width="11" stroke-linecap="round" stroke-dasharray="0 20 13 100"></path>
+                  <path d="M28 138 A102 102 0 0 1 232 138" pathLength="100" fill="none" stroke="#C97D9C" stroke-width="11" stroke-linecap="round" stroke-dasharray="0 40 13 100"></path>
+                  <path d="M28 138 A102 102 0 0 1 232 138" pathLength="100" fill="none" stroke="#DC74A0" stroke-width="11" stroke-linecap="round" stroke-dasharray="0 60 13 100"></path>
+                  <path d="M28 138 A102 102 0 0 1 232 138" pathLength="100" fill="none" stroke="#3D1526" stroke-width="11" stroke-linecap="round" stroke-dasharray="0 80 13 100"></path>
+                  <path d="M28 138 A102 102 0 0 1 232 138" pathLength="100" fill="none" stroke="#FFD9E8" stroke-width="11" stroke-linecap="round" stroke-dasharray="0 80 13 100" opacity="0.35"></path>
+                  <circle cx="188" cy="56" r="9" fill="#DC74A0" stroke="#000" stroke-width="3.5"></circle>
+                  <circle cx="188" cy="56" r="9" fill="none" stroke="#DC74A0" stroke-width="2" style="transform-origin:188px 56px; animation:posPulse 1.6s ease-out infinite;"></circle>
+                </svg>
+                <div style="position:absolute; left:0; right:0; bottom:-4px; text-align:center;">
+                  <div style="display:flex; align-items:baseline; justify-content:center; gap:6px;"><svg width="20" height="20" viewBox="0 0 24 24" style="animation:beatSnap 0.357s ease-out infinite; align-self:center;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg><span style="font-family:'Familjen Grotesk',sans-serif; font-size:74px; font-weight:700; color:#FFF; line-height:0.9; font-variant-numeric:tabular-nums;">168</span></div>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; margin-top:12px;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:700; color:#131216; background:#DC74A0; border-radius:8px; padding:3px 10px;">Z4</span><span style="font-size:11px; letter-spacing:0.14em; font-weight:600; color:#DC74A0;">THRESHOLD · 12:40 HERE</span></div>
+              <svg width="336" height="34" viewBox="0 0 336 34" style="margin-top:14px;">
+                <path d="M0 28 C30 26 50 20 80 18 C110 16 130 22 160 19 C190 16 210 9 250 7 C280 5.5 310 7 336 6" fill="none" stroke="#3A393E" stroke-width="2" stroke-linecap="round"></path>
+                <circle cx="336" cy="6" r="3" fill="#DC74A0"></circle>
+              </svg>
+              <div style="display:flex; width:100%; margin-top:auto; text-align:center;">
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:21px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">486</div><div style="font-size:9px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">KCAL</div></div>
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:21px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">688</div><div style="font-size:9px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">/ H</div></div>
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:21px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">6,240</div><div style="font-size:9px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">STEPS</div></div>
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:21px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">164</div><div style="font-size:9px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">SPM</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:430px; margin-top:14px; font-size:12.5px; color:#8A8890; line-height:1.6;">Five fixed zone segments (one-second read: which arc is my dot on), needle-dot pulsing at the live position, Z5 segment ghosted until entered. The chip line carries <span style="color:#A5A3AA;">time-in-current-zone</span> — the number he actually quotes. History compresses to a 10-min sparkline; the 2×2 stat grid flattens to one row. <span style="color:#A5A3AA;">41 mm:</span> gauge 224 px wide, sparkline drops, stats keep one row.</div>
+    </div>
+  </div>
+  <div style="display:flex; flex-wrap:wrap; gap:24px; margin-bottom:26px; align-items:flex-start;">
+    <div data-screen-label="Effort — always-on" style="flex:none; width:396px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:30px; padding:32px 30px;">
+      <div style="font-size:10px; letter-spacing:0.16em; color:#55535A; margin-bottom:16px;">ALWAYS-ON · WRIST DOWN (BOTH OPTIONS)</div>
+      <div style="display:flex; align-items:center;"><span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#66646C;">EFFORT</span><span style="margin-left:auto; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#55535A;">42 MIN</span></div>
+      <div style="display:flex; align-items:center; gap:12px; margin-top:10px;">
+        <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="none" stroke="#96949B" stroke-width="1.8"></path></svg>
+        <span style="font-family:'Familjen Grotesk',sans-serif; font-size:56px; font-weight:700; color:#A5A3AA; line-height:0.95; font-variant-numeric:tabular-nums;">168</span>
+        <span style="margin-left:auto; font-family:'Familjen Grotesk',sans-serif; font-size:17px; font-weight:700; color:rgba(220,116,160,0.6); border:1.5px solid rgba(220,116,160,0.55); border-radius:9px; padding:3px 10px;">Z4</span>
+      </div>
+      <div style="position:relative; height:92px; margin-top:12px;">
+        <svg width="336" height="92" viewBox="0 0 336 158" preserveAspectRatio="none" style="position:absolute; inset:0;">
+          <line x1="0" y1="17.6" x2="336" y2="17.6" stroke="#1D1C21" stroke-width="1"></line>
+          <line x1="0" y1="37.9" x2="336" y2="37.9" stroke="#1D1C21" stroke-width="1"></line>
+          <line x1="0" y1="58.2" x2="336" y2="58.2" stroke="#1D1C21" stroke-width="1"></line>
+          <line x1="0" y1="98.8" x2="336" y2="98.8" stroke="#1D1C21" stroke-width="1"></line>
+          <path d="M0 128 C24 122 36 106 56 100 C76 94 84 76 104 72 C122 68 130 82 150 78 C170 74 182 55 204 51 C222 48 230 59 250 55 C272 51 284 38 306 33 L328 30" fill="none" stroke="#55535A" stroke-width="2.2" stroke-linecap="round"></path>
+          <circle cx="328" cy="30" r="4" fill="none" stroke="#96949B" stroke-width="1.6"></circle>
+        </svg>
+      </div>
+      <div style="font-size:11.5px; color:#66646C; line-height:1.6; margin-top:14px;">Graph frozen at last wrist-raise · bands become hairlines · chip loses fill, keeps outline · BPM stays (it is the page) at 55% luminance · stats row leaves · elapsed → minutes · <span style="color:#8A8890;">zero animation</span>. Zone-change while wrist-down: chip outline recolors at the next 1 Hz tick, haptic still fires (<a href="#s3">§03</a>).</div>
+    </div>
+    <div data-screen-label="Effort — paused" style="flex:none; width:396px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:30px; padding:32px 30px;">
+      <div style="font-size:10px; letter-spacing:0.16em; color:#55535A; margin-bottom:16px;">PAUSED</div>
+      <div style="display:flex; align-items:center;"><span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#96949B;">PAUSED</span><span style="margin-left:auto; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#66646C; font-variant-numeric:tabular-nums;">42:19</span></div>
+      <div style="display:flex; align-items:center; gap:12px; margin-top:10px; opacity:0.62;">
+        <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg>
+        <span style="font-family:'Familjen Grotesk',sans-serif; font-size:56px; font-weight:700; color:#F2F1F2; line-height:0.95; font-variant-numeric:tabular-nums;">141</span>
+        <span style="font-size:11px; color:#66646C; align-self:center;">falling</span>
+        <span style="margin-left:auto; font-family:'Familjen Grotesk',sans-serif; font-size:17px; font-weight:700; color:#131216; background:#8FBF9C; border-radius:9px; padding:3px 10px;">Z2</span>
+      </div>
+      <div style="position:relative; height:92px; margin-top:12px; opacity:0.62;">
+        <svg width="336" height="92" viewBox="0 0 336 158" preserveAspectRatio="none" style="position:absolute; inset:0;">
+          <rect x="0" y="0" width="336" height="17.6" fill="rgba(255,217,232,0.07)"></rect>
+          <rect x="0" y="17.6" width="336" height="20.3" fill="rgba(220,116,160,0.08)"></rect>
+          <rect x="0" y="37.9" width="336" height="20.3" fill="rgba(201,125,156,0.07)"></rect>
+          <rect x="0" y="58.2" width="336" height="40.6" fill="rgba(143,191,156,0.06)"></rect>
+          <rect x="0" y="98.8" width="336" height="59.2" fill="rgba(127,166,201,0.05)"></rect>
+          <path d="M0 128 C24 122 36 106 56 100 C76 94 84 76 104 72 C122 68 130 82 150 78 C170 74 182 55 204 51 C222 48 230 59 250 55" fill="none" stroke="#F2F1F2" stroke-width="2.4" stroke-linecap="round"></path>
+          <path d="M250 55 C266 62 276 74 290 78" fill="none" stroke="#66646C" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="3 6"></path>
+          <circle cx="290" cy="78" r="4" fill="#66646C"></circle>
+        </svg>
+      </div>
+      <div style="font-size:11.5px; color:#66646C; line-height:1.6; margin-top:14px;">Kicker swaps to PAUSED (grammar from the shipped metrics page) · elapsed holds · HR keeps streaming — the trace continues <span style="color:#8A8890;">dotted</span> so recovery is visible mid-rest · page dims to 62% · burn rate reads 0, steps hold. Resume: dots solidify, 350 ms spring on the chip.</div>
+    </div>
+  </div>
+  <sc-if value="{{ showSpecTables }}" hint-placeholder-val="{{ true }}">
+  <div style="max-width:844px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 24px; margin-bottom:64px; box-sizing:border-box;">
+    <div style="font-size:10.5px; letter-spacing:0.18em; font-weight:600; color:#96949B; margin-bottom:4px;">MOTION SPEC — EFFORT PAGE</div>
+    <div style="display:grid; grid-template-columns:150px 178px 62px 158px 84px 1fr; gap:0 14px; font-size:11.5px; color:#A5A3AA;">
+      <div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">ELEMENT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">TRIGGER</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">DUR</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">EASING</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">REPEAT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">HAPTIC</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Now-dot</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">page visible + running</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">1000 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">ease-in-out, opacity 1→0.35→1</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">loop</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Trace redraw</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">new hrStream sample (~1 Hz)</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">0 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">none — snap, no tween</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">per sample</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Zone chip re-tint</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">zone change (debounced, §03)</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">350 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">spring (.34,1.4,.5,1), scale 1→1.26→1</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">via §03</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Pause dim</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">phase → .paused</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">260 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">ease-in, opacity 1→0.62</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; color:#F2F1F2;">Resume spring</div><div style="padding:7px 0;">phase → .running</div><div style="padding:7px 0; font-family:ui-monospace,Menlo,monospace;">350 ms</div><div style="padding:7px 0;">spring (.34,1.4,.5,1)</div><div style="padding:7px 0;">once</div><div style="padding:7px 0;">.start</div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ══════════ 02 LIVE MAP ══════════ -->
+  <div id="s2" style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:6px;">02 — LIVE MAP PAGE <span style="color:#55535A; letter-spacing:0; font-weight:400;">(new swipe page, outdoor kinds)</span></div>
+  <div style="font-size:13px; color:#66646C; margin-bottom:24px; max-width:820px;">The trail drawn live on Apple's standard map (dark) — this round designs the <span style="color:#A5A3AA;">overlay chrome only</span>, never the tiles. Route in accent, start ring, live dot, GPS pill, distance + pace. <a href="#3c">3c</a> gives the map the whole screen; <a href="#3d">3d</a> keeps the trail-stats family.</div>
+  <div style="display:flex; flex-wrap:wrap; gap:44px; margin-bottom:36px; align-items:flex-start;">
+
+    <div id="3c" data-screen-label="3c Live map — full bleed" style="flex:none;">
+      <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:12px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">3c</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Full bleed — the map is the page</span><span style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#8FBF9C;">PICKED · + 3d'S STAT ROW</span></div>
+      <div style="position:relative;">
+        <div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div>
+        <div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#0E0E12; overflow:hidden; position:relative;">
+            <svg width="396" height="484" viewBox="0 0 396 484" style="position:absolute; inset:0;">
+              <path d="M330 484 C310 420 350 380 396 360 L396 484 Z" fill="#10171D"></path>
+              <path d="M-10 120 C60 96 120 130 200 108 C270 90 330 110 406 92" fill="none" stroke="#1B1A21" stroke-width="14"></path>
+              <path d="M-10 250 C80 230 150 262 240 240 C300 226 350 240 406 228" fill="none" stroke="#201F26" stroke-width="7"></path>
+              <path d="M60 -10 C80 90 40 180 70 290 C90 360 60 430 80 494" fill="none" stroke="#201F26" stroke-width="7"></path>
+              <path d="M180 -10 C200 80 160 200 200 300 C226 366 200 430 216 494" fill="none" stroke="#18171D" stroke-width="4"></path>
+              <path d="M-10 390 C90 372 200 392 300 372 C340 364 380 368 406 360" fill="none" stroke="#18171D" stroke-width="4"></path>
+              <path d="M300 -10 C320 60 290 140 320 220" fill="none" stroke="#18171D" stroke-width="4"></path>
+              <path d="M20 30 C100 60 140 40 210 64 C160 90 120 150 40 130 Z" fill="#131A15"></path>
+              <path d="M84 406 C120 380 108 330 148 308 C190 285 208 250 236 228 C262 208 268 176 300 150" fill="none" stroke="rgba(220,116,160,0.22)" stroke-width="11" stroke-linecap="round"></path>
+              <path d="M84 406 C120 380 108 330 148 308 C190 285 208 250 236 228 C262 208 268 176 300 150" fill="none" stroke="#DC74A0" stroke-width="4.5" stroke-linecap="round"></path>
+              <circle cx="84" cy="406" r="6" fill="none" stroke="#DC74A0" stroke-width="2.5"></circle>
+            </svg>
+            <div style="position:absolute; left:284px; top:134px; width:32px; height:32px;">
+              <span style="position:absolute; inset:0; border-radius:50%; border:2px solid #DC74A0; animation:posPulse 1.8s ease-out infinite;"></span>
+              <span style="position:absolute; left:8px; top:8px; width:16px; height:16px; border-radius:50%; background:#DC74A0; border:3px solid #FFF; box-sizing:border-box;"></span>
+            </div>
+            <div style="position:absolute; left:0; right:0; top:0; height:118px; background:linear-gradient(180deg, rgba(0,0,0,0.82), rgba(0,0,0,0));"></div>
+            <div style="position:absolute; left:30px; right:30px; top:46px; display:flex; align-items:center;">
+              <span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#DC74A0;">TRAIL RUN</span>
+              <span style="margin-left:auto; display:flex; align-items:center; gap:5px; font-size:10px; letter-spacing:0.1em; font-weight:700; color:#8FBF9C; background:rgba(0,0,0,0.5); border:1px solid rgba(143,191,156,0.3); border-radius:99px; padding:5px 11px;"><span style="width:6px; height:6px; border-radius:50%; background:#8FBF9C; animation:gpsBlink 1.6s ease-in-out infinite;"></span>GPS</span>
+            </div>
+            <div style="position:absolute; left:0; right:0; bottom:0; height:196px; background:linear-gradient(0deg, rgba(0,0,0,0.9) 38%, rgba(0,0,0,0));"></div>
+            <div style="position:absolute; left:30px; right:30px; bottom:32px;">
+              <div style="display:flex; align-items:baseline; gap:6px;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:44px; font-weight:700; color:#FFF; line-height:0.95; font-variant-numeric:tabular-nums;">4.18</span><span style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#96949B;">KM</span></div>
+              <div style="display:flex; margin-top:12px; text-align:center;">
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">5:42</div><div style="font-size:9px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:3px;">/ KM · NOW</div></div>
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">+186</div><div style="font-size:9px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:3px;">ELEV M</div></div>
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">6,240</div><div style="font-size:9px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:3px;">STEPS</div></div>
+                <div style="flex:1;"><div style="display:flex; align-items:center; justify-content:center; gap:4px;"><svg width="13" height="13" viewBox="0 0 24 24" style="animation:beatSnap 0.44s ease-out infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg><span style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">137</span></div><div style="font-size:9px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:3px;">BPM</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:430px; margin-top:14px; font-size:12.5px; color:#8A8890; line-height:1.6;">MKMapView, standard style, dark, no POI labels, north-up, auto-panned to keep the head dot in the upper two-thirds — <span style="color:#A5A3AA;">tiles are Apple's; everything on top is ours</span>. Route = route.coordinates at 4.5 px with a 22%-alpha underglow (a second stroke, not a filter); start ring hollow; head dot white-cored with a 1.8 s pulse ring. Scrims guarantee legibility over any tile. Per the pick, <span style="color:#A5A3AA;">3d's stat row folds in</span> under the distance hero — pace (trailing 60 s) · elevation · steps · BPM, cells centered against the corner curve. Wrist-down keeps distance + pace only (the offline/AOD face below). <span style="color:#A5A3AA;">41 mm:</span> hero 38 px, row values 18 px, scrim 172 px.</div>
+    </div>
+
+    <div id="3d" data-screen-label="3d Live map — framed" style="flex:none;">
+      <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:12px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">3d</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Framed — the trail-stats family</span></div>
+      <div style="position:relative;">
+        <div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div>
+        <div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+            <div style="position:absolute; inset:0; box-sizing:border-box; padding:46px 30px 34px; display:flex; flex-direction:column;">
+              <div style="display:flex; align-items:center;">
+                <span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#DC74A0;">TRAIL RUN</span>
+                <span style="margin-left:auto; display:flex; align-items:center; gap:5px; font-size:10px; letter-spacing:0.1em; font-weight:700; color:#8FBF9C;"><span style="width:6px; height:6px; border-radius:50%; background:#8FBF9C; animation:gpsBlink 1.6s ease-in-out infinite;"></span>GPS</span>
+              </div>
+              <div style="position:relative; height:238px; border-radius:22px; overflow:hidden; margin-top:12px; border:1px solid #1F1E23;">
+                <svg width="336" height="238" viewBox="0 0 336 238" style="position:absolute; inset:0; background:#0E0E12;">
+                  <path d="M290 238 C270 190 300 160 336 148 L336 238 Z" fill="#10171D"></path>
+                  <path d="M-10 60 C60 44 120 66 200 52 C260 42 300 52 346 44" fill="none" stroke="#1B1A21" stroke-width="10"></path>
+                  <path d="M-10 140 C80 126 150 148 240 134 C290 126 320 134 346 128" fill="none" stroke="#201F26" stroke-width="5"></path>
+                  <path d="M60 -10 C76 60 46 120 66 190 C76 220 66 232 70 248" fill="none" stroke="#201F26" stroke-width="5"></path>
+                  <path d="M160 -10 C176 50 146 130 176 200 C186 224 176 232 182 248" fill="none" stroke="#18171D" stroke-width="3"></path>
+                  <path d="M14 20 C70 40 100 26 150 44 C114 62 86 100 30 86 Z" fill="#131A15"></path>
+                  <path d="M64 204 C96 184 88 148 120 130 C154 111 168 86 190 70 C210 56 216 40 240 26" fill="none" stroke="rgba(220,116,160,0.22)" stroke-width="9" stroke-linecap="round"></path>
+                  <path d="M64 204 C96 184 88 148 120 130 C154 111 168 86 190 70 C210 56 216 40 240 26" fill="none" stroke="#DC74A0" stroke-width="4" stroke-linecap="round"></path>
+                  <circle cx="64" cy="204" r="5" fill="none" stroke="#DC74A0" stroke-width="2.2"></circle>
+                </svg>
+                <div style="position:absolute; left:226px; top:12px; width:28px; height:28px;">
+                  <span style="position:absolute; inset:0; border-radius:50%; border:2px solid #DC74A0; animation:posPulse 1.8s ease-out infinite;"></span>
+                  <span style="position:absolute; left:7px; top:7px; width:14px; height:14px; border-radius:50%; background:#DC74A0; border:2.5px solid #FFF; box-sizing:border-box;"></span>
+                </div>
+              </div>
+              <div style="display:flex; align-items:baseline; gap:6px; margin-top:14px;">
+                <span style="font-family:'Familjen Grotesk',sans-serif; font-size:46px; font-weight:700; color:#FFF; line-height:0.95; font-variant-numeric:tabular-nums;">4.18</span>
+                <span style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#66646C;">KM</span>
+              </div>
+              <div style="display:flex; margin-top:auto;">
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:22px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">5:42</div><div style="font-size:9px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">/ KM · NOW</div></div>
+                <div style="flex:1;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:22px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">+186</div><div style="font-size:9px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">ELEV M</div></div>
+                <div style="flex:1;"><div style="display:flex; align-items:center; gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" style="animation:beatSnap 0.44s ease-out infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg><span style="font-family:'Familjen Grotesk',sans-serif; font-size:22px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">137</span></div><div style="font-size:9px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">BPM</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:430px; margin-top:14px; font-size:12.5px; color:#8A8890; line-height:1.6;">Same chrome inside the shipped trail-stats grammar — map in a rounded frame, distance hero, the ELEV · PACE · BPM row. Reads as a sibling of the page right below it in the carousel (and duplicates two of its numbers — the honest knock on this option). <span style="color:#A5A3AA;">41 mm:</span> frame 196 px tall, hero 40 px.</div>
+    </div>
+  </div>
+  <div style="display:flex; flex-wrap:wrap; gap:24px; margin-bottom:26px; align-items:flex-start;">
+    <div data-screen-label="Live map — offline / always-on" style="flex:none;">
+      <div style="position:relative;">
+        <div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div>
+        <div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div>
+        <div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);">
+          <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+            <svg width="396" height="484" viewBox="0 0 396 484" style="position:absolute; inset:0;">
+              <path d="M-10 96 C70 72 130 104 200 84 C270 66 330 88 406 68" fill="none" stroke="#1C1B20" stroke-width="2"></path>
+              <path d="M-10 180 C60 158 140 190 220 168 C290 150 340 170 406 152" fill="none" stroke="#1C1B20" stroke-width="2"></path>
+              <path d="M-10 268 C80 246 150 280 240 256 C300 240 350 258 406 242" fill="none" stroke="#1C1B20" stroke-width="2"></path>
+              <path d="M-10 356 C70 336 150 366 230 346 C300 328 350 346 406 332" fill="none" stroke="#1C1B20" stroke-width="2"></path>
+              <path d="M-10 440 C80 420 160 448 250 428 C310 414 360 428 406 418" fill="none" stroke="#1C1B20" stroke-width="2"></path>
+              <path d="M84 406 C120 380 108 330 148 308 C190 285 208 250 236 228 C262 208 268 176 300 150" fill="none" stroke="#A63D63" stroke-width="4" stroke-linecap="round"></path>
+              <circle cx="84" cy="406" r="6" fill="none" stroke="#A63D63" stroke-width="2.2"></circle>
+              <circle cx="300" cy="150" r="7" fill="none" stroke="#DC74A0" stroke-width="2.5"></circle>
+            </svg>
+            <div style="position:absolute; left:30px; right:30px; top:46px; display:flex; align-items:center;">
+              <span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#96949B;">TRAIL RUN</span>
+              <span style="margin-left:auto; display:flex; align-items:center; gap:5px; font-size:10px; letter-spacing:0.1em; font-weight:700; color:#96949B;"><span style="width:6px; height:6px; border-radius:50%; background:#96949B;"></span>SEARCHING</span>
+            </div>
+            <div style="position:absolute; left:30px; right:30px; bottom:36px; display:flex; align-items:flex-end;">
+              <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:40px; font-weight:700; color:#A5A3AA; line-height:0.95; font-variant-numeric:tabular-nums;">4.18</div><div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:4px;">KM</div></div>
+              <div style="margin-left:auto; text-align:right;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:40px; font-weight:700; color:#A5A3AA; line-height:0.95; font-variant-numeric:tabular-nums;">5:42</div><div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:4px;">/ KM</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:10px; font-size:12px; color:#66646C;">no tiles / offline — and the always-on face</div>
+    </div>
+    <div style="flex:none; max-width:396px; display:flex; flex-direction:column; gap:24px;">
+      <div data-screen-label="Live map — paused" style="width:396px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:30px; padding:32px 30px;">
+        <div style="font-size:10px; letter-spacing:0.16em; color:#55535A; margin-bottom:16px;">PAUSED (OVERLAY DELTAS ONLY)</div>
+        <div style="display:flex; align-items:center;">
+          <span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#96949B;">PAUSED</span>
+          <span style="margin-left:auto; display:flex; align-items:center; gap:5px; font-size:10px; letter-spacing:0.1em; font-weight:700; color:#8FBF9C;"><span style="width:6px; height:6px; border-radius:50%; background:#8FBF9C;"></span>GPS</span>
+        </div>
+        <div style="display:flex; align-items:flex-end; margin-top:18px; opacity:0.75;">
+          <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:38px; font-weight:700; color:#FFF; line-height:0.95; font-variant-numeric:tabular-nums;">4.18</div><div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:4px;">KM · HELD</div></div>
+          <div style="margin-left:auto; text-align:right;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:38px; font-weight:700; color:#66646C; line-height:0.95;">—:——</div><div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:4px;">/ KM</div></div>
+        </div>
+        <div style="font-size:11.5px; color:#66646C; line-height:1.6; margin-top:16px;">Kicker → PAUSED · head dot stops pulsing (solid, white-cored) · pace empties — auto-pause means "not moving", a stale pace is a lie · distance labeled HELD · route and tiles untouched. GPS pill keeps its true state; the fix survives the pause.</div>
+      </div>
+      <div style="font-size:12.5px; color:#8A8890; line-height:1.6; padding:0 4px;">The fallback face is the brand answering the failure: the route rides the <span style="color:#A5A3AA;">contour motif</span> (TrailPage's curves, five of them at full screen) instead of a gray tile void. Same face IS the AOD form — deep-pink route (#A63D63), hollow dots, no pulse, no blink, heroes at 55%, pace goes minute-stale honestly ("/ KM" drops its NOW). One design, two duties. Distance + route never require tiles — RouteTracker owns them locally. <span style="color:#A5A3AA;">Starting a hike from a saved trail (<a href="#s5">§05</a>) draws that trail as a ghost dashed line under the live one — both options.</span></div>
+    </div>
+  </div>
+  <sc-if value="{{ showSpecTables }}" hint-placeholder-val="{{ true }}">
+  <div style="max-width:844px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 24px; margin-bottom:64px; box-sizing:border-box;">
+    <div style="font-size:10.5px; letter-spacing:0.18em; font-weight:600; color:#96949B; margin-bottom:4px;">MOTION SPEC — LIVE MAP</div>
+    <div style="display:grid; grid-template-columns:150px 178px 62px 158px 84px 1fr; gap:0 14px; font-size:11.5px; color:#A5A3AA;">
+      <div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">ELEMENT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">TRIGGER</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">DUR</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">EASING</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">REPEAT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">HAPTIC</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Head-dot pulse ring</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">page visible + running + hasFix</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">1800 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">ease-out, scale 0.55→2.1, fade</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">loop</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">GPS pill dot</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">hasFix true</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">1600 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">ease-in-out blink (ships today at 800)</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">loop</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Route head extend</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">accepted GPS fix</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">450 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">ease-in-out, last segment tweens</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">per fix</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Map pan</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">head dot leaves upper ⅔</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">600 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">ease-in-out, MKMapView animated</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">as needed</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Tiles-lost swap</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">MKMapView render fails / offline</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">260 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">crossfade to contour ground</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; color:#F2F1F2;">AOD enter</div><div style="padding:7px 0;">wrist down</div><div style="padding:7px 0; font-family:ui-monospace,Menlo,monospace;">0 ms</div><div style="padding:7px 0;">system crossfade; all loops stop</div><div style="padding:7px 0;">—</div><div style="padding:7px 0;">—</div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ══════════ 03 ZONE-CHANGE ══════════ -->
+  <div id="s3" style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:6px;">03 — THE ZONE-CHANGE MOMENT <span style="color:#55535A; letter-spacing:0; font-weight:400;">(the heart of the motion ask · demos loop ~5 s)</span></div>
+  <div style="font-size:13px; color:#66646C; margin-bottom:24px; max-width:860px;">The second HR crosses a boundary and holds it. Readable without looking: color + haptic carry the message; the screen confirms it. Fires over <span style="color:#A5A3AA;">whichever page is up</span>. Debounce: 5 consecutive seconds in the new zone to fire · 20 s cooldown (latest crossing wins) · never while paused · never in the first 60 s · Z5 entry ignores the cooldown. Picked: <a href="#3f">3f</a> — subtle wins, the page stays readable through the moment. <a href="#3e">3e</a> stays on the board for the record.</div>
+  <div style="display:flex; flex-wrap:wrap; gap:44px; margin-bottom:36px; align-items:flex-start;">
+
+    <div id="3e" data-screen-label="3e Zone change — takeover numeral" style="flex:none;">
+      <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:12px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px; background:rgba(255,255,255,0.12); color:#F2F1F2;">3e</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">The takeover — the numeral owns the screen for a breath</span></div>
+      <div style="display:flex; gap:24px;">
+        <div style="flex:none;">
+          <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);"><div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div><div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div><div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+            <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+              <div style="position:absolute; inset:0; box-sizing:border-box; padding:46px 30px 34px; display:flex; flex-direction:column;">
+                <div style="display:flex; align-items:center;"><span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#DC74A0;">EFFORT</span><span style="margin-left:auto; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#66646C; font-variant-numeric:tabular-nums;">42:19</span></div>
+                <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+                  <svg width="26" height="26" viewBox="0 0 24 24" style="animation:beatSnap 0.36s ease-out infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg>
+                  <span style="font-family:'Familjen Grotesk',sans-serif; font-size:66px; font-weight:700; color:#FFF; line-height:0.95; font-variant-numeric:tabular-nums;">169</span>
+                  <div style="margin-left:auto; position:relative; width:64px; height:38px;">
+                    <span style="position:absolute; right:0; top:0; font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#131216; background:#C97D9C; border-radius:9px; padding:4px 11px; animation:chipSwapOut 4.8s linear infinite;">Z3</span>
+                    <span style="position:absolute; right:0; top:0; font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#131216; background:#DC74A0; border-radius:9px; padding:4px 11px; animation:chipSwapIn 4.8s linear infinite;">Z4</span>
+                  </div>
+                </div>
+                <div style="position:relative; flex:1; margin-top:12px;">
+                  <svg width="336" height="100%" viewBox="0 0 336 158" preserveAspectRatio="none" style="position:absolute; inset:0; height:100%;">
+                    <rect x="0" y="0" width="336" height="17.6" fill="rgba(255,217,232,0.10)"></rect>
+                    <rect x="0" y="17.6" width="336" height="20.3" fill="rgba(220,116,160,0.11)"></rect>
+                    <rect x="0" y="37.9" width="336" height="20.3" fill="rgba(201,125,156,0.10)"></rect>
+                    <rect x="0" y="58.2" width="336" height="40.6" fill="rgba(143,191,156,0.08)"></rect>
+                    <rect x="0" y="98.8" width="336" height="59.2" fill="rgba(127,166,201,0.06)"></rect>
+                    <path d="M0 96 C30 90 50 74 80 70 C110 66 130 56 160 50 C190 44 210 42 250 38 C280 35 310 34 328 32" fill="none" stroke="#F2F1F2" stroke-width="2.6" stroke-linecap="round"></path>
+                    <circle cx="328" cy="32" r="4.5" fill="#DC74A0" style="animation:dotBlip 1s ease-in-out infinite;"></circle>
+                  </svg>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px 14px; margin-top:16px; justify-items:center; text-align:center;">
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">486</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">KCAL</div></div>
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">688</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">KCAL / H</div></div>
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">6,240</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">STEPS</div></div>
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">164</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">STEPS / MIN</div></div>
+                </div>
+              </div>
+              <div style="position:absolute; inset:0; background:#2A1420; animation:washUp 4.8s linear infinite; opacity:0;"></div>
+              <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; animation:numUp 4.8s linear infinite; opacity:0;">
+                <div style="font-size:13px; letter-spacing:0.22em; font-weight:700; color:#E9A8C4;">ZONE UP</div>
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:186px; font-weight:700; color:#DC74A0; line-height:0.9;">4</div>
+                <div style="font-size:15px; letter-spacing:0.18em; font-weight:700; color:#FFD9E8;">THRESHOLD</div>
+                <div style="font-size:12px; color:#D9A7BD; margin-top:6px;">169 BPM · was Z3</div>
+              </div>
+            </div>
+          </div>
+          <div style="text-align:center; margin-top:10px; font-size:12px; color:#66646C;">up-zone · Z3 → Z4 · haptic .directionUp</div>
+        </div>
+        <div style="flex:none;">
+          <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);"><div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div><div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div><div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+            <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+              <div style="position:absolute; inset:0; box-sizing:border-box; padding:46px 30px 34px; display:flex; flex-direction:column;">
+                <div style="display:flex; align-items:center;"><span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#DC74A0;">EFFORT</span><span style="margin-left:auto; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#66646C; font-variant-numeric:tabular-nums;">51:04</span></div>
+                <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+                  <svg width="26" height="26" viewBox="0 0 24 24" style="animation:beatSnap 0.41s ease-out infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg>
+                  <span style="font-family:'Familjen Grotesk',sans-serif; font-size:66px; font-weight:700; color:#FFF; line-height:0.95; font-variant-numeric:tabular-nums;">146</span>
+                  <div style="margin-left:auto; position:relative; width:64px; height:38px;">
+                    <span style="position:absolute; right:0; top:0; font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#131216; background:#C97D9C; border-radius:9px; padding:4px 11px; animation:chipSwapOut 4.8s linear infinite;">Z3</span>
+                    <span style="position:absolute; right:0; top:0; font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#131216; background:#8FBF9C; border-radius:9px; padding:4px 11px; animation:chipSwapIn 4.8s linear infinite;">Z2</span>
+                  </div>
+                </div>
+                <div style="position:relative; flex:1; margin-top:12px;">
+                  <svg width="336" height="100%" viewBox="0 0 336 158" preserveAspectRatio="none" style="position:absolute; inset:0; height:100%;">
+                    <rect x="0" y="0" width="336" height="17.6" fill="rgba(255,217,232,0.10)"></rect>
+                    <rect x="0" y="17.6" width="336" height="20.3" fill="rgba(220,116,160,0.11)"></rect>
+                    <rect x="0" y="37.9" width="336" height="20.3" fill="rgba(201,125,156,0.10)"></rect>
+                    <rect x="0" y="58.2" width="336" height="40.6" fill="rgba(143,191,156,0.08)"></rect>
+                    <rect x="0" y="98.8" width="336" height="59.2" fill="rgba(127,166,201,0.06)"></rect>
+                    <path d="M0 30 C30 32 50 40 80 46 C110 52 130 58 160 62 C190 66 210 70 250 72 C280 74 310 76 328 78" fill="none" stroke="#F2F1F2" stroke-width="2.6" stroke-linecap="round"></path>
+                    <circle cx="328" cy="78" r="4.5" fill="#8FBF9C" style="animation:dotBlip 1s ease-in-out infinite;"></circle>
+                  </svg>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px 14px; margin-top:16px; justify-items:center; text-align:center;">
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">512</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">KCAL</div></div>
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">604</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">KCAL / H</div></div>
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">7,120</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">STEPS</div></div>
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">158</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">STEPS / MIN</div></div>
+                </div>
+              </div>
+              <div style="position:absolute; inset:0; background:#1E2A22; animation:washDown 4.8s linear infinite; opacity:0;"></div>
+              <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; animation:numDown 4.8s linear infinite; opacity:0;">
+                <div style="font-size:13px; letter-spacing:0.22em; font-weight:700; color:#8FBF9C; opacity:0.8;">ZONE DOWN</div>
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:186px; font-weight:700; color:#8FBF9C; line-height:0.9;">2</div>
+                <div style="font-size:15px; letter-spacing:0.18em; font-weight:700; color:#8FBF9C; opacity:0.75;">EASY</div>
+                <div style="font-size:12px; color:#66646C; margin-top:6px;">146 BPM · settling</div>
+              </div>
+            </div>
+          </div>
+          <div style="text-align:center; margin-top:10px; font-size:12px; color:#66646C;">down-zone · Z3 → Z2 · haptic .directionDown</div>
+        </div>
+      </div>
+      <div style="max-width:844px; margin-top:14px; font-size:12.5px; color:#8A8890; line-height:1.6;">Up rises — wash 140 ms, numeral springs from below 350 ms, holds 900 ms, then the numeral <span style="color:#A5A3AA;">shrinks into the zone chip</span> (450 ms settle) so the takeover literally becomes the page's state. Down descends, in the calmer zone-dim wash, holds only 600 ms, and exits without ceremony — <span style="color:#A5A3AA;">up is a push, down is permission</span>. Total: 1.85 s up / 1.4 s down, screen never hostage longer. Numeral 186 px (41 mm: 158 px).</div>
+    </div>
+
+    <div id="3f" data-screen-label="3f Zone change — bloom" style="flex:none;">
+      <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:12px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">3f</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">The bloom — color rises behind the page, numbers never leave</span><span style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#8FBF9C;">PICKED</span></div>
+      <div style="display:flex; gap:24px;">
+        <div style="flex:none;">
+          <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);"><div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div><div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div><div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+            <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+              <div style="position:absolute; left:-60px; right:-60px; bottom:-140px; height:340px; background:radial-gradient(ellipse at 50% 100%, rgba(220,116,160,0.55), rgba(220,116,160,0) 62%); animation:bloomUp 4.8s linear infinite; opacity:0;"></div>
+              <div style="position:absolute; inset:0; box-sizing:border-box; padding:46px 30px 34px; display:flex; flex-direction:column;">
+                <div style="display:flex; align-items:center;"><span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#DC74A0;">EFFORT</span><span style="margin-left:auto; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#66646C; font-variant-numeric:tabular-nums;">42:19</span></div>
+                <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+                  <svg width="26" height="26" viewBox="0 0 24 24" style="animation:beatSnap 0.36s ease-out infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg>
+                  <span style="font-family:'Familjen Grotesk',sans-serif; font-size:66px; font-weight:700; color:#FFF; line-height:0.95; font-variant-numeric:tabular-nums;">169</span>
+                  <div style="margin-left:auto; text-align:right;">
+                    <div style="position:relative; width:64px; height:38px;">
+                      <span style="position:absolute; right:0; top:0; font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#131216; background:#C97D9C; border-radius:9px; padding:4px 11px; animation:chipSwapOut 4.8s linear infinite;">Z3</span>
+                      <span style="position:absolute; right:0; top:0; font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#131216; background:#DC74A0; border-radius:9px; padding:4px 11px; animation:chipSwapIn 4.8s linear infinite;">Z4</span>
+                    </div>
+                    <div style="position:relative; height:14px; margin-top:4px;">
+                      <span style="position:absolute; right:0; top:0; font-size:9.5px; letter-spacing:0.14em; font-weight:600; color:#C97D9C; animation:bpmTintOut 4.8s linear infinite;">AEROBIC</span>
+                      <span style="position:absolute; right:0; top:0; font-size:9.5px; letter-spacing:0.14em; font-weight:600; color:#DC74A0; animation:bpmTintIn 4.8s linear infinite;">THRESHOLD ↑</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="position:relative; flex:1; margin-top:12px;">
+                  <svg width="336" height="100%" viewBox="0 0 336 158" preserveAspectRatio="none" style="position:absolute; inset:0; height:100%;">
+                    <rect x="0" y="0" width="336" height="17.6" fill="rgba(255,217,232,0.10)"></rect>
+                    <rect x="0" y="17.6" width="336" height="20.3" fill="rgba(220,116,160,0.11)"></rect>
+                    <rect x="0" y="37.9" width="336" height="20.3" fill="rgba(201,125,156,0.10)"></rect>
+                    <rect x="0" y="58.2" width="336" height="40.6" fill="rgba(143,191,156,0.08)"></rect>
+                    <rect x="0" y="98.8" width="336" height="59.2" fill="rgba(127,166,201,0.06)"></rect>
+                    <path d="M0 96 C30 90 50 74 80 70 C110 66 130 56 160 50 C190 44 210 42 250 38 C280 35 310 34 328 32" fill="none" stroke="#F2F1F2" stroke-width="2.6" stroke-linecap="round"></path>
+                    <circle cx="328" cy="32" r="4.5" fill="#DC74A0" style="animation:dotBlip 1s ease-in-out infinite;"></circle>
+                  </svg>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px 14px; margin-top:16px; justify-items:center; text-align:center;">
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">486</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">KCAL</div></div>
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">688</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">KCAL / H</div></div>
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">6,240</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">STEPS</div></div>
+                  <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; line-height:1;">164</div><div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">STEPS / MIN</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="text-align:center; margin-top:10px; font-size:12px; color:#66646C;">up-zone · bloom rises from below · .directionUp</div>
+        </div>
+        <div style="flex:none;">
+          <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);"><div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div><div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div><div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+            <div style="width:396px; height:484px; border-radius:106px; background:#0E0E12; overflow:hidden; position:relative;">
+              <svg width="396" height="484" viewBox="0 0 396 484" style="position:absolute; inset:0;">
+                <path d="M-10 250 C80 230 150 262 240 240 C300 226 350 240 406 228" fill="none" stroke="#201F26" stroke-width="7"></path>
+                <path d="M60 -10 C80 90 40 180 70 290 C90 360 60 430 80 494" fill="none" stroke="#201F26" stroke-width="7"></path>
+                <path d="M180 -10 C200 80 160 200 200 300 C226 366 200 430 216 494" fill="none" stroke="#18171D" stroke-width="4"></path>
+                <path d="M84 406 C120 380 108 330 148 308 C190 285 208 250 236 228 C262 208 268 176 300 150" fill="none" stroke="rgba(220,116,160,0.22)" stroke-width="11" stroke-linecap="round"></path>
+                <path d="M84 406 C120 380 108 330 148 308 C190 285 208 250 236 228 C262 208 268 176 300 150" fill="none" stroke="#DC74A0" stroke-width="4.5" stroke-linecap="round"></path>
+                <circle cx="84" cy="406" r="6" fill="none" stroke="#DC74A0" stroke-width="2.5"></circle>
+                <circle cx="300" cy="150" r="8" fill="#DC74A0" stroke="#FFF" stroke-width="3"></circle>
+              </svg>
+              <div style="position:absolute; left:-60px; right:-60px; top:-140px; height:340px; background:radial-gradient(ellipse at 50% 0%, rgba(143,191,156,0.5), rgba(143,191,156,0) 62%); animation:bloomDown 4.8s linear infinite; opacity:0;"></div>
+              <div style="position:absolute; left:0; right:0; top:0; height:118px; background:linear-gradient(180deg, rgba(0,0,0,0.82), rgba(0,0,0,0));"></div>
+              <div style="position:absolute; left:30px; right:30px; top:46px; display:flex; align-items:center;">
+                <span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#DC74A0;">HIKE</span>
+                <div style="margin-left:auto; position:relative; width:52px; height:30px;">
+                  <span style="position:absolute; right:0; top:0; font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:700; color:#131216; background:#C97D9C; border-radius:8px; padding:3px 10px; animation:chipSwapOut 4.8s linear infinite;">Z3</span>
+                  <span style="position:absolute; right:0; top:0; font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:700; color:#131216; background:#8FBF9C; border-radius:8px; padding:3px 10px; animation:chipSwapIn 4.8s linear infinite;">Z2</span>
+                </div>
+              </div>
+              <div style="position:absolute; left:0; right:0; bottom:0; height:158px; background:linear-gradient(0deg, rgba(0,0,0,0.88) 30%, rgba(0,0,0,0));"></div>
+              <div style="position:absolute; left:30px; right:30px; bottom:36px; display:flex; align-items:flex-end;">
+                <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:44px; font-weight:700; color:#FFF; line-height:0.95; font-variant-numeric:tabular-nums;">6.42</div><div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:4px;">KM</div></div>
+                <div style="margin-left:auto; text-align:right;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:44px; font-weight:700; color:#FFF; line-height:0.95; font-variant-numeric:tabular-nums;">11:08</div><div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:4px;">/ KM · NOW</div></div>
+              </div>
+            </div>
+          </div>
+          <div style="text-align:center; margin-top:10px; font-size:12px; color:#66646C;">down-zone on the map page · bloom falls from above · .directionDown</div>
+        </div>
+      </div>
+      <div style="max-width:844px; margin-top:14px; font-size:12.5px; color:#8A8890; line-height:1.6;">Nothing is covered — mid-effort the numbers stay glanceable through the moment. The bloom is a pre-baked radial sprite sliding in on transform (500 ms in, 400 ms fade), origin encodes direction: <span style="color:#A5A3AA;">up rises from the bottom bezel, down falls from the top</span>. The zone chip pops 1→1.26→1 and re-tints; the zone name line swaps with a ↑/↓ tick. Every in-workout page carries a zone chip in its header from this round on (map pages already show one here) — so the bloom always has an anchor. Total: 900 ms. The knock: quieter than <a href="#3e">3e</a> at arm's length.</div>
+    </div>
+  </div>
+  <div style="display:flex; flex-wrap:wrap; gap:24px; margin-bottom:26px; align-items:flex-start;">
+    <div data-screen-label="Zone change — always-on suppression" style="flex:none; width:396px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:30px; padding:32px 30px;">
+      <div style="font-size:10px; letter-spacing:0.16em; color:#55535A; margin-bottom:16px;">ALWAYS-ON — THE MOMENT, SUPPRESSED</div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span style="font-family:'Familjen Grotesk',sans-serif; font-size:56px; font-weight:700; color:#A5A3AA; line-height:0.95; font-variant-numeric:tabular-nums;">169</span>
+        <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+          <span style="font-family:'Familjen Grotesk',sans-serif; font-size:17px; font-weight:700; color:rgba(201,125,156,0.35); border:1.5px solid rgba(201,125,156,0.3); border-radius:9px; padding:3px 10px; text-decoration:line-through;">Z3</span>
+          <span style="font-family:'Familjen Grotesk',sans-serif; font-size:17px; font-weight:700; color:rgba(220,116,160,0.65); border:1.5px solid rgba(220,116,160,0.6); border-radius:9px; padding:3px 10px;">Z4</span>
+        </div>
+      </div>
+      <div style="font-size:11.5px; color:#66646C; line-height:1.6; margin-top:16px;">Wrist down: <span style="color:#8A8890;">no wash, no numeral, no bloom — nothing moves.</span> The haptic still fires (that IS the alert), and the outlined chip recolors at the next 1 Hz AOD tick. Raise the wrist within 6 s of the crossing and the moment plays once, from the wash — you asked to see it. (Struck Z3 shown only to diagram the swap.)</div>
+    </div>
+    <div style="flex:1; min-width:300px; max-width:424px; font-size:12.5px; color:#8A8890; line-height:1.65; align-self:center;">Both options share the recorder contract: a <span style="color:#A5A3AA;">ZonePublisher</span> on WorkoutRecorder classifies each hrStream sample against the served boundaries, requires 5 consecutive samples to call a crossing, emits <span style="color:#A5A3AA;">(from, to, direction)</span>, and enforces the 20 s cooldown — latest crossing wins, Z5 entry exempt. Haptics are the same in both options and in AOD: <span style="color:#F2F1F2;">.directionUp</span> / <span style="color:#F2F1F2;">.directionDown</span>, once, at fire time — the wrist knows before the eyes do. Settings → Haptics off silences them; the visual still plays.</div>
+  </div>
+  <sc-if value="{{ showSpecTables }}" hint-placeholder-val="{{ true }}">
+  <div style="max-width:844px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 24px; margin-bottom:64px; box-sizing:border-box;">
+    <div style="font-size:10.5px; letter-spacing:0.18em; font-weight:600; color:#96949B; margin-bottom:4px;">MOTION SPEC — ZONE CHANGE (BOTH OPTIONS; PICKED ONE PORTS)</div>
+    <div style="display:grid; grid-template-columns:150px 178px 62px 158px 84px 1fr; gap:0 14px; font-size:11.5px; color:#A5A3AA;">
+      <div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">ELEMENT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">TRIGGER</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">DUR</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">EASING</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">REPEAT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">HAPTIC</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">3e wash (up)</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">crossing confirmed, up</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">140 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">ease-out, opacity 0→1, zone-dim fill</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.directionUp</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">3e numeral (up)</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">wash at 60 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">350 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">spring (.34,1.4,.5,1), y +26→0, 0.86→1</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">3e hold + settle</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">numeral landed</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">900+450</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">hold, then ease-in-out shrink into chip</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">3e down variant</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">crossing confirmed, down</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">1.4 s</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">same curve, y −26→0, hold 600 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.directionDown</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">3f bloom</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">crossing confirmed</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">500+400</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">ease-out in (translate, bottom↑/top↓), fade out</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.directionUp / Down</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">3f chip pop + name swap</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">bloom at 150 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">350 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">spring, scale 1→1.26→1, tint crossfade 160 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Debounce gate</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">every hrStream sample</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">5 s</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">5 consecutive samples in new zone</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; color:#F2F1F2;">Cooldown</div><div style="padding:7px 0;">after any fire</div><div style="padding:7px 0; font-family:ui-monospace,Menlo,monospace;">20 s</div><div style="padding:7px 0;">latest crossing wins; Z5 entry exempt</div><div style="padding:7px 0;">—</div><div style="padding:7px 0;">—</div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ══════════ 04 HEART PULSE ══════════ -->
+  <div id="s4" style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:6px;">04 — THE HEART, SYNCED <span style="color:#55535A; letter-spacing:0; font-weight:400;">(BeatingHeart animates a fixed 0.5 s today — it starts telling the truth)</span></div>
+  <div style="font-size:13px; color:#66646C; margin-bottom:24px; max-width:860px;">Beat period = 60/BPM from the live sample, re-timed on every new sample. The fill stays brand pink; <span style="color:#A5A3AA;">intensity arrives as glow</span> — tinted by zone from Z3, blush-hot at Z5. Picked: <a href="#3h">3h</a> — it beats like a heart; ½-beat mode covers it above 170. <a href="#3g">3g</a> stays for the record.</div>
+  <div style="display:flex; flex-wrap:wrap; gap:24px; margin-bottom:26px; align-items:flex-start;">
+
+    <div id="3g" data-screen-label="3g Heart — systole snap" style="flex:none; width:520px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:24px; padding:26px 28px;">
+      <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px; background:rgba(255,255,255,0.12); color:#F2F1F2;">3g</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Systole snap — one sharp contraction</span></div>
+      <div style="display:flex; gap:12px; margin-top:18px;">
+        <div style="flex:1; background:#0A090C; border:1px solid #1D1C21; border-radius:18px; padding:18px 10px; text-align:center;">
+          <div style="position:relative; width:44px; height:44px; margin:0 auto;">
+            <svg width="44" height="44" viewBox="0 0 24 24" style="position:relative; animation:beatSnap 0.968s ease-out infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg>
+          </div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#F2F1F2; margin-top:8px;">62</div>
+          <div style="font-size:9px; letter-spacing:0.12em; color:#7FA6C9; font-weight:600; margin-top:2px;">Z1 · NO GLOW</div>
+        </div>
+        <div style="flex:1; background:#0A090C; border:1px solid #1D1C21; border-radius:18px; padding:18px 10px; text-align:center;">
+          <div style="position:relative; width:44px; height:44px; margin:0 auto;">
+            <svg width="44" height="44" viewBox="0 0 24 24" style="position:relative; animation:beatSnap 0.405s ease-out infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg>
+          </div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#F2F1F2; margin-top:8px;">148</div>
+          <div style="font-size:9px; letter-spacing:0.12em; color:#8FBF9C; font-weight:600; margin-top:2px;">Z2 · NO GLOW</div>
+        </div>
+        <div style="flex:1; background:#0A090C; border:1px solid #1D1C21; border-radius:18px; padding:18px 10px; text-align:center;">
+          <div style="position:relative; width:44px; height:44px; margin:0 auto;">
+            <div style="position:absolute; left:-14px; top:-14px; width:72px; height:72px; border-radius:50%; background:radial-gradient(circle, rgba(220,116,160,0.55), rgba(220,116,160,0) 65%); animation:glowBeat 0.349s linear infinite;"></div>
+            <svg width="44" height="44" viewBox="0 0 24 24" style="position:relative; animation:beatSnap 0.349s ease-out infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg>
+          </div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#F2F1F2; margin-top:8px;">172</div>
+          <div style="font-size:9px; letter-spacing:0.12em; color:#DC74A0; font-weight:600; margin-top:2px;">Z4 · PINK GLOW</div>
+        </div>
+        <div style="flex:1; background:#0A090C; border:1px solid #1D1C21; border-radius:18px; padding:18px 10px; text-align:center;">
+          <div style="position:relative; width:44px; height:44px; margin:0 auto;">
+            <div style="position:absolute; left:-14px; top:-14px; width:72px; height:72px; border-radius:50%; background:radial-gradient(circle, rgba(255,217,232,0.65), rgba(255,217,232,0) 65%); animation:glowBeat 0.645s linear infinite;"></div>
+            <svg width="44" height="44" viewBox="0 0 24 24" style="position:relative; animation:beatSnap 0.645s ease-out infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#FFD9E8"></path></svg>
+          </div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#FFD9E8; margin-top:8px;">186</div>
+          <div style="font-size:9px; letter-spacing:0.12em; color:#FFD9E8; font-weight:600; margin-top:2px;">Z5 · BLUSH · ½ BEATS</div>
+        </div>
+      </div>
+      <div style="font-size:12.5px; color:#8A8890; line-height:1.6; margin-top:14px;">Contraction is fixed at <span style="color:#A5A3AA;">90 ms to 1.16×</span> whatever the tempo; the decay stretches to fill the period — fast hearts feel urgent, slow hearts feel calm, the attack never smears. At Z5 the fill itself goes blush (white-hot) and BPM reads blush with it.</div>
+    </div>
+
+    <div id="3h" data-screen-label="3h Heart — lub-dub" style="flex:none; width:520px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:24px; padding:26px 28px;">
+      <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:600; background:#DC74A0; color:#131216; border-radius:5px; padding:3px 7px;">3h</span><span style="font-size:13px; color:#F2F1F2; font-weight:600;">Lub-dub — the anatomical double beat</span><span style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#8FBF9C;">PICKED</span></div>
+      <div style="display:flex; gap:12px; margin-top:18px;">
+        <div style="flex:1; background:#0A090C; border:1px solid #1D1C21; border-radius:18px; padding:18px 10px; text-align:center;">
+          <div style="position:relative; width:44px; height:44px; margin:0 auto;">
+            <svg width="44" height="44" viewBox="0 0 24 24" style="position:relative; animation:beatLub 0.968s linear infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg>
+          </div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#F2F1F2; margin-top:8px;">62</div>
+          <div style="font-size:9px; letter-spacing:0.12em; color:#7FA6C9; font-weight:600; margin-top:2px;">Z1</div>
+        </div>
+        <div style="flex:1; background:#0A090C; border:1px solid #1D1C21; border-radius:18px; padding:18px 10px; text-align:center;">
+          <div style="position:relative; width:44px; height:44px; margin:0 auto;">
+            <svg width="44" height="44" viewBox="0 0 24 24" style="position:relative; animation:beatLub 0.405s linear infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg>
+          </div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#F2F1F2; margin-top:8px;">148</div>
+          <div style="font-size:9px; letter-spacing:0.12em; color:#8FBF9C; font-weight:600; margin-top:2px;">Z2</div>
+        </div>
+        <div style="flex:1; background:#0A090C; border:1px solid #1D1C21; border-radius:18px; padding:18px 10px; text-align:center;">
+          <div style="position:relative; width:44px; height:44px; margin:0 auto;">
+            <div style="position:absolute; left:-14px; top:-14px; width:72px; height:72px; border-radius:50%; background:radial-gradient(circle, rgba(220,116,160,0.55), rgba(220,116,160,0) 65%); animation:glowBeat 0.349s linear infinite;"></div>
+            <svg width="44" height="44" viewBox="0 0 24 24" style="position:relative; animation:beatLub 0.349s linear infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#DC74A0"></path></svg>
+          </div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#F2F1F2; margin-top:8px;">172</div>
+          <div style="font-size:9px; letter-spacing:0.12em; color:#DC74A0; font-weight:600; margin-top:2px;">Z4 · PINK GLOW</div>
+        </div>
+        <div style="flex:1; background:#0A090C; border:1px solid #1D1C21; border-radius:18px; padding:18px 10px; text-align:center;">
+          <div style="position:relative; width:44px; height:44px; margin:0 auto;">
+            <div style="position:absolute; left:-14px; top:-14px; width:72px; height:72px; border-radius:50%; background:radial-gradient(circle, rgba(255,217,232,0.65), rgba(255,217,232,0) 65%); animation:glowBeat 0.645s linear infinite;"></div>
+            <svg width="44" height="44" viewBox="0 0 24 24" style="position:relative; animation:beatLub 0.645s linear infinite;"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="#FFD9E8"></path></svg>
+          </div>
+          <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:#FFD9E8; margin-top:8px;">186</div>
+          <div style="font-size:9px; letter-spacing:0.12em; color:#FFD9E8; font-weight:600; margin-top:2px;">Z5 · BLUSH · ½ BEATS</div>
+        </div>
+      </div>
+      <div style="font-size:12.5px; color:#8A8890; line-height:1.6; margin-top:14px;">Two contractions per cycle — 1.12× at 8%, 1.18× at 26% — then a long rest. Reads unmistakably as a heartbeat at kettlebell tempos; above ~170 BPM the second beat starts to blur, which is exactly when ½-beat mode kicks in anyway. The more charming shape; <a href="#3g">3g</a> is the more legible one at max effort.</div>
+    </div>
+  </div>
+  <div style="display:flex; flex-wrap:wrap; gap:24px; margin-bottom:26px; align-items:flex-start;">
+    <div data-screen-label="Heart — always-on" style="flex:none; width:396px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:24px; padding:24px 28px; display:flex; align-items:center; gap:16px;">
+      <svg width="34" height="34" viewBox="0 0 24 24"><path d="M12 20.2 C6.2 15.3 3.6 11.9 3.6 8.9 A4.1 4.1 0 0 1 12 7.2 A4.1 4.1 0 0 1 20.4 8.9 C20.4 11.9 17.8 15.3 12 20.2 Z" fill="none" stroke="#96949B" stroke-width="1.8"></path></svg>
+      <div><div style="font-size:12px; font-weight:600; color:#A5A3AA;">Always-on form — frozen outline</div><div style="font-size:11.5px; color:#66646C; line-height:1.55; margin-top:3px;">Stroke 1.8, no fill, no glow, no beat. Sits beside the last BPM at 55%. Both options freeze to this same shape.</div></div>
+    </div>
+    <div style="flex:1; min-width:300px; max-width:548px; font-size:12.5px; color:#8A8890; line-height:1.65; align-self:center;">Implementation: the beat is a <span style="color:#A5A3AA;">timer re-armed per HR sample</span> (60/BPM), driving scaleEffect — one small layer, transform-only, ~2 px of glow sprite behind it from Z3 up. Above 180 BPM it animates <span style="color:#A5A3AA;">every second beat</span> at double amplitude — 3 Hz flutter reads as noise at glance distance and costs frames on a Series 8. Applies everywhere BeatingHeart already lives: metrics page, trail stats, Effort, live map.</div>
+  </div>
+  <sc-if value="{{ showSpecTables }}" hint-placeholder-val="{{ true }}">
+  <div style="max-width:844px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 24px; margin-bottom:64px; box-sizing:border-box;">
+    <div style="font-size:10.5px; letter-spacing:0.18em; font-weight:600; color:#96949B; margin-bottom:4px;">MOTION SPEC — HEART PULSE</div>
+    <div style="display:grid; grid-template-columns:150px 178px 62px 158px 84px 1fr; gap:0 14px; font-size:11.5px; color:#A5A3AA;">
+      <div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">ELEMENT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">TRIGGER</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">DUR</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">EASING</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">REPEAT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">HAPTIC</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">3g contraction</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">beat timer (60/BPM per sample)</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">90 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">ease-out to 1.16×; ease-in decay fills period</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">per beat</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">3h lub-dub</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">beat timer</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">period</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">1.12× @ 8% · 1.18× @ 26% · rest to 100%</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">per beat</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Glow sprite</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">zone ≥ Z3 (Z3 rose · Z4 pink · Z5 blush)</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">period</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">opacity 0.18→0.85 @ 10%, linear decay</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">per beat</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Z5 fill shift</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">zone → Z5 / leaves Z5</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">260 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">tint crossfade #DC74A0 ⇄ #FFD9E8</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Half-beat mode</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">BPM &gt; 180</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">2×period</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">every second beat, amplitude 1.2×</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">while &gt;180</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; color:#F2F1F2;">AOD freeze</div><div style="padding:7px 0;">wrist down</div><div style="padding:7px 0; font-family:ui-monospace,Menlo,monospace;">0 ms</div><div style="padding:7px 0;">outline form, stroke 1.8, no fill</div><div style="padding:7px 0;">—</div><div style="padding:7px 0;">—</div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ══════════ 05 SAVE TRACK ══════════ -->
+  <div id="s5" style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:6px;">05 — SAVE THIS TRACK <span style="color:#55535A; letter-spacing:0; font-weight:400;">(after saving an outdoor workout · committed take)</span></div>
+  <div style="font-size:13px; color:#66646C; margin-bottom:24px; max-width:820px;">The server matches the finished polyline against saved trails and answers with candidates + run counts; the prompt rides in 600 ms after the save confirms. Max two suggestions, sorted by overlap. Skip stores nothing and never re-asks for this session.</div>
+  <div style="display:flex; flex-wrap:wrap; gap:34px; margin-bottom:26px; align-items:flex-start;">
+    <div data-screen-label="Save track — prompt" style="flex:none;">
+      <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);"><div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div><div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div><div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+          <div style="position:absolute; inset:0; box-sizing:border-box; padding:48px 30px 32px; display:flex; flex-direction:column;">
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:27px; font-weight:700; color:#FFF;">Save this track?</div>
+            <div style="font-size:12.5px; color:#96949B; margin-top:3px;">6.4 km · looks like one you know</div>
+            <div style="display:grid; gap:8px; margin-top:16px;">
+              <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:12px 14px;">
+                <div style="flex:none; width:34px; height:34px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h11v17l-5.5-4.2L6.5 20.5Z"></path><path d="M9 9.5c2-1.5 4 1.5 6 0"></path></svg></div>
+                <div style="flex:1; min-width:0;"><div style="font-size:15px; font-weight:600; color:#F2F1F2; line-height:1.25;">el Cerro de las Tres Cruces</div><div style="font-size:11px; color:#66646C; margin-top:1px;">3rd time · 6.4 km · 94% match</div></div>
+                <span style="font-size:14px; color:#66646C;">›</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:12px 14px;">
+                <div style="flex:none; width:34px; height:34px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h11v17l-5.5-4.2L6.5 20.5Z"></path><path d="M9 9.5c2-1.5 4 1.5 6 0"></path></svg></div>
+                <div style="flex:1; min-width:0;"><div style="font-size:15px; font-weight:600; color:#F2F1F2;">Río loop</div><div style="font-size:11px; color:#66646C; margin-top:1px;">7th time · 6.1 km · 71% match</div></div>
+                <span style="font-size:14px; color:#66646C;">›</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:12px 14px;">
+                <div style="flex:none; width:34px; height:34px; border-radius:50%; background:#17161A; border:1px solid #2A292E; box-sizing:border-box; display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5a2.8 2.8 0 0 1 2.8 2.8v4.4a2.8 2.8 0 0 1-5.6 0V6.3A2.8 2.8 0 0 1 12 3.5Z"></path><path d="M6.2 10.7a5.8 5.8 0 0 0 11.6 0"></path><path d="M12 16.5v3.7"></path></svg></div>
+                <div style="flex:1;"><div style="font-size:15px; font-weight:600; color:#DC74A0;">New trail…</div><div style="font-size:11px; color:#66646C; margin-top:1px;">dictate a name</div></div>
+              </div>
+            </div>
+            <div style="margin-top:auto; text-align:center; font-size:14px; font-weight:600; color:#96949B; padding:10px 0;">Skip</div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:10px; font-size:12px; color:#66646C;">prompt · slides up 350 ms spring, 600 ms after save confirms</div>
+    </div>
+    <div data-screen-label="Save track — success" style="flex:none;">
+      <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);"><div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div><div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div><div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+          <div style="position:absolute; inset:0; box-sizing:border-box; padding:48px 34px 36px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+            <div style="position:relative; width:76px; height:76px;">
+              <div style="position:absolute; inset:0; border-radius:50%; border:2.5px solid #8FBF9C;"></div>
+              <svg width="34" height="34" viewBox="0 0 24 24" style="position:absolute; left:21px; top:21px;" fill="none" stroke="#8FBF9C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 L9.5 17.5 L19.5 6.5"></path></svg>
+              <span style="position:absolute; left:32px; top:-14px; width:9px; height:9px; background:#8FBF9C; animation:seedB 4s linear infinite;"></span>
+            </div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#FFF; margin-top:18px;">Track saved</div>
+            <div style="font-size:14px; font-weight:600; color:#8FBF9C; margin-top:6px; line-height:1.4;">el Cerro de las Tres Cruces</div>
+            <div style="font-size:12px; color:#66646C; margin-top:4px;">3 runs · syncs with the workout</div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:10px; font-size:12px; color:#66646C;">success · mint check draws 350 ms · auto-returns to summary in 1.2 s</div>
+    </div>
+    <div data-screen-label="Hike submenu — saved trails" style="flex:none;">
+      <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);"><div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div><div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div><div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+          <div style="position:absolute; inset:0; box-sizing:border-box; padding:48px 28px 0;">
+            <div style="display:flex; align-items:center; gap:8px;"><div style="width:26px; height:26px; border-radius:50%; background:#17161A; display:flex; align-items:center; justify-content:center; color:#66646C; font-size:14px;">‹</div><span style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#FFF;">Hike</span></div>
+            <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:13px 14px; margin-top:14px;">
+              <div style="flex:none; width:34px; height:34px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 19 L9.5 8.5 L13 14 L16 10 L20.5 19 Z"></path></svg></div>
+              <div style="flex:1;"><div style="font-size:15.5px; font-weight:600; color:#F2F1F2;">Open hike</div><div style="font-size:11px; color:#66646C; margin-top:1px;">no target · GPS + elevation</div></div>
+              <span style="font-size:14px; color:#66646C;">›</span>
+            </div>
+            <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#66646C; margin:16px 6px 8px;">SAVED TRAILS</div>
+            <div style="display:grid; gap:7px;">
+              <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:12px 14px;">
+                <div style="flex:none; width:34px; height:34px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h11v17l-5.5-4.2L6.5 20.5Z"></path><path d="M9 9.5c2-1.5 4 1.5 6 0"></path></svg></div>
+                <div style="flex:1; min-width:0;"><div style="font-size:14.5px; font-weight:600; color:#F2F1F2; line-height:1.25;">el Cerro de las Tres Cruces</div><div style="font-size:11px; color:#66646C; margin-top:1px;">6.4 km · +312 m · Sun</div></div>
+                <span style="font-size:14px; color:#66646C;">›</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:12px 14px;">
+                <div style="flex:none; width:34px; height:34px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h11v17l-5.5-4.2L6.5 20.5Z"></path><path d="M9 9.5c2-1.5 4 1.5 6 0"></path></svg></div>
+                <div style="flex:1;"><div style="font-size:14.5px; font-weight:600; color:#F2F1F2;">Río loop</div><div style="font-size:11px; color:#66646C; margin-top:1px;">6.1 km · +88 m · Aug 19</div></div>
+                <span style="font-size:14px; color:#66646C;">›</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:12px 14px;">
+                <div style="flex:none; width:34px; height:34px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h11v17l-5.5-4.2L6.5 20.5Z"></path><path d="M9 9.5c2-1.5 4 1.5 6 0"></path></svg></div>
+                <div style="flex:1;"><div style="font-size:14.5px; font-weight:600; color:#F2F1F2;">Vuelta del lago</div><div style="font-size:11px; color:#66646C; margin-top:1px;">9.2 km · +105 m · Aug 12</div></div>
+                <span style="font-size:14px; color:#66646C;">›</span>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute; left:0; right:0; bottom:0; height:90px; background:linear-gradient(180deg, transparent, #000 80%); display:flex; align-items:flex-end; justify-content:center; padding-bottom:16px; font-size:12px; color:#66646C;">scrolls ↓</div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:10px; font-size:12px; color:#66646C;">Hike submenu · replaces the flat Hike row (<a href="#s8">§08</a>)</div>
+    </div>
+  </div>
+  <div style="max-width:844px; margin-bottom:64px; font-size:12.5px; color:#8A8890; line-height:1.65;">Tapping a suggestion books the run onto that trail (run count +1) and shows success; <span style="color:#A5A3AA;">New trail…</span> opens system dictation and lands on the same success with the spoken name. Starting a hike from a saved-trail row begins a normal hike with the trail as target — its line renders as a <span style="color:#A5A3AA;">ghost dashed path</span> under the live route on the map page (<a href="#s2">§02</a>), and the Save-track prompt is skipped at the end (the trail is known; the run count just increments). Walks and runs get the same prompt; the saved-trails list lives in the Hike submenu only. <span style="color:#A5A3AA;">41 mm:</span> suggestion rows keep two lines — the long Spanish name wraps rather than truncates.</div>
+
+  <!-- ══════════ 06 SAVING STATES ══════════ -->
+  <div id="s6" style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:6px;">06 — SAVING, DESIGNED <span style="color:#55535A; letter-spacing:0; font-weight:400;">(syncState .syncing / .failed ship undesigned today)</span></div>
+  <div style="font-size:13px; color:#66646C; margin-bottom:24px; max-width:820px;">The Save CTA's three minutes of truth. Same summary screen as shipped — only the CTA block changes state.</div>
+  <div style="display:flex; flex-wrap:wrap; gap:24px; margin-bottom:26px; align-items:flex-start;">
+    <div data-screen-label="Saving — in flight" style="flex:none; width:340px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:26px; padding:26px 26px;">
+      <div style="font-size:10px; letter-spacing:0.16em; color:#55535A; margin-bottom:14px;">SAVING — IN FLIGHT</div>
+      <div style="width:100%; box-sizing:border-box; background:#6B2740; border-radius:48px; padding:14px 0; display:flex; align-items:center; justify-content:center; gap:10px;">
+        <svg width="13" height="13" viewBox="0 0 10 10" style="animation:spinDiamond 0.9s linear infinite;"><rect x="1.5" y="1.5" width="7" height="7" fill="#D9A7BD"></rect></svg>
+        <span style="font-family:'Familjen Grotesk',sans-serif; font-size:18px; font-weight:600; color:#D9A7BD;">Saving…</span>
+      </div>
+      <div style="text-align:center; font-size:11px; color:#55535A; margin-top:10px;">un-tappable · Discard hidden</div>
+      <div style="font-size:11.5px; color:#66646C; line-height:1.6; margin-top:12px;">Label crossfades 160 ms; the diamond spins 900 ms/rev — the brand mark is the spinner. Pill dims to 65% of accentDeep. Crown and taps eat silently.</div>
+    </div>
+    <div data-screen-label="Saving — failed" style="flex:none; width:340px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:26px; padding:26px 26px;">
+      <div style="font-size:10px; letter-spacing:0.16em; color:#55535A; margin-bottom:14px;">FAILED — TRY AGAIN</div>
+      <div style="width:100%; box-sizing:border-box; background:#A63D63; border-radius:48px; padding:14px 0; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:18px; font-weight:600; color:#FFF;">Save workout</div>
+      <div style="display:flex; align-items:center; justify-content:center; gap:6px; margin-top:10px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E08585" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v9"></path><circle cx="12" cy="18.5" r="0.6" fill="#E08585"></circle></svg>
+        <span style="font-size:12px; font-weight:600; color:#E08585;">couldn't save — try again</span>
+      </div>
+      <div style="font-size:11.5px; color:#66646C; line-height:1.6; margin-top:12px;">Pill restores instantly and <span style="color:#8A8890;">shakes ±6 px, 3 cycles, 260 ms</span> with haptic .failure; the line rides in under it (220 ms). Nothing is lost — the workout still sits local, Discard returns.</div>
+    </div>
+    <div data-screen-label="Saving — offline queued" style="flex:none; width:340px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:26px; padding:26px 26px;">
+      <div style="font-size:10px; letter-spacing:0.16em; color:#55535A; margin-bottom:14px;">OFFLINE — QUEUED (SHIPS TODAY)</div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div style="width:26px; height:26px; border-radius:50%; border:2px solid #8FBF9C; display:flex; align-items:center; justify-content:center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8FBF9C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 L9.5 17.5 L19.5 6.5"></path></svg></div>
+        <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:17px; font-weight:700; color:#FFF;">Saved</div><div style="font-size:10.5px; color:#96949B;">offline · queued to sync</div></div>
+      </div>
+      <div style="width:100%; box-sizing:border-box; background:#A63D63; border-radius:48px; padding:14px 0; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:18px; font-weight:600; color:#FFF; margin-top:14px;">Done</div>
+      <div style="font-size:11.5px; color:#66646C; line-height:1.6; margin-top:12px;">Unchanged — the queue is trusted, treated as a save. Shown for the family; the Save-track prompt waits for the real sync (match needs the server).</div>
+    </div>
+  </div>
+  <sc-if value="{{ showSpecTables }}" hint-placeholder-val="{{ true }}">
+  <div style="max-width:844px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 24px; margin-bottom:64px; box-sizing:border-box;">
+    <div style="font-size:10.5px; letter-spacing:0.18em; font-weight:600; color:#96949B; margin-bottom:4px;">MOTION SPEC — SAVE FLOW</div>
+    <div style="display:grid; grid-template-columns:150px 178px 62px 158px 84px 1fr; gap:0 14px; font-size:11.5px; color:#A5A3AA;">
+      <div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">ELEMENT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">TRIGGER</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">DUR</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">EASING</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">REPEAT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">HAPTIC</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">CTA → Saving…</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">Save tapped</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">160 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">label crossfade, fill → 65%</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Diamond spinner</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">while .syncing</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">900 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">linear, per revolution</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">loop</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Success morph</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.synced</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">220 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">header check strokes mint · CTA → Done</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.success</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Fail shake + line</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.failed</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">260 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">±6 px x-shake ×3; line slides in 220 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.failure</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Track prompt in</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.synced + outdoor kind, 600 ms later</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">350 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">spring (.34,1.4,.5,1), slides up</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">—</div>
+      <div style="padding:7px 0; color:#F2F1F2;">Track success check</div><div style="padding:7px 0;">suggestion tapped / name dictated</div><div style="padding:7px 0; font-family:ui-monospace,Menlo,monospace;">350 ms</div><div style="padding:7px 0;">check path draws ease-out; auto-return 1.2 s</div><div style="padding:7px 0;">once</div><div style="padding:7px 0;">.success</div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ══════════ 07 PROPOSED MOMENTS ══════════ -->
+  <div id="s7" style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:6px;">07 — MORE MOMENTS <span style="color:#55535A; letter-spacing:0; font-weight:400;">(picked from the brief + two proposals · all optional, all event-driven)</span></div>
+  <div style="font-size:13px; color:#66646C; margin-bottom:24px; max-width:820px;">Same motion ladder, same haptic map. Each is one event, one gesture of color, done.</div>
+  <div style="display:flex; flex-wrap:wrap; gap:34px; margin-bottom:26px; align-items:flex-start;">
+    <div data-screen-label="Km split flash" style="flex:none;">
+      <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);"><div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div><div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div><div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="width:396px; height:484px; border-radius:106px; background:#0E0E12; overflow:hidden; position:relative;">
+          <svg width="396" height="484" viewBox="0 0 396 484" style="position:absolute; inset:0;">
+            <path d="M-10 250 C80 230 150 262 240 240 C300 226 350 240 406 228" fill="none" stroke="#201F26" stroke-width="7"></path>
+            <path d="M60 -10 C80 90 40 180 70 290 C90 360 60 430 80 494" fill="none" stroke="#201F26" stroke-width="7"></path>
+            <path d="M84 406 C120 380 108 330 148 308 C190 285 208 250 236 228 C262 208 268 176 300 150" fill="none" stroke="rgba(220,116,160,0.22)" stroke-width="11" stroke-linecap="round"></path>
+            <path d="M84 406 C120 380 108 330 148 308 C190 285 208 250 236 228 C262 208 268 176 300 150" fill="none" stroke="#DC74A0" stroke-width="4.5" stroke-linecap="round"></path>
+            <circle cx="300" cy="150" r="8" fill="#DC74A0" stroke="#FFF" stroke-width="3"></circle>
+          </svg>
+          <div style="position:absolute; left:0; right:0; bottom:0; height:158px; background:linear-gradient(0deg, rgba(0,0,0,0.88) 30%, rgba(0,0,0,0));"></div>
+          <div style="position:absolute; left:30px; right:30px; bottom:36px; display:flex; align-items:flex-end;">
+            <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:44px; font-weight:700; color:#FFF; line-height:0.95; font-variant-numeric:tabular-nums;">4.02</div><div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:4px;">KM</div></div>
+            <div style="margin-left:auto; text-align:right;"><div style="font-family:'Familjen Grotesk',sans-serif; font-size:44px; font-weight:700; color:#FFF; line-height:0.95; font-variant-numeric:tabular-nums;">5:47</div><div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:#96949B; margin-top:4px;">/ KM · NOW</div></div>
+          </div>
+          <div style="position:absolute; left:26px; right:26px; top:44px; background:#3D1526; border:1px solid #A63D63; border-radius:20px; padding:13px 18px; animation:splitBanner 5s linear infinite; opacity:0;">
+            <div style="display:flex; align-items:baseline;">
+              <span style="font-family:'Familjen Grotesk',sans-serif; font-size:23px; font-weight:700; color:#FFD9E8;">KM 4</span>
+              <span style="margin-left:auto; font-family:'Familjen Grotesk',sans-serif; font-size:23px; font-weight:700; color:#FFF; font-variant-numeric:tabular-nums;">6:12</span>
+            </div>
+            <div style="font-size:11.5px; font-weight:600; color:#8FBF9C; margin-top:2px;">9 s faster than your average</div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:396px; text-align:center; margin-top:10px; font-size:12px; color:#66646C;">km split · banner in 300 ms spring, holds 2.2 s · .notification · slower splits say it plain in ghost, no mint</div>
+    </div>
+    <div data-screen-label="HR recovery capture" style="flex:none;">
+      <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);"><div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div><div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div><div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+          <div style="position:absolute; inset:0; box-sizing:border-box; padding:46px 32px 34px; display:flex; flex-direction:column; align-items:center;">
+            <div style="font-size:12px; letter-spacing:0.18em; font-weight:700; color:#96949B;">RECOVERY · 1:00</div>
+            <div style="position:relative; width:190px; height:190px; margin-top:16px;">
+              <svg width="190" height="190" viewBox="0 0 190 190">
+                <circle cx="95" cy="95" r="84" fill="none" stroke="#232227" stroke-width="9"></circle>
+                <circle cx="95" cy="95" r="84" pathLength="100" fill="none" stroke="#8FBF9C" stroke-width="9" stroke-linecap="round" stroke-dasharray="100 100" transform="rotate(-90 95 95)" style="animation:ringDrain 10s linear infinite;"></circle>
+              </svg>
+              <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <div style="position:relative; width:130px; height:58px;">
+                  <span style="position:absolute; left:0; right:0; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:58px; font-weight:700; color:#FFF; line-height:1; font-variant-numeric:tabular-nums; animation:hrrN1 10s linear infinite;">158</span>
+                  <span style="position:absolute; left:0; right:0; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:58px; font-weight:700; color:#FFF; line-height:1; font-variant-numeric:tabular-nums; animation:hrrN2 10s linear infinite; opacity:0;">141</span>
+                  <span style="position:absolute; left:0; right:0; text-align:center; font-family:'Familjen Grotesk',sans-serif; font-size:58px; font-weight:700; color:#8FBF9C; line-height:1; font-variant-numeric:tabular-nums; animation:hrrN3 10s linear infinite; opacity:0;">127</span>
+                </div>
+                <div style="font-size:10px; letter-spacing:0.14em; font-weight:600; color:#66646C; margin-top:4px;">BPM · FALLING</div>
+              </div>
+            </div>
+            <svg width="240" height="40" viewBox="0 0 240 40" style="margin-top:14px;">
+              <polyline points="4,6 44,10 84,17 124,24 164,30 204,34 236,36" fill="none" stroke="#8FBF9C" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="340" style="animation:sparkDraw 10s linear infinite;"></polyline>
+            </svg>
+            <div style="font-size:14px; font-weight:600; color:#8FBF9C; margin-top:10px; animation:hrrVerdict 10s linear infinite; opacity:0;">−31 in 1:00 · quick</div>
+            <div style="margin-top:auto; font-size:13px; font-weight:600; color:#66646C;">Skip</div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:396px; text-align:center; margin-top:10px; font-size:12px; color:#66646C;">post-save capture (demo at 6×) · the recorder already stays alive 60 s for HRR — this gives that minute a face · .success at verdict</div>
+    </div>
+    <div data-screen-label="EMOM halfway" style="flex:none;">
+      <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);"><div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div><div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div><div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+          <div style="position:absolute; inset:0; box-sizing:border-box; padding:46px 32px 34px; display:flex; flex-direction:column; align-items:center;">
+            <div style="display:flex; align-items:center; width:100%;"><span style="font-size:12px; letter-spacing:0.16em; font-weight:700; color:#DC74A0;">EMOM 20</span><span style="margin-left:auto; font-size:12px; font-weight:600; color:#66646C;">ROUND 10 OF 20</span></div>
+            <div style="position:relative; width:196px; height:196px; margin-top:18px;">
+              <svg width="196" height="196" viewBox="0 0 196 196">
+                <circle cx="98" cy="98" r="86" fill="none" stroke="#232227" stroke-width="10"></circle>
+                <circle cx="98" cy="98" r="86" pathLength="100" fill="none" stroke="#DC74A0" stroke-width="10" stroke-linecap="round" stroke-dasharray="47 100" transform="rotate(-90 98 98)"></circle>
+              </svg>
+              <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <span style="font-family:'Familjen Grotesk',sans-serif; font-size:62px; font-weight:700; color:#FFF; line-height:1; font-variant-numeric:tabular-nums;">0:32</span>
+                <span style="font-size:11px; letter-spacing:0.12em; font-weight:600; color:#66646C; margin-top:3px;">TO ROUND 11</span>
+              </div>
+            </div>
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:22px; font-weight:700; color:#F2F1F2; margin-top:16px;">Clean &amp; Press</div>
+            <div style="font-size:12px; color:#66646C; margin-top:2px;">next · Swing 24 kg</div>
+          </div>
+          <div style="position:absolute; inset:0; background:#3D1526; animation:washFlash 5s linear infinite; opacity:0;"></div>
+          <div style="position:absolute; left:50%; top:200px; width:26px; height:26px; margin-left:-13px; background:#FFD9E8; animation:sweepDiamond 5s linear infinite; opacity:0;"></div>
+          <div style="position:absolute; left:0; right:0; top:246px; text-align:center; animation:halfLine 5s linear infinite; opacity:0;">
+            <div style="font-family:'Familjen Grotesk',sans-serif; font-size:34px; font-weight:700; color:#FFD9E8; letter-spacing:0.04em;">HALFWAY</div>
+            <div style="font-size:12px; font-weight:600; color:#E9A8C4; margin-top:2px;">10 down · 10 to go</div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:396px; text-align:center; margin-top:10px; font-size:12px; color:#66646C;">EMOM halfway · rides the shipped boundary wash; a blush diamond sweeps 700 ms · .success (boundary keeps .start ×2)</div>
+    </div>
+  </div>
+  <div style="display:flex; flex-wrap:wrap; gap:24px; margin-bottom:26px; align-items:flex-start;">
+    <div data-screen-label="Elevation crest (proposal)" style="flex:none; width:396px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:26px; padding:26px 28px;">
+      <div style="font-size:10px; letter-spacing:0.16em; color:#55535A; margin-bottom:4px;">PROPOSAL — ELEVATION CREST (HIKES)</div>
+      <div style="position:relative; height:96px; margin-top:8px;">
+        <svg width="336" height="96" viewBox="0 0 330 96">
+          <path d="M-10 24 C60 12 120 30 180 20 C240 12 290 24 340 16" fill="none" stroke="#3A2A31" stroke-width="2" style="animation:contourRipple 5s linear infinite;"></path>
+          <path d="M-10 52 C70 42 130 58 200 48 C260 40 300 50 340 44" fill="none" stroke="#2E2229" stroke-width="2" style="animation:contourRipple 5s linear infinite 0.12s;"></path>
+          <path d="M-10 80 C60 70 140 84 210 76 C270 70 310 78 340 72" fill="none" stroke="#232227" stroke-width="2" style="animation:contourRipple 5s linear infinite 0.24s;"></path>
+        </svg>
+        <div style="position:absolute; right:6px; top:18px; text-align:right;">
+          <div style="position:relative; height:34px; width:130px;">
+            <span style="position:absolute; right:0; font-family:'Familjen Grotesk',sans-serif; font-size:32px; font-weight:700; color:#F2F1F2; font-variant-numeric:tabular-nums; animation:crestNumA 5s linear infinite;">+200</span>
+            <span style="position:absolute; right:0; font-family:'Familjen Grotesk',sans-serif; font-size:32px; font-weight:700; color:#E9A8C4; font-variant-numeric:tabular-nums; animation:crestNumB 5s linear infinite; opacity:0;">+300</span>
+          </div>
+          <div style="font-size:9.5px; letter-spacing:0.12em; font-weight:600; color:#66646C;">M GAIN</div>
+        </div>
+      </div>
+      <div style="font-size:12px; color:#8A8890; line-height:1.6; margin-top:6px;">Every +100 m of barometric gain (elevationGainLive already accumulates it): the contour lines <span style="color:#A5A3AA;">ripple upward once</span>, staggered 120 ms, and the gain counter ticks in blush. 600 ms total, haptic .click. Trail-stats and map pages only.</div>
+    </div>
+    <div data-screen-label="Streak seed on save (proposal)" style="flex:none; width:396px; box-sizing:border-box; background:#000; border:1px solid #232227; border-radius:26px; padding:26px 28px;">
+      <div style="font-size:10px; letter-spacing:0.16em; color:#55535A; margin-bottom:14px;">PROPOSAL — STREAK SEEDS ON SAVE</div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="position:relative; width:30px; height:30px;">
+          <div style="position:absolute; inset:0; border-radius:50%; border:2px solid #8FBF9C;"></div>
+          <svg width="14" height="14" viewBox="0 0 24 24" style="position:absolute; left:8px; top:8px;" fill="none" stroke="#8FBF9C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 L9.5 17.5 L19.5 6.5"></path></svg>
+          <span style="position:absolute; left:11px; top:11px; width:8px; height:8px; background:#8FBF9C; animation:seedA 4s linear infinite; opacity:0;"></span>
+          <span style="position:absolute; left:11px; top:11px; width:8px; height:8px; background:#DC74A0; animation:seedB 4s linear infinite; opacity:0;"></span>
+          <span style="position:absolute; left:11px; top:11px; width:8px; height:8px; background:#8FBF9C; animation:seedC 4s linear infinite; opacity:0;"></span>
+        </div>
+        <div><div style="font-family:'Familjen Grotesk',sans-serif; font-size:19px; font-weight:700; color:#FFF;">Saved</div><div style="font-size:11px; color:#8FBF9C;">synced to Pitaya · <span style="color:#F2F1F2;">◆ day 24</span></div></div>
+      </div>
+      <div style="font-size:12px; color:#8A8890; line-height:1.6; margin-top:14px;">When the save <span style="color:#A5A3AA;">extends the streak</span> (streak is a sync field since Round 2): three diamond seeds arc off the mint check — the PR burst's little sibling, 700 ms, mint + pink — and the sync line gains "◆ day N". No streak change, no seeds. Never fires with a PR banner up; PR wins the moment.</div>
+    </div>
+  </div>
+  <sc-if value="{{ showSpecTables }}" hint-placeholder-val="{{ true }}">
+  <div style="max-width:844px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 24px; margin-bottom:64px; box-sizing:border-box;">
+    <div style="font-size:10.5px; letter-spacing:0.18em; font-weight:600; color:#96949B; margin-bottom:4px;">MOTION SPEC — MOMENTS</div>
+    <div style="display:grid; grid-template-columns:150px 178px 62px 158px 84px 1fr; gap:0 14px; font-size:11.5px; color:#A5A3AA;">
+      <div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">ELEMENT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">TRIGGER</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">DUR</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">EASING</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">REPEAT</div><div style="padding:7px 0; border-bottom:1px solid #232227; font-size:9px; letter-spacing:0.14em; color:#55535A;">HAPTIC</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Split banner</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">each completed km (GPS)</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">2.8 s</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">spring in 300 · hold 2200 · out 260 up</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">per km</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.notification</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">HRR ring + fall</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">save confirmed, HR present</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">60 s</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">linear drain; BPM live; verdict fades in 260</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.success at end</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Halfway sweep</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">EMOM round N/2 boundary</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">1.4 s</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">wash 120/400 (ships) + diamond 700 linear</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">once</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.success</div>
+      <div style="padding:7px 0; border-bottom:1px solid #1D1C21; color:#F2F1F2;">Contour crest</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">every +100 m gain (hike)</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21; font-family:ui-monospace,Menlo,monospace;">600 ms</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">ripple −7 px, stagger 120; counter tick 220</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">per 100 m</div><div style="padding:7px 0; border-bottom:1px solid #1D1C21;">.click</div>
+      <div style="padding:7px 0; color:#F2F1F2;">Streak seeds</div><div style="padding:7px 0;">save extends streak</div><div style="padding:7px 0; font-family:ui-monospace,Menlo,monospace;">700 ms</div><div style="padding:7px 0;">3 seeds arc + fade (PR-burst curve)</div><div style="padding:7px 0;">once</div><div style="padding:7px 0;">— (save's .success owns it)</div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ══════════ 08 BACKLOG RIDERS ══════════ -->
+  <div id="s8" style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:6px;">08 — BACKLOG RIDERS <span style="color:#55535A; letter-spacing:0; font-weight:400;">(flagged UNDESIGNED in the shipped app)</span></div>
+  <div style="font-size:13px; color:#66646C; margin-bottom:24px; max-width:820px;">The workout list grows two rows and the Hike row becomes an entry to its submenu (<a href="#s5">§05</a>). Glyphs below in <a href="#s9">§09</a>.</div>
+  <div style="display:flex; flex-wrap:wrap; gap:34px; margin-bottom:64px; align-items:flex-start;">
+    <div data-screen-label="Workout list — with riders" style="flex:none;">
+      <div style="position:relative; border-radius:124px; padding:15px; background:linear-gradient(155deg,#2E2D33,#17161A 45%,#0C0B0E); box-shadow:0 26px 60px rgba(0,0,0,0.55);"><div style="position:absolute; right:-8px; top:126px; width:12px; height:72px; border-radius:6px; background:linear-gradient(90deg,#45444B,#17161A);"></div><div style="position:absolute; right:-8px; top:154px; width:12px; height:15px; background:#A63D63; opacity:0.85;"></div><div style="position:absolute; right:-5px; top:218px; width:8px; height:98px; border-radius:4px; background:linear-gradient(90deg,#3A393E,#1B1A1E);"></div>
+        <div style="width:396px; height:484px; border-radius:106px; background:#000; overflow:hidden; position:relative;">
+          <div style="position:absolute; inset:0; box-sizing:border-box; padding:48px 28px 0;">
+            <div style="display:flex; align-items:center; gap:8px;"><div style="width:26px; height:26px; border-radius:50%; background:#17161A; display:flex; align-items:center; justify-content:center; color:#66646C; font-size:14px;">‹</div><span style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:#FFF;">Workouts</span></div>
+            <div style="display:grid; gap:7px; margin-top:14px;">
+              <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:11px 14px;">
+                <div style="flex:none; width:33px; height:33px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 8.6V6.4a3 3 0 0 1 6 0v2.2"></path><circle cx="12" cy="14.2" r="5.6"></circle></svg></div>
+                <div style="flex:1;"><div style="font-size:14.5px; font-weight:600; color:#F2F1F2;">Kettlebell</div><div style="font-size:10.5px; color:#66646C;">3 routines · free sets</div></div>
+                <span style="font-size:13px; color:#66646C;">›</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:11px 14px;">
+                <div style="flex:none; width:33px; height:33px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 12h1.6"></path><path d="M19.6 12h1.6"></path><path d="M9.2 12h5.6"></path><rect x="4.6" y="8.2" width="2.3" height="7.6" rx="1.1"></rect><rect x="6.9" y="6.2" width="2.3" height="11.6" rx="1.1"></rect><rect x="17.1" y="8.2" width="2.3" height="7.6" rx="1.1"></rect><rect x="14.8" y="6.2" width="2.3" height="11.6" rx="1.1"></rect></svg></div>
+                <div style="flex:1;"><div style="font-size:14.5px; font-weight:600; color:#F2F1F2;">Weight training</div><div style="font-size:10.5px; color:#66646C;">bar · plates · PRs</div></div>
+                <span style="font-size:9px; letter-spacing:0.1em; font-weight:700; color:#131216; background:#DC74A0; border-radius:6px; padding:3px 7px;">NEW</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:11px 14px;">
+                <div style="flex:none; width:33px; height:33px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h3l2.2-5.4 3.3 10.8 2.3-7.2 1.4 1.8H21"></path></svg></div>
+                <div style="flex:1;"><div style="font-size:14.5px; font-weight:600; color:#F2F1F2;">Freestyle</div><div style="font-size:10.5px; color:#66646C;">just record · shape it in Pitaya after</div></div>
+                <span style="font-size:9px; letter-spacing:0.1em; font-weight:700; color:#131216; background:#DC74A0; border-radius:6px; padding:3px 7px;">NEW</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:11px 14px;">
+                <div style="flex:none; width:33px; height:33px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 19 L9.5 8.5 L13 14 L16 10 L20.5 19 Z"></path></svg></div>
+                <div style="flex:1;"><div style="font-size:14.5px; font-weight:600; color:#F2F1F2;">Trail Run</div><div style="font-size:10.5px; color:#66646C;">4.2 km · Wed</div></div>
+                <span style="font-size:13px; color:#66646C;">›</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:11px; background:#17161A; border-radius:18px; padding:11px 14px;">
+                <div style="flex:none; width:33px; height:33px; border-radius:50%; background:#2A1420; display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 19 L9.5 8.5 L13 14 L16 10 L20.5 19 Z"></path><path d="M9 9.5c2-1.5 4 1.5 6 0" transform="translate(0,10)"></path></svg></div>
+                <div style="flex:1;"><div style="font-size:14.5px; font-weight:600; color:#F2F1F2;">Hike</div><div style="font-size:10.5px; color:#66646C;">3 saved trails · open goal</div></div>
+                <span style="font-size:13px; color:#66646C;">›</span>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute; left:0; right:0; bottom:0; height:86px; background:linear-gradient(180deg, transparent, #000 80%); display:flex; align-items:flex-end; justify-content:center; padding-bottom:15px; font-size:12px; color:#66646C;">Walk · Treadmill below ↓</div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:10px; font-size:12px; color:#66646C;">HomeView list · Weight training + Freestyle rows land; Hike gains its ›</div>
+    </div>
+    <div style="flex:1; min-width:300px; max-width:480px; font-size:12.5px; color:#8A8890; line-height:1.65; align-self:center;"><span style="color:#A5A3AA;">Weight training</span> reuses the whole kettlebell machinery — crown-dialed weight, tap reps, PR line — with the barbell glyph and plate-math detents (2.5 kg steps instead of bell stops). <span style="color:#A5A3AA;">Freestyle</span> is the watch-contract flow verbatim: start/stop + live HR, streams sync as workoutType "freestyle", structure happens later in phone chat — the row promises exactly that and nothing more. It runs the two-page carousel (<a href="#s0">§00</a>). <span style="color:#A5A3AA;">Hike</span> stops being a bare row; the submenu is drawn in <a href="#s5">§05</a>.</div>
+  </div>
+
+  <!-- ══════════ 09 GLYPHS ══════════ -->
+  <div id="s9" style="font-size:11px; letter-spacing:0.2em; font-weight:600; color:#96949B; margin-bottom:6px;">09 — NEW GLYPHS <span style="color:#55535A; letter-spacing:0; font-weight:400;">(24×24 · stroke 2.1 · round caps/joins · extract SVG verbatim)</span></div>
+  <div style="font-size:13px; color:#66646C; margin-bottom:24px; max-width:820px;">Seven additions to PitayaGlyphs, same grammar as the set. No system icons anywhere on these surfaces.</div>
+  <div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:64px; max-width:1092px;">
+    <div style="width:138px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 12px; text-align:center;">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 12h1.6"></path><path d="M19.6 12h1.6"></path><path d="M9.2 12h5.6"></path><rect x="4.6" y="8.2" width="2.3" height="7.6" rx="1.1"></rect><rect x="6.9" y="6.2" width="2.3" height="11.6" rx="1.1"></rect><rect x="17.1" y="8.2" width="2.3" height="7.6" rx="1.1"></rect><rect x="14.8" y="6.2" width="2.3" height="11.6" rx="1.1"></rect></svg>
+      <div style="font-size:13px; font-weight:600; color:#F2F1F2; margin-top:10px;">barbell</div>
+      <div style="font-size:10.5px; color:#66646C; margin-top:2px;">Weight training row, <a href="#s8">§08</a></div>
+    </div>
+    <div style="width:138px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 12px; text-align:center;">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h3l2.2-5.4 3.3 10.8 2.3-7.2 1.4 1.8H21"></path></svg>
+      <div style="font-size:13px; font-weight:600; color:#F2F1F2; margin-top:10px;">freestyle</div>
+      <div style="font-size:10.5px; color:#66646C; margin-top:2px;">the raw recording</div>
+    </div>
+    <div style="width:138px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 12px; text-align:center;">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h11v17l-5.5-4.2L6.5 20.5Z"></path><path d="M9 9.5c2-1.5 4 1.5 6 0"></path></svg>
+      <div style="font-size:13px; font-weight:600; color:#F2F1F2; margin-top:10px;">trail-bookmark</div>
+      <div style="font-size:10.5px; color:#66646C; margin-top:2px;">saved trails, <a href="#s5">§05</a></div>
+    </div>
+    <div style="width:138px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 12px; text-align:center;">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5a2.8 2.8 0 0 1 2.8 2.8v4.4a2.8 2.8 0 0 1-5.6 0V6.3A2.8 2.8 0 0 1 12 3.5Z"></path><path d="M6.2 10.7a5.8 5.8 0 0 0 11.6 0"></path><path d="M12 16.5v3.7"></path></svg>
+      <div style="font-size:13px; font-weight:600; color:#F2F1F2; margin-top:10px;">mic</div>
+      <div style="font-size:10.5px; color:#66646C; margin-top:2px;">New trail… dictation</div>
+    </div>
+    <div style="width:138px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 12px; text-align:center;">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="5.2" y="3.6" width="5" height="9.2" rx="2.5" transform="rotate(-13 7.7 8.2)"></rect><rect x="13.9" y="11" width="5" height="9.2" rx="2.5" transform="rotate(11 16.4 15.6)"></rect></svg>
+      <div style="font-size:13px; font-weight:600; color:#F2F1F2; margin-top:10px;">cadence</div>
+      <div style="font-size:10.5px; color:#66646C; margin-top:2px;">steps/min, Effort page</div>
+    </div>
+    <div style="width:138px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 12px; text-align:center;">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6c1.1 2.5-.3 4-1.5 5.4-1.3 1.5-2.6 3.1-2.6 5.2a6.1 6.1 0 0 0 12.2 0c0-3.5-2.4-5.2-3.5-7.6-.7 1.2-1.8 2-1.8 3.6 0-2.5-1-4.7-2.8-6.6Z"></path></svg>
+      <div style="font-size:13px; font-weight:600; color:#F2F1F2; margin-top:10px;">flame</div>
+      <div style="font-size:10.5px; color:#66646C; margin-top:2px;">burn rate kcal/h</div>
+    </div>
+    <div style="width:138px; background:#17161A; border:1px solid #232227; border-radius:16px; padding:18px 12px; text-align:center;">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#DC74A0" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20.5V4"></path><path d="M7 4.5h10l-2.6 3.6L17 11.7H7"></path></svg>
+      <div style="font-size:13px; font-weight:600; color:#F2F1F2; margin-top:10px;">split-flag</div>
+      <div style="font-size:10.5px; color:#66646C; margin-top:2px;">km splits, <a href="#s7">§07</a></div>
+    </div>
+  </div>
+
+  <div style="max-width:1020px; background:#17161A; border:1px solid #232227; border-radius:18px; padding:20px 26px;">
+    <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">CONTRACT — WHAT THE PORT CONSUMES AND WHAT IT ADDS</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 28px; margin-top:12px; font-size:13px; color:#A5A3AA; line-height:1.55;">
+      <div>· Consumes as-is: hrStream/timeStream, activeCalories, elevationGainLive, route.coordinates + hasFix/isAuthorized, syncState, /api/mobile/zones, trail match + save APIs (per brief: in place)</div>
+      <div>· New watch-side: ZonePublisher on the recorder (5 s debounce · 20 s cooldown · Z5 exempt), CMPedometer live cadence, MapKit page, BeatingHeart re-timer, Theme.zone1–5 + dims</div>
+      <div>· metricsData additions: splits[] (per-km seconds), hrrDelta + hrrSeconds — server keeps owning analytics</div>
+      <div>· Effort + Live map join every relevant carousel; every in-workout page header carries a zone chip from this round on</div>
+      <div>· AOD grammar holds everywhere: outlines, no fill, no motion, 1 Hz; haptics still fire</div>
+      <div>· Handoff: picks condense to a locked spec MD like Rounds 1+2 → port session builds views only; glyphs + artboards extract verbatim (PORT GATE)</div>
+    </div>
+  </div>
+</section>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showSpecTables&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Board&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return { showSpecTables: this.props.showSpecTables ?? true };
+  }
+}
+</script>
+</body>
+</html>

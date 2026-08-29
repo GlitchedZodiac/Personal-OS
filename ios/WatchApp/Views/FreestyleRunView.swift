@@ -15,7 +15,7 @@ struct FreestyleRunView: View {
     @EnvironmentObject private var model: AppModel
     @ObservedObject private var recorder: WorkoutRecorder
     @Environment(\.isLuminanceReduced) private var dimmed
-    @State private var lastZone: Int?
+    @State private var page = 0
 
     init() {
         // The recorder is a let on the model; observing it directly is what
@@ -40,6 +40,32 @@ struct FreestyleRunView: View {
     }
 
     var body: some View {
+        // Round 3 §00: freestyle runs a two-page carousel — the recording
+        // face (End stays HERE, never a swipe away from a mid-video fumble)
+        // plus the Effort page.
+        TabView(selection: $page) {
+            recordingFace.tag(0)
+            EffortPage(recorder: recorder, kind: .freestyle).tag(1)
+        }
+        .tabViewStyle(.verticalPage)
+        .onAppear {
+            #if DEBUG
+            if let forced = ProcessInfo.processInfo
+                .environment["PITAYA_SMOKE_PAGE"].flatMap(Int.init) {
+                page = forced
+            }
+            #endif
+        }
+        .overlay { ZoneBloomOverlay(recorder: recorder) }
+        .overlay { CountdownOverlay() }
+        .overlay {
+            if model.idleNudgeActive {
+                IdleNudgeOverlay(onEnd: { Task { await model.finishWorkout(.freestyle) } })
+            }
+        }
+    }
+
+    private var recordingFace: some View {
         VStack(spacing: 0) {
             header
 
@@ -77,22 +103,9 @@ struct FreestyleRunView: View {
         }
         .padding(.horizontal, Theme.px(10))
         .padding(.vertical, Theme.px(4))
-        .overlay { CountdownOverlay() }
-        .overlay {
-            if model.idleNudgeActive {
-                IdleNudgeOverlay(onEnd: { Task { await model.finishWorkout(.freestyle) } })
-            }
-        }
-        .onChange(of: zone) { _, new in
-            // A tap per zone change — he can feel the effort move without
-            // looking away from the video.
-            guard let new, let old = lastZone, new != old else {
-                lastZone = new
-                return
-            }
-            Haptics.key(new > old ? .directionUp : .directionDown)
-            lastZone = new
-        }
+        // The per-crossing haptic moved into the recorder's ZonePublisher
+        // (Round 3 §03: 5-sample confirm + cooldown) — the old raw-sample
+        // onChange here would have double-fired every crossing.
     }
 
     private var header: some View {

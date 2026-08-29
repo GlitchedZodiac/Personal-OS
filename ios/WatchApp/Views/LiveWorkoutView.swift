@@ -12,23 +12,42 @@ struct LiveWorkoutView: View {
     @State private var page = 0
 
     var body: some View {
+        // Round 3 §00 carousel order:
+        //   kettlebell  Metrics → Set logger → Effort → Controls
+        //   outdoor     Metrics → Live map → Trail stats → Effort → Controls
+        //   treadmill   Metrics → Effort → Controls
         TabView(selection: $page) {
             MetricsPage(recorder: model.recorder, kind: kind).tag(0)
             if kind == .kettlebell {
                 SetLoggerPage().tag(1)
-            }
-            if kind.isOutdoor {
-                // Design 12 — the GPS/route face for outdoor sessions.
-                TrailPage(recorder: model.recorder, route: model.recorder.route, kind: kind)
+                EffortPage(recorder: model.recorder, kind: kind).tag(2)
+                ControlsPage(recorder: model.recorder, kind: kind, isSequence: false).tag(3)
+            } else if kind.isOutdoor {
+                LiveMapPage(recorder: model.recorder, route: model.recorder.route, kind: kind)
                     .tag(1)
+                // Design 12 — the GPS/route stats face.
+                TrailPage(recorder: model.recorder, route: model.recorder.route, kind: kind)
+                    .tag(2)
+                EffortPage(recorder: model.recorder, kind: kind).tag(3)
+                ControlsPage(recorder: model.recorder, kind: kind, isSequence: false).tag(4)
+            } else {
+                EffortPage(recorder: model.recorder, kind: kind).tag(1)
+                ControlsPage(recorder: model.recorder, kind: kind, isSequence: false).tag(2)
             }
-            ControlsPage(recorder: model.recorder, kind: kind, isSequence: false)
-                .tag(kind == .kettlebell || kind.isOutdoor ? 2 : 1)
         }
         .tabViewStyle(.verticalPage)
         .onAppear {
             if kind == .kettlebell { page = 1 }
+            #if DEBUG
+            // Smoke seam: land on a specific carousel page for screenshots.
+            if let forced = ProcessInfo.processInfo
+                .environment["PITAYA_SMOKE_PAGE"].flatMap(Int.init) {
+                page = forced
+            }
+            #endif
         }
+        .overlay { ZoneBloomOverlay(recorder: model.recorder) }
+        .overlay { SplitBannerOverlay(recorder: model.recorder) }
         .overlay(alignment: .bottom) {
             if let flash = model.prFlash {
                 // §05: while the flash is up, Double Tap dismisses it.
@@ -78,7 +97,7 @@ struct MetricsPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 5) {
                 Text(kind == .kettlebell ? "KB SESSION" : kind.title.uppercased())
                     .font(Theme.text(8, weight: .bold))
                     .kerning(1.2)
@@ -90,6 +109,8 @@ struct MetricsPage: View {
                         .kerning(1)
                         .foregroundStyle(Theme.textTertiary)
                 }
+                // Round 3 §00: every in-workout header carries the zone chip.
+                ZoneChipStack(zone: recorder.currentZone, showName: false)
             }
 
             Text(Fmt.clock(recorder.elapsed))
@@ -199,7 +220,12 @@ struct ControlsPage: View {
                 PauseGlyph(color: Theme.textPrimary, size: 15)
             }
         }) {
-            paused ? recorder.resume() : recorder.pause()
+            if paused {
+                recorder.resume()
+                Haptics.key(.start) // Round 3 §01: resume lands with .start
+            } else {
+                recorder.pause()
+            }
         }
     }
 

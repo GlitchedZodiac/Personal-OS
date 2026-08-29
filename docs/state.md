@@ -5,13 +5,114 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-28 (EXERCISE V3 — the duplicate-save race killed at
-both ends, the stale-GPS leak that stamped walk trails onto freestyle rows
-found and rooted out, named trails live with his Tres Cruces hike linked, a
-real MapLibre terrain map with 3D + moving/stopped/breaks/splits analytics,
-GPX + per-set export, the AI-dictated training week with four push senders —
-and the watch's new in-workout pages deliberately parked behind a Claude
-Design round: `docs/design/watch-v3-prompt.md`.)
+**Last updated:** 2026-08-28b (WATCH ROUND 3 PORTED — the locked spec built
+1:1: Effort page, live MapKit page with the contour AOD face, zone-change
+blooms off a real ZonePublisher, the BPM-synced lub-dub heart, save-track
+prompt + Saved trails in the Hike menu, §06 saving states, km splits/HRR
+screen/EMOM halfway/crest/streak seeds, the Weight-Training free session,
+eight verbatim glyphs. Same day, earlier: the v3 web+server round below.)
+
+---
+
+## 2026-08-28b · Watch Round 3 — the in-workout v3 port
+
+Branch `claude/watch-v3-port` off the just-merged main. Source of truth:
+`docs/design/pitaya-watch-round3.dc.html` + `watch-v3-handoff-spec.md`
+(Michael's locked spec — 3a/3c/3f/3h picked; 3b/3d-as-page/3e/3g not
+built). **The spec's "code base: claude/watch-app" line was stale template
+text — that branch is the documented clobber risk; everything built off
+main.** The Round 3 canvas is the 45 mm screen at 2× (pt = px/2 exactly), so
+Theme gained `r3*` helpers beside the Round-1-scaled ones, plus the zone
+ramp (zone1–5 + dims + `#131216` chip text), the §00 motion ladder and the
+haptic map (`Haptics.beatTick` = the one "everything"-tier row: per-beat at
+Z5).
+
+**What's on the wrist now** — carousels: KB Metrics→Logger→Effort→Controls ·
+outdoor Metrics→Live map→Trail stats→Effort→Controls · treadmill
+Metrics→Effort→Controls · freestyle face→Effort (End stays on the face);
+every legacy header wears the compact zone chip.
+
+- **Effort (§01)**: 10-min HR strip over served zone bands (10/11/10/8/6%
+  alphas, Z2–Z5 edge labels), 66 px BPM + chip stack, kind-aware 2×2
+  (KCAL·KCAL/H + STEPS·STEPS/MIN via **CMPedometer** — live cadence, HK
+  stays finish-only — or AVG·PEAK BPM), dotted trace while paused, page
+  dims 62%, AOD per spec ("42 MIN", outline chip, #55535A trace).
+- **Live map (§02)**: full-bleed **SwiftUI `Map`** (MKMapView does not
+  exist on watchOS — surfaced substitution, identical standard-style
+  render; consequences: no tiles-lost callback, so the contour face serves
+  AOD only, and new fixes snap rather than tween — MapPolyline can't
+  animate shape). Accent route + 11 px under-glow stroke (never a blur),
+  start ring, pulsing head dot (1.8 s), auto-pan 600 ms when the head
+  drifts a third of span, scrims, retimed GPS pill (0.8→1.6 s), distance
+  hero + 4-cell row with trailing-60 s pace (`paceNowSecPerKm` on the
+  recorder). **The five contour curves extracted verbatim** from the board
+  are the offline/AOD face, route in `#A63D63`. Saved-trail runs draw the
+  trail as a dashed ghost under the live line.
+- **ZonePublisher (§03)** on the recorder: 5-consecutive-sample confirm,
+  20 s cooldown with latest-wins (silent moves still recolor the chip), Z5
+  entry exempt, never paused/frozen, never in the first 60 s, haptic at
+  fire. The bloom: 516×340 radial sprite, up rises from the bottom bezel /
+  down falls from the top, 500/400 ms, 900 total; chip pops 1→1.26→1 with
+  "NAME ↑". AOD suppressed; a raise within 6 s replays once. The old
+  freestyle raw-sample haptic was REMOVED (it would have double-fired).
+- **Heart (§04)**: BeatingHeart rewritten — keyframed lub-dub
+  (1→1.12@8%→1.03@16%→1.18@26%→1@48%) re-armed per HR sample, zone-tinted
+  radial glow from Z3, Z5 blush crossfade (digits follow on Effort),
+  half-beat ×1.2 above 180 BPM, AOD 1.8-stroke outline. Everywhere the
+  heart lives.
+- **Save track (§05)**: 600 ms after `.synced` on outdoor saves (queued
+  skips; saved-trail runs skip — the run count just increments via
+  `trailId` on the item). Max 2 suggestions ranked trailhead+length with
+  matchPct (server stamps the same 50–99 formula on near queries), New
+  trail… dictates via TextFieldLink, Skip never re-asks this session,
+  success = drawn mint check → summary. Hike submenu is REAL: "Open hike"
+  + SAVED TRAILS rows (bookmark glyph, "6.4 km · +312 m · Sun") starting
+  ghost-target runs that baseline "vs your last run here".
+- **Saving states (§06)**: diamond spinner 900 ms/rev on a 65% pill with
+  blush label, morphs to Done in 220 ms, failures shake ±6 px ×3 and lead
+  with "!". (The engineering underneath shipped in the morning round.)
+- **Moments (§07)**: km split banner (recorder banks `splitSeconds` →
+  `metricsData.splits`, "9 s faster than your average" in mint, haptic
+  `.notification`, never drawn in AOD, still logs) · **HRR screen** — the
+  60 s recovery window now arms for EVERY kind with HR (outdoor snapshots
+  carry the route; the Apple-Health route attach is skipped on that path —
+  Pitaya's payload is the product), post-save full screen with draining
+  mint ring, falling BPM + spark, verdict bands quick/typical/slow,
+  Skip never skips the data; `hrrDelta`/`hrrSeconds` ride metricsData,
+  arriving late via an idempotent re-sync of the same externalId (straight
+  through WorkoutSyncFlight so the summary CTA never flickers) · EMOM
+  halfway (blush diamond sweep + "10 down · 10 to go" at round N/2) ·
+  elevation crest (+100 m: contours ripple −7 px staggered 120 ms on a
+  1-second animation clock, counters tick blush, `.click`) · streak seeds
+  (mint·pink·mint off the check, "◆ day N" on the sync line — TRAINING
+  streak computed locally from cached rows; the served streakDays is the
+  food streak on purpose; PR banner wins).
+- **Riders (§08)** + glyphs (§09 verbatim: barbell replaces the 08-20
+  provisional, freestyle pulse, trail-bookmark, mic, cadence, flame,
+  split-flag; the §09 heart replaced `Glyphs.heart` everywhere): Weight
+  Training's list gains **Free session** (kettlebell machinery, 2.5 kg
+  plate detents via a session override — the logger's detents went
+  Double), freestyle row copy "just record · shape it in Pitaya after",
+  hike row counts its trails.
+
+**The post-save sequence, locked:** End → recovery window arms → Summary →
+Save (busy diamond) → synced (check, Done, streak seeds unless PR) → HRR
+screen if the 60 s window is still live (wall-clock-bound; the falling
+heart can't wait — Skip available) → save-track prompt (+600 ms) → summary;
+freestyle then auto-exits home. Queued saves: no HRR-server dependency
+issue (HRR still runs), trail prompt skipped.
+
+**Dial-ins recorded, not silent:** SwiftUI Map substitution (above) ·
+weights plate range 2.5–200 kg (spec gave the step, not the range) · the
+HRR verdict holds 2 s before auto-return (spec gave the fade, not the
+hold) · zone chips landed on headers that exist (Metrics, Trail stats;
+Effort/map per their own specs; Controls has no header) · sequence runners
+keep their 2-page carousel (the spec's carousel list doesn't name them;
+halfway + bloom ride the runner).
+
+Builds green on both schemes; 305 web tests (server matchPct added to
+lib/trails' near queries); sim smokes + screenshots below. The wrist gets
+it at the next `pitaya-resign.sh --force` after merge.
 
 ---
 

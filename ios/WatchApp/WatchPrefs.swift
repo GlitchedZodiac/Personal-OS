@@ -135,5 +135,12 @@ enum Haptics {
         guard WatchPrefs.shared.hapticsMode == .everything else { return }
         WKInterfaceDevice.current().play(type)
     }
+
+    /// Round 3 §00: "everything" adds per-BEAT ticks at Z5 only — the one
+    /// haptic below the "key moments" tier.
+    static func beatTick() {
+        guard WatchPrefs.shared.hapticsMode == .everything else { return }
+        WKInterfaceDevice.current().play(.click)
+    }
 }
 #endif
