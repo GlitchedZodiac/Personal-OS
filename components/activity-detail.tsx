@@ -44,7 +44,18 @@ export interface ActivityDetailData {
   sequenceName: string | null;
   totalRounds: number | null;
   stepSeconds: number[] | null;
-  segments: { name: string; sub: string; seconds: number | null; deltaSeconds: number | null }[];
+  segments: {
+    name: string;
+    sub: string;
+    seconds: number | null;
+    deltaSeconds: number | null;
+    bestWeightKg: number | null;
+    lastTimeKg: number | null;
+    timesTrained: number | null;
+  }[];
+  loadScore: number | null;
+  relativeEffort: number | null;
+  timeUnderLoadSeconds: number | null;
   hrStream: number[] | null;
   zonePct: number[] | null;
   zoneSeconds: number[] | null;
@@ -883,6 +894,17 @@ export default function ActivityDetail({
             </div>
             {det.segments.map((g, i) => {
               const delta = deltaLabel(g.deltaSeconds);
+              // v4: per-movement lineage — "best 32 · last time 24" from the
+              // whole logged history, right where the weight is read.
+              const lineage = [
+                g.bestWeightKg != null ? `best ${g.bestWeightKg}` : null,
+                g.lastTimeKg != null ? `last ${g.lastTimeKg}` : null,
+                g.timesTrained != null && g.timesTrained > 1
+                  ? `${g.timesTrained}× trained`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
               return (
                 <div
                   key={i}
@@ -890,7 +912,11 @@ export default function ActivityDetail({
                 >
                   <div>
                     <div className="text-[13px] font-semibold text-foreground">{g.name}</div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">{g.sub}</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      {g.sub}
+                      {lineage && g.sub ? " — " : ""}
+                      {lineage && <span className="text-[#8C2F51]">{lineage}</span>}
+                    </div>
                   </div>
                   <div className="text-right">
                     <div className="text-[13px] font-semibold text-foreground tabular-nums">
@@ -915,6 +941,85 @@ export default function ActivityDetail({
             onSaved={() => window.location.reload()}
           />
         )}
+
+        {/* v4 EFFORT (strength) — loadScore/relativeEffort were computed on
+            every sync and never rendered here; work density says how much
+            of the clock was actually under the bell */}
+        {dark &&
+          (det.loadScore != null ||
+            det.relativeEffort != null ||
+            (det.workSeconds != null && det.workSeconds > 0 && det.durationMinutes > 0) ||
+            (det.timeUnderLoadSeconds != null && det.timeUnderLoadSeconds > 0)) && (
+            <div className="mt-3 rounded-[18px] bg-white p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+              <div className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+                EFFORT
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-y-2.5">
+                {det.loadScore != null && (
+                  <div>
+                    <div
+                      className="text-[18px] font-bold text-foreground tabular-nums"
+                      style={{ fontFamily: "var(--font-display)" }}
+                    >
+                      {Math.round(det.loadScore)}
+                    </div>
+                    <div className="text-[9.5px] font-semibold tracking-[0.1em] text-muted-foreground">
+                      TRAINING LOAD
+                    </div>
+                  </div>
+                )}
+                {det.relativeEffort != null && (
+                  <div>
+                    <div
+                      className="text-[18px] font-bold text-foreground tabular-nums"
+                      style={{ fontFamily: "var(--font-display)" }}
+                    >
+                      {Math.round(det.relativeEffort)}
+                    </div>
+                    <div className="text-[9.5px] font-semibold tracking-[0.1em] text-muted-foreground">
+                      RELATIVE EFFORT
+                    </div>
+                  </div>
+                )}
+                {det.timeUnderLoadSeconds != null && det.timeUnderLoadSeconds > 0 && (
+                  <div>
+                    <div
+                      className="text-[18px] font-bold text-foreground tabular-nums"
+                      style={{ fontFamily: "var(--font-display)" }}
+                    >
+                      {mmss(det.timeUnderLoadSeconds)}
+                    </div>
+                    <div className="text-[9.5px] font-semibold tracking-[0.1em] text-muted-foreground">
+                      TIME UNDER LOAD
+                    </div>
+                  </div>
+                )}
+              </div>
+              {det.workSeconds != null &&
+                det.workSeconds > 0 &&
+                det.durationMinutes > 0 &&
+                (() => {
+                  const total = det.durationMinutes * 60;
+                  const pct = Math.min(100, Math.round((det.workSeconds! / total) * 100));
+                  const rest = Math.max(0, total - det.workSeconds!);
+                  return (
+                    <div className="mt-3">
+                      <div className="h-2.5 overflow-hidden rounded-full bg-[#F2F1F2]">
+                        <div
+                          className="h-full rounded-full bg-[#A63D63]"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <div className="mt-1.5 flex justify-between text-[10px] text-muted-foreground tabular-nums">
+                        <span>{mmss(det.workSeconds!)} working</span>
+                        <span>{pct}% density</span>
+                        <span>{mmss(rest)} resting</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+            </div>
+          )}
 
         {/* elevation (outdoor, when an altitude series exists) */}
         {det.type === "out" && elevLine && elevSeries && (

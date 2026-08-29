@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg, type RawExercise } from "@/lib/prs";
 import { activityTypeOf, routeDataAllowed, type RunMetrics } from "@/lib/activities";
 import { DEFAULT_HR_ZONE_TOPS } from "@/lib/zones";
 import type { RouteAnalytics } from "@/lib/route-analytics";
+import {
+  buildMovementHistories,
+  movementContext,
+  timeUnderLoadSeconds,
+} from "@/lib/strength-history";
 
 // GET ?id= — everything the activity detail screen shows (design 2026-08-11
 // rev): stats, per-movement segments with time-vs-last-run comparison,
@@ -51,15 +57,38 @@ export async function GET(request: NextRequest) {
       if (Array.isArray(pm.stepSeconds)) prevStepSeconds = pm.stepSeconds;
     }
 
+    // Per-movement context (2026-08-29, the strength round): "best 32 ·
+    // last time 24" per row, from the whole logged history. Strength rows
+    // only — one bounded query, folded in memory.
+    const histories =
+      type !== "out" && exercises.length > 0
+        ? buildMovementHistories(
+            await prisma.workoutLog.findMany({
+              where: { exercises: { not: Prisma.DbNull } },
+              orderBy: { startedAt: "desc" },
+              take: 400,
+              select: { id: true, startedAt: true, exercises: true },
+            })
+          )
+        : null;
+    const startedIso = w.startedAt.toISOString();
+
     const segments = exercises.map((e, i) => {
       const seconds = stepSeconds?.[i] ?? null;
       const prevSec = prevStepSeconds?.[i] ?? null;
+      const ctx =
+        histories && typeof e.name === "string"
+          ? movementContext(histories, e.name, startedIso)
+          : null;
       return {
         name: typeof e.name === "string" ? e.name : "—",
         sub: segSub(e),
         seconds,
         deltaSeconds:
           seconds != null && prevSec != null && prevSec > 0 ? seconds - prevSec : null,
+        bestWeightKg: ctx?.bestWeightKg ?? null,
+        lastTimeKg: ctx?.lastTime?.topWeightKg ?? null,
+        timesTrained: ctx?.timesTrained ?? null,
       };
     });
 
@@ -248,6 +277,12 @@ export async function GET(request: NextRequest) {
       vamMPerHour,
       descentM,
       hrr,
+      // Strength round (2026-08-29): stored-but-never-rendered effort
+      // numbers + the honest time-under-load for seconds-based steps.
+      loadScore: typeof m.loadScore === "number" ? m.loadScore : null,
+      relativeEffort: typeof m.relativeEffort === "number" ? m.relativeEffort : null,
+      timeUnderLoadSeconds:
+        type !== "out" ? timeUnderLoadSeconds(w.exercises) || null : null,
       packKg: w.packKg,
       bodyWeight: nearestWeigh
         ? {
