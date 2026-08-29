@@ -245,7 +245,7 @@ struct ControlsPage: View {
                     .font(Theme.text(8.5, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
         }

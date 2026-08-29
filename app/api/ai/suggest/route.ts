@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai, CHAT_MODEL } from "@/lib/openai";
+import { recordAIUsage } from "@/lib/ai-usage";
 import { buildCoachStyleGuide, getCoachLanguageLabel } from "@/lib/health-coach";
 
 // Allow up to 60s for AI generation (Vercel Pro)
@@ -83,6 +84,13 @@ Rules:
       ],
       max_completion_tokens: 250,
       temperature: 0.5,
+    });
+
+    recordAIUsage({
+      surface: "meal_suggest",
+      model: CHAT_MODEL,
+      inputTokens: completion.usage?.prompt_tokens ?? 0,
+      outputTokens: completion.usage?.completion_tokens ?? 0,
     });
 
     const suggestion =

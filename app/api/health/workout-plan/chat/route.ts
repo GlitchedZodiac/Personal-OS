@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai, CHAT_MODEL } from "@/lib/openai";
+import { recordAIUsage } from "@/lib/ai-usage";
 import { prisma } from "@/lib/prisma";
 import { getDateStringInTimeZone } from "@/lib/timezone";
 import { getUserTimeZone } from "@/lib/server-timezone";
@@ -303,6 +304,12 @@ ${planContext}${recentWorkoutsContext}`;
       max_completion_tokens: capDemoCompletionTokens(4000),
     });
     await recordDemoAISpend(completion.usage);
+    recordAIUsage({
+      surface: "workout_plan_chat",
+      model: getDemoChatModel(CHAT_MODEL),
+      inputTokens: completion.usage?.prompt_tokens ?? 0,
+      outputTokens: completion.usage?.completion_tokens ?? 0,
+    });
 
     const responseMessage = completion.choices[0].message;
 

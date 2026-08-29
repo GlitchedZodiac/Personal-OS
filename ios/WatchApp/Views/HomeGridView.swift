@@ -207,7 +207,7 @@ struct HomeGridView: View {
                 .font(Theme.wText(5.5))
                 .foregroundStyle(subtitleColor)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.8)
                 .padding(.top, Theme.px(1))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -258,6 +258,10 @@ private struct VerdictChip: View {
                     Text(verdict.headerWord)
                         .foregroundStyle(verdict.color)
                 }
+                // Inline header chip: 32 pt is the documented exception to
+                // the 38 pt floor (a full-height hit would distort the grid
+                // header row) — still 3× the bare-text hit it replaces.
+                .pitayaTappable(minHeight: 32)
             }
             .buttonStyle(.plain)
         }

@@ -54,6 +54,12 @@ export interface RunMetrics {
   timeStream?: number[];
   altitudeStream?: number[];
   routeAnalytics?: import("@/lib/route-analytics").RouteAnalytics;
+  /// Round 3 §07 (watch, 2026-08-28): heart-rate recovery — BPM drop over
+  /// the post-workout window and the seconds actually measured (≤60).
+  hrrDelta?: number;
+  hrrSeconds?: number;
+  /// Per-km elapsed seconds banked live on the wrist (outdoor kinds).
+  splits?: number[];
 }
 
 export function activityTypeOf(workout: {

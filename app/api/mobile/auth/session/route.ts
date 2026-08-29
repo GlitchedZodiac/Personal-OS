@@ -1,9 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/auth";
 import { createDeviceSession } from "@/lib/mobile-session";
 import { verifyPin } from "@/lib/pin-auth";
 
 export async function POST(request: NextRequest) {
   try {
+    // Same brute-force gate as the web login (2026-08-29 — this was the one
+    // PIN door with no limiter; found during the MCP-exposure audit).
+    const rateLimit = checkRateLimit(request, "mobile-pair");
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many attempts. Try again in a few minutes." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
     const body = await request.json();
     const pin = typeof body.pin === "string" ? body.pin : "";
     const deviceLabel =
@@ -16,8 +30,10 @@ export async function POST(request: NextRequest) {
       typeof body.deviceType === "string" ? body.deviceType.trim() : null;
 
     if (!(await verifyPin(pin))) {
+      rateLimit.registerFailure();
       return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
     }
+    rateLimit.reset();
 
     const { session, accessToken, refreshToken } = await createDeviceSession({
       deviceLabel,

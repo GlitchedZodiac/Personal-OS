@@ -27,7 +27,7 @@ struct SetLoggerPage: View {
                         .font(Theme.text(10.5, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.65)
+                        .minimumScaleFactor(0.8)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 7, weight: .bold))
                         .foregroundStyle(Theme.accent)
@@ -169,6 +169,7 @@ struct SetLoggerPage: View {
                 .foregroundStyle(Theme.textPrimary)
                 .frame(width: 28, height: 28)
                 .background(Theme.elementDim, in: Circle())
+                .pitayaTappable(minWidth: Theme.minTap)
         }
         .buttonStyle(.plain)
     }

@@ -123,9 +123,14 @@ metricsData: {
 
 `hrrDelta`/`hrrSeconds` may arrive AFTER the row exists: the watch
 re-syncs the same `(externalSource, externalId)` with the enriched
-metrics and the atomic upsert lands it as an update. The server stores
-these verbatim today; surfacing them (recovery card, splits table
-cross-check vs routeAnalytics.splits) is main-lane backlog. Also
+metrics and the atomic upsert lands it as an update. Surfaced on the web
+activity page since 2026-08-29 (the RECOVERY card, quick/typical/slow).
+
+**packKg (2026-08-29, additive, main-lane column):** `WorkoutLog.packKg`
+records carried load for hikes (0–60). Web + chat edit it today; when the
+wrist adds a pre-hike pack entry, send it as a top-level `packKg` on the
+sync item and the server will accept it (ask main lane to wire the sync
+route when the watch half is ready — one line). Also
 additive since 08-28b: `GET /api/mobile/trails?nearLat…` rows carry
 `matchPct` (50–99, null when not near-ranked) — the wrist prints it in
 save-track suggestions ("94% match").

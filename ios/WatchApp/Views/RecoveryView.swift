@@ -95,7 +95,7 @@ struct RecoveryView: View {
                     .font(Theme.r3Text(14, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, Theme.r3(10))
+                    .pitayaTappable()
             }
             .buttonStyle(.plain)
             .padding(.bottom, Theme.r3(12))

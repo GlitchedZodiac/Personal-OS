@@ -26,7 +26,7 @@ struct SequencesListView: View {
                         .font(Theme.display(16))
                         .foregroundStyle(Theme.textBright)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.8)
                 }
                 .padding(.horizontal, 4)
 
@@ -143,7 +143,7 @@ struct SequenceDetailView: View {
                         .font(Theme.display(12.5))
                         .foregroundStyle(Theme.textBright)
                         .lineLimit(2)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.8)
                 }
                 .padding(.horizontal, 4)
 
@@ -201,7 +201,7 @@ struct SequenceDetailView: View {
                                             .font(Theme.text(10.5, weight: .medium))
                                             .foregroundStyle(Theme.textPrimary)
                                             .lineLimit(1)
-                                            .minimumScaleFactor(0.7)
+                                            .minimumScaleFactor(0.8)
                                         Spacer(minLength: 4)
                                         Text(weightLabel(exercise.id))
                                             .font(Theme.numeric(11, weight: .semibold))
@@ -289,7 +289,7 @@ struct WeightDialSheet: View {
                 .font(Theme.text(10.5, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.8)
             Spacer(minLength: 0)
             Text(Fmt.kg(crownWeight))
                 .font(Theme.numeric(40))
@@ -450,7 +450,7 @@ struct SequenceLiveView: View {
                         .font(Theme.display(12, weight: .semibold))
                         .foregroundStyle(dimmed ? Color(hex: 0x8A5B6E) : Theme.accent)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.65)
+                        .minimumScaleFactor(0.8)
                         .id(model.emomRound)
                         .transition(.offset(y: Theme.px(10)).combined(with: .opacity))
                         .animation(dimmed ? nil : .spring(duration: 0.35), value: model.emomRound)
@@ -461,7 +461,7 @@ struct SequenceLiveView: View {
                             .font(Theme.text(8.5))
                             .foregroundStyle(Theme.textTertiary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                            .minimumScaleFactor(0.8)
                     }
                     HStack(spacing: 4) {
                         BeatingHeart(size: 10)
@@ -563,7 +563,7 @@ struct CircuitRunnerPage: View {
                     .font(Theme.display(13, weight: .semibold))
                     .foregroundStyle(Theme.accent)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.8)
                     .multilineTextAlignment(.center)
                 if let weight = model.effectiveWeight(for: step) {
                     Text("\(Fmt.kg(weight)) kg")
@@ -615,7 +615,7 @@ struct CircuitRunnerPage: View {
                         .font(Theme.text(9))
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.8)
                 }
             } else {
                 VStack(spacing: 2) {
@@ -638,13 +638,18 @@ struct CircuitRunnerPage: View {
                     Text("round \(model.circuitRound + 1) next")
                         .font(Theme.text(9))
                         .foregroundStyle(Theme.textSecondary)
-                    Button("Skip") {
+                    // Legibility floor (2026-08-29): "the skip was a TINY
+                    // button" — the label was a bare ≈24×14 pt hit region.
+                    // Sizing lives INSIDE the label so the hit area grows.
+                    Button {
                         model.skipCircuitRest()
+                    } label: {
+                        Text("Skip")
+                            .font(Theme.text(11, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                            .pitayaTappable(minWidth: 84)
                     }
                     .buttonStyle(.plain)
-                    .font(Theme.text(10, weight: .semibold))
-                    .foregroundStyle(Theme.accent)
-                    .padding(.top, 4)
                     // §05: on the rest ring, Double Tap skips the rest.
                     .handGestureShortcut(.primaryAction)
                 }
@@ -678,11 +683,13 @@ struct IdleNudgeOverlay: View {
                     .font(Theme.text(9))
                     .foregroundStyle(Theme.textTertiary)
                 PitayaCTA(title: "Keep going") { model.keepTraining() }
-                Button("End workout", action: onEnd)
-                    .buttonStyle(.plain)
-                    .font(Theme.text(10, weight: .semibold))
-                    .foregroundStyle(Theme.danger)
-                    .padding(.top, 2)
+                Button(action: onEnd) {
+                    Text("End workout")
+                        .font(Theme.text(11, weight: .semibold))
+                        .foregroundStyle(Theme.danger)
+                        .pitayaTappable(minWidth: 120)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 12)
         }

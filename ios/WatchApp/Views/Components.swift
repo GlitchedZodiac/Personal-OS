@@ -85,7 +85,7 @@ struct StatCell: View {
                 .font(Theme.numeric(15))
                 .foregroundStyle(color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.8)
             Text(label)
                 .font(Theme.text(7, weight: .semibold))
                 .kerning(0.8)
@@ -108,7 +108,7 @@ struct PRBanner: View {
                 .font(Theme.text(10, weight: .semibold))
                 .foregroundStyle(Theme.prText)
                 .lineLimit(2)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 9)

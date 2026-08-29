@@ -5,7 +5,95 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-28b (WATCH ROUND 3 PORTED — the locked spec built
+**Last updated:** 2026-08-29 (V4 FEEDBACK ROUND — see the entry below:
+analytics honesty, hike metrics + pack load, the dock hides, the on-page
+movement editor, watch legibility floor, strength reports, token-ROI
+hygiene, and the MCP proposal.)
+
+---
+
+## 2026-08-29 · v4 — the feedback round (his 6 threads, one session)
+
+Branch `claude/v4-feedback`. Source: his Claude-chat hike report (Aug 1 vs
+Aug 27 Tres Cruces), the freestyle screenshot, and four asks in chat.
+
+**Analytics honesty (the report's three bugs, root-fixed + backfilled):**
+AVG PACE divided moving time by a moving-only GPS sum the card never
+showed — `analyzeRoute` now takes the workout's own `distanceMeters`
+(sane band 0.7–1.5× GPS) as the pace basis and echoes `paceMeters`;
+max speed rejects windows >3× the median window speed (one 50 m fix in a
+3-sample window ≈ the "12.0 km/h" spike); the elevation chart read the
+wrist's RELATIVE CMAltimeter stream ("1–376 m" on a 1,480 m summit) —
+absolute GPS altitude from `routeData.points[].alt` now feeds the chart,
+`minAltM/maxAltM`, and descent totals. `routeAnalytics.version = 2`; the
+backfill route recomputes v1 rows (RUN AGAINST PROD after deploy).
+
+**Metrics the DB already held, now on the activity page:** ELAPSED, CLIMB
+RATE (VAM m/h), DESCENT, zone rows with bpm bands + minutes ("Z2 ·
+123–152 · 24 min · 57%"), the Round-3 HRR capture as a RECOVERY card
+(quick/typical/slow), body weight nearest the session, and — for named
+trails — **VS YOUR LAST RUN** (moving/pace/climb-rate/gain/HR deltas vs
+the previous run of the same trail) plus a tappable all-runs list. "2
+runs logged" finally compares them.
+
+**Pack load:** `WorkoutLog.packKg` (migration, 0–60 kg) — the Tolima
+plan's progressive-loading variable. Editable on the page (+ SET PACK
+WEIGHT), via chat ("pack was 6 kilos" — `edit_workout_entry.packKg`),
+shown as CARRIED · N KG. Wrist pre-hike entry → deferred (design slice).
+
+**The dock hides** (his pick): scroll down and the idle pill slides away;
+any scroll-up (or near-top) brings it back. Active states (recording,
+transcribing, confirm cards, failed-text) stay pinned. No idle-timer
+return — that would re-cover the exact element being read. This was the
+screenshot: "Delete this workout" sat under the mic on every page.
+
+**The kettlebell-weight fix:** the activity page now carries a movement
+editor (autocomplete from the exercise catalog; sets/reps/kg; 0 kg valid
+for bodyweight) posting the SAME `PATCH /api/health/workouts/entry` the
+chat flow uses — volume + PRs recompute identically. The describe-flow
+now asks for load in its one question. His screenshot's freestyle row is
+editable in place.
+
+**Watch legibility floor** (his "tiny menus" call — codified in CLAUDE.md):
+Round 3's `r3Text(N)=N/2` had dropped the app's wrist factor (1.406×) —
+7 pt Skips, 4.5 pt axis labels. `Theme.r3TypeSize` boosts sub-12 pt sizes
+×1.40625 (ceiling 12, floor 7, continuous — heroes untouched);
+`Theme.minTap = 38` + `.pitayaTappable()` enforce hit areas; swept: rest
+Skip, IdleNudge End, BackChevron ×5, Ready chevron, rep ±, bell-rack bars
+(5.7 pt slivers → full-slot strips), settings toggle/segment,
+Recovery/SaveTrack Skips; `minimumScaleFactor` floored at 0.8. Sim-shot
+proof sent (Effort/Recovery/SaveTrack read clean).
+
+**Strength reports ("like trails"):** new `lib/strength-history.ts`
+(per-movement history folded across all `exercises` JSON) → segment rows
+carry lineage ("best 32 · last 24 · 7× trained"), an EFFORT card renders
+the loadScore/relativeEffort every sync computed and nothing showed +
+time-under-load (honest for seconds-steps; tonnage stays 0) + a
+work-density bar; Train page gains the PR WALL (every heaviest-ever,
+tap → workout) and BY MOVEMENT · 8 WEEKS tonnage bars.
+
+**Token ROI** (`docs/token-roi.md` has the numbers): $3.92 all-time; the
+chat lane's 7.1k-input average is the spend. Shipped: 8 unmetered call
+sites metered + weekly-recap label fixed; 4 dead AI routes deleted; chat
+history 20→12; `set_reminder` joined confirm-first (was the one silent
+write); stale `PROPOSAL_TOOL_NAMES` deleted (proposalKindFor is the
+authority); **usuals got fuzzy** — `lib/food-match.ts` fold+overlap, the
+food card shows "≈ your usual" and a Log-usual button (exact saved
+macros, zero drift). Library-instead-of-AI was REJECTED by the data (3%
+exact repeats over 559 foods); the luna food-lane experiment is deferred
+to his call.
+
+**MCP** (`docs/mcp-proposal.md`, proposal only per his pick): Stage 1 —
+personal connector over the EXISTING 48-dataset registry + validated
+write routes, bearer token as a DeviceSession, ~2–3 sessions, zero
+inference cost; Stage 2 — multi-user (user model is the real gate, OAuth
+via a provider, per-user scoping). Hardening shipped NOW: the mobile
+PIN-mint route got the same rate limiter as web login (it had none).
+
+Tests 316/316 (route-analytics v2, strength-history, food-match added);
+build green; both Xcode schemes green.
+
+---
 1:1: Effort page, live MapKit page with the contour AOD face, zone-change
 blooms off a real ZonePublisher, the BPM-synced lub-dub heart, save-track
 prompt + Saved trails in the Hike menu, §06 saving states, km splits/HRR

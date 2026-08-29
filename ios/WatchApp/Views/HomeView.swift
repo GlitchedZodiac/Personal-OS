@@ -258,11 +258,14 @@ struct BackChevron: View {
 
     var body: some View {
         Button(action: action) {
+            // Visual stays the design's 22 pt circle; the HIT area meets the
+            // 38 pt floor (2026-08-29 — this chevron is on five screens).
             Image(systemName: "chevron.left")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Theme.textMuted)
                 .frame(width: 22, height: 22)
                 .background(Theme.card, in: Circle())
+                .pitayaTappable(minWidth: Theme.minTap)
         }
         .buttonStyle(.plain)
     }

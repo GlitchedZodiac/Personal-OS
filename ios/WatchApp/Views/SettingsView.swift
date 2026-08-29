@@ -163,7 +163,7 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.textMuted)
                 }
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.8)
             }
             .padding(.horizontal, Theme.px(16))
             .padding(.vertical, Theme.px(13))
@@ -197,6 +197,7 @@ struct SettingsView: View {
                         .padding(Theme.px(3))
                 }
                 .animation(.easeInOut(duration: 0.15), value: isOn.wrappedValue)
+                .pitayaTappable(minWidth: Theme.minTap)
             }
             .buttonStyle(.plain)
         }
@@ -231,6 +232,8 @@ struct SettingsView: View {
                 .padding(.horizontal, Theme.px(selected ? 14 : 12))
                 .padding(.vertical, Theme.px(4))
                 .background(selected ? Theme.accent : .clear, in: Capsule())
+                // Inline segment: 32 pt exception, same as header chips.
+                .pitayaTappable(minHeight: 32)
         }
         .buttonStyle(.plain)
     }
@@ -249,7 +252,7 @@ struct SettingsView: View {
                     .font(Theme.wText(7))
                     .foregroundStyle(model.queuedCount == 0 ? Theme.mint : Color(hex: 0xE8B675))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .minimumScaleFactor(0.8)
             }
         }
         .padding(.horizontal, Theme.px(16))

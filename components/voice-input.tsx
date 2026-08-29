@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -130,6 +130,32 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [textInput, setTextInput] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
+
+  // v4 (2026-08-29, his pick): the idle pill hides on scroll-down and
+  // returns on ANY scroll-up (or near the top) — every page's last element
+  // becomes reachable ("Delete this workout" sat under the mic). No
+  // idle-timer return: it would re-cover the exact thing being read. Active
+  // states (recording/confirm/edit) pin the dock visible below.
+  const [scrolledAway, setScrolledAway] = useState(false);
+  useEffect(() => {
+    let lastY = window.scrollY;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        const delta = y - lastY;
+        if (y < 50) setScrolledAway(false);
+        else if (delta > 12) setScrolledAway(true);
+        else if (delta < -4) setScrolledAway(false);
+        lastY = y;
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   const [aiResponse, setAiResponse] = useState<AIResponse | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -846,9 +872,28 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
     );
   }
 
+  // The pill stays pinned while anything is in flight — hiding a live
+  // recording or a mid-transcription state would read as data loss.
+  const dockHidden =
+    scrolledAway &&
+    !isRecording &&
+    !isTranscribing &&
+    !isProcessing &&
+    !showTextInput &&
+    !lastFailedText;
+
   return (
-    <div className={cn("fixed left-0 right-0 px-4 z-[60] pointer-events-none", floatingBottomClass)}>
-      <div className="max-w-lg mx-auto pointer-events-auto">
+    <div
+      className={cn(
+        "fixed left-0 right-0 px-4 z-[60] pointer-events-none transition-all duration-300 ease-out",
+        floatingBottomClass,
+        dockHidden && "translate-y-[240px] opacity-0"
+      )}
+      aria-hidden={dockHidden}
+    >
+      <div
+        className={cn("max-w-lg mx-auto", dockHidden ? "pointer-events-none" : "pointer-events-auto")}
+      >
         {/* Failed text recovery banner */}
         {lastFailedText && (
           <Card className="mb-3 rounded-[24px] border-red-500/30 bg-red-500/5 shadow-lg">

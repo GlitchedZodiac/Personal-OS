@@ -57,7 +57,7 @@ struct PinPadView: View {
                     .font(Theme.text(8, weight: .semibold))
                     .foregroundStyle(Theme.danger)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.8)
             }
 
             grid

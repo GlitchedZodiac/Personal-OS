@@ -189,7 +189,9 @@ export async function POST(request: NextRequest) {
           ? (item.routeData as { points?: unknown }).points
           : null;
       const routeAnalytics = Array.isArray(routePoints)
-        ? analyzeRoute(routePoints as RoutePointIn[])
+        ? analyzeRoute(routePoints as RoutePointIn[], {
+            authoritativeMeters: toNullableNumber(item.distanceMeters),
+          })
         : null;
 
       const data = {

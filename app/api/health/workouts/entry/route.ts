@@ -32,6 +32,7 @@ export async function PATCH(request: NextRequest) {
         seconds?: unknown;
         weightKg?: unknown;
       }[];
+      packKg?: unknown;
     };
     const id = typeof body.id === "string" ? body.id : null;
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
@@ -39,6 +40,32 @@ export async function PATCH(request: NextRequest) {
     const workout = await prisma.workoutLog.findUnique({ where: { id } });
     if (!workout) {
       return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+    }
+
+    // Carried load (2026-08-29): pack weight for hikes. null clears; 0–60 kg
+    // sane band. Editable alone or alongside a movement edit.
+    let packPatch: { packKg: number | null } | undefined;
+    if ("packKg" in body) {
+      if (body.packKg === null) packPatch = { packKg: null };
+      else if (
+        typeof body.packKg === "number" &&
+        Number.isFinite(body.packKg) &&
+        body.packKg >= 0 &&
+        body.packKg <= 60
+      ) {
+        packPatch = { packKg: body.packKg };
+      } else {
+        return NextResponse.json({ error: "packKg must be 0–60 or null" }, { status: 400 });
+      }
+    }
+
+    const hasExerciseEdit =
+      (Array.isArray(body.exercises) && body.exercises.length > 0) ||
+      (Array.isArray(body.assignments) && body.assignments.length > 0) ||
+      body.match != null;
+    if (!hasExerciseEdit && packPatch) {
+      const updated = await prisma.workoutLog.update({ where: { id }, data: packPatch });
+      return NextResponse.json({ workout: updated, changed: ["packKg"], prRebuild: null });
     }
 
     await ensureUserExercisesLoaded();
@@ -52,6 +79,10 @@ export async function PATCH(request: NextRequest) {
       // rough) movement list, names normalized against the catalog.
       const num = (v: unknown) =>
         typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined;
+      // Weight alone may be 0 — bodyweight movements ("0 kg" is a value,
+      // not an omission; dropping it was the 2026-08-29 zero-drop bug).
+      const numOrZero = (v: unknown) =>
+        typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined;
       const attached = body.exercises
         .map((e) => {
           const raw = String(e.name ?? "").trim();
@@ -63,7 +94,7 @@ export async function PATCH(request: NextRequest) {
             ...(num(e.sets) !== undefined ? { sets: num(e.sets) } : {}),
             ...(num(e.reps) !== undefined ? { reps: num(e.reps) } : {}),
             ...(num(e.seconds) !== undefined ? { seconds: num(e.seconds) } : {}),
-            ...(num(e.weightKg) !== undefined ? { weightKg: num(e.weightKg) } : {}),
+            ...(numOrZero(e.weightKg) !== undefined ? { weightKg: numOrZero(e.weightKg) } : {}),
           };
         })
         .filter((e): e is NonNullable<typeof e> => e !== null);
@@ -92,7 +123,7 @@ export async function PATCH(request: NextRequest) {
 
     const updated = await prisma.workoutLog.update({
       where: { id },
-      data: { exercises: edit.exercises },
+      data: { exercises: edit.exercises, ...(packPatch ?? {}) },
     });
 
     // Rebuild rather than re-detect: detection only ever raises records, but

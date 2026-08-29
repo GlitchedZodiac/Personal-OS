@@ -1,4 +1,5 @@
 import { openai, CHAT_MODEL } from "@/lib/openai";
+import { recordAIUsage } from "@/lib/ai-usage";
 import {
   capDemoCompletionTokens,
   enforceDemoAIBudget,
@@ -182,6 +183,12 @@ export async function analyzeFinanceText(message: string, aiLanguage = "english"
     ],
   });
   await recordDemoAISpend(response.usage);
+  recordAIUsage({
+    surface: "finance_text",
+    model: getDemoChatModel(CHAT_MODEL),
+    inputTokens: response.usage?.prompt_tokens ?? 0,
+    outputTokens: response.usage?.completion_tokens ?? 0,
+  });
 
   return parseJSONResponse<ParsedFinanceText>(response.choices[0].message.content || "{}");
 }
@@ -212,6 +219,12 @@ export async function analyzeFinanceReceipt(image: string, aiLanguage = "english
     ],
   });
   await recordDemoAISpend(response.usage);
+  recordAIUsage({
+    surface: "finance_receipt",
+    model: getDemoChatModel(CHAT_MODEL),
+    inputTokens: response.usage?.prompt_tokens ?? 0,
+    outputTokens: response.usage?.completion_tokens ?? 0,
+  });
 
   return parseJSONResponse<ParsedReceipt>(response.choices[0].message.content || "{}");
 }
@@ -240,6 +253,12 @@ export async function analyzeFinanceDocument(input: {
     ],
   });
   await recordDemoAISpend(response.usage);
+  recordAIUsage({
+    surface: "finance_document",
+    model: getDemoChatModel(CHAT_MODEL),
+    inputTokens: response.usage?.prompt_tokens ?? 0,
+    outputTokens: response.usage?.completion_tokens ?? 0,
+  });
 
   return parseJSONResponse<ParsedFinanceDocument>(response.choices[0].message.content || "{}");
 }

@@ -59,7 +59,8 @@ struct BellRackSheet: View {
     /// Design: bar width 13px (cursor 15px), radius 4, heights ramp 20→44px;
     /// owned #A63D63 · unowned #2A292E · cursor #DC74A0.
     private var rack: some View {
-        HStack(alignment: .bottom, spacing: Theme.px(4)) {
+        // Spacing lives inside each slot since 2026-08-29 (hit strips).
+        HStack(alignment: .bottom, spacing: 0) {
             ForEach(Array(denominations.enumerated()), id: \.element) { index, kg in
                 let isCursor = kg == cursorKg
                 let owned = prefs.ownedBells.contains(kg)
@@ -68,12 +69,21 @@ struct BellRackSheet: View {
                     prefs.toggleBell(kg)
                     Haptics.minor(.click)
                 } label: {
+                    // The bar stays the design's sliver; the HIT strip is
+                    // the full slot (bar + gap) at rack height — 5.7 pt
+                    // bars were the smallest tap targets in the app.
                     RoundedRectangle(cornerRadius: Theme.px(4))
                         .fill(isCursor ? Theme.accent : (owned ? Theme.accentDeep : Theme.elementDim))
                         .frame(
                             width: Theme.px(isCursor ? 15 : 13) * 0.62,
                             height: Theme.px(20 + (44 - 20) * t)
                         )
+                        .frame(
+                            width: Theme.px(13) * 0.62 + Theme.px(4),
+                            height: Theme.px(44),
+                            alignment: .bottom
+                        )
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }

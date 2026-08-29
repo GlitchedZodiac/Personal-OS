@@ -429,22 +429,9 @@ export async function executeGetHealthData(
   }
 }
 
-// Proposal tools — the model proposes, the USER confirms in the UI, then the
-// client persists via the normal CRUD endpoints. Anything here is terminal
-// for the agentic loop.
-export const PROPOSAL_TOOL_NAMES = new Set([
-  "log_food",
-  "log_measurement",
-  "log_workout",
-  "log_water",
-  "edit_food_log",
-  "delete_entry",
-  "create_routine",
-  "update_routine",
-  "create_exercise",
-  "edit_workout_entry",
-  "save_food_product",
-]);
+// (The old PROPOSAL_TOOL_NAMES set was deleted 2026-08-29: it had drifted
+// out of sync with proposalKindFor — the single authority below — and
+// nothing consumed it.)
 
 /// Numeric measurement fields — the ones the model zero-fills.
 const MEASUREMENT_NUMERIC_FIELDS = [
@@ -516,7 +503,8 @@ export type ProposalKind =
   | "edit_workout"
   | "product"
   | "trail"
-  | "plan_week";
+  | "plan_week"
+  | "reminder";
 
 export function proposalKindFor(toolName: string): ProposalKind | null {
   switch (toolName) {
@@ -546,6 +534,10 @@ export function proposalKindFor(toolName: string): ProposalKind | null {
       return "trail";
     case "plan_training":
       return "plan_week";
+    // 2026-08-29: reminders join the confirm-first shape — this was the one
+    // tool that wrote immediately with no card.
+    case "set_reminder":
+      return "reminder";
     default:
       return null;
   }

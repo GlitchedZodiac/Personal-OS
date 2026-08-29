@@ -76,6 +76,9 @@ model WorkoutLog {
   avgHeartRateBpm  Int?
   maxHeartRateBpm  Int?
   elevationGainM   Float?
+  // Carried load (2026-08-29): pack weight for hikes — the Tolima plan's
+  // progressive-loading variable. Null = unrecorded, not zero.
+  packKg           Float?
   routeData        Json?
   metricsData      Json?
   deviceType       String?
