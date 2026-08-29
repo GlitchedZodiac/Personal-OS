@@ -2,8 +2,10 @@
 // routeData carries the full-res points[] gets moving/stopped time, breaks,
 // splits and grade-adjusted pace written into metricsData — the same math the
 // sync route now runs for new sessions. Idempotent: rows already carrying
-// routeAnalytics are skipped. Cookie-gated like every /api/health/* route;
-// curl it (or re-run it) freely.
+// CURRENT-version routeAnalytics are skipped; older versions are recomputed
+// (v2, 2026-08-29: reconciled pace, spike-filtered max speed, absolute
+// min/max altitude, descent totals). Cookie-gated like every /api/health/*
+// route; curl it (or re-run it) freely.
 
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -19,7 +21,7 @@ export async function POST() {
       where: { workoutType: { in: [...GPS_WORKOUT_TYPES] } },
       orderBy: { startedAt: "desc" },
       take: 200,
-      select: { id: true, routeData: true, metricsData: true },
+      select: { id: true, routeData: true, metricsData: true, distanceMeters: true },
     });
 
     let processed = 0;
@@ -33,13 +35,16 @@ export async function POST() {
         row.metricsData && typeof row.metricsData === "object" && !Array.isArray(row.metricsData)
           ? (row.metricsData as Record<string, unknown>)
           : {};
-      if (metrics.routeAnalytics) {
+      const existing = metrics.routeAnalytics as { version?: number } | undefined;
+      if (existing && (existing.version ?? 1) >= 2) {
         skippedExisting++;
         continue;
       }
       const route = row.routeData as { points?: unknown } | null;
       const points = Array.isArray(route?.points) ? (route.points as RoutePointIn[]) : null;
-      const analytics = points ? analyzeRoute(points) : null;
+      const analytics = points
+        ? analyzeRoute(points, { authoritativeMeters: row.distanceMeters })
+        : null;
       if (!analytics) {
         skippedNoPoints++;
         continue;

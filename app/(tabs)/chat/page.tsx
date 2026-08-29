@@ -681,13 +681,16 @@ export default function ChatPage() {
             set: data.set,
             assignments: data.assignments,
             exercises: data.exercises,
+            ...(typeof data.packKg === "number" ? { packKg: data.packKg } : {}),
           }),
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || "Edit failed");
         followUp = Array.isArray(data.exercises)
           ? "Structured — the session now carries what you actually did, measured against the recording. PRs checked."
-          : "Fixed — PRs recalculated.";
+          : typeof data.packKg === "number" && !data.match && !data.assignments
+            ? `Pack recorded — ${data.packKg} kg carried.`
+            : "Fixed — PRs recalculated.";
       } else if (kind === "product") {
         const res = await fetch("/api/health/favorites", {
           method: "POST",
@@ -1020,9 +1023,16 @@ export default function ChatPage() {
                         .map(([k, v]) =>
                           k === "weightKg" ? `${v} kg` : k === "seconds" ? `${v}s` : `${k} ${v}`
                         )
-                        .join(" · ")}
+                        .join(" · ") ||
+                      (typeof data.packKg === "number" ? `pack ${data.packKg} kg` : "")}
                 </>
               )}
+              {typeof data.packKg === "number" &&
+                Boolean(data.exercises || data.match || data.assignments) && (
+                  <div className="mt-1 text-[12.5px] text-secondary-foreground">
+                    pack · {String(data.packKg)} kg carried
+                  </div>
+                )}
             </div>
           )}
 

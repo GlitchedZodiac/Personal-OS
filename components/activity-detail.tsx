@@ -8,7 +8,7 @@
 // (terrain map, moving/stopped, SPLITS — the card the design omitted for
 // lack of data — and BREAKS) are marked inline.
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -47,10 +47,41 @@ export interface ActivityDetailData {
   segments: { name: string; sub: string; seconds: number | null; deltaSeconds: number | null }[];
   hrStream: number[] | null;
   zonePct: number[] | null;
+  zoneSeconds: number[] | null;
+  zoneTops: number[] | null;
   altitudeStream: number[] | null;
+  /// Preferred elevation series — absolute GPS metres when the route has
+  /// them (altitudeAbsolute true), else the wrist's RELATIVE barometric
+  /// stream (never label that one as altitude).
+  altitudeSeries: number[] | null;
+  altitudeAbsolute: boolean;
+  vamMPerHour: number | null;
+  descentM: number | null;
+  hrr: { delta: number; seconds: number; band: string } | null;
+  packKg: number | null;
+  bodyWeight: { kg: number | null; measuredAt: string } | null;
+  exercises: { name: string; sets: number | null; reps: number | null; seconds: number | null; weightKg: number | null }[];
   polyline: string | null;
   routeAnalytics: RouteAnalytics | null;
-  trail: { id: string; name: string; runCount: number } | null;
+  trail: {
+    id: string;
+    name: string;
+    runCount: number;
+    prevRun: TrailRunSummary | null;
+    runs: TrailRunSummary[];
+  } | null;
+}
+
+export interface TrailRunSummary {
+  id: string;
+  startedAt: string;
+  durationMinutes: number;
+  distanceMeters: number | null;
+  elevationGainM: number | null;
+  avgHeartRateBpm: number | null;
+  movingSeconds: number | null;
+  paceSecPerKm: number | null;
+  vamMPerHour: number | null;
 }
 
 const ZONE_COLORS = ["#E7E5E9", "#DCA8BE", "#C97D9C", "#A63D63", "#8C2F51"];
@@ -80,6 +111,319 @@ function deltaLabel(deltaSeconds: number | null): { text: string; color: string 
   const sign = deltaSeconds < 0 ? "−" : "+";
   const color = deltaSeconds < 0 ? "#5E9B72" : "#D9A23E";
   return { text: `${sign}${mmss(Math.abs(deltaSeconds))} vs last`, color };
+}
+
+// v4 (2026-08-29): the on-page movement editor — the deterministic twin of
+// the chat describe-flow. Same PATCH /api/health/workouts/entry ATTACH body,
+// so names normalize, volume recomputes and PRs rebuild identically; this
+// just doesn't cost a conversation. Born from "I can't enter the kettlebell
+// weight I did".
+type EditRow = { name: string; sets: string; reps: string; weightKg: string; seconds: string };
+
+function MovementEditor({
+  det,
+  trigger,
+  onSaved,
+}: {
+  det: ActivityDetailData;
+  trigger: string;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [names, setNames] = useState<string[]>([]);
+  const toRow = (e: ActivityDetailData["exercises"][number]): EditRow => ({
+    name: e.name,
+    sets: e.sets != null ? String(e.sets) : "",
+    reps: e.reps != null ? String(e.reps) : "",
+    weightKg: e.weightKg != null ? String(e.weightKg) : "",
+    seconds: e.seconds != null ? String(e.seconds) : "",
+  });
+  const [rows, setRows] = useState<EditRow[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    setRows(
+      det.exercises.length > 0
+        ? det.exercises.map(toRow)
+        : [{ name: "", sets: "", reps: "", weightKg: "", seconds: "" }]
+    );
+    fetch("/api/health/exercises")
+      .then((r) => r.json())
+      .then((b) =>
+        setNames(
+          (Array.isArray(b.exercises) ? b.exercises : [])
+            .map((e: { name?: string }) => e?.name)
+            .filter((n: unknown): n is string => typeof n === "string")
+        )
+      )
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const setField = (i: number, k: keyof EditRow, v: string) =>
+    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+
+  const save = async () => {
+    const exercises = rows
+      .filter((r) => r.name.trim())
+      .map((r) => ({
+        name: r.name.trim(),
+        ...(Number(r.sets) > 0 ? { sets: Number(r.sets) } : {}),
+        ...(Number(r.reps) > 0 ? { reps: Number(r.reps) } : {}),
+        ...(Number(r.seconds) > 0 ? { seconds: Number(r.seconds) } : {}),
+        ...(r.weightKg.trim() !== "" && Number(r.weightKg) >= 0
+          ? { weightKg: Number(r.weightKg) }
+          : {}),
+      }));
+    if (exercises.length === 0) {
+      toast.error("Name at least one movement");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch("/api/health/workouts/entry", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: det.id, exercises }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      toast.success("Movements saved — volume and PRs updated");
+      setOpen(false);
+      onSaved();
+    } else {
+      const body = await res.json().catch(() => ({}));
+      toast.error(String(body.error ?? "Couldn't save"));
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-3 w-full rounded-[12px] border border-[#E3E1E5] bg-white py-2.5 text-[12.5px] font-semibold text-foreground hover:bg-[#FAFAFA]"
+      >
+        {trigger}
+      </button>
+    );
+  }
+  return (
+    <div className="mt-3 rounded-[18px] bg-white p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+      <div className="mb-2 text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+        MOVEMENTS · SETS × REPS · KG
+      </div>
+      <datalist id="pitaya-exercise-names">
+        {names.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
+      {rows.map((r, i) => (
+        <div key={i} className="mb-2 flex items-center gap-1.5">
+          <input
+            list="pitaya-exercise-names"
+            value={r.name}
+            onChange={(e) => setField(i, "name", e.target.value)}
+            placeholder="Movement"
+            className="min-w-0 flex-1 rounded-[10px] border border-[#E3E1E5] px-2.5 py-2 text-[13px]"
+          />
+          <input
+            value={r.sets}
+            onChange={(e) => setField(i, "sets", e.target.value)}
+            placeholder="sets"
+            inputMode="numeric"
+            className="w-12 rounded-[10px] border border-[#E3E1E5] px-1.5 py-2 text-center text-[13px] tabular-nums"
+          />
+          <input
+            value={r.reps}
+            onChange={(e) => setField(i, "reps", e.target.value)}
+            placeholder="reps"
+            inputMode="numeric"
+            className="w-12 rounded-[10px] border border-[#E3E1E5] px-1.5 py-2 text-center text-[13px] tabular-nums"
+          />
+          <input
+            value={r.weightKg}
+            onChange={(e) => setField(i, "weightKg", e.target.value)}
+            placeholder="kg"
+            inputMode="decimal"
+            className="w-14 rounded-[10px] border border-[#E3E1E5] px-1.5 py-2 text-center text-[13px] tabular-nums"
+          />
+          <button
+            onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-[#B4536F]"
+            aria-label="Remove row"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <div className="mt-1 flex items-center justify-between">
+        <button
+          onClick={() =>
+            setRows((rs) => [...rs, { name: "", sets: "", reps: "", weightKg: "", seconds: "" }])
+          }
+          className="text-[12.5px] font-semibold text-[#3E7A54]"
+        >
+          + Add movement
+        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setOpen(false)}
+            className="rounded-[10px] px-3 py-2 text-[12.5px] font-semibold text-muted-foreground"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="rounded-[10px] bg-[#232227] px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+      <p className="mt-2 text-[10px] leading-[1.5] text-muted-foreground">
+        Weights recompute session volume and PRs the moment you save. 0 kg is
+        valid for bodyweight movements.
+      </p>
+    </div>
+  );
+}
+
+// v4: pack weight for hikes — the Tolima plan's progressive-loading variable.
+function PackEditor({ det, onSaved }: { det: ActivityDetailData; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(det.packKg != null ? String(det.packKg) : "");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    const kg = value.trim() === "" ? null : Number(value);
+    if (kg != null && (!Number.isFinite(kg) || kg < 0 || kg > 60)) {
+      toast.error("Pack weight must be 0–60 kg");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch("/api/health/workouts/entry", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: det.id, packKg: kg }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      toast.success(kg != null ? `Pack recorded — ${kg} kg` : "Pack cleared");
+      setOpen(false);
+      onSaved();
+    } else {
+      toast.error("Couldn't save pack weight");
+    }
+  };
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-1 text-[10.5px] font-semibold tracking-[0.12em] text-[#3E7A54]"
+      >
+        {det.packKg != null ? `CARRIED ${det.packKg} KG · EDIT` : "+ SET PACK WEIGHT"}
+      </button>
+    );
+  }
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="kg carried"
+        inputMode="decimal"
+        autoFocus
+        className="w-24 rounded-[10px] border border-[#E3E1E5] px-2.5 py-1.5 text-[13px] tabular-nums"
+      />
+      <button
+        onClick={save}
+        disabled={saving}
+        className="rounded-[10px] bg-[#232227] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
+      >
+        {saving ? "…" : "Save"}
+      </button>
+      <button
+        onClick={() => setOpen(false)}
+        className="px-1 text-[12px] font-semibold text-muted-foreground"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
+// v4: the report did this comparison by hand from two screenshots — the
+// data was here all along. Lower is better for times/pace; higher for climb
+// rate; HR is context, not a score.
+function TrailCompareCard({
+  det,
+  prev,
+}: {
+  det: ActivityDetailData;
+  prev: TrailRunSummary;
+}) {
+  const ra = det.routeAnalytics;
+  const prevDate = new Date(prev.startedAt)
+    .toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    .toUpperCase();
+  const rows: { label: string; now: string; then: string; delta: string; color: string }[] = [];
+  const push = (
+    label: string,
+    now: number | null | undefined,
+    then: number | null | undefined,
+    fmtVal: (v: number) => string,
+    lowerIsBetter: boolean | null
+  ) => {
+    if (now == null || then == null) return;
+    const d = now - then;
+    const better = lowerIsBetter == null ? null : lowerIsBetter ? d < 0 : d > 0;
+    rows.push({
+      label,
+      now: fmtVal(now),
+      then: fmtVal(then),
+      delta: d === 0 ? "even" : `${d > 0 ? "+" : "−"}${fmtVal(Math.abs(d))}`,
+      color: better == null || d === 0 ? "#96949B" : better ? "#5E9B72" : "#D9A23E",
+    });
+  };
+  push("MOVING", ra?.movingSeconds, prev.movingSeconds, mmss, true);
+  push("PACE", ra?.avgMovingPaceSecPerKm, prev.paceSecPerKm, (v) => `${mmss(v)}/km`, true);
+  push("CLIMB RATE", det.vamMPerHour, prev.vamMPerHour, (v) => `${fmt(Math.round(v))} m/h`, false);
+  push(
+    "ELEV GAIN",
+    det.elevationGainM,
+    prev.elevationGainM,
+    (v) => `${Math.round(v)} m`,
+    null
+  );
+  push("AVG HR", det.avgHeartRateBpm, prev.avgHeartRateBpm, (v) => `${Math.round(v)} bpm`, null);
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-3 overflow-hidden rounded-[18px] bg-white shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+      <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
+        <div className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+          VS YOUR LAST RUN
+        </div>
+        <div className="text-[11px] font-semibold text-[#66646C]">{prevDate}</div>
+      </div>
+      {rows.map((r) => (
+        <div
+          key={r.label}
+          className="flex items-center justify-between border-t border-[#F2F1F2] px-4 py-2.5"
+        >
+          <span className="w-24 text-[10.5px] font-semibold tracking-[0.1em] text-muted-foreground">
+            {r.label}
+          </span>
+          <span className="flex-1 text-[12.5px] text-muted-foreground tabular-nums">
+            {r.then} →{" "}
+            <span className="font-semibold text-foreground">{r.now}</span>
+          </span>
+          <span className="text-[11px] font-semibold tabular-nums" style={{ color: r.color }}>
+            {r.delta}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function sourceLabel(a: { externalSource: string | null; source: string | null }) {
@@ -200,14 +544,23 @@ export default function ActivityDetail({
     if (det.type === "out") {
       // v3: with route analytics the card answers "how much did I stop" and
       // "how hard was it really" — moving/stopped + grade-adjusted pace.
+      // v4 (2026-08-29): ELAPSED, VAM and DESCENT join — the mountaineering
+      // numbers the hike report had to compute by hand.
       if (ra) {
         return [
           ["DISTANCE", `${((det.distanceMeters ?? 0) / 1000).toFixed(1)} km`],
           ["ELEV GAIN", det.elevationGainM ? `+${Math.round(det.elevationGainM)} m` : "—"],
           ["MOVING", mmss(ra.movingSeconds)],
           ["STOPPED", mmss(ra.stoppedSeconds)],
+          ["ELAPSED", mmss(ra.elapsedSeconds)],
           ["AVG PACE", paceLabel(ra.avgMovingPaceSecPerKm)],
           ["GRADE-ADJ PACE", paceLabel(ra.gradeAdjustedPaceSecPerKm)],
+          ...(det.vamMPerHour != null
+            ? ([["CLIMB RATE", `${fmt(det.vamMPerHour)} m/h`]] as [string, string][])
+            : []),
+          ...(det.descentM != null
+            ? ([["DESCENT", `−${fmt(Math.round(det.descentM))} m`]] as [string, string][])
+            : []),
           ["STEPS", det.stepCount ? fmt(det.stepCount) : "—"],
           ["AVG HR", hr(det.avgHeartRateBpm)],
         ];
@@ -263,12 +616,13 @@ export default function ActivityDetail({
     () => (det.hrStream && det.hrStream.length > 1 ? chartPoints(det.hrStream, 360, 110, 8) : null),
     [det]
   );
+  // v4: chart the ABSOLUTE GPS series when the route carries one; the
+  // relative barometric stream is the fallback and is labeled as a profile,
+  // never as altitude ("1 – 376 m" on a 1,480 m summit was the bug).
+  const elevSeries = det.altitudeSeries ?? det.altitudeStream;
   const elevLine = useMemo(
-    () =>
-      det.altitudeStream && det.altitudeStream.length > 1
-        ? chartPoints(det.altitudeStream, 360, 110, 8)
-        : null,
-    [det]
+    () => (elevSeries && elevSeries.length > 1 ? chartPoints(elevSeries, 360, 110, 8) : null),
+    [elevSeries]
   );
 
   const fastestSplit = useMemo(
@@ -406,6 +760,14 @@ export default function ActivityDetail({
             {det.trail.runCount > 1 ? `${det.trail.runCount} RUNS LOGGED` : "FIRST RUN"}
           </div>
         )}
+        {det.bodyWeight?.kg != null && (
+          <div className="mt-1 text-[10.5px] font-semibold tracking-[0.12em] text-muted-foreground">
+            BODY {det.bodyWeight.kg.toFixed(1)} KG THAT DAY
+          </div>
+        )}
+        {det.type === "out" && !/treadmill/i.test(det.workoutType) && (
+          <PackEditor det={det} onSaved={() => window.location.reload()} />
+        )}
 
         {/* stats grid */}
         <div className="mt-3.5 rounded-[18px] bg-white px-4 py-2 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
@@ -425,6 +787,12 @@ export default function ActivityDetail({
             ))}
           </div>
         </div>
+
+        {/* v4 VS YOUR LAST RUN — the trail card finally answers the
+            comparison "2 runs logged" was advertising */}
+        {det.type === "out" && det.trail?.prevRun && (
+          <TrailCompareCard det={det} prev={det.trail.prevRun} />
+        )}
 
         {/* v3 SPLITS — the card the design mock had to omit (no split data
             existed); per-km moving pace + climb from routeAnalytics */}
@@ -538,16 +906,27 @@ export default function ActivityDetail({
           </div>
         )}
 
-        {/* elevation (outdoor, when an altitude stream exists) */}
-        {det.type === "out" && elevLine && det.altitudeStream && (
+        {/* v4: correct sets/reps/weights in place — the deterministic twin
+            of the chat describe-flow */}
+        {dark && det.segments.length > 0 && (
+          <MovementEditor
+            det={det}
+            trigger="Edit movements & weights"
+            onSaved={() => window.location.reload()}
+          />
+        )}
+
+        {/* elevation (outdoor, when an altitude series exists) */}
+        {det.type === "out" && elevLine && elevSeries && (
           <div className="mt-3 rounded-[18px] bg-white p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
             <div className="flex items-center justify-between">
               <div className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
-                ELEVATION
+                {det.altitudeAbsolute ? "ELEVATION" : "ELEVATION · GAIN PROFILE"}
               </div>
               <div className="text-[11px] font-semibold text-[#66646C] tabular-nums">
-                {fmt(Math.round(Math.min(...det.altitudeStream)))} –{" "}
-                {fmt(Math.round(Math.max(...det.altitudeStream)))} m
+                {det.altitudeAbsolute
+                  ? `${fmt(det.routeAnalytics?.minAltM ?? Math.round(Math.min(...elevSeries)))} – ${fmt(det.routeAnalytics?.maxAltM ?? Math.round(Math.max(...elevSeries)))} m`
+                  : `+${fmt(Math.round(Math.max(...elevSeries) - Math.min(...elevSeries)))} m span · relative`}
               </div>
             </div>
             <svg width="100%" height="110" viewBox="0 0 360 110" preserveAspectRatio="none" className="mt-2.5">
@@ -591,28 +970,83 @@ export default function ActivityDetail({
                   TIME IN ZONES
                 </div>
                 <div className="grid gap-2">
-                  {det.zonePct.map((p, i) => (
-                    <div key={i} className="flex items-center gap-2.5">
-                      <span className="w-5 text-[10.5px] font-bold text-muted-foreground">
-                        Z{i + 1}
-                      </span>
-                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#F2F1F2]">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.min(100, p * 2.2)}%`,
-                            background: ZONE_COLORS[i],
-                          }}
-                        />
+                  {det.zonePct.map((p, i) => {
+                    // v4: the bpm band + real minutes, not just percent —
+                    // the report had to guess both.
+                    const tops = det.zoneTops;
+                    const band = tops
+                      ? i === 0
+                        ? `< ${tops[0]}`
+                        : i >= tops.length
+                          ? `${tops[tops.length - 1] + 1}+`
+                          : `${tops[i - 1] + 1}–${tops[i]}`
+                      : null;
+                    const secs = det.zoneSeconds?.[i];
+                    return (
+                      <div key={i} className="flex items-center gap-2.5">
+                        <span className="w-5 text-[10.5px] font-bold text-muted-foreground">
+                          Z{i + 1}
+                        </span>
+                        {band && (
+                          <span className="w-[52px] text-[9.5px] text-muted-foreground tabular-nums">
+                            {band}
+                          </span>
+                        )}
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#F2F1F2]">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.min(100, p * 2.2)}%`,
+                              background: ZONE_COLORS[i],
+                            }}
+                          />
+                        </div>
+                        <span className="w-[72px] text-right text-[10.5px] text-[#66646C] tabular-nums">
+                          {secs != null && secs > 0 ? `${Math.round(secs / 60)} min · ` : ""}
+                          {p}%
+                        </span>
                       </div>
-                      <span className="w-9 text-right text-[10.5px] text-[#66646C] tabular-nums">
-                        {p}%
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* v4 RECOVERY — the wrist's §07 HRR capture, previously stored and
+            never shown; the cheapest fitness marker there is */}
+        {det.hrr && (
+          <div className="mt-3 flex items-center justify-between rounded-[18px] bg-white px-4 py-3.5 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+            <div>
+              <div className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+                RECOVERY · FIRST {det.hrr.seconds}s
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                heart-rate drop after the effort
+              </div>
+            </div>
+            <div className="text-right">
+              <div
+                className="text-[20px] font-bold text-foreground tabular-nums"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                −{det.hrr.delta} bpm
+              </div>
+              <div
+                className="text-[10.5px] font-semibold"
+                style={{
+                  color:
+                    det.hrr.band === "quick"
+                      ? "#3E7A54"
+                      : det.hrr.band === "typical"
+                        ? "#66646C"
+                        : "#D9A23E",
+                }}
+              >
+                {det.hrr.band}
+              </div>
+            </div>
           </div>
         )}
 
@@ -660,6 +1094,15 @@ export default function ActivityDetail({
             measures it against the recording, and can keep it as a routine.
           </p>
         )}
+        {/* v4: or skip the conversation — type the movements and the
+            kettlebell weight straight in */}
+        {det.segments.length === 0 && !det.sequenceName && det.type !== "out" && (
+          <MovementEditor
+            det={det}
+            trigger="Add movements & weights yourself"
+            onSaved={() => window.location.reload()}
+          />
+        )}
 
         <div className="mt-4 text-center text-[11px] text-muted-foreground">
           {sourceLabel(det).charAt(0) + sourceLabel(det).slice(1).toLowerCase()} · synced to
@@ -674,6 +1117,43 @@ export default function ActivityDetail({
           >
             Download GPX track
           </a>
+        )}
+
+        {/* v4: the other runs on this trail, tappable */}
+        {det.trail && det.trail.runs.filter((r) => r.id !== det.id).length > 0 && (
+          <div className="mt-3 overflow-hidden rounded-[18px] bg-white shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+            <div className="px-4 pb-2 pt-3.5 text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+              ALL RUNS · {det.trail.name.toUpperCase()}
+            </div>
+            {det.trail.runs.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => {
+                  if (r.id !== det.id)
+                    router.push(`/health/workouts/activities/${encodeURIComponent(r.id)}`);
+                }}
+                className={`flex w-full items-center justify-between border-t border-[#F2F1F2] px-4 py-2.5 text-left ${
+                  r.id === det.id ? "bg-[#FAF7F8]" : "hover:bg-[#FAFAFA]"
+                }`}
+              >
+                <span className="text-[12.5px] text-foreground">
+                  {new Date(r.startedAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                  {r.id === det.id ? " · this run" : ""}
+                </span>
+                <span className="text-[12.5px] font-semibold text-foreground tabular-nums">
+                  {r.movingSeconds != null ? mmss(r.movingSeconds) : `${r.durationMinutes}:00`}
+                  {r.vamMPerHour != null ? (
+                    <span className="ml-2 text-[10.5px] font-normal text-muted-foreground">
+                      {fmt(r.vamMPerHour)} m/h
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            ))}
+          </div>
         )}
 
         {/* his ask: delete a wrong workout — confirm-first, PRs rebuild

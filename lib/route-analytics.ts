@@ -34,16 +34,37 @@ export interface RouteSplit {
 }
 
 export interface RouteAnalytics {
-  version: 1;
+  version: 2;
   elapsedSeconds: number;
   movingSeconds: number;
   stoppedSeconds: number;
   breaks: RouteBreak[];
   splits: RouteSplit[];
   totalMeters: number;
+  /// The distance the pace math actually used (the workout's own
+  /// distanceMeters when sane, else GPS totalMeters) — so the card's pace
+  /// always reconciles with a distance the caller can display.
+  paceMeters: number;
   avgMovingPaceSecPerKm: number | null;
   gradeAdjustedPaceSecPerKm: number | null;
   maxSpeedMps: number | null;
+  /// Absolute altitude (GPS MSL) over the route — null when points carry
+  /// no altitude. The wrist's altitudeStream is RELATIVE (CMAltimeter) and
+  /// must not be labeled as elevation; these are the real metres.
+  minAltM: number | null;
+  maxAltM: number | null;
+  totalElevGainM: number;
+  totalElevLossM: number;
+}
+
+export interface AnalyzeOptions {
+  /// The workout's own distance column (HealthKit fused / Strava). GPS
+  /// haversine over decimated points under-measures (stopped-segment travel
+  /// dropped, switchbacks chord-shortened), so pace computed from it never
+  /// matched the DISTANCE tile — the 2026-08-29 hike-report bug. When this
+  /// is present and within a sane band of the GPS total (0.7×–1.5×), pace
+  /// and grade-adjusted pace use it instead.
+  authoritativeMeters?: number | null;
 }
 
 /// Hiking-friendly: slower than 0.5 m/s (1.8 km/h) across a sample gap reads
@@ -87,7 +108,10 @@ export function gradeCostFactor(grade: number): number {
   return Math.max(0.2, cost / 3.6);
 }
 
-export function analyzeRoute(pointsIn: RoutePointIn[] | null | undefined): RouteAnalytics | null {
+export function analyzeRoute(
+  pointsIn: RoutePointIn[] | null | undefined,
+  opts?: AnalyzeOptions
+): RouteAnalytics | null {
   if (!Array.isArray(pointsIn)) return null;
 
   // Sanitize: numeric lat/lng/t, ascending t, one point per t.
@@ -164,6 +188,8 @@ export function analyzeRoute(pointsIn: RoutePointIn[] | null | undefined): Route
   let lastAlt: number | null = Number.isFinite(points[0].alt ?? NaN)
     ? (points[0].alt as number)
     : null;
+  let minAltM: number | null = lastAlt;
+  let maxAltM: number | null = lastAlt;
 
   for (let i = 1; i < points.length; i++) {
     const prev = points[i - 1];
@@ -181,6 +207,8 @@ export function analyzeRoute(pointsIn: RoutePointIn[] | null | undefined): Route
     let dAlt = 0;
     if (Number.isFinite(curr.alt ?? NaN)) {
       const alt = curr.alt as number;
+      if (minAltM == null || alt < minAltM) minAltM = alt;
+      if (maxAltM == null || alt > maxAltM) maxAltM = alt;
       if (lastAlt != null) {
         const delta = alt - lastAlt;
         if (Math.abs(delta) > ALT_NOISE_M) {
@@ -226,8 +254,13 @@ export function analyzeRoute(pointsIn: RoutePointIn[] | null | undefined): Route
   breaks.sort((a, b) => b.seconds - a.seconds);
   const keptBreaks = breaks.slice(0, MAX_BREAKS).sort((a, b) => a.startT - b.startT);
 
-  // Max speed over a ≥15 s rolling window — single spikes can't win.
-  let maxSpeedMps: number | null = null;
+  // Max speed over a ≥15 s rolling window — single spikes can't win the
+  // window, but a 50 m-accuracy fix in a ~3-sample window still reads as
+  // ~12 km/h on a hike (the 2026-08-29 report's "GPS spike"). So: collect
+  // every window speed, then reject windows faster than 3× the median
+  // before taking the max — a real sprint sustains neighbours near it; a
+  // spike stands alone.
+  const windowSpeeds: number[] = [];
   let windowStart = 0;
   for (let j = 1; j < points.length; j++) {
     while (points[j].t - points[windowStart].t >= 15 && windowStart < j - 1) {
@@ -236,33 +269,64 @@ export function analyzeRoute(pointsIn: RoutePointIn[] | null | undefined): Route
       windowStart++;
     }
     const dtw = points[j].t - points[windowStart].t;
-    if (dtw >= 15) {
-      const speed = (cumDist[j] - cumDist[windowStart]) / dtw;
-      if (maxSpeedMps == null || speed > maxSpeedMps) {
-        maxSpeedMps = speed;
-      }
-    }
+    if (dtw >= 15) windowSpeeds.push((cumDist[j] - cumDist[windowStart]) / dtw);
   }
-  if (maxSpeedMps != null) maxSpeedMps = Math.round(maxSpeedMps * 100) / 100;
+  let maxSpeedMps: number | null = null;
+  if (windowSpeeds.length > 0) {
+    const sorted = [...windowSpeeds].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const ceiling = median > 0 ? median * 3 : Infinity;
+    maxSpeedMps = windowSpeeds.reduce(
+      (best, s) => (s <= ceiling && s > best ? s : best),
+      0
+    );
+    maxSpeedMps = Math.round(maxSpeedMps * 100) / 100;
+  }
 
-  const km = totalMeters / 1000;
+  // Pace reconciles with the distance the user SEES: prefer the workout's
+  // own distance column when it's in a sane band of the GPS total (GPS is
+  // a lower bound — decimated points chord-cut switchbacks and stopped
+  // travel is dropped; far outside the band means one source is broken,
+  // trust GPS).
+  const authoritative = opts?.authoritativeMeters;
+  const paceMeters =
+    authoritative != null &&
+    Number.isFinite(authoritative) &&
+    authoritative >= totalMeters * 0.7 &&
+    authoritative <= totalMeters * 1.5
+      ? authoritative
+      : totalMeters;
+  const km = paceMeters / 1000;
   const avgMovingPaceSecPerKm = movingSeconds > 0 ? Math.round(movingSeconds / km) : null;
-  // Grade-adjusted pace only when altitude covered most of the ground.
+  // Grade-adjusted pace only when altitude covered most of the ground —
+  // equivalent-flat metres scale with the same distance correction.
   const gradeAdjustedPaceSecPerKm =
     altCoveredMeters / totalMeters >= 0.8 && equivalentFlatMeters > 0
-      ? Math.round(movingSeconds / (equivalentFlatMeters / 1000))
+      ? Math.round(
+          movingSeconds / ((equivalentFlatMeters * (paceMeters / totalMeters)) / 1000)
+        )
       : null;
 
+  const totalElevGainM =
+    Math.round(splits.reduce((s, x) => s + x.elevGainM, 0) * 10) / 10;
+  const totalElevLossM =
+    Math.round(splits.reduce((s, x) => s + x.elevLossM, 0) * 10) / 10;
+
   return {
-    version: 1,
+    version: 2,
     elapsedSeconds,
     movingSeconds,
     stoppedSeconds,
     breaks: keptBreaks,
     splits,
     totalMeters: Math.round(totalMeters),
+    paceMeters: Math.round(paceMeters),
     avgMovingPaceSecPerKm,
     gradeAdjustedPaceSecPerKm,
     maxSpeedMps,
+    minAltM: minAltM != null ? Math.round(minAltM) : null,
+    maxAltM: maxAltM != null ? Math.round(maxAltM) : null,
+    totalElevGainM,
+    totalElevLossM,
   };
 }
