@@ -66,4 +66,36 @@ public enum Polyline {
         chunk.append(Character(UnicodeScalar(UInt8(v + 63))))
         return chunk
     }
+
+    /// Decode a precision-5 polyline — the saved-trail ghost line on the
+    /// Round 3 live map draws a server `summaryPolyline` this way.
+    public static func decode(_ encoded: String) -> [(lat: Double, lng: Double)] {
+        var coordinates: [(lat: Double, lng: Double)] = []
+        var index = encoded.startIndex
+        var lat = 0
+        var lng = 0
+
+        func nextValue() -> Int? {
+            var result = 0
+            var shift = 0
+            while index < encoded.endIndex {
+                let byte = Int(encoded[index].asciiValue ?? 63) - 63
+                index = encoded.index(after: index)
+                result |= (byte & 0x1f) << shift
+                shift += 5
+                if byte < 0x20 {
+                    return (result & 1) != 0 ? ~(result >> 1) : (result >> 1)
+                }
+            }
+            return nil
+        }
+
+        while index < encoded.endIndex {
+            guard let dLat = nextValue(), let dLng = nextValue() else { break }
+            lat += dLat
+            lng += dLng
+            coordinates.append((lat: Double(lat) / 1e5, lng: Double(lng) / 1e5))
+        }
+        return coordinates
+    }
 }

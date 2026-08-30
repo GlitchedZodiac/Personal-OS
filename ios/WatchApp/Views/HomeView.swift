@@ -29,8 +29,9 @@ struct WorkoutListView: View {
 
                 // Freestyle first: it's the catch-all, and it replaced free
                 // sets as the way to record something unstructured.
-                row(kind: .freestyle, title: "Freestyle", subtitle: "record · describe it later") {
-                    PitayaGlyph(paths: Glyphs.heart, style: .fill, color: Theme.accent, size: 15)
+                // Round 3 §08/§09: the pulse glyph + copy land verbatim.
+                row(kind: .freestyle, title: "Freestyle", subtitle: "just record · shape it in Pitaya after") {
+                    PitayaGlyph(paths: Glyphs.freestyle, color: Theme.accent, size: 15)
                 }
                 row(title: "Kettlebell", subtitle: routineSubtitle(.kettlebell), pushes: true) {
                     PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 15)
@@ -51,7 +52,7 @@ struct WorkoutListView: View {
                 row(kind: .treadmill, title: "Treadmill", subtitle: "indoor · distance & HR") {
                     WalkGlyph(color: Theme.accent, size: 15)
                 }
-                row(title: "Hike", subtitle: "new ground or a trail you know", pushes: true) {
+                row(title: "Hike", subtitle: hikeSubtitle, pushes: true) {
                     PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 15)
                 } action: {
                     model.openHikeMenu()
@@ -125,6 +126,13 @@ struct WorkoutListView: View {
         }
         return "GPS · HR live"
     }
+
+    /// Round 3 §08: "3 saved trails · open goal" once trails exist.
+    private var hikeSubtitle: String {
+        let count = model.trails.count
+        guard count > 0 else { return "new ground or a trail you know" }
+        return "\(count) saved trail\(count == 1 ? "" : "s") · open goal"
+    }
 }
 
 // MARK: - Hike submenu (his 08-20 ask: new ground, or ground he's covered)
@@ -143,12 +151,13 @@ struct HikeMenuView: View {
                 }
                 .padding(.horizontal, 4)
 
+                // Round 3 §05: "Open hike" — no target, GPS + elevation.
                 Button {
                     Task { await model.startWorkout(.hike) }
                 } label: {
                     hikeRow(
-                        title: "New Hike",
-                        subtitle: "GPS · elevation · heart rate",
+                        title: "Open hike",
+                        subtitle: "no target · GPS + elevation",
                         live: true
                     ) {
                         PitayaGlyph(paths: Glyphs.trail, color: Theme.accent, size: 15)
@@ -156,27 +165,63 @@ struct HikeMenuView: View {
                 }
                 .buttonStyle(.plain)
 
-                // Honest placeholder, in the grammar the home grid already
-                // uses for Sleep and Journal — never a dashed promise, never
-                // a tappable row that does nothing. Naming a trail from chat
-                // and comparing runs against it is filed in
-                // docs/deferred-items.md (2026-08-20, needs a Trail model).
-                hikeRow(
-                    title: "Saved trails",
-                    subtitle: "soon · name one in Pitaya chat",
-                    live: false
-                ) {
-                    SegmentsGlyph(color: Theme.textMuted, size: 15)
-                }
+                if !model.trails.isEmpty {
+                    Text("SAVED TRAILS")
+                        .font(Theme.text(7.5, weight: .bold))
+                        .kerning(1.2)
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.horizontal, 6)
+                        .padding(.top, 4)
 
-                Text("Trails you've named will start here, so a second run can be compared to the first.")
-                    .font(Theme.text(8.5))
-                    .foregroundStyle(Theme.textMuted)
-                    .padding(.horizontal, 6)
-                    .padding(.top, 2)
+                    // §05: starting from a trail draws it as the ghost target
+                    // and skips the end-of-run prompt — the run count just
+                    // increments.
+                    ForEach(model.trails) { trail in
+                        Button {
+                            Task { await model.startWorkout(.hike, trail: trail) }
+                        } label: {
+                            hikeRow(
+                                title: trail.name,
+                                subtitle: trailSub(trail),
+                                live: true
+                            ) {
+                                PitayaGlyph(
+                                    paths: Glyphs.trailBookmark,
+                                    color: Theme.accent, size: 15
+                                )
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    hikeRow(
+                        title: "Saved trails",
+                        subtitle: "name one at the end of a hike, or in chat",
+                        live: false
+                    ) {
+                        PitayaGlyph(paths: Glyphs.trailBookmark, color: Theme.textMuted, size: 15)
+                    }
+                }
             }
             .padding(.horizontal, 2)
         }
+    }
+
+    /// "6.4 km · +312 m · Sun" for a saved-trail row.
+    private func trailSub(_ trail: TrailSummary) -> String {
+        var parts: [String] = []
+        if let meters = trail.distanceMeters {
+            parts.append(String(format: "%.1f km", meters / 1000))
+        }
+        if let gain = trail.elevationGainM, gain > 0 {
+            parts.append("+\(Int(gain)) m")
+        }
+        if let last = trail.lastRun {
+            let f = DateFormatter()
+            f.dateFormat = "EEE"
+            parts.append(f.string(from: last.startedAt))
+        }
+        return parts.isEmpty ? "\(trail.runCount) runs" : parts.joined(separator: " · ")
     }
 
     private func hikeRow(
@@ -213,11 +258,14 @@ struct BackChevron: View {
 
     var body: some View {
         Button(action: action) {
+            // Visual stays the design's 22 pt circle; the HIT area meets the
+            // 38 pt floor (2026-08-29 — this chevron is on five screens).
             Image(systemName: "chevron.left")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Theme.textMuted)
                 .frame(width: 22, height: 22)
                 .background(Theme.card, in: Circle())
+                .pitayaTappable(minWidth: Theme.minTap)
         }
         .buttonStyle(.plain)
     }

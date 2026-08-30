@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useDataLoggedListener } from "@/components/use-data-logged";
 import { SheetPortal } from "@/components/sheet-portal";
+import { TrainingWeek } from "@/components/training-week";
 import {
   EmomRunner,
   runnerCues,
@@ -48,6 +49,15 @@ interface TrainData {
   } | null;
   weeklyVolume: { weekStart: string; label: string; volumeKg: number }[];
   pctChange: number | null;
+  prWall: {
+    exercise: string;
+    exerciseName: string;
+    valueKg: number;
+    previousKg: number | null;
+    achievedAt: string;
+    workoutLogId: string | null;
+  }[];
+  movementTonnage: { key: string; name: string; totalKg: number; weeksActive: number }[];
   latestTrail: {
     id: string;
     startedAt: string;
@@ -450,6 +460,11 @@ export default function TrainPage() {
         </button>
       </div>
 
+      {/* THIS WEEK · PLANNED (2026-08-28) — the chat-dictated week; renders
+          nothing until a week exists. Notably this is the "weekly plan
+          target" the overview card's design always wanted. */}
+      <TrainingWeek />
+
       {/* THIS WEEK · OVERVIEW (design 2026-08-11 rev). Surfaced deviation:
           the design's "4 of 5 planned" needs a weekly plan target that
           doesn't exist yet — the label shows the live session count. */}
@@ -637,6 +652,76 @@ export default function TrainPage() {
           <span>{data?.weeklyVolume[7]?.label ?? ""}</span>
         </div>
       </div>
+
+      {/* v4 BY MOVEMENT — where the 8 weeks of tonnage actually went */}
+      {data && data.movementTonnage.length > 0 && (
+        <div className="mt-3 rounded-[16px] bg-card p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+          <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+            BY MOVEMENT · 8 WEEKS
+          </p>
+          <div className="mt-3 grid gap-2">
+            {data.movementTonnage.map((m) => {
+              const max = data.movementTonnage[0].totalKg || 1;
+              return (
+                <div key={m.key} className="flex items-center gap-2.5">
+                  <span className="w-24 truncate text-[11px] font-semibold text-foreground">
+                    {m.name}
+                  </span>
+                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[#F2F1F2]">
+                    <div
+                      className="h-full rounded-full bg-[#A63D63]"
+                      style={{ width: `${Math.max(6, Math.round((m.totalKg / max) * 100))}%` }}
+                    />
+                  </div>
+                  <span className="w-16 text-right text-[10.5px] text-muted-foreground tabular-nums">
+                    {tonnageLabel(m.totalKg)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* v4 PR WALL — every heaviest-ever, not just the latest banner */}
+      {data && data.prWall.length > 0 && (
+        <div className="mt-3 rounded-[16px] bg-card p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
+          <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
+            PR WALL · HEAVIEST EVER
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {data.prWall.map((pr) => (
+              <button
+                key={pr.exercise}
+                onClick={() =>
+                  pr.workoutLogId &&
+                  router.push(
+                    `/health/workouts/activities/${encodeURIComponent(pr.workoutLogId)}`
+                  )
+                }
+                className="rounded-[12px] bg-[#FAF7F8] px-3 py-2.5 text-left"
+              >
+                <div className="truncate text-[11px] font-semibold text-foreground">
+                  {pr.exerciseName}
+                </div>
+                <div
+                  className="mt-0.5 text-[17px] font-bold text-[#8C2F51] tabular-nums"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {pr.valueKg} kg
+                </div>
+                <div className="text-[9.5px] text-muted-foreground tabular-nums">
+                  {pr.previousKg != null ? `was ${pr.previousKg} · ` : ""}
+                  {new Date(pr.achievedAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Trails — tapping the summary opens that activity's full detail */}
       <div className="mt-3 rounded-[16px] bg-card p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">

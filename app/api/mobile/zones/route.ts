@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireMobileSession } from "@/lib/mobile-session";
-import { DEFAULT_HR_ZONE_TOPS, ZONE_NAMES } from "@/lib/zones";
+import { ZONE_NAMES } from "@/lib/zones";
+import { getZoneTops } from "@/lib/server-zones";
 
 // GET - his heart-rate zone boundaries for the watch (bearer device-
 // session auth). The wrist binds to this instead of hardcoding, so a
@@ -16,9 +17,9 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({
       // Upper bounds of Z1–Z4; Z5 is everything above the last.
-      tops: DEFAULT_HR_ZONE_TOPS,
+      tops: await getZoneTops(),
       names: ZONE_NAMES,
-      source: "strava-profile-age-derived",
+      source: "settings",
     });
   } catch (error) {
     console.error("Mobile zones error:", error);

@@ -7,6 +7,19 @@
 //   SIMCTL_CHILD_PITAYA_SMOKE_AUTORUN=1     then record + log sets + sync
 //
 // Output lines are prefixed PITAYA-SMOKE for log scraping.
+//
+// Watch-SIMULATOR facts (learned 2026-08-28, cost an afternoon):
+// - simctl location (set AND route-mode start) never reaches CoreLocation in
+//   the watch sim. Use PITAYA_SMOKE_FAKEGPS=<m/s> (RouteTracker seam) for any
+//   flow that needs fixes — it walks NE from the Tres Cruces trailhead.
+// - HealthKit's live builder generates SYNTHETIC heart rate (~70-95 bpm) and
+//   a token distance during recorder sessions — so BPM UI renders, but
+//   distance-gated moments (km splits) won't fire off HK's number.
+// - healthd WEDGES between runs that opened an HKWorkoutSession: the next
+//   launch's beginCollection() awaits forever. Reboot between full-flow runs:
+//   xcrun simctl shutdown <udid> && xcrun simctl boot <udid>. On-close stalls
+//   (endCollection/finishWorkout) are survived in-app by completeRecovery's
+//   8 s deadline; none of this affects real hardware.
 
 #if os(watchOS)
 import Foundation
@@ -114,6 +127,65 @@ enum Smoke {
             return
         }
 
+        // PHANTOM: the auto-discard guard (2026-08-29). A ~10 s accidental
+        // start with nothing logged must vanish (no summary, no sync); the
+        // same start under the smoke marker must still reach the summary
+        // (the exemption that keeps scripted walks alive). Runs with NO
+        // externalSourceOverride on purpose — if the guard regresses, the
+        // fallback discard below keeps prod clean and logs FAIL.
+        if env["PITAYA_SMOKE_PHANTOM"] == "1", model.phase == .home {
+            log("phantom: starting 10s accidental session…")
+            await model.startWorkout(.walk, useRecorder: true)
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            await model.finishWorkout(.walk)
+            if model.phase == .home && model.summary == nil {
+                log("phantom PASS — discarded, no summary, nothing queued")
+            } else {
+                log("phantom FAIL — reached \(String(describing: model.phase)); discarding manually")
+                model.discardWorkout()
+            }
+            // Exemption half: the smoke marker must bypass the guard.
+            model.externalSourceOverride = "watch_smoke"
+            await model.startWorkout(.walk, useRecorder: true)
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            await model.finishWorkout(.walk)
+            if model.summary != nil {
+                log("phantom exemption PASS — smoke session reached summary")
+                model.discardWorkout()
+            } else {
+                log("phantom exemption FAIL — smoke session was discarded")
+            }
+            return
+        }
+
+        // DOUBLESAVE: the duplicate-save regression harness. Finish a session,
+        // then race two Save taps AND a background drain — the tap guard plus
+        // WorkoutSyncFlight must collapse them so the server holds exactly
+        // ONE row for the item's externalId.
+        if env["PITAYA_SMOKE_DOUBLESAVE"] == "1", model.phase == .home {
+            model.externalSourceOverride = "watch_smoke"
+            await model.refreshHistory()
+            await model.startWorkout(.kettlebell, useRecorder: false)
+            model.weightKg = 16
+            model.reps = 10
+            model.logSet()
+            await model.finishWorkout(.kettlebell)
+            guard let externalId = model.pendingItemExternalId else {
+                log("doublesave: no pending item after finish — FAIL")
+                return
+            }
+            log("doublesave: racing two saves + a background drain…")
+            async let firstSave: Void = model.saveWorkout()
+            async let secondSave: Void = model.saveWorkout()
+            let background = Task { await model.drainQueue() }
+            _ = await (firstSave, secondSave)
+            await background.value
+            let rows = await model.debugCountWorkouts(externalId: externalId)
+            log("doublesave: rows=\(rows.map(String.init) ?? "fetch-failed") state=\(String(describing: model.syncState))")
+            log(rows == 1 ? "doublesave PASS" : "doublesave FAIL")
+            return
+        }
+
         // §03 deltas proof: run the sample circuit twice, saving both — the
         // second summary must carry "· vs <first run>" with per-stat deltas
         // (volume/time equal ⇒ ghost "="). Ends holding the saved summary.
@@ -156,6 +228,21 @@ enum Smoke {
             log("freestyle: zones=\(model.zones.map { "\($0.tops)" } ?? "MISSING")")
 
             await model.startWorkout(.freestyle)
+
+            #if DEBUG
+            // Visual runs want the Effort graph alive DURING the session.
+            if ProcessInfo.processInfo.environment["PITAYA_SMOKE_INJECT_EARLY"] == "1",
+               model.recorder.hrStream.isEmpty {
+                let hr = (0..<600).map { i -> Int in
+                    let t = Double(i) / 600.0
+                    return Int(105 + 80 * min(t * 1.6, 1.0))
+                }
+                let time = (0..<600).map { $0 * 2 }
+                model.recorder.injectSyntheticStreams(hr: hr, time: time)
+                log("freestyle: injected \(hr.count) synthetic HR samples (early)")
+            }
+            #endif
+
             try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
 
             #if DEBUG

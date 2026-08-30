@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { disablePush, enablePush, pushStatus, sendTestPush, type PushState } from "@/lib/push-client";
 
-// The evening reminder, and the only notification the app sends.
-//
-// It names the homework he is already carrying — nothing else. No
-// streak-saving, no "you haven't opened Pitaya today", no re-engagement.
-// A reminder of something he chose, once, or it is off.
+// The evening reminder — the app's first notification, and still the only
+// one this toggle governs directly (it enables the DEVICE subscription).
+// Since 2026-08-28 other senders exist — reminders, the planned-training
+// nudge, PRs, the weekly report — each with its own switch in
+// Settings → Notifications. The rule is unchanged: a reminder of something
+// he chose, or it is off. No streak-saving, no re-engagement.
 
 const COPY: Record<PushState, { label: string; note: string }> = {
   on: {
@@ -17,7 +18,7 @@ const COPY: Record<PushState, { label: string; note: string }> = {
   },
   off: {
     label: "Turn on the evening reminder",
-    note: "One notification, around 7pm, naming the homework you're carrying. Nothing else — ever.",
+    note: "Around 7pm, naming the homework you're carrying. Other senders have their own switches in Settings → Notifications.",
   },
   denied: {
     label: "Blocked in your device settings",

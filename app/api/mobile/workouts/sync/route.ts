@@ -1,6 +1,15 @@
 import { Prisma } from "@prisma/client";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
+import { routeDataAllowed } from "@/lib/activities";
 import { requireMobileSession } from "@/lib/mobile-session";
+import { getNotificationPrefs } from "@/lib/notification-prefs";
+import { markPlannedDone } from "@/lib/planner";
+import { sendPush } from "@/lib/push";
+import {
+  analyzeRoute,
+  type RouteAnalytics,
+  type RoutePointIn,
+} from "@/lib/route-analytics";
 import { prisma } from "@/lib/prisma";
 import { detectAndRecordPRs, type NewPR } from "@/lib/prs";
 import { buildStreamMetrics } from "@/lib/strava";
@@ -11,6 +20,10 @@ import {
   type RoutineCoda,
 } from "@/lib/mobile-summary";
 import { getUserTimeZone } from "@/lib/server-timezone";
+
+// A cold start plus a multi-item queue drain can outlive the 10s default —
+// which the watch experienced as "tapped Save, nothing happened".
+export const maxDuration = 60;
 
 type MobileWorkoutPayload = {
   externalId?: string;
@@ -32,6 +45,9 @@ type MobileWorkoutPayload = {
   source?: string;
   syncStatus?: string;
   deviceType?: string | null;
+  // Additive (2026-08-28, §Trails): set when the session was started from a
+  // saved trail on the wrist.
+  trailId?: string;
 };
 
 function toNullableNumber(value: unknown) {
@@ -61,6 +77,7 @@ export async function POST(request: NextRequest) {
 
     let created = 0;
     let updated = 0;
+    let strippedRoutes = 0;
     // Per-item PR results, keyed by externalId (or index when absent) so the
     // watch can celebrate server-confirmed records after sync.
     const prResults: Array<{ externalId: string | null; newPRs: NewPR[] }> = [];
@@ -84,6 +101,70 @@ export async function POST(request: NextRequest) {
       return { ...m, ...computed } as Prisma.InputJsonValue;
     };
 
+    // Route analytics (2026-08-28): moving/stopped time, breaks, splits and
+    // grade-adjusted pace from the full-res GPS buffer — additive key, same
+    // server-owns-analytics policy as the zone math above.
+    const withRouteAnalytics = (
+      metrics: Prisma.InputJsonValue | undefined,
+      analytics: RouteAnalytics | null
+    ): Prisma.InputJsonValue | undefined => {
+      if (!analytics) return metrics;
+      const base =
+        metrics && typeof metrics === "object" && !Array.isArray(metrics)
+          ? (metrics as Record<string, unknown>)
+          : {};
+      return { ...base, routeAnalytics: analytics } as unknown as Prisma.InputJsonValue;
+    };
+
+    // The routine coda belongs to the newest synced run that names a
+    // sequence; its own startedAt is the cutoff so lastRun = the run BEFORE
+    // this one, not itself. That also means it never needs to see this sync's
+    // inserts — start it (and the timezone read) now so their DB work overlaps
+    // the insert loop instead of extending the watch's wait afterwards.
+    const routineRun = items
+      .map((item) => ({
+        sequenceId: (item.metricsData as { sequenceId?: string } | undefined)
+          ?.sequenceId,
+        startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
+      }))
+      .filter(
+        (r): r is { sequenceId: string; startedAt: Date } =>
+          typeof r.sequenceId === "string" && r.sequenceId.length > 0
+      )
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
+    const timeZonePromise = getUserTimeZone(null).catch((error: unknown) => {
+      console.warn("Sync timezone read failed:", (error as Error)?.message);
+      return null;
+    });
+    const routinePromise: Promise<RoutineCoda | null> = routineRun
+      ? buildRoutineCoda(routineRun.sequenceId, routineRun.startedAt).catch(
+          (error: unknown) => {
+            console.warn("Sync routine coda failed:", (error as Error)?.message);
+            return null;
+          }
+        )
+      : Promise.resolve(null);
+
+    // Trail links ride the item only when the id is real — an unknown id is
+    // dropped silently rather than failing the save.
+    const requestedTrailIds = [
+      ...new Set(
+        items
+          .map((i) => (typeof i.trailId === "string" ? i.trailId.trim() : ""))
+          .filter(Boolean)
+      ),
+    ];
+    const validTrailIds = new Set(
+      requestedTrailIds.length
+        ? (
+            await prisma.trail.findMany({
+              where: { id: { in: requestedTrailIds } },
+              select: { id: true },
+            })
+          ).map((t) => t.id)
+        : []
+    );
+
     for (const item of items) {
       const externalSource =
         typeof item.externalSource === "string" && item.externalSource.trim().length > 0
@@ -94,14 +175,30 @@ export async function POST(request: NextRequest) {
           ? item.externalId.trim()
           : null;
 
+      const workoutType =
+        typeof item.workoutType === "string" && item.workoutType.trim().length > 0
+          ? item.workoutType.trim()
+          : "other";
+      // GPS trails only ride genuinely outdoor types — pre-2026-08-28 watch
+      // builds could attach a stale tracker buffer to stationary sessions.
+      // Strip, never reject: a sync must not lose a workout.
+      const routeAllowed = routeDataAllowed(workoutType);
+      if (item.routeData != null && !routeAllowed) strippedRoutes++;
+      const routePoints =
+        routeAllowed && item.routeData && typeof item.routeData === "object"
+          ? (item.routeData as { points?: unknown }).points
+          : null;
+      const routeAnalytics = Array.isArray(routePoints)
+        ? analyzeRoute(routePoints as RoutePointIn[], {
+            authoritativeMeters: toNullableNumber(item.distanceMeters),
+          })
+        : null;
+
       const data = {
         startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
         endedAt: item.endedAt ? new Date(item.endedAt) : null,
         durationMinutes: Math.max(0, Number(item.durationMinutes || 0)),
-        workoutType:
-          typeof item.workoutType === "string" && item.workoutType.trim().length > 0
-            ? item.workoutType.trim()
-            : "other",
+        workoutType,
         description:
           typeof item.description === "string" ? item.description : null,
         caloriesBurned: toNullableNumber(item.caloriesBurned),
@@ -119,8 +216,15 @@ export async function POST(request: NextRequest) {
             ? null
             : Math.round(Number(item.maxHeartRateBpm)),
         elevationGainM: toNullableNumber(item.elevationGainM),
-        routeData: item.routeData ?? Prisma.JsonNull,
-        metricsData: enrichMetrics(item.metricsData) ?? Prisma.JsonNull,
+        // DbNull (SQL NULL), not JsonNull: a JSON-level null made every
+        // "routeData IS NOT NULL" audit lie.
+        routeData:
+          item.routeData != null && routeAllowed
+            ? item.routeData
+            : Prisma.DbNull,
+        metricsData:
+          withRouteAnalytics(enrichMetrics(item.metricsData), routeAnalytics) ??
+          Prisma.JsonNull,
         exercises: item.exercises ?? Prisma.JsonNull,
         deviceType:
           typeof item.deviceType === "string" && item.deviceType.trim().length > 0
@@ -136,25 +240,32 @@ export async function POST(request: NextRequest) {
           typeof item.source === "string" && item.source.trim().length > 0
             ? item.source.trim()
             : "mobile",
+        // Present only when valid, so a retry without it never clears a link.
+        ...(typeof item.trailId === "string" && validTrailIds.has(item.trailId.trim())
+          ? { trailId: item.trailId.trim() }
+          : {}),
       };
 
       let workoutId: string;
       if (externalId) {
-        const existing = await prisma.workoutLog.findFirst({
-          where: { externalSource, externalId },
-          select: { id: true },
-        });
-
-        if (existing) {
-          await prisma.workoutLog.update({
-            where: { id: existing.id },
+        // Atomicity lives in the DB: (externalSource, externalId) is unique,
+        // so a raced or retried POST loses the create and lands as an update.
+        // The find-then-create this replaces let two in-flight queue drains
+        // both see "not found" and both insert.
+        try {
+          const entry = await prisma.workoutLog.create({ data });
+          created++;
+          workoutId = entry.id;
+        } catch (error) {
+          const isDup =
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002";
+          if (!isDup) throw error;
+          const entry = await prisma.workoutLog.update({
+            where: { externalSource_externalId: { externalSource, externalId } },
             data,
           });
           updated++;
-          workoutId = existing.id;
-        } else {
-          const entry = await prisma.workoutLog.create({ data });
-          created++;
           workoutId = entry.id;
         }
       } else {
@@ -180,32 +291,58 @@ export async function POST(request: NextRequest) {
     // Watch Round 1+2 handoff (spec § API dependencies): the response carries
     // everything the wrist Summary + complication need, so no second round
     // trip. Additive — created/updated/total/prs are unchanged. Never lets a
-    // summary hiccup fail a sync that already persisted.
-    let summary: HeroMetrics | null = null;
-    let routine: RoutineCoda | null = null;
-    try {
-      const timeZone = await getUserTimeZone(null);
-      // The routine coda belongs to the newest synced run that names a
-      // sequence; its own startedAt is the cutoff so lastRun = the run BEFORE
-      // this one, not itself.
-      const routineRun = items
-        .map((item) => ({
-          sequenceId: (item.metricsData as { sequenceId?: string } | undefined)
-            ?.sequenceId,
-          startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
-        }))
-        .filter(
-          (r): r is { sequenceId: string; startedAt: Date } =>
-            typeof r.sequenceId === "string" && r.sequenceId.length > 0
-        )
-        .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
+    // summary hiccup fail a sync that already persisted. Hero metrics stay
+    // AFTER the loop: z2WeeklyMinutes must count the rows just written.
+    // Off the critical path, after the response: a saved session on a
+    // planned day completes the plan, and a fresh PR earns its (pref-gated)
+    // celebration push. Neither may tax the watch's wait or fail the sync.
+    const newestSaved = items
+      .map((item) => ({
+        startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
+        sequenceId:
+          (item.metricsData as { sequenceId?: string } | undefined)?.sequenceId ??
+          null,
+      }))
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
+    after(async () => {
+      try {
+        const timeZone = (await timeZonePromise) || "America/Bogota";
+        if (newestSaved) {
+          await markPlannedDone({
+            startedAt: newestSaved.startedAt,
+            timeZone,
+            sequenceId: newestSaved.sequenceId,
+          });
+        }
+      } catch (error) {
+        console.warn("Planned-done hook failed:", (error as Error)?.message);
+      }
+      try {
+        const firstPR = prResults[0]?.newPRs[0];
+        if (firstPR) {
+          const prefs = await getNotificationPrefs();
+          if (prefs.prCelebration) {
+            const unit = firstPR.unit === "kg-reps" ? "kg total" : firstPR.unit;
+            await sendPush({
+              title: `PR · ${firstPR.exerciseName}`,
+              body: `${firstPR.value} ${unit}${
+                firstPR.previousValue != null ? ` — was ${firstPR.previousValue}` : ""
+              }`,
+              url: "/health/workouts",
+              tag: "pr-celebration",
+            });
+          }
+        }
+      } catch (error) {
+        console.warn("PR push failed:", (error as Error)?.message);
+      }
+    });
 
-      [summary, routine] = await Promise.all([
-        buildHeroMetrics(timeZone),
-        routineRun
-          ? buildRoutineCoda(routineRun.sequenceId, routineRun.startedAt)
-          : Promise.resolve(null),
-      ]);
+    let summary: HeroMetrics | null = null;
+    const routine: RoutineCoda | null = await routinePromise;
+    try {
+      const timeZone = await timeZonePromise;
+      if (timeZone) summary = await buildHeroMetrics(timeZone);
     } catch (error) {
       console.warn("Sync summary enrichment failed:", (error as Error)?.message);
     }
@@ -214,6 +351,9 @@ export async function POST(request: NextRequest) {
       created,
       updated,
       total: items.length,
+      // Additive (2026-08-28): items whose routeData was dropped because the
+      // workoutType can't legitimately carry a GPS trail.
+      strippedRoutes,
       prs: prResults,
       summary,
       routine,

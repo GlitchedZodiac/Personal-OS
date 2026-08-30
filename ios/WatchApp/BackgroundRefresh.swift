@@ -27,18 +27,16 @@ enum PitayaBackgroundRefresh {
     /// Drain without touching AppModel. A background wake can start the
     /// process before SwiftUI has built its @StateObject, so this path owns
     /// its own queue + client rather than racing the model's lifecycle.
+    /// It still shares the queue FILE with the model, so the drain itself
+    /// goes through WorkoutSyncFlight — a cold wake that then launches the
+    /// UI used to run this and bootstrap's drain concurrently, POSTing the
+    /// same items twice.
     static func drainStandalone() async {
         guard let queue = try? OfflineWorkoutQueue() else { return }
-        let pending = await queue.load()
-        guard !pending.isEmpty else { return }
-
         let store = KeychainSessionStore(accessGroup: PitayaKeychain.sharedGroup)
         guard await store.load() != nil else { return } // not paired
         let api = MobileAPIClient(sessionStore: store)
-
-        if (try? await api.syncWorkouts(pending)) != nil {
-            try? await queue.removeSynced(pending)
-        }
+        _ = await WorkoutSyncFlight.run(queue: queue, api: api)
     }
 }
 

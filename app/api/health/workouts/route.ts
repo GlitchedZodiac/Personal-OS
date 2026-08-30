@@ -1,7 +1,11 @@
 import { Prisma } from "@prisma/client";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
+import { routeDataAllowed } from "@/lib/activities";
+import { markPlannedDone } from "@/lib/planner";
 import { prisma } from "@/lib/prisma";
 import { detectAndRecordPRs } from "@/lib/prs";
+import { findRecentDuplicate } from "@/lib/workout-dedupe";
+import { getUserTimeZone } from "@/lib/server-timezone";
 
 function toNullableNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
@@ -16,13 +20,14 @@ function toNullableDate(value: unknown) {
 }
 
 function buildWorkoutMutation(body: Record<string, unknown>) {
+  const workoutType =
+    typeof body.workoutType === "string" && body.workoutType.trim().length > 0
+      ? body.workoutType.trim()
+      : "other";
   return {
     startedAt: toNullableDate(body.startedAt) || new Date(),
     endedAt: toNullableDate(body.endedAt),
-    workoutType:
-      typeof body.workoutType === "string" && body.workoutType.trim().length > 0
-        ? body.workoutType.trim()
-        : "other",
+    workoutType,
     durationMinutes: Math.max(0, Number(body.durationMinutes || 0)),
     description:
       typeof body.description === "string" ? body.description : null,
@@ -41,7 +46,11 @@ function buildWorkoutMutation(body: Record<string, unknown>) {
         ? null
         : Math.round(Number(body.maxHeartRateBpm)),
     elevationGainM: toNullableNumber(body.elevationGainM),
-    routeData: (body.routeData as Prisma.InputJsonValue) ?? undefined,
+    // Same guard as the mobile sync: trails only on GPS-legitimate types.
+    routeData:
+      body.routeData != null && routeDataAllowed(workoutType)
+        ? (body.routeData as Prisma.InputJsonValue)
+        : undefined,
     metricsData: (body.metricsData as Prisma.InputJsonValue) ?? undefined,
     exercises: (body.exercises as Prisma.InputJsonValue) ?? undefined,
     deviceType:
@@ -85,10 +94,24 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
+    const data = buildWorkoutMutation(body);
 
-    const entry = await prisma.workoutLog.create({
-      data: buildWorkoutMutation(body),
-    });
+    // Double-submit guard (2026-08-29): a Confirm re-tap after a committed-
+    // but-unacknowledged POST used to write a twin row.
+    if (!data.externalId) {
+      const existing = await findRecentDuplicate({
+        startedAt: data.startedAt,
+        workoutType: data.workoutType,
+        durationMinutes: data.durationMinutes,
+        description: data.description,
+        exercises: data.exercises,
+      });
+      if (existing) {
+        return NextResponse.json({ ...existing, newPRs: [], deduped: true });
+      }
+    }
+
+    const entry = await prisma.workoutLog.create({ data });
 
     // PR detection — metering strength progress is why the app exists.
     // Never let it break workout logging.
@@ -102,6 +125,22 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.warn("PR detection failed:", (error as Error)?.message);
     }
+
+    // A logged session on a planned day completes the plan — after the
+    // response, never blocking the save.
+    after(async () => {
+      try {
+        const timeZone = await getUserTimeZone(null);
+        const metrics = entry.metricsData as { sequenceId?: string } | null;
+        await markPlannedDone({
+          startedAt: entry.startedAt,
+          timeZone,
+          sequenceId: metrics?.sequenceId ?? null,
+        });
+      } catch (hookError) {
+        console.warn("Planned-done hook failed:", (hookError as Error)?.message);
+      }
+    });
 
     return NextResponse.json({ ...entry, newPRs });
   } catch (error) {

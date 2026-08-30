@@ -5,17 +5,22 @@ guesses. Sources: `docs/design/pitaya-app.dc.html`, `pitaya-watch.dc.html`,
 the `[watch]` deferred items (2026-08-09), and THE PORT GATE in CLAUDE.md
 (binds both lanes — extract from the design, never interpret).
 
-## Lane homes (after the worktree split, 2026-08-09)
+## Lane homes (updated 2026-08-28 — the 08-09 split is history)
 
-| Lane | Directory | Branch |
-|---|---|---|
-| Main (web + backend) | `~/VibeCoding/Mikes Personal OS` | `claude/phase1-modernization` |
-| Watch (native Apple) | `~/VibeCoding/personal-os-watch` | `claude/watch-app` |
+**`main` is the single source of truth for BOTH surfaces.** The Q23
+exception (Spirit-on-iPad, 2026-08-22) merged `ios/**` work through
+main-lane branches, and `claude/watch-app` has been a strict ANCESTOR of
+main since — 18 files / 1199 deletions stale as of 08-26. Branching watch
+work off `claude/watch-app` is the documented clobber risk
+(deferred-items 2026-08-26): branch off `main`, whatever the lane. The
+re-sign automation already builds from `origin/main`.
 
-Same repo, separate working trees — never switch branches in the other
-lane's directory. Both lanes read/write `docs/state.md` and
-`docs/deferred-items.md` (merge conflicts in these two files are expected
-occasionally; resolve by keeping both entries, newest first).
+The original split (main lane `~/VibeCoding/Mikes Personal OS`, watch lane
+`~/VibeCoding/personal-os-watch` on `claude/watch-app`) remains only as the
+worktree-hygiene rule: never switch branches in a directory another session
+is using. Both lanes read/write `docs/state.md` and `docs/deferred-items.md`
+(merge conflicts there are expected occasionally; resolve by keeping both
+entries, newest first).
 
 ## Ownership map
 
@@ -23,7 +28,8 @@ occasionally; resolve by keeping both entries, newest first).
 |---|---|---|---|
 | Exercise catalog + canonical ids | Main (`lib/exercises.ts`) | Watch mirrors normalizer in Swift | Ids are append-only and stable; watch re-syncs its mirror when the file changes (state.md announces changes) |
 | PR detection + records | Main (`lib/prs.ts`, `personal_records`) | Watch celebrates | Server is the source of truth. Sync response now returns `prs: [{externalId, newPRs}]` per item; `GET /api/mobile/prs` (bearer) serves baselines — watch may drop its top-100 rebuild fallback |
-| Workout storage + sync | Main (`/api/mobile/workouts*`) | Watch offline queue | Existing payload shape frozen; additive changes only, announced in state.md |
+| Workout storage + sync | Main (`/api/mobile/workouts*`) | Watch offline queue | Existing payload shape frozen; additive changes only, announced in state.md. **(externalSource, externalId) is DB-unique since 2026-08-28** — sync create is atomic (P2002 → update), so retries land as updates, never duplicates. Additive since 08-28: `items[].trailId`, `strippedRoutes` in the response, and server-side `metricsData.routeAnalytics` (moving/stopped/breaks/splits) computed from `routeData.points[]`. routeData is stripped server-side for non-GPS workoutTypes |
+| Named trails | Main (`lib/trails.ts`, `trails` table) | Watch "save this track?" + Saved trails list | `GET /api/mobile/trails` (bearer; `?nearLat&nearLng&distanceMeters` ranks suggestions by trailhead proximity + similar length) returns `{trails: [{id, name, aliases, distanceMeters, elevationGainM, summaryPolyline, startLat, startLng, runCount, lastRun}], updatedAt}`; `POST /api/mobile/trails {name \| trailId, workoutExternalId}` create-or-links (case-insensitive on name+aliases, never duplicates). Wrist UI SHIPPED 2026-08-28b (Round 3 port): save-track prompt post-sync, Saved trails in the Hike menu, ghost overlay + "vs your last run here" baselines; near-ranked rows carry `matchPct` (50–99) |
 | Device auth | Main (`/api/mobile/auth/*`) | Watch Keychain | Current: PIN-on-wrist pairing (shipped, design-styled). Future: pairing-code flow (below) |
 | Sequences (routines) | Main builds model + API + iPhone builder UI in the **Train stage** | Watch renders/runs them | Contract below — watch builds wrist UI only after `/api/mobile/sequences` ships |
 | Recovery/HRV/sleep ingestion | Watch captures (HealthKit) → posts | Main stores + Body screen renders | Uses `/api/mobile/health/daily` (existing); extend additively when Body stage lands |
@@ -42,7 +48,7 @@ Sequence {
   restSecondsDefault: Int?,   // circuits: rest BETWEEN ROUNDS (the watch's runCircuitRest); Michael's: 45–90 s
   durationMinutes: Int?,      // ADDED 2026-08-09: EMOM total time ("20-minute EMOM")
   rounds: Int?,               // ADDED 2026-08-10: circuit round count ("repeat 3 times"); watch falls back to 3 when null
-  steps: Json  // ordered [{ exercise: canonicalId, exerciseName, sets?, reps?, seconds?, weightKg?, restSeconds? }]
+  steps: Json  // ordered [{ exercise: canonicalId, exerciseName, sets?, reps?, seconds?, weightKg?, restSeconds?, toFailure? }] — toFailure added 2026-08-26 ("MAX" in the wrist numeral slot)
   isArchived, createdAt, updatedAt
 }
 ```
@@ -103,6 +109,43 @@ HealthKit gives (the server downsamples to ≤120 points for storage).
 `hike` (existing `walk`/`run`/`trail_run` unchanged). Treadmill types
 render a distance-hero header instead of a GPS map; `stepCount` is
 already an accepted column — send it when HealthKit has it.
+
+**Round 3 additions (2026-08-28b, watch → main, additive):** the watch now
+also sends inside `metricsData` when it has them —
+
+```
+metricsData: {
+  splits:     [Int],  // per-km elapsed seconds, outdoor kinds (§07 3i)
+  hrrDelta:   Int,    // BPM drop over the 60 s recovery window (§07 HRR)
+  hrrSeconds: Int,    // window length actually measured (≤ 60)
+}
+```
+
+`hrrDelta`/`hrrSeconds` may arrive AFTER the row exists: the watch
+re-syncs the same `(externalSource, externalId)` with the enriched
+metrics and the atomic upsert lands it as an update. Surfaced on the web
+activity page since 2026-08-29 (the RECOVERY card, quick/typical/slow).
+
+**v5 additions (2026-08-29d, additive):** items may carry
+`metricsData.avgCadenceSpm` (session-mean steps/min from CMPedometer).
+Streams are downsampled to ≤600 on-wrist for every kind now (the server
+reduces to ≤120 for storage; ≤600 keeps full analytic headroom at a sixth
+of the payload). `GET /api/mobile/workouts` responses SLIMMED: routeData
+and stream keys no longer ride the list (the wrist decodes
+sequenceId/sequenceName/timeInZones.seconds only — lenient decoders
+unaffected). `GET /api/mobile/trails` rows now include `endLat`/`endLng`
+(direction-aware matching; send `nearEndLat`/`nearEndLng` on near
+queries). Sub-4-minute no-content sessions are auto-discarded ON the
+wrist and never sync.
+
+**packKg (2026-08-29, additive, main-lane column):** `WorkoutLog.packKg`
+records carried load for hikes (0–60). Web + chat edit it today; when the
+wrist adds a pre-hike pack entry, send it as a top-level `packKg` on the
+sync item and the server will accept it (ask main lane to wire the sync
+route when the watch half is ready — one line). Also
+additive since 08-28b: `GET /api/mobile/trails?nearLat…` rows carry
+`matchPct` (50–99, null when not near-ranked) — the wrist prints it in
+save-track suggestions ("94% match").
 
 ## Companion contract (added 2026-08-12 — main lane LIVE, build against it)
 

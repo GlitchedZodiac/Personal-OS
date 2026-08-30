@@ -15,17 +15,19 @@ struct TrailPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 5) {
                 Text(kind.title.uppercased())
                     .font(Theme.text(8, weight: .bold))
                     .kerning(1.2)
                     .foregroundStyle(Theme.accent)
                 Spacer()
+                // Round 3 §00: every in-workout header carries the zone chip.
+                ZoneChipStack(zone: recorder.currentZone, showName: false)
                 GPSPill(hasFix: route.hasFix, authorized: route.isAuthorized)
             }
             .padding(.horizontal, 2)
 
-            RoutePreview(coordinates: route.coordinates)
+            RoutePreview(coordinates: route.coordinates, crestAt: crestAt)
                 .frame(height: 62)
                 .padding(.top, 5)
 
@@ -41,7 +43,9 @@ struct TrailPage: View {
                 Spacer(minLength: 0)
                 Text(elevationText)
                     .font(Theme.numeric(30))
-                    .foregroundStyle(Theme.textBright)
+                    // §07 crest: the gain counter ticks in blush for 220 ms.
+                    .foregroundStyle(crestFlash ? Theme.accentWashSub : Theme.textBright)
+                    .animation(.easeInOut(duration: 0.22), value: crestFlash)
                 Text("M")
                     .font(Theme.text(8, weight: .semibold))
                     .kerning(0.8)
@@ -74,7 +78,22 @@ struct TrailPage: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
+        // Round 3 §07 elevation crest: every +100 m the contours ripple up
+        // once and the counter ticks blush (haptic .click fires in the
+        // recorder). Trail-stats + map pages only.
+        .onChange(of: recorder.crestEvent) { _, crest in
+            guard crest != nil else { return }
+            crestAt = Date()
+            crestFlash = true
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 220_000_000)
+                crestFlash = false
+            }
+        }
     }
+
+    @State private var crestAt: Date?
+    @State private var crestFlash = false
 
     /// §09 Z2 accumulator — "1:24 in zone 2 · 63% of the hike · 128 bpm".
     /// AOD: the chip loses its fill and keeps the outline.
@@ -104,7 +123,7 @@ struct TrailPage: View {
                     .font(Theme.text(6.5))
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
@@ -155,9 +174,10 @@ struct GPSPill: View {
                 .fill(color)
                 .frame(width: 5, height: 5)
                 .opacity(hasFix && blink ? 0.3 : 1)
+                // Round 3 §02 retime: the lock blink slows 0.8 → 1.6 s.
                 .animation(
                     hasFix
-                        ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
+                        ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true)
                         : .default,
                     value: blink
                 )
@@ -184,6 +204,9 @@ struct GPSPill: View {
 
 struct RoutePreview: View {
     let coordinates: [CLLocationCoordinate2D]
+    /// §07 crest: set to the crest moment — the contours ripple up once,
+    /// staggered 120 ms; the animation clock only runs for that second.
+    var crestAt: Date? = nil
 
     /// The design's three contour curves, verbatim (viewBox 330×184).
     private static let contours = [
@@ -193,12 +216,32 @@ struct RoutePreview: View {
     ]
 
     var body: some View {
+        if let crestAt, Date().timeIntervalSince(crestAt) < 1.2 {
+            TimelineView(.animation) { timeline in
+                canvas(rippleClock: timeline.date.timeIntervalSince(crestAt))
+            }
+        } else {
+            canvas(rippleClock: nil)
+        }
+    }
+
+    /// Rise −7 px and settle, per contour, 120 ms apart — 600 ms total.
+    private func rippleOffset(index: Int, clock: TimeInterval?) -> CGFloat {
+        guard let clock else { return 0 }
+        let local = clock - Double(index) * 0.12
+        guard local > 0, local < 0.24 else { return 0 }
+        return -Theme.r3(7) * sin(.pi * local / 0.24)
+    }
+
+    private func canvas(rippleClock: TimeInterval?) -> some View {
         Canvas { context, size in
             let sx = size.width / 330, sy = size.height / 184
             let scale = CGAffineTransform(scaleX: sx, y: sy)
 
-            for contour in Self.contours {
-                let path = svgPath(contour).applying(scale)
+            for (index, contour) in Self.contours.enumerated() {
+                let lift = rippleOffset(index: index, clock: rippleClock)
+                let path = svgPath(contour)
+                    .applying(scale.translatedBy(x: 0, y: lift / max(sy, 0.001)))
                 context.stroke(
                     Path(path.cgPath),
                     with: .color(Color(hex: 0x1C1B20)),

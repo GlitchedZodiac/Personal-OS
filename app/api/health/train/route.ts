@@ -8,9 +8,12 @@ import {
   getWeekStartDateString,
 } from "@/lib/timezone";
 import { sessionVolumeKg } from "@/lib/prs";
+import { GPS_WORKOUT_TYPES } from "@/lib/activities";
 import { volumeTrendPct } from "@/lib/format-training";
 import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
+import { tonnageByMovement } from "@/lib/strength-history";
+import { getMovementHistoriesCached } from "@/lib/strength-history-db";
 
 const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -59,7 +62,7 @@ export async function GET(request: NextRequest) {
     // Custom movements must resolve for display names and PR chips.
     await ensureUserExercisesLoaded();
 
-    const [workouts, latestPRRow, trail, effortRow] = await Promise.all([
+    const [workouts, weightRecords, trail, effortRow] = await Promise.all([
       prisma.workoutLog.findMany({
         where: { startedAt: { gte: rangeStart } },
         orderBy: { startedAt: "desc" },
@@ -77,12 +80,20 @@ export async function GET(request: NextRequest) {
       // Heaviest-ever ("weight") records are the banner's subject: they mean
       // the same thing on every movement. Session-tonnage ("volume") records
       // only surface when there's no recent weight PR to show.
-      prisma.personalRecord.findFirst({
+      // v4 (2026-08-29): the FULL weight-record list rides too — the PR
+      // WALL card (one banner was the only PR surface on the whole page).
+      prisma.personalRecord.findMany({
         where: { kind: "weight" },
         orderBy: { achievedAt: "desc" },
       }),
       prisma.workoutLog.findFirst({
-        where: { distanceMeters: { gt: 0 } },
+        // TRAILS means ground actually covered — typed GPS sessions only. A
+        // bare distance filter once surfaced a freestyle row carrying leaked
+        // GPS distance as the "latest trail".
+        where: {
+          distanceMeters: { gt: 0 },
+          workoutType: { in: [...GPS_WORKOUT_TYPES] },
+        },
         orderBy: { startedAt: "desc" },
         select: {
           id: true,
@@ -229,6 +240,7 @@ export async function GET(request: NextRequest) {
     }
 
     // PR banner only stays fresh for a week — after that the shimmer would lie.
+    const latestPRRow = weightRecords[0] ?? null;
     const latestPR =
       latestPRRow &&
       Date.now() - latestPRRow.achievedAt.getTime() < 7 * 86_400_000
@@ -244,12 +256,26 @@ export async function GET(request: NextRequest) {
           }
         : null;
 
+    // v4: the PR wall — every heaviest-ever record — and 8-week tonnage by
+    // movement from the same rows the volume chart already fetched.
+    const prWall = weightRecords.map((r) => ({
+      exercise: r.exercise,
+      exerciseName: r.exerciseName,
+      valueKg: r.value,
+      previousKg: r.previousValue,
+      achievedAt: r.achievedAt.toISOString(),
+      workoutLogId: r.workoutLogId,
+    }));
+    const movementTonnage = tonnageByMovement(await getMovementHistoriesCached(), 8, 6);
+
     return NextResponse.json({
       date: todayStr,
       weekNumber: isoWeek(todayStr),
       weekVolumeKg,
       weekOverview,
       latestPR,
+      prWall,
+      movementTonnage,
       session,
       weeklyVolume,
       pctChange,

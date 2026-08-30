@@ -5,6 +5,7 @@
 // drives these same methods, so self-smoke exercises real paths).
 
 #if os(watchOS)
+import CoreLocation
 import Foundation
 import HealthKit
 import SwiftUI
@@ -142,6 +143,8 @@ public final class AppModel: ObservableObject {
         case live(WorkoutKind)           // freeform live pages
         case liveSequence(SequenceDef)   // EMOM ring or circuit runner by kind
         case summary
+        case hrr                         // Round 3 §07 — post-save recovery screen
+        case trailPrompt                 // Round 3 §05 — "Save this track?"
         case doubleTapCoach              // §05 1o — once, before first live session
         case voiceWeight                 // §08 2e — "HEARD · WEIGHT" confirm card
         case voiceFood                   // §08 — parsed food confirm card
@@ -255,6 +258,34 @@ public final class AppModel: ObservableObject {
     private var prFlashTask: Task<Void, Never>?
     private var workoutStartedAt = Date()
     private var pendingItem: WorkoutSyncItem?
+    /// The externalId whose PR verdict the summary is waiting on. Stored so
+    /// the reconcile survives whichever serialized flight actually lands the
+    /// response (a Save's items can ride a drain another caller started).
+    private var pendingPRReconcileId: String?
+    /// Round 3 §05 saved-trail target: set when a hike starts from a saved
+    /// trail — ghost line on the live map, trailId on the sync item, and the
+    /// end-of-run prompt is skipped (the run count just increments).
+    @Published public private(set) var activeTrail: TrailSummary?
+    public private(set) var activeTrailGhost: [CLLocationCoordinate2D] = []
+    /// §05: the server's trail list, cached each refresh — the Hike submenu
+    /// and the save-track suggestions read it.
+    @Published public private(set) var trails: [TrailSummary] = []
+    /// §05 prompt state: near-ranked suggestions (max 2) for the track just
+    /// saved, and the success name once one lands.
+    @Published public private(set) var trailSuggestions: [TrailSummary] = []
+    @Published public private(set) var trailSaveSuccess: String?
+    @Published public private(set) var trailSaving = false
+    /// §07 streak seeds: set when THIS save extended the training streak
+    /// ("◆ day N"); PR banners win, so it stays nil alongside one.
+    @Published public private(set) var streakCelebration: Int?
+    /// The synced item, kept so the late HRR capture can ride an idempotent
+    /// re-sync (same externalId → server UPDATE).
+    private var lastSavedItem: WorkoutSyncItem?
+    /// §05 "Skip … never re-asks this session".
+    private var trailPromptSkipped = false
+    /// §08 Weight Training free session: 2.5 kg plate detents replace the
+    /// bell rack on the logger's crown for this session only.
+    @Published public private(set) var weightDetentOverride: [Double]?
     private var activeSequence: SequenceDef?
     private var engineTask: Task<Void, Never>?
     private var sequencePausedAccum: TimeInterval = 0
@@ -286,6 +317,10 @@ public final class AppModel: ObservableObject {
             ExerciseCatalog.setCustom(cached)
         }
         zones = ZonesCache.load()
+        // 2026-08-29: home paints from last-good lists instantly; the
+        // parallel refresh settles the truth.
+        if let cached = SequencesCache.load() { sequences = cached }
+        if let cached = TrailsCache.load() { trails = cached }
         AppModel.shared = self
     }
 
@@ -367,21 +402,37 @@ public final class AppModel: ObservableObject {
             // Offline is fine — cached baselines stand.
         }
 
-        if let served = try? await api.fetchZones() {
+        // The five remaining fetches are independent — PARALLEL since
+        // 2026-08-29 (they ran serially: six round trips of dead time on
+        // every launch, pairing, and summary dismissal).
+        async let zonesTask = api.fetchZones()
+        async let sequencesTask = api.fetchSequences()
+        async let trailsTask = api.fetchTrails()
+        async let exercisesTask = api.fetchExercises()
+        async let workoutsTask = api.fetchWorkouts(limit: 50)
+
+        if let served = try? await zonesTask {
             zones = served.zones
             ZonesCache.save(served.zones)
         }
 
-        if let list = try? await api.fetchSequences() {
+        if let list = try? await sequencesTask {
             sequences = list.sequences
+            SequencesCache.save(list.sequences)
             #if DEBUG
             sequences.append(contentsOf: debugInjected)
             #endif
         }
 
+        // §05: saved trails for the Hike submenu + save-track suggestions.
+        if let list = try? await trailsTask {
+            trails = list.trails
+            TrailsCache.save(list.trails)
+        }
+
         // AI-created custom exercises → merged into the catalog/normalizer,
         // cached for offline cold-starts.
-        if let list = try? await api.fetchExercises() {
+        if let list = try? await exercisesTask {
             let defs = list.exercises.map { row in
                 ExerciseDef(
                     id: row.id,
@@ -395,7 +446,7 @@ public final class AppModel: ObservableObject {
         }
 
         do {
-            let list = try await api.fetchWorkouts(limit: 50)
+            let list = try await workoutsTask
             recentRows = list.entries
             historyCount = list.entries.count
             lastKettlebell = list.entries.first {
@@ -613,15 +664,34 @@ public final class AppModel: ObservableObject {
 
     /// `useRecorder: false` is the headless-smoke path (no HealthKit sheet,
     /// no countdown in a simulator run); every user-facing call leaves it true.
-    public func startWorkout(_ kind: WorkoutKind, useRecorder: Bool = true) async {
+    /// `trail` (§05) makes the session a saved-trail run: ghost line on the
+    /// map, trailId on the sync item, end prompt skipped.
+    public func startWorkout(
+        _ kind: WorkoutKind, useRecorder: Bool = true, trail: TrailSummary? = nil,
+        plateDetents: Bool = false
+    ) async {
         // §05 1o: the one-time coach interrupts the first-ever live session
         // (real sessions only — the headless smoke path skips it).
         if useRecorder, !DoubleTapCoach.shared.coachShown {
-            pendingCoachAction = { [weak self] in await self?.startWorkout(kind) }
+            pendingCoachAction = { [weak self] in
+                await self?.startWorkout(kind, trail: trail, plateDetents: plateDetents)
+            }
             phase = .doubleTapCoach
             return
         }
         resetLiveState()
+        if plateDetents {
+            // §08: bar work dials in 2.5 kg plate steps, not bell stops.
+            weightDetentOverride = stride(from: 2.5, through: 200, by: 2.5).map { $0 }
+        }
+        if let trail {
+            activeTrail = trail
+            activeTrailGhost = trail.summaryPolyline.map { polyline in
+                Polyline.decode(polyline).map {
+                    CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
+                }
+            } ?? []
+        }
         if kind == .kettlebell {
             reps = WatchPrefs.shared.startRepsAt == .lastLogged
                 ? WatchPrefs.shared.lastLoggedReps : 10
@@ -630,6 +700,8 @@ public final class AppModel: ObservableObject {
         guard useRecorder else { return }
         // A recovery window still watching the previous session yields first.
         await recorder.abortRecoveryIfNeeded()
+        // Round 3 §00: served boundaries feed the chips + ZonePublisher.
+        recorder.hrZones = zones
         await runCountdown()
         workoutStartedAt = Date()
         do {
@@ -710,14 +782,34 @@ public final class AppModel: ObservableObject {
 
     public func finishWorkout(_ kind: WorkoutKind) async {
         let entries = aggregatedEntries()
-        // §03 HRR: kettlebell sessions freeze the numbers at the last Done
-        // and watch the descent for 60 s; outdoor kinds close as before.
-        let totals: WorkoutRecorder.Totals?
-        if kind == .kettlebell {
-            totals = await beginRecoveryOrFinish()
-        } else {
-            totals = await recorder.finish()
+        // Round 3 §07 opened the 60 s recovery window to EVERY kind with a
+        // live recorder (it was kettlebell-only) — the post-save HRR screen
+        // rides it, and the sensors freeze at End either way.
+        let totals = await beginRecoveryOrFinish()
+
+        // Phantom guard (2026-08-29, his call: auto-discard silently): an
+        // accidental start — under 4 minutes with nothing logged and no real
+        // ground covered — never reaches the summary and never syncs. Six
+        // 1-minute stubs were polluting his session counts.
+        let elapsed = totals?.durationSeconds ?? recorder.elapsed
+        let covered = totals?.distanceMeters ?? 0
+        // Smokes are exempt via their existing marker — a 65 s scripted walk
+        // must still reach save.
+        if elapsed < 240, loggedSets.isEmpty, covered < 150,
+           externalSourceOverride == nil {
+            recoveryTask?.cancel()
+            recoveryTask = nil
+            Task { await recorder.abortRecoveryIfNeeded() }
+            #if DEBUG
+            print("PITAYA-SMOKE: phantom auto-discarded \(Int(elapsed))s \(kind.rawValue)")
+            #endif
+            Haptics.minor(.click)
+            resetLiveState()
+            clearSummaryExtras()
+            phase = .home
+            return
         }
+
         prepareSummary(
             kind: kind,
             totals: totals,
@@ -740,15 +832,58 @@ public final class AppModel: ObservableObject {
         recoveryTask?.cancel()
         recoveryTask = Task { [weak self] in
             let capture = await self?.recorder.completeRecovery()
+            #if DEBUG
+            print("PITAYA-SMOKE: recoveryTask capture=\(String(describing: capture?.drop)) cancelled=\(Task.isCancelled) phase=\(String(describing: self?.phase))")
+            #endif
             guard let self, !Task.isCancelled else { return }
-            // Only surface it if we're still on this session's summary.
-            if case .summary = self.phase,
-               self.workoutStartedAt == sessionToken,
+            // Surface it anywhere in this session's post-workout chain —
+            // summary, the HRR screen itself, or the trail prompt.
+            let stillHere: Bool
+            switch self.phase {
+            case .summary, .hrr, .trailPrompt: stillHere = true
+            default: stillHere = false
+            }
+            if stillHere, self.workoutStartedAt == sessionToken,
                let capture, capture.drop > 0 {
                 self.recoveryCapture = capture
+                Haptics.key(.success) // §07: HRR-done
+                self.attachHRR(capture)
+            } else if case .hrr = self.phase, self.workoutStartedAt == sessionToken {
+                // No qualifying descent (HR rose, sensor gap, HK close timed
+                // out) — there's no verdict to show, but the screen must
+                // still resolve: advance the post-save chain instead of
+                // stranding RECOVERY · 0:00 until a manual Skip.
+                await self.finishHRR()
             }
         }
         return totals
+    }
+
+    /// §07: hrrDelta/hrrSeconds ride metricsData. The capture can land up to
+    /// 60 s AFTER the item was built — patch the pending item in place, or
+    /// re-enqueue the already-synced item (same externalId → the server's
+    /// unique upsert makes the re-sync an idempotent UPDATE).
+    private func attachHRR(_ capture: WorkoutRecorder.RecoveryCapture) {
+        if let item = pendingItem {
+            let metrics = (item.metricsData ?? WorkoutMetricsData())
+                .withHRR(delta: capture.drop, seconds: 60)
+            pendingItem = item.replacingMetrics(metrics)
+            return
+        }
+        guard let item = lastSavedItem else { return }
+        let metrics = (item.metricsData ?? WorkoutMetricsData())
+            .withHRR(delta: capture.drop, seconds: 60)
+        let updated = item.replacingMetrics(metrics)
+        lastSavedItem = updated
+        Task { [weak self] in
+            guard let self, let queue = self.queue else { return }
+            try? await queue.enqueue(updated)
+            // Straight through the flight, NOT drainQueue — the summary is
+            // already showing "synced" and this quiet enrichment must not
+            // flicker the CTA back to Saving…. Offline just leaves it
+            // queued for the next drain.
+            _ = await WorkoutSyncFlight.run(queue: queue, api: self.api)
+        }
     }
 
     // MARK: - Sequence (EMOM) flow
@@ -776,6 +911,7 @@ public final class AppModel: ObservableObject {
         if useRecorder {
             // A recovery window still watching the previous session yields.
             await recorder.abortRecoveryIfNeeded()
+            recorder.hrZones = zones
             await runCountdown()
         }
         workoutStartedAt = Date()
@@ -923,7 +1059,11 @@ public final class AppModel: ObservableObject {
                     emomRound = round
                     markActivity()
                 }
-                emomSecondsLeft = 60 - (Int(elapsed) % 60)
+                // 2026-08-29: only publish when the displayed second actually
+                // changes — the 250 ms loop was invalidating the whole view
+                // tree at 4 Hz for a 1 Hz value.
+                let secondsLeft = 60 - (Int(elapsed) % 60)
+                if secondsLeft != emomSecondsLeft { emomSecondsLeft = secondsLeft }
             }
 
             try? await Task.sleep(nanoseconds: 250_000_000)
@@ -1047,7 +1187,19 @@ public final class AppModel: ObservableObject {
         // §03 deltas: instant baseline from cached rows (same semantics as
         // the server's lastRun — the run before this one, same routine);
         // the sync response's coda replaces it, server winning on drift.
+        // §05: a saved-trail run baselines against the trail's last run
+        // instead — "vs your last run here".
         lastRunBaseline = sequence.flatMap { localLastRun(sequenceId: $0.id, before: started) }
+            ?? activeTrail?.lastRun.map { last in
+                LastRunStats(
+                    startedAt: last.startedAt,
+                    durationMinutes: last.durationMinutes,
+                    volumeKg: 0,
+                    caloriesBurned: nil,
+                    avgHeartRateBpm: last.avgHeartRateBpm,
+                    roundsCompleted: nil
+                )
+            }
 
         summary = WorkoutSummary(
             kind: kind,
@@ -1078,10 +1230,19 @@ public final class AppModel: ObservableObject {
         let zoneBreakdown: WorkoutZoneBreakdown? = isFreestyle
             ? zones.flatMap { StreamMath.timeInZones(hr: rawHR, time: rawTime, zones: $0) }
             : nil
-        let hrStream = isFreestyle ? StreamMath.downsample(rawHR) : rawHR
-        let timeStream = isFreestyle ? StreamMath.downsample(rawTime) : rawTime
+        // 2026-08-29: non-freestyle used to ship RAW second-by-second
+        // arrays (~3×3600 ints for an hour) that the server immediately
+        // reduced to ≤120 — ≤600 keeps full analytic headroom at a sixth
+        // of the payload.
+        let hrStream = isFreestyle
+            ? StreamMath.downsample(rawHR)
+            : StreamMath.downsample(rawHR, limit: 600)
+        let timeStream = isFreestyle
+            ? StreamMath.downsample(rawTime)
+            : StreamMath.downsample(rawTime, limit: 600)
         let altitudeStream = isFreestyle
-            ? StreamMath.downsample(rawAltitude) : rawAltitude
+            ? StreamMath.downsample(rawAltitude)
+            : StreamMath.downsample(rawAltitude, limit: 600)
 
         freestyleZoneSeconds = zoneBreakdown?.seconds
 
@@ -1096,7 +1257,10 @@ public final class AppModel: ObservableObject {
             altitudeStream: altitudeStream.isEmpty ? nil : altitudeStream,
             timeInZones: zoneBreakdown,
             elevationGainM: isFreestyle && recorder.elevationGain > 1
-                ? (recorder.elevationGain * 10).rounded() / 10 : nil
+                ? (recorder.elevationGain * 10).rounded() / 10 : nil,
+            // §07: per-km seconds banked live on the wrist.
+            splits: recorder.splitSeconds.isEmpty ? nil : recorder.splitSeconds,
+            avgCadenceSpm: recorder.avgCadenceSpm
         )
 
         pendingItem = WorkoutSyncItem(
@@ -1115,7 +1279,10 @@ public final class AppModel: ObservableObject {
             exercises: entries.isEmpty ? nil : entries,
             metricsData: metrics.isEmpty ? nil : metrics,
             routeData: totals?.routeData,
-            deviceType: "apple_watch"
+            deviceType: "apple_watch",
+            // §05: a saved-trail run carries its trail — the server links
+            // the row and the run count increments.
+            trailId: activeTrail?.id
         )
 
         syncState = .unsaved
@@ -1128,22 +1295,206 @@ public final class AppModel: ObservableObject {
     /// Michael's ask: explicit Save (vs the old auto-save) so test sessions
     /// and forgotten-running workouts can be thrown away.
     public func saveWorkout() async {
-        guard let item = pendingItem else { return }
+        guard let item = pendingItem, syncState != .syncing else { return }
+        // Flip the UI before the first await — the dead window between the
+        // tap and any visible state change is what invited second taps.
+        syncState = .syncing
+        do {
+            guard let queue else { throw CocoaError(.fileWriteUnknown) }
+            try await queue.enqueue(item)
+        } catch {
+            // Keep pendingItem so Save reappears and a retry re-enqueues.
+            // The old `try?` here dropped the workout silently and left the
+            // button a permanent no-op.
+            syncState = .failed("couldn't save — try again")
+            Haptics.key(.failure)
+            return
+        }
         pendingItem = nil
-        try? await queue?.enqueue(item)
+        lastSavedItem = item
         await drainQueue(reconcilePRsFor: item.externalId)
 
-        // His 08-20 note: "I should just be able to click save, maybe a
-        // confirmation, and then it goes." Save is a two-tap ritual today
-        // only because the server still owes some summaries their zone
-        // breakdown. When the wrist already holds every number the screen
-        // will ever show — freestyle computes its own zones live — there is
-        // nothing to wait for, so confirm and get out of the way.
+        // ——— Round 3 post-save chain (the "full sequence", locked) ———
+        // synced → streak seeds (PR wins) → HRR screen while the 60 s
+        // window is still live → save-track prompt (outdoor, +600 ms,
+        // skipped for queued saves and saved-trail runs) → summary/home.
+        if syncState == .synced {
+            celebrateStreakIfExtended(savedAt: item.startedAt)
+        }
+        if recorder.isInRecovery,
+           let endsAt = recorder.recoveryEndsAt, endsAt > Date(),
+           summary?.avgHeartRate != nil {
+            phase = .hrr
+            return // finishHRR() carries the chain on
+        }
+        await continuePostSaveChain()
+    }
+
+    /// The chain after the (optional) HRR screen: trail prompt, then the
+    /// original zones-or-leave behavior.
+    private func continuePostSaveChain() async {
+        if syncState == .synced, !trailPromptSkipped, activeTrail == nil,
+           summary?.kind.isOutdoor == true,
+           let item = lastSavedItem,
+           let points = item.routeData?.points, points.count > 1 {
+            // §05: 600 ms after the save confirms.
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard case .summary = phase else { return } // he may have moved on
+            prepareTrailPrompt(track: points, item: item)
+            phase = .trailPrompt
+            return
+        }
+        await settleSummary()
+    }
+
+    /// His 08-20 note: "I should just be able to click save, maybe a
+    /// confirmation, and then it goes." Freestyle holds every number the
+    /// screen will ever show, so it confirms and leaves; everything else
+    /// fetches its zones card and keeps Done.
+    private func settleSummary() async {
         if summaryNeedsNothingFurther {
             await confirmSaveAndLeave()
             return
         }
-        await loadSummaryZones(externalId: item.externalId)
+        if let externalId = lastSavedItem?.externalId {
+            await loadSummaryZones(externalId: externalId)
+        }
+    }
+
+    // MARK: - §07 HRR screen handoff
+
+    /// Verdict shown (or Skip): back to the summary, chain continues. The
+    /// capture itself keeps running off-screen either way — skipping the
+    /// screen never skips the data.
+    public func finishHRR() async {
+        guard case .hrr = phase else { return }
+        phase = .summary
+        await continuePostSaveChain()
+    }
+
+    // MARK: - §05 save-track prompt
+
+    private func prepareTrailPrompt(track: [RoutePoint], item: WorkoutSyncItem) {
+        trailSaveSuccess = nil
+        trailSaving = false
+        guard let start = track.first else {
+            trailSuggestions = []
+            return
+        }
+        let end = track.last
+        // Rank the cached list locally (same rule the server uses: trailhead
+        // within ~300 m, similar length strengthens) — max 2, best first.
+        let distance = item.distanceMeters
+        trailSuggestions = Array(
+            trails
+                .compactMap { trail -> (TrailSummary, Double)? in
+                    guard let lat = trail.startLat, let lng = trail.startLng else { return nil }
+                    let gap = Self.haversineMeters(
+                        lat1: lat, lng1: lng, lat2: start.lat, lng2: start.lng
+                    )
+                    guard gap <= 300 else { return nil }
+                    // Direction awareness (2026-08-29): when both ends are
+                    // known, a track that ENDS far from the trail's end is
+                    // a different traversal — the descent bug.
+                    if let tEndLat = trail.endLat, let tEndLng = trail.endLng, let end {
+                        let endGap = Self.haversineMeters(
+                            lat1: tEndLat, lng1: tEndLng, lat2: end.lat, lng2: end.lng
+                        )
+                        guard endGap <= 300 else { return nil }
+                    }
+                    var score = 1 - gap / 300
+                    if let mine = distance, let theirs = trail.distanceMeters, theirs > 0 {
+                        let rel = abs(mine - theirs) / theirs
+                        if rel <= 0.2 { score += 1 - rel }
+                    }
+                    return (trail, score)
+                }
+                .sorted { $0.1 > $1.1 }
+                .prefix(2)
+                .map { pair in Self.stamped(pair.0, matchPct: Int(min(0.99, pair.1 / 2) * 100)) }
+        )
+    }
+
+    /// TrailSummary is a decoded server row — the local ranking re-stamps
+    /// matchPct the same way the server's near query would.
+    private static func stamped(_ trail: TrailSummary, matchPct: Int) -> TrailSummary {
+        TrailSummary(
+            id: trail.id, name: trail.name, aliases: trail.aliases,
+            distanceMeters: trail.distanceMeters, elevationGainM: trail.elevationGainM,
+            summaryPolyline: trail.summaryPolyline, startLat: trail.startLat,
+            startLng: trail.startLng, endLat: trail.endLat, endLng: trail.endLng,
+            runCount: trail.runCount,
+            lastRun: trail.lastRun, matchPct: max(50, matchPct)
+        )
+    }
+
+    /// Suggestion row tapped, or a dictated name submitted.
+    public func saveTrack(trailId: String? = nil, name: String? = nil) async {
+        guard let item = lastSavedItem, !trailSaving else { return }
+        trailSaving = true
+        defer { trailSaving = false }
+        do {
+            let result = try await api.saveTrail(
+                name: name, trailId: trailId, workoutExternalId: item.externalId
+            )
+            Haptics.key(.success)
+            trailSaveSuccess = result.trail.name
+            if let refreshed = try? await api.fetchTrails() { trails = refreshed.trails }
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard case .trailPrompt = phase else { return }
+            phase = .summary
+            await settleSummary()
+        } catch {
+            // Server unreachable mid-prompt: fall back to the summary — the
+            // workout is saved either way, and chat can name it later.
+            Haptics.key(.failure)
+            phase = .summary
+            await settleSummary()
+        }
+    }
+
+    /// §05 Skip — stores nothing, never re-asks this session.
+    public func skipTrailPrompt() async {
+        trailPromptSkipped = true
+        guard case .trailPrompt = phase else { return }
+        phase = .summary
+        await settleSummary()
+    }
+
+    // MARK: - §07 streak seeds
+
+    /// "Save extends streak": this is the first session today AND yesterday
+    /// trained → seeds + "◆ day N". Local computation over the cached rows —
+    /// the served streak is the food streak, a different thing on purpose.
+    private func celebrateStreakIfExtended(savedAt: Date) {
+        guard summary?.prs.isEmpty != false else { return } // PR banner wins
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: savedAt)
+        let trainedDays = Set(recentRows.map { calendar.startOfDay(for: $0.startedAt) })
+        guard !trainedDays.contains(today) else { return } // not the first today
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+              trainedDays.contains(yesterday)
+        else { return }
+        var days = 2
+        var cursor = yesterday
+        while let previous = calendar.date(byAdding: .day, value: -1, to: cursor),
+              trainedDays.contains(previous) {
+            days += 1
+            cursor = previous
+        }
+        streakCelebration = days
+    }
+
+    private static func haversineMeters(
+        lat1: Double, lng1: Double, lat2: Double, lng2: Double
+    ) -> Double {
+        let r = 6_371_000.0
+        let dLat = (lat2 - lat1) * .pi / 180
+        let dLng = (lng2 - lng1) * .pi / 180
+        let a = sin(dLat / 2) * sin(dLat / 2)
+            + cos(lat1 * .pi / 180) * cos(lat2 * .pi / 180)
+            * sin(dLng / 2) * sin(dLng / 2)
+        return 2 * r * asin(min(1, sqrt(a)))
     }
 
     /// True when saving cannot add anything to the summary screen.
@@ -1220,7 +1571,25 @@ public final class AppModel: ObservableObject {
         activeSequence = nil
         clearSummaryExtras()
         phase = .home
-        Task { await refreshHistory() }
+        // 2026-08-29: leaving the summary used to re-run the whole
+        // six-fetch refresh — only workouts + PRs can have changed here.
+        Task { await refreshWorkoutsAndPRs() }
+    }
+
+    /// The targeted post-save refresh: history rows + PR baselines only.
+    private func refreshWorkoutsAndPRs() async {
+        async let prsTask = api.fetchPRs()
+        async let workoutsTask = api.fetchWorkouts(limit: 50)
+        if let prList = try? await prsTask {
+            baselines = PRBaselines(records: prList.records)
+            prExerciseCount = Set(prList.records.map(\.exercise)).count
+            await prCache?.save(baselines.best)
+        }
+        if let list = try? await workoutsTask {
+            recentRows = list.entries
+            historyCount = list.entries.count
+        }
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func clearSummaryExtras() {
@@ -1230,7 +1599,30 @@ public final class AppModel: ObservableObject {
         freestyleZoneSeconds = nil
         emomRoundSeconds = []
         emomPRRound = nil
+        // Round 3 session-scoped state.
+        activeTrail = nil
+        activeTrailGhost = []
+        trailSuggestions = []
+        trailSaveSuccess = nil
+        trailSaving = false
+        trailPromptSkipped = false
+        streakCelebration = nil
+        lastSavedItem = nil
     }
+
+    #if DEBUG
+    // MARK: - Smoke seams (DEBUG builds only)
+
+    /// The unsaved summary's idempotency key, exposed so the DOUBLESAVE
+    /// smoke can count its rows server-side after the race.
+    var pendingItemExternalId: String? { pendingItem?.externalId }
+
+    /// Server-side truth for the smoke: how many rows carry this externalId.
+    func debugCountWorkouts(externalId: String) async -> Int? {
+        guard let list = try? await api.fetchWorkouts(limit: 20) else { return nil }
+        return list.entries.filter { $0.externalId == externalId }.count
+    }
+    #endif
 
     // MARK: - Idle nudge
 
@@ -1245,6 +1637,7 @@ public final class AppModel: ObservableObject {
         countdown = nil
         circuitRestTask?.cancel()
         circuitRestLeft = nil
+        weightDetentOverride = nil
         clearSummaryExtras()
         workoutStartedAt = Date()
         markActivity()
@@ -1302,18 +1695,30 @@ public final class AppModel: ObservableObject {
 
     public func drainQueue(reconcilePRsFor externalId: String? = nil) async {
         guard let queue else { return }
-        let pending = await queue.load()
-        queuedCount = pending.count
-        guard !pending.isEmpty else { return }
+        if let externalId { pendingPRReconcileId = externalId }
+        queuedCount = await queue.count()
+        guard queuedCount > 0 else {
+            // A serialized flight elsewhere can drain the queue between a
+            // Save's enqueue and this count — the items are safe on the
+            // server; never leave that Save stuck on the spinner.
+            if syncState == .syncing {
+                syncState = .synced
+                lastSyncCheckAt = Date()
+            }
+            return
+        }
 
         syncState = .syncing
-        do {
-            let response = try await api.syncWorkouts(pending)
-            try? await queue.removeSynced(pending)
+        // Every drain in the process — including the cold-wake standalone
+        // path — serializes through WorkoutSyncFlight; overlapping drains
+        // were the duplicate-save race.
+        let outcome = await WorkoutSyncFlight.run(queue: queue, api: api)
+        if let response = outcome.response {
             syncState = .synced
             queuedCount = 0
             lastSyncCheckAt = Date()
-            reconcileSummaryPRs(from: response, matching: externalId)
+            reconcileSummaryPRs(from: response, matching: pendingPRReconcileId)
+            pendingPRReconcileId = nil
             // §02/§03 codas: hero metrics for the wrist surfaces, routine
             // verdict + last-run for the summary deltas — the server's
             // lastRun replaces the local baseline (server wins on drift).
@@ -1326,9 +1731,16 @@ public final class AppModel: ObservableObject {
             }
             // §02: every sync refreshes the complication timeline.
             WidgetCenter.shared.reloadAllTimelines()
-        } catch {
-            syncState = .queued(pending.count)
-            queuedCount = pending.count
+        } else if outcome.pendingCount > 0 {
+            syncState = .queued(outcome.pendingCount)
+            queuedCount = outcome.pendingCount
+        } else {
+            // Our items rode a flight we queued behind: pushed, but the
+            // response went to that caller. Only this save's PR reconcile
+            // and codas are skipped — the local estimates stand.
+            syncState = .synced
+            queuedCount = 0
+            lastSyncCheckAt = Date()
         }
     }
 

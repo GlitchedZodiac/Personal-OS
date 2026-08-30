@@ -76,6 +76,9 @@ model WorkoutLog {
   avgHeartRateBpm  Int?
   maxHeartRateBpm  Int?
   elevationGainM   Float?
+  // Carried load (2026-08-29): pack weight for hikes — the Tolima plan's
+  // progressive-loading variable. Null = unrecorded, not zero.
+  packKg           Float?
   routeData        Json?
   metricsData      Json?
   deviceType       String?
@@ -85,13 +88,65 @@ model WorkoutLog {
   exercises        Json? // Array of { name, sets, reps, weight }
   stravaActivityId String?
   source           String    @default("manual") // manual, voice, strava
+  // Named-trails spine (2026-08-28): links repeat runs of the same ground.
+  trailId          String?
+  trail            Trail?    @relation(fields: [trailId], references: [id], onDelete: SetNull)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   @@index([startedAt])
-  @@index([externalSource, externalId])
+  // Unique, not a plain index: the watch's idempotency key must be enforced by
+  // the DB — two in-flight syncs of the same item both passed the route's old
+  // find-then-create check (same race class as the 857-duplicate weigh-ins).
+  @@unique([externalSource, externalId])
   @@index([syncStatus])
+  @@index([trailId])
   @@map("workout_logs")
+}
+
+// One planned training day — the dynamic week he dictates to the AI ("this
+// week: X routine, back day, Thursday climb Tres Cruces"). Day-level on
+// purpose; timed sub-reminders ("stretch first at 4pm") ride the existing
+// Reminder rows. A saved workout on the day flips status to done.
+model PlannedWorkout {
+  id             String   @id @default(uuid())
+  localDate      String // YYYY-MM-DD in his timezone
+  title          String
+  notes          String?
+  sequenceId     String?
+  trailId        String?
+  targetWeightKg Float?
+  status         String   @default("planned") // planned | done | skipped
+  source         String   @default("chat") // chat | manual
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([localDate])
+  @@map("planned_workouts")
+}
+
+// A named piece of ground he covers repeatedly — "el Cerro de las Tres
+// Cruces". Workouts link to it so a run can be compared with the last run of
+// the SAME trail. Reference stats seed from the first linked workout.
+// endLat/endLng added 2026-08-29: matching was direction-blind — an
+// out-and-back start put a DESCENT within 300 m of the trailhead and it
+// linked as a run of the ascent (the +13.5 m lastRun on a +390 m trail).
+model Trail {
+  id              String       @id @default(uuid())
+  name            String
+  aliases         String[]     @default([])
+  distanceMeters  Float?
+  elevationGainM  Float?
+  summaryPolyline String?
+  startLat        Float?
+  startLng        Float?
+  endLat          Float?
+  endLng          Float?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  workouts        WorkoutLog[]
+
+  @@map("trails")
 }
 
 model WaterLog {
@@ -282,6 +337,11 @@ model DailyHealthSnapshot {
   sleepDeepMinutes             Int?
   sleepRemMinutes              Int?
   hrvMs                        Float? // heartRateVariabilitySDNN, daily average
+  // Zero-effort extras (2026-08-29) — the watch measures these on its own.
+  respiratoryRateBrpm          Float?
+  wristTempC                   Float?
+  vo2Max                       Float?
+  spo2Pct                      Float?
   source                       String   @default("apple_health")
   rawData                      Json?
   createdAt                    DateTime @default(now())
@@ -1050,7 +1110,28 @@ model PersonalRecord {
   updatedAt     DateTime @updatedAt
 
   @@unique([exercise, kind])
+  // 2026-08-29 (speed round): today/train/activity filter and sort on
+  // these; both were sequential scans.
+  @@index([kind, achievedAt])
+  @@index([workoutLogId])
   @@map("personal_records")
+}
+
+// One-time OAuth authorization codes (2026-08-29, the Claude connector's
+// sign-in flow). Short-lived, single-use; the real credential they exchange
+// into is a DeviceSession.
+model OAuthCode {
+  id            String    @id @default(uuid())
+  codeHash      String    @unique
+  clientId      String
+  redirectUri   String
+  codeChallenge String
+  scope         String?
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@map("oauth_codes")
 }
 
 model ChatMessage {
@@ -1077,6 +1158,7 @@ model Sequence {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  @@index([isArchived, updatedAt])
   @@map("sequences")
 }
 

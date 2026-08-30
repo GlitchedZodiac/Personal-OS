@@ -26,7 +26,7 @@ struct SequencesListView: View {
                         .font(Theme.display(16))
                         .foregroundStyle(Theme.textBright)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.8)
                 }
                 .padding(.horizontal, 4)
 
@@ -34,6 +34,38 @@ struct SequencesListView: View {
                     .font(Theme.text(8.5))
                     .foregroundStyle(Theme.textMuted)
                     .padding(.horizontal, 6)
+
+                // Round 3 §08: Weight Training gets a free session — the
+                // kettlebell machinery (crown weight, tap reps, PR line)
+                // with 2.5 kg plate detents instead of bell stops.
+                if discipline == .weights {
+                    Button {
+                        Task {
+                            await model.startWorkout(.kettlebell, plateDetents: true)
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            ZStack {
+                                Circle().fill(Theme.accentDim)
+                                BarbellGlyph(color: Theme.accent, size: 15)
+                            }
+                            .frame(width: 31, height: 31)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("Free session")
+                                    .font(Theme.text(11.5, weight: .semibold))
+                                    .foregroundStyle(Theme.textBright)
+                                Text("bar · plates · PRs")
+                                    .font(Theme.text(8.5))
+                                    .foregroundStyle(Theme.textTertiary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 9)
+                        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 ForEach(routines) { sequence in
                     Button {
@@ -73,7 +105,7 @@ struct SequencesListView: View {
 
     private func recipe(for sequence: SequenceDef) -> String {
         let parts = sequence.steps.prefix(2).map { step in
-            step.reps.map { "\($0) \(shortName(step))" } ?? shortName(step)
+            step.dosePrefix + shortName(step)
         }
         let cadence = sequence.kind == "emom" ? "every :60" : sequence.kind
         return (parts + [cadence]).joined(separator: " · ")
@@ -111,7 +143,7 @@ struct SequenceDetailView: View {
                         .font(Theme.display(12.5))
                         .foregroundStyle(Theme.textBright)
                         .lineLimit(2)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.8)
                 }
                 .padding(.horizontal, 4)
 
@@ -169,7 +201,7 @@ struct SequenceDetailView: View {
                                             .font(Theme.text(10.5, weight: .medium))
                                             .foregroundStyle(Theme.textPrimary)
                                             .lineLimit(1)
-                                            .minimumScaleFactor(0.7)
+                                            .minimumScaleFactor(0.8)
                                         Spacer(minLength: 4)
                                         Text(weightLabel(exercise.id))
                                             .font(Theme.numeric(11, weight: .semibold))
@@ -228,7 +260,7 @@ struct SequenceDetailView: View {
     }
 
     private func stepLine(_ step: SequenceStep) -> String {
-        var line = step.reps.map { "\($0) " } ?? ""
+        var line = step.dosePrefix
         line += step.exerciseName.lowercased()
         if let seconds = step.seconds { line += " · \(seconds)s" }
         if let weight = model.effectiveWeight(for: step) { line += " · \(Fmt.kg(weight)) kg" }
@@ -257,7 +289,7 @@ struct WeightDialSheet: View {
                 .font(Theme.text(10.5, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.8)
             Spacer(minLength: 0)
             Text(Fmt.kg(crownWeight))
                 .font(Theme.numeric(40))
@@ -310,6 +342,8 @@ struct SequenceLiveView: View {
             ControlsPage(recorder: model.recorder, kind: .kettlebell, isSequence: true).tag(1)
         }
         .tabViewStyle(.verticalPage)
+        .overlay { ZoneBloomOverlay(recorder: model.recorder) }
+        .overlay { halfwayOverlay }
         .overlay {
             if model.idleNudgeActive {
                 IdleNudgeOverlay(onEnd: { Task { await model.endSequenceEarly() } })
@@ -318,11 +352,64 @@ struct SequenceLiveView: View {
         .overlay {
             CountdownOverlay()
         }
+        .onChange(of: model.emomRound) { _, round in
+            // Round 3 §07: the halfway moment rides the round-N/2 boundary.
+            let total = max(sequence.durationMinutes ?? sequence.steps.count, 1)
+            guard sequence.kind == "emom", total >= 4, round == total / 2 + 1 else { return }
+            playHalfway(down: round - 1, toGo: total - (round - 1))
+        }
     }
 
     /// §10 AOD twin ("Always-On dimmed state"): ring 13→4 px in the dimmed
     /// palette, countdown → session clock, weight + HR leave, move stays.
     @Environment(\.isLuminanceReduced) private var dimmed
+
+    // §07 halfway state — copy rises 12 px in, blush diamond sweeps at
+    // y 200 px over 700 ms, whole moment 1.4 s, haptic .success.
+    @State private var halfwayCopy: (down: Int, toGo: Int)?
+    @State private var halfwayRisen = false
+    @State private var diamondSwept = false
+
+    private func playHalfway(down: Int, toGo: Int) {
+        guard !dimmed else { return }
+        Haptics.key(.success)
+        halfwayCopy = (down, toGo)
+        halfwayRisen = false
+        diamondSwept = false
+        withAnimation(Theme.Motion.arrival) { halfwayRisen = true }
+        withAnimation(.linear(duration: 0.7)) { diamondSwept = true }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            withAnimation(Theme.Motion.exit) { halfwayRisen = false }
+            try? await Task.sleep(nanoseconds: 260_000_000)
+            halfwayCopy = nil
+        }
+    }
+
+    @ViewBuilder
+    private var halfwayOverlay: some View {
+        if let copy = halfwayCopy, !dimmed {
+            let width = WKInterfaceDevice.current().screenBounds.width
+            ZStack {
+                PitayaMark(size: Theme.r3(26), color: Theme.prText)
+                    .position(
+                        x: diamondSwept ? width + Theme.r3(30) : -Theme.r3(30),
+                        y: Theme.r3(200)
+                    )
+                VStack(spacing: Theme.r3(6)) {
+                    Text("HALFWAY")
+                        .font(Theme.r3Display(34, weight: .bold))
+                        .foregroundStyle(Theme.prText)
+                    Text("\(copy.down) down · \(copy.toGo) to go")
+                        .font(Theme.r3Text(13, weight: .semibold))
+                        .foregroundStyle(Theme.accentWashSub)
+                }
+                .offset(y: halfwayRisen ? 0 : Theme.r3(12))
+                .opacity(halfwayRisen ? 1 : 0)
+            }
+            .allowsHitTesting(false)
+        }
+    }
 
     private var runner: some View {
         let totalRounds = max(sequence.durationMinutes ?? sequence.steps.count, 1)
@@ -363,18 +450,18 @@ struct SequenceLiveView: View {
                         .font(Theme.display(12, weight: .semibold))
                         .foregroundStyle(dimmed ? Color(hex: 0x8A5B6E) : Theme.accent)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.65)
+                        .minimumScaleFactor(0.8)
                         .id(model.emomRound)
                         .transition(.offset(y: Theme.px(10)).combined(with: .opacity))
                         .animation(dimmed ? nil : .spring(duration: 0.35), value: model.emomRound)
                 }
                 if !dimmed {
                     if let next = model.nextStep(of: sequence) {
-                        Text("next · \(next.reps.map { "\($0) " } ?? "")\(next.exerciseName.lowercased())")
+                        Text("next · \(next.dosePrefix)\(next.exerciseName.lowercased())")
                             .font(Theme.text(8.5))
                             .foregroundStyle(Theme.textTertiary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                            .minimumScaleFactor(0.8)
                     }
                     HStack(spacing: 4) {
                         BeatingHeart(size: 10)
@@ -415,7 +502,7 @@ struct SequenceLiveView: View {
         let name = step.exerciseName
             .replacingOccurrences(of: "Kettlebell ", with: "")
             .uppercased()
-        var label = step.reps.map { "\($0) \(name)" } ?? name
+        var label = step.dosePrefix.isEmpty ? name : step.dosePrefix + name
         if let weight = model.effectiveWeight(for: step) {
             label += " · \(Fmt.kg(weight))KG"
         }
@@ -461,7 +548,13 @@ struct CircuitRunnerPage: View {
             Spacer(minLength: 2)
 
             if let step {
-                if let reps = step.reps {
+                if step.isToFailure {
+                    // The big numeral slot still has to say something, or a
+                    // to-failure step reads as a movement with no prescription.
+                    Text("MAX")
+                        .font(Theme.display(30, weight: .bold))
+                        .foregroundStyle(Theme.textBright)
+                } else if let reps = step.reps {
                     Text("\(reps)")
                         .font(Theme.numeric(38))
                         .foregroundStyle(Theme.textBright)
@@ -470,7 +563,7 @@ struct CircuitRunnerPage: View {
                     .font(Theme.display(13, weight: .semibold))
                     .foregroundStyle(Theme.accent)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.8)
                     .multilineTextAlignment(.center)
                 if let weight = model.effectiveWeight(for: step) {
                     Text("\(Fmt.kg(weight)) kg")
@@ -522,7 +615,7 @@ struct CircuitRunnerPage: View {
                         .font(Theme.text(9))
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.8)
                 }
             } else {
                 VStack(spacing: 2) {
@@ -545,13 +638,18 @@ struct CircuitRunnerPage: View {
                     Text("round \(model.circuitRound + 1) next")
                         .font(Theme.text(9))
                         .foregroundStyle(Theme.textSecondary)
-                    Button("Skip") {
+                    // Legibility floor (2026-08-29): "the skip was a TINY
+                    // button" — the label was a bare ≈24×14 pt hit region.
+                    // Sizing lives INSIDE the label so the hit area grows.
+                    Button {
                         model.skipCircuitRest()
+                    } label: {
+                        Text("Skip")
+                            .font(Theme.text(11, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                            .pitayaTappable(minWidth: 84)
                     }
                     .buttonStyle(.plain)
-                    .font(Theme.text(10, weight: .semibold))
-                    .foregroundStyle(Theme.accent)
-                    .padding(.top, 4)
                     // §05: on the rest ring, Double Tap skips the rest.
                     .handGestureShortcut(.primaryAction)
                 }
@@ -585,11 +683,13 @@ struct IdleNudgeOverlay: View {
                     .font(Theme.text(9))
                     .foregroundStyle(Theme.textTertiary)
                 PitayaCTA(title: "Keep going") { model.keepTraining() }
-                Button("End workout", action: onEnd)
-                    .buttonStyle(.plain)
-                    .font(Theme.text(10, weight: .semibold))
-                    .foregroundStyle(Theme.danger)
-                    .padding(.top, 2)
+                Button(action: onEnd) {
+                    Text("End workout")
+                        .font(Theme.text(11, weight: .semibold))
+                        .foregroundStyle(Theme.danger)
+                        .pitayaTappable(minWidth: 120)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 12)
         }

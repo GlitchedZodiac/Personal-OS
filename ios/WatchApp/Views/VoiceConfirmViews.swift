@@ -85,7 +85,7 @@ struct VoiceFoodConfirmView: View {
                 .font(Theme.wDisplay(11))
                 .foregroundStyle(Theme.textBright)
                 .lineLimit(3)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.8)
                 .padding(.top, Theme.px(12))
 
             Text("Pitaya will price it")

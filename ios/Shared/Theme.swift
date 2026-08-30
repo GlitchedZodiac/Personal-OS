@@ -135,6 +135,89 @@ public enum Theme {
     /// to the watch's ~198pt width.
     public static let cardRadius: CGFloat = 13
     public static let chipRadius: CGFloat = 50
+
+    // ── Round 3 (pitaya-watch-round3.dc.html, §00–§09) ────────────────
+    // The Round 3 canvas is 396×484 px @2x — the 45 mm screen's PHYSICAL
+    // scale — so GEOMETRY extraction is exact: pt = px/2. TYPE is different
+    // since 2026-08-29 (Michael: "the new menus are incredibly tiny"):
+    // halving alone dropped BOTH legibility factors the rest of the app
+    // wears (wristScale 1.25 × typeScale 1.125 = 1.406) — r3Text(14) came
+    // out 7.0 pt, smaller than text(8)'s 9.0. The LEGIBILITY CURVE below is
+    // the codified standard (see CLAUDE.md → Watch legibility floor):
+    // small text gets the same +40% the app already wears, capped at 12 pt
+    // so the curve stays continuous and heroes keep their designed size.
+    // 41 mm adaptations are explicit per section.
+
+    /// Round 3 geometry: design px → pt, exactly halved. Geometry only —
+    /// type goes through r3TypeSize.
+    public static func r3(_ designPx: CGFloat) -> CGFloat { designPx / 2 }
+
+    /// The legibility curve: half ≥ 12 pt is design-exact; below that,
+    /// boost ×1.40625 (the app's wrist+type factor), ceiling 12, floor 7.
+    /// Monotonic and continuous — a design ramp stays a ramp.
+    public static func r3TypeSize(_ designPx: CGFloat) -> CGFloat {
+        let half = designPx / 2
+        if half >= 12 { return half }
+        return max(min(half * wristScale * typeScale, 12), 7)
+    }
+
+    public static func r3Display(_ px: CGFloat, weight: Font.Weight = .bold) -> Font {
+        .custom(familjen(weight), size: r3TypeSize(px))
+    }
+
+    public static func r3Text(_ px: CGFloat, weight: Font.Weight = .regular) -> Font {
+        .custom(instrument(weight), size: r3TypeSize(px))
+    }
+
+    public static func r3Numeric(_ px: CGFloat, weight: Font.Weight = .bold) -> Font {
+        .custom(familjen(weight), size: r3TypeSize(px)).monospacedDigit()
+    }
+
+    // ── Tap floor (2026-08-29, the legibility standard's other half) ──
+    /// No tappable control renders a hit area shorter than this. 38 pt is
+    /// the wrist-scale floor (PitayaCTA is 42; Apple's phone floor is 44 on
+    /// a screen twice this size).
+    public static let minTap: CGFloat = 38
+
+    // Zone ramp, cool → hot (§00, served boundaries ride /api/mobile/zones).
+    // Chip text on a zone fill is ALWAYS zoneChipText.
+    public static let zone1 = Color(hex: 0x7FA6C9)
+    public static let zone2 = Color(hex: 0x8FBF9C)
+    public static let zone3 = Color(hex: 0xC97D9C)
+    public static let zone4 = Color(hex: 0xDC74A0)
+    public static let zone5 = Color(hex: 0xFFD9E8)
+    public static let zoneDim1 = Color(hex: 0x14212B)
+    public static let zoneDim2 = Color(hex: 0x1E2A22)
+    public static let zoneDim3 = Color(hex: 0x26161C)
+    public static let zoneDim4 = Color(hex: 0x2A1420)
+    public static let zoneDim5 = Color(hex: 0x3D1526)
+    public static let zoneChipText = Color(hex: 0x131216)
+
+    public static func zoneFill(_ zone: Int) -> Color {
+        [zone1, zone2, zone3, zone4, zone5][max(1, min(zone, 5)) - 1]
+    }
+
+    public static func zoneDim(_ zone: Int) -> Color {
+        [zoneDim1, zoneDim2, zoneDim3, zoneDim4, zoneDim5][max(1, min(zone, 5)) - 1]
+    }
+
+    public static let zoneNames = ["RECOVERY", "EASY", "AEROBIC", "THRESHOLD", "MAX"]
+
+    /// §00 motion ladder — every Round 3 animation uses one of these rungs.
+    public enum Motion {
+        /// attack 90 ms ease-out
+        public static let attack = Animation.easeOut(duration: 0.09)
+        /// wash-in 140 ms ease-out
+        public static let washIn = Animation.easeOut(duration: 0.14)
+        /// arrival spring 350 ms · cubic-bezier(.34,1.4,.5,1)
+        public static let arrival = Animation.timingCurve(0.34, 1.4, 0.5, 1, duration: 0.35)
+        /// settle/morph 450 ms ease-in-out
+        public static let settle = Animation.easeInOut(duration: 0.45)
+        /// exit 260 ms ease-in
+        public static let exit = Animation.easeIn(duration: 0.26)
+        /// hold ceiling — nothing full-screen lives past 2 s; blooms ≤ 900 ms.
+        public static let holdMax: TimeInterval = 0.9
+    }
 }
 
 public extension Color {
@@ -146,6 +229,21 @@ public extension Color {
             blue: Double(hex & 0xFF) / 255,
             opacity: 1
         )
+    }
+}
+
+extension View {
+    /// The tap-floor enforcer (CLAUDE.md → Watch legibility floor): apply
+    /// INSIDE a Button's label so the whole padded region — including the
+    /// invisible slack up to the floor — becomes the hit area. A
+    /// `.buttonStyle(.plain)` control must either be a PitayaCTA/tile or
+    /// wear this; bare text buttons (the old rest-screen Skip: ≈24×14 pt)
+    /// are the defect class this exists to kill.
+    public func pitayaTappable(
+        minWidth: CGFloat? = nil, minHeight: CGFloat = Theme.minTap
+    ) -> some View {
+        frame(minWidth: minWidth, minHeight: minHeight)
+            .contentShape(Rectangle())
     }
 }
 

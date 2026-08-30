@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { after, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createOpaqueToken, hashOpaqueToken } from "@/lib/security";
 
@@ -13,6 +13,11 @@ export async function createDeviceSession(input: {
   deviceLabel: string;
   platform?: string | null;
   deviceType?: string | null;
+  /// MCP connector tokens (2026-08-29) live longer than phone sessions —
+  /// a pasted claude.ai credential shouldn't die monthly. Revocation is
+  /// the control, not expiry.
+  accessTtlDays?: number;
+  refreshTtlDays?: number;
 }) {
   const accessToken = createOpaqueToken();
   const refreshToken = createOpaqueToken();
@@ -24,8 +29,8 @@ export async function createDeviceSession(input: {
       deviceType: input.deviceType || null,
       tokenHash: hashOpaqueToken(accessToken),
       refreshTokenHash: hashOpaqueToken(refreshToken),
-      expiresAt: addDays(SESSION_TTL_DAYS),
-      refreshExpiresAt: addDays(REFRESH_TTL_DAYS),
+      expiresAt: addDays(input.accessTtlDays ?? SESSION_TTL_DAYS),
+      refreshExpiresAt: addDays(input.refreshTtlDays ?? REFRESH_TTL_DAYS),
       lastSeenAt: new Date(),
     },
   });
@@ -72,8 +77,15 @@ export async function refreshDeviceSession(refreshToken: string) {
 
 export function getBearerToken(request: NextRequest) {
   const auth = request.headers.get("authorization") || "";
-  if (!auth.toLowerCase().startsWith("bearer ")) return null;
-  return auth.slice(7).trim() || null;
+  if (auth.toLowerCase().startsWith("bearer ")) {
+    return auth.slice(7).trim() || null;
+  }
+  // claude.ai's connector dialog can't send a custom Authorization header —
+  // its "no-OAuth" path sends the token as an extra request header instead
+  // (2026-08-29). Accept the two conventional names.
+  const apiToken =
+    request.headers.get("api-token") || request.headers.get("x-api-key") || "";
+  return apiToken.trim() || null;
 }
 
 export async function requireMobileSession(request: NextRequest) {
@@ -91,10 +103,13 @@ export async function requireMobileSession(request: NextRequest) {
 
   if (!session) return null;
 
-  await prisma.deviceSession.update({
-    where: { id: session.id },
-    data: { lastSeenAt: new Date() },
-  });
+  // lastSeenAt is bookkeeping — flush it after the response instead of taxing
+  // every mobile request with a second DB round trip before any real work.
+  after(() =>
+    prisma.deviceSession
+      .update({ where: { id: session.id }, data: { lastSeenAt: new Date() } })
+      .catch(() => {})
+  );
 
   return session;
 }

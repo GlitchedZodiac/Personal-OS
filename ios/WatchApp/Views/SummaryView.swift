@@ -11,6 +11,8 @@ import SwiftUI
 struct SummaryView: View {
     @EnvironmentObject private var model: AppModel
     @State private var confirmDiscard = false
+    /// §06 fail shake: each failure adds three ±6 px cycles over 260 ms.
+    @State private var failShakes = 0
 
     private var isSaved: Bool {
         switch model.syncState {
@@ -31,7 +33,18 @@ struct SummaryView: View {
                     tapeCard(summary)
                 }
 
-                if isSaved {
+                if model.syncState == .syncing {
+                    // Round 3 §06: busy, un-tappable, diamond spinning — the
+                    // pill dims to 65% accentDeep and the label reads blush.
+                    PitayaCTA(
+                        title: "Saving…",
+                        background: Color(hex: 0x6B2740),
+                        titleColor: Theme.accentWashSub,
+                        primary: true,
+                        isBusy: true
+                    ) {}
+                        .padding(.top, Theme.px(12))
+                } else if isSaved {
                     Text("Full breakdown in Pitaya")
                         .font(Theme.wText(5.75))
                         .foregroundStyle(Theme.textMuted)
@@ -40,10 +53,15 @@ struct SummaryView: View {
                     PitayaCTA(title: "Done", primary: true) { model.dismissSummary() }
                         .padding(.top, Theme.px(10))
                 } else {
-                    // §05: on the summary, Double Tap saves.
+                    // §05: on the summary, Double Tap saves. The click lands
+                    // on the tap itself — the visible "Saving…" flip is
+                    // synchronous in saveWorkout, but fingers want an ack.
+                    // §06: a failed save restores instantly and SHAKES.
                     PitayaCTA(title: "Save workout", primary: true) {
+                        Haptics.minor(.click)
                         Task { await model.saveWorkout() }
                     }
+                    .modifier(ShakeEffect(travel: CGFloat(failShakes) * 3))
                     .padding(.top, Theme.px(12))
                     Button {
                         confirmDiscard = true
@@ -67,6 +85,13 @@ struct SummaryView: View {
             Button("Discard", role: .destructive) { model.discardWorkout() }
             Button("Keep", role: .cancel) {}
         }
+        // §06: the CTA morphs between its states in 220 ms.
+        .animation(.easeInOut(duration: 0.22), value: model.syncState)
+        .onChange(of: model.syncState) { _, state in
+            if case .failed = state {
+                withAnimation(.linear(duration: 0.26)) { failShakes += 1 }
+            }
+        }
     }
 
     // MARK: - Header (1g: mint check · Saved · synced to Pitaya)
@@ -79,6 +104,11 @@ struct SummaryView: View {
                     paths: Glyphs.check, style: .stroke(width: 3),
                     color: isSaved ? Theme.mint : Theme.textTertiary, size: Theme.px(15)
                 )
+                // §07 streak seeds — three diamonds arc off the check (PR
+                // banners win; the model only sets this when none is up).
+                if model.streakCelebration != nil {
+                    StreakSeeds()
+                }
             }
             .frame(width: Theme.px(34), height: Theme.px(34))
 
@@ -104,14 +134,21 @@ struct SummaryView: View {
                     .font(Theme.wText(5.75)).foregroundStyle(Theme.textTertiary)
             }
         case .synced:
-            Text("synced to Pitaya")
-                .font(Theme.wText(5.75)).foregroundStyle(Theme.mint)
+            // §07: an extended training streak signs the sync line.
+            Text(
+                model.streakCelebration.map { "synced to Pitaya ◆ day \($0)" }
+                    ?? "synced to Pitaya"
+            )
+            .font(Theme.wText(5.75)).foregroundStyle(Theme.mint)
         case .queued:
             Text("offline · queued to sync")
                 .font(Theme.wText(5.75)).foregroundStyle(Theme.textTertiary)
         case .failed(let message):
-            Text(message)
-                .font(Theme.wText(5.75)).foregroundStyle(Theme.danger)
+            // §06: the failure line leads with its ! and slides in with the
+            // container's 220 ms morph.
+            Text("! \(message)")
+                .font(Theme.wText(5.75, weight: .semibold)).foregroundStyle(Theme.danger)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
         case .idle:
             EmptyView()
         }
@@ -213,7 +250,7 @@ struct SummaryView: View {
                     .font(Theme.wDisplay(11))
                     .foregroundStyle(color)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                    .minimumScaleFactor(0.8)
                 if let delta {
                     Text(deltaText(delta))
                         .font(Theme.wText(5.5, weight: .semibold))

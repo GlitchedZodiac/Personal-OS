@@ -197,6 +197,9 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
     public let source: String
     public let syncStatus: String
     public let deviceType: String?
+    /// §Trails (2026-08-28, additive): set when the session started from a
+    /// saved trail. Optional so queue files written by older builds decode.
+    public let trailId: String?
 
     public init(
         externalId: String = UUID().uuidString,
@@ -217,7 +220,8 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         routeData: WorkoutRouteData? = nil,
         source: String = "mobile",
         syncStatus: String = "synced",
-        deviceType: String? = "apple_watch"
+        deviceType: String? = "apple_watch",
+        trailId: String? = nil
     ) {
         self.externalId = externalId
         self.externalSource = externalSource
@@ -238,7 +242,66 @@ public struct WorkoutSyncItem: Codable, Hashable, Identifiable, Sendable {
         self.source = source
         self.syncStatus = syncStatus
         self.deviceType = deviceType
+        self.trailId = trailId
     }
+}
+
+// MARK: - Named trails (§Trails, 2026-08-28)
+
+/// GET /api/mobile/trails row — lib/trails.ts TrailPayload field names are
+/// the contract; renames go through deferred-items, never adapted here.
+public struct TrailSummary: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    public let name: String
+    public let aliases: [String]
+    public let distanceMeters: Double?
+    public let elevationGainM: Double?
+    public let summaryPolyline: String?
+    public let startLat: Double?
+    public let startLng: Double?
+    /// Direction awareness (2026-08-29): where the trail ENDS.
+    public let endLat: Double?
+    public let endLng: Double?
+    public let runCount: Int
+    public let lastRun: TrailLastRunPayload?
+    /// Round 3 §05: present only on near-ranked queries — "94% match".
+    public let matchPct: Int?
+}
+
+public struct TrailLastRunPayload: Codable, Hashable, Sendable {
+    public let workoutId: String
+    public let workoutExternalId: String?
+    public let startedAt: Date
+    public let durationMinutes: Int
+    public let distanceMeters: Double?
+    public let elevationGainM: Double?
+    public let avgHeartRateBpm: Int?
+}
+
+public struct TrailListResponse: Codable, Sendable {
+    public let trails: [TrailSummary]
+    public let updatedAt: Date
+}
+
+public struct TrailSaveRequest: Codable, Sendable {
+    public let name: String?
+    public let trailId: String?
+    public let workoutExternalId: String?
+    public init(name: String? = nil, trailId: String? = nil, workoutExternalId: String? = nil) {
+        self.name = name
+        self.trailId = trailId
+        self.workoutExternalId = workoutExternalId
+    }
+}
+
+public struct TrailSaveResponse: Codable, Sendable {
+    public struct Ref: Codable, Sendable {
+        public let id: String
+        public let name: String
+    }
+    public let trail: Ref
+    public let created: Bool
+    public let linked: Bool
 }
 
 public struct WorkoutSyncRequest: Codable, Sendable {
@@ -380,17 +443,34 @@ public struct SequenceStep: Codable, Hashable, Sendable {
     public let exerciseName: String
     public let reps: Int?
     public let seconds: Int?
+    /// Work the set to failure rather than to a rep count or a clock.
+    /// Added 2026-08-26 — a step now carries exactly one of reps, seconds or
+    /// toFailure. Optional so a routine saved before this decodes unchanged.
+    public let toFailure: Bool?
     public let weightKg: Double?
     public let restSeconds: Int?
 
+    /// Whether this step stops at failure rather than at a number.
+    public var isToFailure: Bool { toFailure == true }
+
+    /// Leading dose for a watch label — "10 ", "MAX ", or "".
+    /// "MAX" rather than "to failure": the wrist has no room for three words,
+    /// and it is the word he would say mid-set.
+    public var dosePrefix: String {
+        if isToFailure { return "MAX " }
+        if let reps { return "\(reps) " }
+        return ""
+    }
+
     public init(
         exercise: String, exerciseName: String, reps: Int?, seconds: Int?,
-        weightKg: Double?, restSeconds: Int?
+        toFailure: Bool? = nil, weightKg: Double?, restSeconds: Int?
     ) {
         self.exercise = exercise
         self.exerciseName = exerciseName
         self.reps = reps
         self.seconds = seconds
+        self.toFailure = toFailure
         self.weightKg = weightKg
         self.restSeconds = restSeconds
     }
@@ -466,6 +546,15 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     /// Barometric climb, mirrored into metricsData for the phone's
     /// freestyle analytics (also sent top-level on the sync item).
     public let elevationGainM: Double?
+    /// Round 3 §07 (additive): per-km seconds banked live on the wrist —
+    /// distinct from the server's GPS-derived routeAnalytics.splits.
+    public let splits: [Int]?
+    /// Round 3 §07 (additive): the 60 s HR-recovery drop and its window.
+    public let hrrDelta: Int?
+    public let hrrSeconds: Int?
+    /// 2026-08-29 (additive): session-mean step cadence from CMPedometer —
+    /// collected live since Round 3, persisted now (Strava parity).
+    public let avgCadenceSpm: Int?
 
     public init(
         sequenceId: String? = nil, sequenceName: String? = nil,
@@ -473,7 +562,11 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
         hrStream: [Int]? = nil, timeStream: [Int]? = nil,
         altitudeStream: [Double]? = nil,
         timeInZones: WorkoutZoneBreakdown? = nil,
-        elevationGainM: Double? = nil
+        elevationGainM: Double? = nil,
+        splits: [Int]? = nil,
+        hrrDelta: Int? = nil,
+        hrrSeconds: Int? = nil,
+        avgCadenceSpm: Int? = nil
     ) {
         self.sequenceId = sequenceId
         self.sequenceName = sequenceName
@@ -484,11 +577,47 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
         self.altitudeStream = altitudeStream
         self.timeInZones = timeInZones
         self.elevationGainM = elevationGainM
+        self.splits = splits
+        self.hrrDelta = hrrDelta
+        self.hrrSeconds = hrrSeconds
+        self.avgCadenceSpm = avgCadenceSpm
     }
 
     public var isEmpty: Bool {
         sequenceId == nil && stepSeconds == nil && hrStream == nil
-            && timeInZones == nil
+            && timeInZones == nil && splits == nil && hrrDelta == nil
+    }
+
+    /// Round 3 §07: the HRR numbers land up to 60 s after the item was
+    /// built — clone with the capture attached.
+    public func withHRR(delta: Int, seconds: Int) -> WorkoutMetricsData {
+        WorkoutMetricsData(
+            sequenceId: sequenceId, sequenceName: sequenceName,
+            roundsCompleted: roundsCompleted, stepSeconds: stepSeconds,
+            hrStream: hrStream, timeStream: timeStream,
+            altitudeStream: altitudeStream, timeInZones: timeInZones,
+            elevationGainM: elevationGainM, splits: splits,
+            hrrDelta: delta, hrrSeconds: seconds,
+            avgCadenceSpm: avgCadenceSpm
+        )
+    }
+}
+
+public extension WorkoutSyncItem {
+    /// Same item, new metrics — the externalId survives, so a re-enqueue
+    /// after sync lands as an idempotent UPDATE on the server.
+    func replacingMetrics(_ metricsData: WorkoutMetricsData?) -> WorkoutSyncItem {
+        WorkoutSyncItem(
+            externalId: externalId, externalSource: externalSource,
+            startedAt: startedAt, endedAt: endedAt,
+            durationMinutes: durationMinutes, workoutType: workoutType,
+            description: description, caloriesBurned: caloriesBurned,
+            distanceMeters: distanceMeters, stepCount: stepCount,
+            avgHeartRateBpm: avgHeartRateBpm, maxHeartRateBpm: maxHeartRateBpm,
+            elevationGainM: elevationGainM, exercises: exercises,
+            metricsData: metricsData, routeData: routeData, source: source,
+            syncStatus: syncStatus, deviceType: deviceType, trailId: trailId
+        )
     }
 }
 
@@ -514,11 +643,77 @@ public struct CustomExerciseListResponse: Codable, Sendable {
 public struct WeightSamplePayload: Codable, Hashable, Sendable {
     public let measuredAt: Date
     public let weightKg: Double
+    /// Composition the scale writes alongside the weigh-in. Widened 2026-08-26
+    /// — before that the app never asked HealthKit for ANY of these, so every
+    /// body-fat and BMI reading his scale produced was thrown away.
+    ///
+    /// All optional, and JSONEncoder omits nils, so an older server that only
+    /// knows measuredAt+weightKg still receives exactly what it used to.
+    ///
+    /// NOTE: HealthKit has no sample type for muscle mass, bone mass, body
+    /// water, protein, visceral fat, BMR or metabolic age. Those columns exist
+    /// in body_measurements but can only ever be filled by the VeSync CSV
+    /// import — do not add fields here expecting them to arrive.
+    public let bodyFatPct: Double?
+    public let bmi: Double?
+    public let fatFreeWeightKg: Double?
+    public let waistCm: Double?
+    public let heartRateBpm: Int?
 
-    public init(measuredAt: Date, weightKg: Double) {
+    public init(
+        measuredAt: Date,
+        weightKg: Double,
+        bodyFatPct: Double? = nil,
+        bmi: Double? = nil,
+        fatFreeWeightKg: Double? = nil,
+        waistCm: Double? = nil,
+        heartRateBpm: Int? = nil
+    ) {
         self.measuredAt = measuredAt
         self.weightKg = weightKg
+        self.bodyFatPct = bodyFatPct
+        self.bmi = bmi
+        self.fatFreeWeightKg = fatFreeWeightKg
+        self.waistCm = waistCm
+        self.heartRateBpm = heartRateBpm
     }
+}
+
+/// What the server reports back about a weigh-in push. Every field optional so
+/// an older server's response still decodes.
+///
+/// TRAP: PitayaJSON.decoder()'s date strategy THROWS on an unrecognised date,
+/// and the daily route spreads the whole snapshot row (createdAt, updatedAt)
+/// into its response. Undeclared keys are never decoded, so this is safe — but
+/// do not casually add a `Date` field here.
+public struct BodySyncCounts: Decodable, Hashable, Sendable {
+    public let weightsImported: Int?
+    public let weightsMerged: Int?
+    public let weightsSkipped: Int?
+    public let weightsInvalid: Int?
+
+    public var landed: Int { (weightsImported ?? 0) + (weightsMerged ?? 0) }
+}
+
+/// Request/response for the historical backfill endpoint.
+public struct BodySamplesRequest: Encodable, Sendable {
+    public let samples: [WeightSamplePayload]
+    public let source: String
+
+    public init(samples: [WeightSamplePayload], source: String = "apple_health") {
+        self.samples = samples
+        self.source = source
+    }
+}
+
+public struct BodySamplesResponse: Decodable, Sendable {
+    public let received: Int?
+    public let imported: Int?
+    public let merged: Int?
+    public let skipped: Int?
+    public let invalid: Int?
+
+    public var landed: Int { (imported ?? 0) + (merged ?? 0) }
 }
 
 public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {

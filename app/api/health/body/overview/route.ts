@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hasTapeWhere } from "@/lib/body-measurements";
 import { prisma } from "@/lib/prisma";
 import { getUserTimeZone } from "@/lib/server-timezone";
 import {
@@ -38,18 +39,11 @@ export async function GET(request: NextRequest) {
         orderBy: { measuredAt: "asc" },
         select: { measuredAt: true, weightKg: true },
       }),
+      // hasTapeWhere() covers all NINE dims — this list used to omit
+      // shouldersCm and forearmsCm, so a shoulders-only check-in never
+      // appeared on this screen.
       prisma.bodyMeasurement.findMany({
-        where: {
-          OR: [
-            { neckCm: { not: null } },
-            { chestCm: { not: null } },
-            { armsCm: { not: null } },
-            { waistCm: { not: null } },
-            { hipsCm: { not: null } },
-            { legsCm: { not: null } },
-            { calvesCm: { not: null } },
-          ],
-        },
+        where: hasTapeWhere(),
         orderBy: { measuredAt: "asc" },
       }),
       prisma.bodyMeasurement.findFirst({ orderBy: { measuredAt: "desc" } }),

@@ -1,7 +1,9 @@
-// Service Worker for Pitaya PWA — v4 (current IA: Today/Chat/Food/
+// Service Worker for Pitaya PWA — v5 (current IA: Today/Chat/Food/
 // Spirit/Journal/Settings; audited 2026-08-14: network-first keeps JS
-// fresh, cache is offline-fallback only)
-const CACHE_NAME = "pitaya-v4";
+// fresh, cache is offline-fallback only; v5 2026-08-28: cross-origin GETs
+// are no longer intercepted — the MapLibre trail view streams thousands of
+// map/terrain tiles that would have grown this cache without bound)
+const CACHE_NAME = "pitaya-v6";
 const OFFLINE_URL = "/dashboard";
 
 // Assets to cache on install — every URL must resolve or install fails,
@@ -48,8 +50,32 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (event.request.method !== "GET") return;
 
+  // Same-origin only: map/terrain tiles (and any other third-party asset)
+  // get the browser's normal HTTP caching, never this cache.
+  if (new URL(event.request.url).origin !== self.location.origin) return;
+
   // Skip API routes - always go to network
   if (event.request.url.includes("/api/")) return;
+
+  // Immutable build assets (2026-08-29, speed round): content-hashed
+  // filenames make cache-first strictly correct — first paint stops
+  // waiting on the network for chunks that can never change.
+  if (event.request.url.includes("/_next/static/")) {
+    event.respondWith(
+      caches.match(event.request).then(
+        (cached) =>
+          cached ||
+          fetch(event.request).then((response) => {
+            if (response.status === 200) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+            }
+            return response;
+          })
+      )
+    );
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)

@@ -27,6 +27,19 @@ public actor MobileAPIClient {
 
     public static let productionBaseURL = URL(string: "https://personal-os-plum.vercel.app")!
 
+    /// Stock URLSession waits 60 s before failing a dead request — on the
+    /// wrist that read as "Save did nothing" until it flipped to queued.
+    /// Fail fast into the honest offline state instead; the disk queue plus
+    /// the server's unique (externalSource, externalId) upsert make every
+    /// retry free.
+    public static let tunedSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 60
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }()
+
     private let baseURL: URL
     private let session: URLSession
     private let sessionStore: any SessionStore
@@ -35,7 +48,7 @@ public actor MobileAPIClient {
 
     public init(
         baseURL: URL = MobileAPIClient.productionBaseURL,
-        session: URLSession = .shared,
+        session: URLSession = MobileAPIClient.tunedSession,
         sessionStore: any SessionStore
     ) {
         self.baseURL = baseURL
@@ -101,6 +114,40 @@ public actor MobileAPIClient {
         )
     }
 
+    // MARK: - Trails (§Trails, 2026-08-28)
+
+    /// Saved trails, optionally ranked by proximity to a just-finished
+    /// track's start (the "save this track?" suggestions).
+    public func fetchTrails(
+        nearLat: Double? = nil, nearLng: Double? = nil, distanceMeters: Double? = nil
+    ) async throws -> TrailListResponse {
+        var query: [URLQueryItem] = []
+        if let nearLat { query.append(URLQueryItem(name: "nearLat", value: String(nearLat))) }
+        if let nearLng { query.append(URLQueryItem(name: "nearLng", value: String(nearLng))) }
+        if let distanceMeters {
+            query.append(URLQueryItem(name: "distanceMeters", value: String(distanceMeters)))
+        }
+        return try await send(
+            path: "/api/mobile/trails",
+            query: query,
+            method: "GET",
+            body: Optional<Int>.none,
+            authorized: true
+        )
+    }
+
+    /// Create-or-link by name, or link straight to a suggested trailId.
+    public func saveTrail(
+        name: String? = nil, trailId: String? = nil, workoutExternalId: String?
+    ) async throws -> TrailSaveResponse {
+        try await send(
+            path: "/api/mobile/trails",
+            method: "POST",
+            body: TrailSaveRequest(name: name, trailId: trailId, workoutExternalId: workoutExternalId),
+            authorized: true
+        )
+    }
+
     /// AI-created custom exercises — merged into the on-watch catalog.
     public func fetchExercises() async throws -> CustomExerciseListResponse {
         try await send(
@@ -147,10 +194,28 @@ public actor MobileAPIClient {
         )
     }
 
-    public func syncDailyHealth(_ payload: DailyHealthSnapshotPayload) async throws {
-        struct AnyResponse: Decodable {}
-        let _: AnyResponse = try await send(
+    /// Returns the server's real counts. This used to decode into
+    /// `struct AnyResponse: Decodable {}` and throw them away, which is why
+    /// nobody could tell whether a weigh-in had actually landed.
+    @discardableResult
+    public func syncDailyHealth(
+        _ payload: DailyHealthSnapshotPayload
+    ) async throws -> BodySyncCounts {
+        try await send(
             path: "/api/mobile/health/daily", method: "POST", body: payload, authorized: true
+        )
+    }
+
+    /// Weigh-ins at any date — the historical backfill path. Separate from the
+    /// daily route because that one upserts a day snapshot and would zero a
+    /// historical day's step count.
+    @discardableResult
+    public func postBodySamples(
+        _ samples: [WeightSamplePayload]
+    ) async throws -> BodySamplesResponse {
+        try await send(
+            path: "/api/mobile/health/body", method: "POST",
+            body: BodySamplesRequest(samples: samples), authorized: true
         )
     }
 

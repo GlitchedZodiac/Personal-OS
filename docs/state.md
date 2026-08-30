@@ -10,6 +10,863 @@ first. Update the top of this file whenever a session ships.
 ---
 
 **Superseded:** 2026-08-23 (SPIRIT ON IPAD — round 7: **he confirms the pen works** — "incredibly responsive". A splitting eraser, the dead margin explained and removed, a trimmed rail, honest chips, and a V2 design prompt written from a week of real use.)
+**Superseded (was current on main):** 2026-08-29d (V5 — PITAYA REPLACES STRAVA: native parity
+from the watch's own collection, the audit's data-quality bugs root-fixed
+with approved repairs run, sleep/HRV ingestion fixed + four new zero-effort
+metrics, and a real speed round on both the wrist and the phone. Earlier
+same day: MCP OAuth, the connector, and the v4 round below.)
+
+---
+
+## 2026-08-29d · v5 — better data, faster app (the audit round)
+
+His MCP connector audited Pitaya against Strava and handed back bugs +
+gaps; his directive: **no features, no effort retaining Strava — replace
+it.** Branch `claude/v5-data-speed`.
+
+**Native Strava parity (from our own collection):** every HR row now
+carries `relativeEffort` (Pitaya's own TRIMP when Strava never supplied
+sufferScore; 75 historical rows stamped) · `routeAnalytics` v3 adds
+derived `velocitySeries`/`gradeSeries` (≤120 pts, signed grade — the
+audit's #1 "streams" ask, zero new collection) · the wrist now persists
+`metricsData.avgCadenceSpm` (session mean, collected live since Round 3)
+· old Strava rows' real moving_time backs the MOVING TIME tile · the
+Settings Strava row says the truth: retired, watch records natively.
+
+**The one-shot that paid off:** the dormant refresh token still worked —
+`backfill-streams` v2 fetched latlng+streams for **all 80 historical
+Strava rows**, reconstructed `routeData.points[]`, and ran the SAME route
+analyzer watch rows get. The Apr 28 and Aug 1 Tres Cruces baselines now
+carry moving time, reconciled+grade-adjusted pace, VAM, breaks, absolute
+1,0xx–1,459 m altitude — and both were direction-verified (start gap
+158 m/13 m, end gap 12 m/7 m) and linked to the trail: **the Aug 27 climb's
+VS YOUR LAST RUN points at Aug 1, with Apr 28 in the run list — one
+algorithm across both systems.** (In-Pitaya moving times differ from
+Strava's own definition — consistent internally, which is what comparison
+needs.) No ongoing Strava dependency: a dead token would have reported
+`tokenDead` and stopped.
+
+**Data-quality (all repairs approved + run, rows printed in-session):**
+2 duplicate pairs deleted (pre-Aug-28 watch race residue with distinct
+minted ids) · 4 empty phantom starts + 1 stray smoke row deleted (the
+Aug 22 stub with logged swings KEPT) · the Tres Cruces descent unlinked ·
+the pending Aug-28 route-leak SQL run (9 routes, 4 distances, 3 literal
+nulls). Guards so none of it recurs: a ±120 s content-signature
+**double-submit guard** on the NULL-externalId paths (web POST + MCP) ·
+**phantom auto-discard** on the wrist (his pick: <4 min, no sets, <150 m
+→ silent discard; smokes exempt; PITAYA_SMOKE_PHANTOM passes both halves)
+· **direction-aware trails** (Trail.endLat/endLng seeded + backfilled,
+end-within-300 m in the matcher and the wrist ranking, profile check in
+lastRun/prevRun).
+
+**Zero-effort collection:** the daily upsert is null-preserving (a
+sleepless daytime sync erased good sleep rows — the audit's "every sleep
+field null" cause #1) · inBed-only nights count as time-in-bed ·
+HRV = overnight-window MEAN (18:00→noon) with daytime fallback · 3
+stranded pre-08-17 HRV days promoted from rawData · four new columns the
+watch measures alone: respiratoryRateBrpm, wristTempC, vo2Max, spo2Pct
+(companion read-types v3 → one re-prompt on his phone). The honest half:
+stage sleep + nightly HRV require wearing the watch to bed.
+
+**Speed:** wrist — the 6-call serial launch chain is parallel;
+sequences/trails have last-good disk caches (instant warm home);
+dismissSummary refreshes only workouts+PRs; all kinds downsample streams
+to ≤600 pre-sync; `/api/mobile/workouts` sheds routeData+streams (the
+wrist reads 3 scalars — ~10× launch payload cut); Keychain reads once per
+process; EffortGraph lost its per-sample identity churn and
+binary-searches its draw window; EMOM publishes 1 Hz not 4; autoPan gates
+before its four O(n) passes. Web — new indexes (PersonalRecord
+kind+achievedAt / workoutLogId, Sequence, and JSONB expression indexes on
+metricsData sequenceId/loadScore); pin-gate memoizes auth-ok 10 min (the
+serial /api/auth hop per navigation is gone); movement histories are one
+bounded strength-only query behind a shared 60 s memo; sw v6 serves
+/_next/static cache-first.
+
+**Registry/MCP widening:** `recent_workouts` now exposes distance,
+elevation, HR, kcal, steps, packKg, trail, provenance, createdAt, HRR,
+cadence, and the routeAnalytics summary — everything the external audit
+couldn't see. **Zones are configuration**: settings-backed `hrZoneTops`
+(defaults = his real bands), editable in Settings, served to the watch;
+history keeps its at-sync splits (recompute = filed follow-up).
+
+Tests 330/330; both Xcode schemes green; prod backfills drained (analytics
+v3: 48 GPS rows; streams v2: 80/80; effort: 75).
+
+---
+
+## 2026-08-29c · OAuth for the connector — connect becomes one Approve tap
+
+Michael hit the truth in the claude.ai dialog: no bearer-token field
+exists; it probes the endpoint, reads our 401 as "Always required
+(Detected)", and expects the MCP OAuth story. His `api-token` header
+attempt also failed because the server only read `Authorization`. Branch
+`claude/mcp-oauth`. Both paths fixed:
+
+**The OAuth story (the easy way, now real):** `/api/mcp` 401s carry
+`WWW-Authenticate` → RFC 9728 protected-resource metadata (origin +
+path-suffixed `/api/mcp` forms) → RFC 8414 AS metadata → **CIMD**
+(client_id as Anthropic's hosted-metadata URL, fetched + honored, 10 min
+cache) and stateless **DCR** (`/api/oauth/register` mints HMAC-signed
+client ids embedding their redirect set — no client table) →
+`/oauth/authorize`, a bare PIN-gated approve screen (inline PIN when the
+cookie's absent; one Approve tap; Deny returns `access_denied`) →
+single-use PKCE-S256 codes (new `oauth_codes` table, 5 min TTL,
+claim-then-verify so replays lose races too) → `/api/oauth/token`
+(form-encoded per spec, JSON tolerated) exchanging into ordinary
+**DeviceSessions** (deviceType "mcp", 30 d access / 365 d rotating
+refresh — the existing refresh lib does the rotation). Redirect policy
+allows only claude.ai/claude.com/anthropic.com + localhost tooling —
+CIMD/DCR vouching is necessary but not sufficient. proxy allowlists
+exactly `/api/oauth/token` + `/api/oauth/register`; approve stays
+cookie-gated.
+
+**The fallback:** `getBearerToken` now also reads `api-token` /
+`x-api-key` headers, so the dialog's Authentication-None + custom-header
+path works with a minted token. Settings → Claude connector rewritten:
+the URL-only OAuth path is the headline; the token is the fallback.
+
+Smoked live end-to-end simulating claude.ai: discovery chain →
+DCR (evil redirect rejected) → approve (401 without cookie) → token
+exchange → **code replay rejected** → MCP with the OAuth token → the
+`api-token` header path → refresh rotation (old token dies) — smoke
+session revoked after. Tests 330/330 (oauth policy/PKCE/single-use
+suite added). His connect is now: paste the URL, tap Approve.
+
+---
+
+## 2026-08-29b · The Claude connector (MCP Stage 1, full surface)
+
+His call, hours after the proposal: "build the full MCP — beyond being
+cool it'll identify where the gaps are." Branch `claude/mcp-stage1`.
+
+**Live at `POST /api/mcp`** — stateless Streamable HTTP (hand-rolled
+JSON-RPC core in `lib/mcp/server.ts`, pure + unit-tested; no SDK, no
+sessions, no Redis — the five methods a tools-only server needs). Bearer
+auth reuses the DeviceSession machinery (`deviceType: "mcp"`, year-long,
+hashed at rest, revocable from the existing Devices list); minting is
+cookie-gated at **Settings → Claude connector** (`/settings/claude`, token
+shown once with the claude.ai connect steps). `/api/mcp` joined the proxy
+allowlist as a self-authenticating route.
+
+**20 tools** (`lib/mcp/tools.ts` — every handler calls the same libs the
+web routes call: normalizers, validateSequence, PR detection/rebuild,
+planWeek, createOrLinkTrail):
+- `query_data` — the full 48-dataset registry, identical to in-app
+  get_app_data (allowlists + clip budget included).
+- Recipes (his word for usuals): `list/save/rename/delete_recipe` +
+  `log_recipe` with id → exact → **fuzzy fold-match** resolution and
+  per-serving product scaling ("rename" didn't exist anywhere before).
+- `log_food` (1–20 items, source "mcp"), `edit_food`.
+- `log_workout` (normalized exercises, PR detection, packKg),
+  `edit_workout` (attach/assignments/match+set/packKg, PR rebuild),
+  `delete_entry` (food/workout/measurement, PR rebuild on workout).
+- `log_measurement` (weight + 9 tape fields, never zero-fills),
+  `log_water`, `set_reminder`.
+- `create_routine`/`update_routine` (minting + validation, same endpoint
+  semantics as the web editor), `plan_training`/`get_training_week`,
+  `name_trail` (defaults to the latest GPS workout).
+- **`report_gap`** — the roadmap generator: when his Claude lacks a
+  capability, it files a 🧩 todo (category "app").
+
+**Self-smoked end-to-end on the live server**: 401 without/with-wrong
+token, initialize (version echo), 202 notification, 20-tool list, real
+reads (it saw that morning's actual walk), save→rename→fuzzy-log→delete
+recipe round-trip with usageCount bump, report_gap → todo, malformed-JSON
+400 — every smoke row deleted and the smoke token revoked after. Tests
+325/325 (9 new protocol/handler tests).
+
+**His one step**: claude.ai → Settings → Connectors → Add custom
+connector → the URL + token from Settings → Claude connector.
+
+---
+
+## 2026-08-29 · v4 — the feedback round (his 6 threads, one session)
+
+Branch `claude/v4-feedback`. Source: his Claude-chat hike report (Aug 1 vs
+Aug 27 Tres Cruces), the freestyle screenshot, and four asks in chat.
+
+**Analytics honesty (the report's three bugs, root-fixed + backfilled):**
+AVG PACE divided moving time by a moving-only GPS sum the card never
+showed — `analyzeRoute` now takes the workout's own `distanceMeters`
+(sane band 0.7–1.5× GPS) as the pace basis and echoes `paceMeters`;
+max speed rejects windows >3× the median window speed (one 50 m fix in a
+3-sample window ≈ the "12.0 km/h" spike); the elevation chart read the
+wrist's RELATIVE CMAltimeter stream ("1–376 m" on a 1,480 m summit) —
+absolute GPS altitude from `routeData.points[].alt` now feeds the chart,
+`minAltM/maxAltM`, and descent totals. `routeAnalytics.version = 2`; the
+backfill route recomputes v1 rows (RUN AGAINST PROD after deploy).
+
+**Metrics the DB already held, now on the activity page:** ELAPSED, CLIMB
+RATE (VAM m/h), DESCENT, zone rows with bpm bands + minutes ("Z2 ·
+123–152 · 24 min · 57%"), the Round-3 HRR capture as a RECOVERY card
+(quick/typical/slow), body weight nearest the session, and — for named
+trails — **VS YOUR LAST RUN** (moving/pace/climb-rate/gain/HR deltas vs
+the previous run of the same trail) plus a tappable all-runs list. "2
+runs logged" finally compares them.
+
+**Pack load:** `WorkoutLog.packKg` (migration, 0–60 kg) — the Tolima
+plan's progressive-loading variable. Editable on the page (+ SET PACK
+WEIGHT), via chat ("pack was 6 kilos" — `edit_workout_entry.packKg`),
+shown as CARRIED · N KG. Wrist pre-hike entry → deferred (design slice).
+
+**The dock hides** (his pick): scroll down and the idle pill slides away;
+any scroll-up (or near-top) brings it back. Active states (recording,
+transcribing, confirm cards, failed-text) stay pinned. No idle-timer
+return — that would re-cover the exact element being read. This was the
+screenshot: "Delete this workout" sat under the mic on every page.
+
+**The kettlebell-weight fix:** the activity page now carries a movement
+editor (autocomplete from the exercise catalog; sets/reps/kg; 0 kg valid
+for bodyweight) posting the SAME `PATCH /api/health/workouts/entry` the
+chat flow uses — volume + PRs recompute identically. The describe-flow
+now asks for load in its one question. His screenshot's freestyle row is
+editable in place.
+
+**Watch legibility floor** (his "tiny menus" call — codified in CLAUDE.md):
+Round 3's `r3Text(N)=N/2` had dropped the app's wrist factor (1.406×) —
+7 pt Skips, 4.5 pt axis labels. `Theme.r3TypeSize` boosts sub-12 pt sizes
+×1.40625 (ceiling 12, floor 7, continuous — heroes untouched);
+`Theme.minTap = 38` + `.pitayaTappable()` enforce hit areas; swept: rest
+Skip, IdleNudge End, BackChevron ×5, Ready chevron, rep ±, bell-rack bars
+(5.7 pt slivers → full-slot strips), settings toggle/segment,
+Recovery/SaveTrack Skips; `minimumScaleFactor` floored at 0.8. Sim-shot
+proof sent (Effort/Recovery/SaveTrack read clean).
+
+**Strength reports ("like trails"):** new `lib/strength-history.ts`
+(per-movement history folded across all `exercises` JSON) → segment rows
+carry lineage ("best 32 · last 24 · 7× trained"), an EFFORT card renders
+the loadScore/relativeEffort every sync computed and nothing showed +
+time-under-load (honest for seconds-steps; tonnage stays 0) + a
+work-density bar; Train page gains the PR WALL (every heaviest-ever,
+tap → workout) and BY MOVEMENT · 8 WEEKS tonnage bars.
+
+**Token ROI** (`docs/token-roi.md` has the numbers): $3.92 all-time; the
+chat lane's 7.1k-input average is the spend. Shipped: 8 unmetered call
+sites metered + weekly-recap label fixed; 4 dead AI routes deleted; chat
+history 20→12; `set_reminder` joined confirm-first (was the one silent
+write); stale `PROPOSAL_TOOL_NAMES` deleted (proposalKindFor is the
+authority); **usuals got fuzzy** — `lib/food-match.ts` fold+overlap, the
+food card shows "≈ your usual" and a Log-usual button (exact saved
+macros, zero drift). Library-instead-of-AI was REJECTED by the data (3%
+exact repeats over 559 foods); the luna food-lane experiment is deferred
+to his call.
+
+**MCP** (`docs/mcp-proposal.md`, proposal only per his pick): Stage 1 —
+personal connector over the EXISTING 48-dataset registry + validated
+write routes, bearer token as a DeviceSession, ~2–3 sessions, zero
+inference cost; Stage 2 — multi-user (user model is the real gate, OAuth
+via a provider, per-user scoping). Hardening shipped NOW: the mobile
+PIN-mint route got the same rate limiter as web login (it had none).
+
+Tests 316/316 (route-analytics v2, strength-history, food-match added);
+build green; both Xcode schemes green.
+
+---
+1:1: Effort page, live MapKit page with the contour AOD face, zone-change
+blooms off a real ZonePublisher, the BPM-synced lub-dub heart, save-track
+prompt + Saved trails in the Hike menu, §06 saving states, km splits/HRR
+screen/EMOM halfway/crest/streak seeds, the Weight-Training free session,
+eight verbatim glyphs. Same day, earlier: the v3 web+server round below.)
+
+---
+
+## 2026-08-28b · Watch Round 3 — the in-workout v3 port
+
+Branch `claude/watch-v3-port` off the just-merged main. Source of truth:
+`docs/design/pitaya-watch-round3.dc.html` + `watch-v3-handoff-spec.md`
+(Michael's locked spec — 3a/3c/3f/3h picked; 3b/3d-as-page/3e/3g not
+built). **The spec's "code base: claude/watch-app" line was stale template
+text — that branch is the documented clobber risk; everything built off
+main.** The Round 3 canvas is the 45 mm screen at 2× (pt = px/2 exactly), so
+Theme gained `r3*` helpers beside the Round-1-scaled ones, plus the zone
+ramp (zone1–5 + dims + `#131216` chip text), the §00 motion ladder and the
+haptic map (`Haptics.beatTick` = the one "everything"-tier row: per-beat at
+Z5).
+
+**What's on the wrist now** — carousels: KB Metrics→Logger→Effort→Controls ·
+outdoor Metrics→Live map→Trail stats→Effort→Controls · treadmill
+Metrics→Effort→Controls · freestyle face→Effort (End stays on the face);
+every legacy header wears the compact zone chip.
+
+- **Effort (§01)**: 10-min HR strip over served zone bands (10/11/10/8/6%
+  alphas, Z2–Z5 edge labels), 66 px BPM + chip stack, kind-aware 2×2
+  (KCAL·KCAL/H + STEPS·STEPS/MIN via **CMPedometer** — live cadence, HK
+  stays finish-only — or AVG·PEAK BPM), dotted trace while paused, page
+  dims 62%, AOD per spec ("42 MIN", outline chip, #55535A trace).
+- **Live map (§02)**: full-bleed **SwiftUI `Map`** (MKMapView does not
+  exist on watchOS — surfaced substitution, identical standard-style
+  render; consequences: no tiles-lost callback, so the contour face serves
+  AOD only, and new fixes snap rather than tween — MapPolyline can't
+  animate shape). Accent route + 11 px under-glow stroke (never a blur),
+  start ring, pulsing head dot (1.8 s), auto-pan 600 ms when the head
+  drifts a third of span, scrims, retimed GPS pill (0.8→1.6 s), distance
+  hero + 4-cell row with trailing-60 s pace (`paceNowSecPerKm` on the
+  recorder). **The five contour curves extracted verbatim** from the board
+  are the offline/AOD face, route in `#A63D63`. Saved-trail runs draw the
+  trail as a dashed ghost under the live line.
+- **ZonePublisher (§03)** on the recorder: 5-consecutive-sample confirm,
+  20 s cooldown with latest-wins (silent moves still recolor the chip), Z5
+  entry exempt, never paused/frozen, never in the first 60 s, haptic at
+  fire. The bloom: 516×340 radial sprite, up rises from the bottom bezel /
+  down falls from the top, 500/400 ms, 900 total; chip pops 1→1.26→1 with
+  "NAME ↑". AOD suppressed; a raise within 6 s replays once. The old
+  freestyle raw-sample haptic was REMOVED (it would have double-fired).
+- **Heart (§04)**: BeatingHeart rewritten — keyframed lub-dub
+  (1→1.12@8%→1.03@16%→1.18@26%→1@48%) re-armed per HR sample, zone-tinted
+  radial glow from Z3, Z5 blush crossfade (digits follow on Effort),
+  half-beat ×1.2 above 180 BPM, AOD 1.8-stroke outline. Everywhere the
+  heart lives.
+- **Save track (§05)**: 600 ms after `.synced` on outdoor saves (queued
+  skips; saved-trail runs skip — the run count just increments via
+  `trailId` on the item). Max 2 suggestions ranked trailhead+length with
+  matchPct (server stamps the same 50–99 formula on near queries), New
+  trail… dictates via TextFieldLink, Skip never re-asks this session,
+  success = drawn mint check → summary. Hike submenu is REAL: "Open hike"
+  + SAVED TRAILS rows (bookmark glyph, "6.4 km · +312 m · Sun") starting
+  ghost-target runs that baseline "vs your last run here".
+- **Saving states (§06)**: diamond spinner 900 ms/rev on a 65% pill with
+  blush label, morphs to Done in 220 ms, failures shake ±6 px ×3 and lead
+  with "!". (The engineering underneath shipped in the morning round.)
+- **Moments (§07)**: km split banner (recorder banks `splitSeconds` →
+  `metricsData.splits`, "9 s faster than your average" in mint, haptic
+  `.notification`, never drawn in AOD, still logs) · **HRR screen** — the
+  60 s recovery window now arms for EVERY kind with HR (outdoor snapshots
+  carry the route; the Apple-Health route attach is skipped on that path —
+  Pitaya's payload is the product), post-save full screen with draining
+  mint ring, falling BPM + spark, verdict bands quick/typical/slow,
+  Skip never skips the data; `hrrDelta`/`hrrSeconds` ride metricsData,
+  arriving late via an idempotent re-sync of the same externalId (straight
+  through WorkoutSyncFlight so the summary CTA never flickers) · EMOM
+  halfway (blush diamond sweep + "10 down · 10 to go" at round N/2) ·
+  elevation crest (+100 m: contours ripple −7 px staggered 120 ms on a
+  1-second animation clock, counters tick blush, `.click`) · streak seeds
+  (mint·pink·mint off the check, "◆ day N" on the sync line — TRAINING
+  streak computed locally from cached rows; the served streakDays is the
+  food streak on purpose; PR banner wins).
+- **Riders (§08)** + glyphs (§09 verbatim: barbell replaces the 08-20
+  provisional, freestyle pulse, trail-bookmark, mic, cadence, flame,
+  split-flag; the §09 heart replaced `Glyphs.heart` everywhere): Weight
+  Training's list gains **Free session** (kettlebell machinery, 2.5 kg
+  plate detents via a session override — the logger's detents went
+  Double), freestyle row copy "just record · shape it in Pitaya after",
+  hike row counts its trails.
+
+**The post-save sequence, locked:** End → recovery window arms → Summary →
+Save (busy diamond) → synced (check, Done, streak seeds unless PR) → HRR
+screen if the 60 s window is still live (wall-clock-bound; the falling
+heart can't wait — Skip available) → save-track prompt (+600 ms) → summary;
+freestyle then auto-exits home. Queued saves: no HRR-server dependency
+issue (HRR still runs), trail prompt skipped.
+
+**Dial-ins recorded, not silent:** SwiftUI Map substitution (above) ·
+weights plate range 2.5–200 kg (spec gave the step, not the range) · the
+HRR verdict holds 2 s before auto-return (spec gave the fade, not the
+hold) · zone chips landed on headers that exist (Metrics, Trail stats;
+Effort/map per their own specs; Controls has no header) · sequence runners
+keep their 2-page carousel (the spec's carousel list doesn't name them;
+halfway + bloom ride the runner).
+
+**Hardening the sim run forced (post-spec, real-device relevant):** the
+HRR screen resolves on its own when the capture doesn't qualify — HR
+rose after the effort, or the sensor gapped — instead of stranding at
+0:00 until a manual Skip (no verdict shows; the chain just continues to
+the trail prompt/summary). And `completeRecovery` deadlines its
+HealthKit close at 8 s with ownership guards, so a stalled
+`endCollection` can neither hold that screen hostage nor leave the
+recorder refusing the next session. Found because the watch SIM wedges
+healthd routinely; the guards are cheap insurance on hardware. Sim
+facts + the new `PITAYA_SMOKE_FAKEGPS` seam are documented in
+`Smoke.swift`'s header.
+
+Builds green on both schemes; 305 web tests (server matchPct added to
+lib/trails' near queries); sim smokes + screenshots below. The wrist gets
+it at the next `pitaya-resign.sh --force` after merge.
+
+---
+
+## 2026-08-28 · Exercise v3: save reliability, trails, terrain maps, the planned week
+
+Branch `claude/apple-watch-exercise-ux-1ed863` (== `origin/main` at start;
+both watch branches are strict ancestors — all work happens here now, and
+`docs/watch-contract.md` Lane homes says so). Eight commits, each
+self-smoked; three additive prod migrations applied via the build's
+`migrate deploy`. **Watch UI pages are NOT in this session by his call** —
+the swipe pages went to design first (prompt below), with all their
+engineering pre-plumbed so the port is views-only.
+
+### 1. The sporadic duplicate save — dead at both ends
+
+His report: Save sometimes shows nothing, tap again → two rows. Diagnosis
+matched the 857-weigh-in incident exactly, on two layers at once:
+
+- **Watch:** `drainQueue()` had THREE overlapping call sites plus the
+  model-less cold-wake drain in `BackgroundRefresh` — four drains sharing one
+  queue file with no single-flight, interleaving across awaits and POSTing
+  the same items twice. All four now serialize through
+  `ios/WatchApp/WorkoutSyncFlight.swift` (the HealthStore `syncTask` idiom,
+  process-wide, callers serialize rather than coalesce).
+- **Server:** the route's find-then-create raced, and
+  `(externalSource, externalId)` was a plain INDEX. It is `@@unique` now
+  (migration dedupes first — the 08-28 audit found zero, but the migration
+  runs unattended and had to be self-sufficient), and the route creates then
+  resolves P2002 into an update. Two concurrent curls of one externalId →
+  `created:1` + `updated:1`, one row. New `PITAYA_SMOKE_DOUBLESAVE` races two
+  saves + a background drain against prod: `rows=1`.
+
+The "nothing happened" half: Save flips `syncState = .syncing`
+SYNCHRONOUSLY on the tap (the dead window invited second taps), the CTA gets
+a busy/disabled state so a queued tap can't hit Done mid-sync, enqueue
+failures surface as a reachable `.failed` with `pendingItem` RETAINED (the
+old `try?` silently lost the workout and left Save a permanent no-op), the
+API client fails dead requests in 15 s instead of 60, and server-side the
+sync route gets `maxDuration 60`, `lastSeenAt` behind `after()`, and the
+routine-coda/timezone reads overlapped with the insert loop.
+
+### 2. The freestyle "trail" was REAL — a stale-GPS leak
+
+His complaint was literally true. `RouteTracker` outlives the session and
+only clears on the next OUTDOOR start, while `WorkoutRecorder.finish()`
+read the route (and the GPS distance fallback) unconditionally — so the
+08-18 walk's polyline sat byte-identical on BOTH the 08-19 and 08-20
+freestyle rows, 08-26 freestyle = that day's walk, and one strength row
+carried a leaked 913 m. Root fix: a `routeActive` gate + the tracker clears
+its buffer on finish. Guards for the old build still installed: both write
+paths strip routeData off non-GPS workoutTypes (additive `strippedRoutes`
+count), the activity detail never returns a polyline for stationary types,
+the TRAILS card only picks typed GPS sessions, `activityTypeOf` stops
+promoting freestyle/strength to outdoor cards on distance, and absent
+routeData stores SQL NULL (DbNull) so audits stop lying. **Historical rows
+keep their leaked values pending his explicit go** — the repair SQL is in
+deferred-items; display is already honest without it.
+
+### 3. Named trails (deferred 08-20, shipped — web half)
+
+`Trail` model + `WorkoutLog.trailId`, one create-or-link brain in
+`lib/trails.ts` (case-insensitive name+aliases, seeds from the workout's own
+recording, 300 m trailhead + similar-length match scoring for wrist
+suggestions), `GET/POST /api/mobile/trails` (bearer, near-ranked),
+`/api/health/trails` CRUD, additive `items[].trailId` on sync, a
+confirm-first `name_trail` chat proposal, and a `trails` dataset in the AI
+registry. Self-smoked on his real rows: the 08-27 Tres Cruces ascent minted
+the trail (2.2 km / +390 m / trailhead coords), the lowercase re-name
+LINKED the descent instead of duplicating — runCount 2. Wrist surfaces
+(save-track prompt, Saved trails list) ride the design round.
+
+### 4. Route analytics + the terrain map
+
+`lib/route-analytics.ts` reads what the watch stored all along and nothing
+ever read — full-res `routeData.points[]` — into moving/stopped seconds,
+breaks (≥30 s stops with coordinates), per-km splits with climb, Minetti
+grade-adjusted pace, windowed max speed. Runs on sync; a backfill route
+filled history (4 point-bearing rows). His ascent reads honestly now:
+**31:40 moving, 10:39 stopped across 3 breaks, GAP 6:48/km vs 16:56 raw.**
+
+The activity detail became a real route
+(`/health/workouts/activities/[id]`, actDet extracted to
+`components/activity-detail.tsx`, old `?id=` links redirect) and GPS
+sessions render a real basemap: MapLibre + OpenFreeMap vector tiles + AWS
+Terrarium hillshade (all keyless, $0), route + break dots sized by stop
+length, 2D/3D terrain toggle, SVG fallback when tiles are unreachable.
+Traps that cost real hours, recorded: layers attach on `style.load` (never
+`"load"`, which waits for every tile), **Turbopack 404s MapLibre's worker
+chunk as text/html which silently kills the whole tile pipeline** — the
+worker + shared chunk are self-hosted in `public/` (re-copy on upgrade!) —
+and `sw.js` v5 stops intercepting cross-origin GETs so tiles can't bloat
+the PWA cache. SPLITS — the card the design had to omit for lack of data —
+exists now, with BREAKS below it. 3D framing wants one on-device polish
+pass (deferred-items).
+
+### 5. Export: GPS finally leaves the app
+
+`lib/gpx.ts` (GPX 1.1; watch rows carry `<ele>`/`<time>`, Strava rows
+coordinates-only, bulk = one multi-track file), per-workout GPX on every GPS
+activity + a bulk card on `/settings/export`, the JSON export's
+`includeWorkoutRoutes` flag finally has its checkbox, and CSV gains
+`workout-sets` — one row per set with an honesty column (`aggregated`; true
+per-set capture filed in deferred-items). Smoke: the ascent GPX carries all
+509 points; bulk = 22 tracks; sets CSV = 193 rows.
+
+### 6. The week he dictates + notifications live
+
+His AskUserQuestion answer upgraded the planned-workout nudge into a
+feature: `PlannedWorkout` (day-level, `localDate` in his zone) written by a
+confirm-first `plan_training` chat card — "this week Armor Builder Monday,
+Thursday climb Tres Cruces, remind me Wednesday 4pm to stretch first" —
+with routine/trail names resolved server-side and timed reminders becoming
+real Reminder rows. A saved workout on a planned day marks it done (hooks on
+both writers, post-response). Train grows a THIS/NEXT WEEK · PLANNED strip
+(renders nothing until a week exists; falls forward to next week — he plans
+on Fridays); `get_app_data training_week` reads it back.
+
+Senders, each gated by `lib/notification-prefs` and flipped on the new
+`/settings/notifications` page (reached from the DATA card; Spirit's cron
+now honors the same switchboard): due reminders via cron (claim-first vs
+the foreground poll; **dues >48 h old are claimed silently — the table
+carried MONTHS of pre-push "Weekly Report" rows** that would have blasted
+the first subscribed device), the 7 am planned-day nudge (silent once he's
+trained), PR celebrations on watch saves, weekly-report-ready (tagged by
+week-start so the twice-listed cron replaces, not stacks).
+
+**Merge-day correction:** the reminder cron shipped as `*/15` and **Vercel
+rejected the entire production deployment in five seconds** — Hobby crons
+are daily-precision (the five existing daily crons proved nothing about the
+plan tier). The plan's own fallback applied: `0 11 * * *` (6am Bogotá daily
+sweep; the foreground poll stays the same-moment path). Real 15-minute
+delivery = Vercel Pro or a free GitHub-Actions pinger — his call, in
+deferred-items.
+
+**Found in smoke: prod has ZERO push subscriptions.** Nothing delivers —
+not even Spirit's — until he flips the This-device toggle on his phone.
+Top of his checklist.
+
+### 7. The design round (his mid-plan call)
+
+The new swipe pages (Effort, live map), the zone-change pulse, the
+BPM-synced heart, the trail-save prompt and the saving states are a DESIGN
+deliverable first: `docs/design/watch-v3-prompt.md` is ready to run in
+Claude Design; slices land in `docs/design/watch-v3/` and implementation is
+then a port. Pre-plumbed so that port is views-only: recorder
+`stepCountLive` (15 s ticker) + `streamRevision`, `TrailSummary` +
+`fetchTrails`/`saveTrail` + `WorkoutSyncItem.trailId` (inert), watchOS
+target 11.0 (SwiftUI Map is available).
+
+**Numbers:** 305 vitest green (27 files; new: sync dedupe incl. a raced
+create, activities typing, trails, route-analytics, gpx, workout-sets,
+planner). Both Xcode schemes build; DOUBLESAVE + FREESTYLE smokes green on
+the sim against prod. Docs: watch-contract Lane homes corrected (the 08-09
+split table was actively misleading), §Trails + `toFailure` + the unique
+key added; deferred-items pruned of two obsolete merge instructions and
+grown six new entries. **The wrist runs the old build until the next
+re-sign** — the automation builds from `origin/main`, so the save fix
+reaches the watch after merge, on its 09:30/18:30 cycle.
+
+---
+
+## 2026-08-26 · The AI reads everything · data export · Apple Health weight sync
+
+Three asks, all confirmed as real defects before a line was written.
+
+### 1. "Our AI can't read my measurements even though I have them in there"
+
+**True, and it had THREE causes — the third would have silently defeated a fix
+of the first two.**
+
+- `lib/chat-tools.ts:265,270` filtered `weightKg: { not: null }` on BOTH
+  measurement queries. Every check-in where he taped chest/arms/waist but never
+  stepped on the scale was invisible to the assistant. **His 2026-08-20 tape
+  check-in — neck 39.3, shoulders 50.9, chest 94.4, arms 36.1, forearms 31.3,
+  waist 87.4, hips 91.8, calves 42.7 — was one of those rows.**
+- The projection returned 3 columns of 23. The write tool accepts 11 numeric
+  fields; the read path surfaced 3, so the model could write measurements it
+  could never read back.
+- `lib/ai-prompts.ts:493` literally instructed refusal: *"NOT YOUR JOB: Todos,
+  finances... are out of the app now. If asked, say Pitaya dropped that."*
+  Data access without deleting that produces an assistant that has the numbers
+  and declines to say them.
+
+**New `lib/body-measurements.ts` is the single vocabulary** — `TAPE_FIELDS`
+(all NINE dims), `COMPOSITION_FIELDS`, `hasAnyMeasurementWhere()`,
+`hasTapeWhere()`, and `compactMeasurement()` which drops nulls and keeps
+everything else. The `!= null` test there is load-bearing: `visceralFat: 0` and
+`bodyFatPct: 0` are real readings a falsy check would erase.
+
+Fixed at four call sites, not one: chat, `trends/insights`, `health-coach`, and
+`body/overview` — whose own tape OR listed 7 of 9 dims, so a shoulders-only or
+forearms-only check-in was invisible on **his own Body screen** too.
+
+### 2. The assistant now reads the whole app
+
+`lib/ai/data-registry.ts` + `lib/ai/data-access.ts`. One tool (`get_app_data`)
+over a 43-entry registry; the dataset enum AND the catalog the model reads are
+GENERATED from the registry, so opening a new surface is one line and nothing
+else. The catalog ships inside the tool description rather than behind a
+discovery call, so no turn is ever spent asking what exists.
+
+Reachable now, all previously invisible: Spirit notes/highlights/links/threads/
+reading log/memory/studies/pages (recognised text, never strokes), todos,
+journal, habits, `DailyHealthSnapshot`, and finance.
+
+**Finance reuses `getFinanceReportSummary()` rather than re-deriving.** The
+Finances screen applies a non-obvious active filter (posted + resolved +
+settlement not in provisional/failed/rejected/ignored); a naive `findMany`
+would quote totals that do not match the screen, which he would correctly read
+as the AI being broken. **`getPocketDashboardData()` was deliberately NOT used
+— it calls `ensureCanonicalCashSetup()` and writes.** Read tools do not write.
+
+Excluded by his explicit call: credentials/tokens, audio bytes, `EsvPassage`
+(Crossway licensing forbids a substantially complete copy), `ChatMessage`
+(it IS the history), the finance ingest internals, and
+`FinanceDocument.contentText` — that one is email-derived and therefore
+attacker-influenced while the model can emit proposal tools. The confirm-first
+UX is the structural backstop and is load-bearing, not decorative.
+
+Bounded three ways: `select` always built from an allowlist, a `clip()` pass
+that kills `data:` strings and caps strings/arrays regardless of allowlist, and
+a 24k-char payload cap — tool results are echoed into `input` on every later
+turn, so a fat result is paid for repeatedly. `MAX_TURNS` 5→6 plus a 42s
+wall-clock guard that forces a final text turn rather than letting a slow
+multi-dataset turn hit the 60s ceiling and return nothing.
+
+**Read-only.** No new write tools; that is a separate project.
+
+### 3. Export (JSON + CSV, health + measurements)
+
+`components/health-export-card.tsx` was **built and never rendered anywhere** —
+the JSON export had no UI at all. It now lives on a new `/settings/export`
+page alongside five CSVs, reached from a new row in the settings DATA card.
+
+`lib/csv.ts` (RFC 4180, CRLF, UTF-8 BOM for Excel) + `lib/health-csv.ts` (pure
+projection over `buildHealthExport`'s return — never touches Prisma, hence
+fully fixture-testable). `measurements.csv` carries all 23 columns plus the
+seven skinfold keys unpacked AND the raw JSON, so a future key cannot vanish.
+`daily.csv` **fills the calendar**: `dailyRollups` omits days with zero logs,
+and charting absent days silently compresses a two-week gap into one segment.
+
+### 4. Apple Health weight sync
+
+Five layered causes; the primary one is not the one it looks like.
+
+1. **Composition was never requested.** Zero occurrences of
+   `bodyFatPercentage`/`leanBodyMass`/`bodyMassIndex` anywhere in `ios/`. His
+   Etekcity scale has been writing them into Apple Health all along.
+2. **The query window was today+yesterday only** — a plain `HKSampleQuery`, no
+   anchor, no backfill. VeSync writes to Apple Health when ITS app opens and
+   the samples keep their ORIGINAL date, so a batch landing today but dated
+   last week fell outside every window the app ever queried. **Unreachable
+   forever.** This is the real bug.
+3. Server twin-check **skipped instead of merging**, so an Apple Health sample
+   carrying body fat could never enrich a row he typed by hand.
+4. Every failure was silent: counts returned then discarded by
+   `struct AnyResponse: Decodable {}`, and zero weight simply omitted from the
+   status line rather than named.
+5. Background delivery calls `enableBackgroundDelivery` and throws the error
+   away — the entitlement is absent and a **free personal team cannot sign it**.
+
+The fix: `HKAnchoredObjectQuery` with **no upper date bound** (insertion-
+ordered, so back-dated batches arrive), per-type anchors in
+`ios/iPhone/HealthAnchorStore` persisted **only after a successful POST** — the
+highest-severity ordering rule here, since saving first orphans a page
+permanently on a network blip. New `ios/iPhone/BodyCompositionReader.swift`
+clusters composition onto a `bodyMass` anchor by source + ±120s, greedy
+nearest-first, and **counts unmatched samples as orphans** rather than dropping
+them — that count is the only signal the window is wrong.
+`bodyFatPercentage` is ×100'd: `HKUnit.percent()` returns a FRACTION.
+
+Server: `lib/body-ingest.ts` — one range query instead of N+1, merge-not-skip,
+intra-batch collapse, and an unparseable `measuredAt` is now **rejected** rather
+than stamped `now` (at backfill scale that fallback would fabricate hundreds of
+today-dated weigh-ins). Backfill posts to a NEW `/api/mobile/health/body`,
+because the daily route upserts a day snapshot with `steps: … ?? 0` and would
+have **zeroed historical step counts**.
+
+`needsMoreTypes` status is self-healing — growing `readTypes` automatically
+re-prompts an install that could otherwise never be asked again. A
+`scenePhase` `.active` trigger replaces background delivery honestly; because
+sync is now anchored, ONE foreground pass catches everything since last time at
+any sample date.
+
+**Told him plainly, in the app:** Apple Health has no sample type for muscle
+mass, bone mass, body water, protein, visceral fat, BMR or metabolic age. Nine
+of thirteen composition columns can only ever come from the VeSync CSV. The
+companion says so rather than leaving him to wonder why they stay blank.
+
+### Found while smoking, worth his eye
+
+His shoulder measurements mix conventions — an older row reads 118.5 cm
+(circumference), the newest 50.9 cm, whose own note says *"Shoulder width:
+50.9 cm"*. The arithmetic delta is −67.6 cm. Rather than hide it or invent a
+correction, `buildTapeTrend` flags `suspectMethodChange` when a delta exceeds
+20% and the prompt tells the assistant to name it as a method change, never as
+a body change. **The underlying data is still mixed — his call what to do.**
+
+### Verification
+
+261 unit tests (was 200), 0 TypeScript errors, `next build` green, iOS
+`BUILD SUCCEEDED`. Self-smoke against the real database and over real HTTP:
+the tape-only row now returns from `weight_trend` with 8 dims; widest
+measurement row went 3 → 16 fields; `measurements.csv` exports 233 rows with
+`weightKg` **empty not 0** on the tape row and the comma/quote/newline note
+intact; `daily.csv` 661 rows with **421 filled unlogged days**; unauthenticated
+CSV request 401s; the page's CSV button toasts "233 body measurements rows
+downloaded" off the `X-Row-Count` header.
+
+Two guards worth keeping: a registry↔schema parity test that parses
+`schema.prisma` at test time (a typo'd column would otherwise fail at runtime
+inside a chat turn, invisibly), and a replacement for the old
+"stripped surfaces stay stripped" prompt pin so this policy reversal is
+recorded rather than silently deleted.
+
+---
+
+## 2026-08-26 · Free-team re-sign: Pitaya repushed to phone, iPad, and watch
+
+**The 7-day clock, not a bug.** Michael's Apple ID is a *free personal team*
+(`HDR67SL3JG`), so every provisioning profile it issues is valid for exactly
+**7 days** — the signing certificate is fine for a year
+(`Apple Development: michaelg458@gmail.com`, good to 2027-08-10), but when the
+embedded profile lapses the app stops launching. Nothing in `ios/` changed
+this session; this was a re-sign and reinstall.
+
+**What was actually on disk.** Profiles do NOT live in the classic
+`~/Library/MobileDevice/Provisioning Profiles/` on Xcode 26 — that directory
+does not exist. They are in
+`~/Library/Developer/Xcode/UserData/Provisioning Profiles/`. Found there: the
+two iOS profiles (`pitaya`, `pitaya.phonewidgets`) issued 08-22 and expiring
+**08-29**, and *no watch profiles at all* — `pitaya.watchkitapp` and
+`.watchkitapp.widgets` were gone.
+
+**Refreshing beats reusing.** The first iOS build happily reused the 08-22
+profile and produced an app good for only 3 more days. `-allowProvisioningUpdates`
+will not refresh a profile that is still technically valid. Moving the stale
+profiles aside and rebuilding made Xcode mint new ones — **all four now expire
+2026-09-02**, a full 7 days. That is the difference between a 3-day and a
+7-day repush, so it is worth the extra build.
+
+**Built Release, not Debug.** Safe on device: `MobileAPIClient` defaults to
+`productionBaseURL` (personal-os-plum.vercel.app), and `WebShellView`'s
+`pitaya.devOrigin` override is DEBUG-only *and* requires a UserDefaults key
+that is not set on his devices.
+
+**Self-smoke: launched, not just installed.** Install success proves nothing
+about signing — the signature is only checked at launch. Driving
+`devicectl device process launch` on all three caught the real state:
+
+- **iPad Air 5** — launched ✓
+- **Apple Watch Series 8** — launched ✓ (a first attempt failed with
+  `FBSOpenApplicationErrorDomain error 7 (Locked)`, which is a locked wrist,
+  not a signing fault)
+- **iPhone 17 Pro Max** — refuses with `error 3 (Security)`: *"invalid code
+  signature, inadequate entitlements or its profile has not been explicitly
+  trusted by the user."*
+
+**The iPhone needs a human, and only the iPhone.** The same binary, profile,
+and certificate launched on the iPad — which rules out the build. Verified
+directly rather than assumed: `codesign --verify --deep --strict` reports
+valid and satisfying its Designated Requirement; the profile grants
+`healthkit`, the matching `application-identifier`, and
+`keychain-access-groups = HDR67SL3JG.*` (covers
+`...pitaya.shared`); all 3 devices are in `ProvisionedDevices`. What is left is
+per-device trust state, which iOS drops when a profile expires and which
+cannot be set remotely:
+**Settings → General → VPN & Device Management → Apple Development:
+michaelg458@gmail.com → Trust.**
+
+**The repeatable chore** (every ~7 days; takes about 4 minutes):
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+# 1. force-refresh: move ALL current profiles aside first, or you re-sign stale
+mv ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision /tmp/
+# 2. rebuild both targets for device
+cd ios
+xcodebuild -project PersonalOS.xcodeproj -scheme PersonalOS -configuration Release \
+  -destination 'generic/platform=iOS' -derivedDataPath /tmp/dd-ios \
+  -allowProvisioningUpdates build
+xcodebuild -project PersonalOS.xcodeproj -scheme "PersonalOS Watch" -configuration Release \
+  -destination 'generic/platform=watchOS' -derivedDataPath /tmp/dd-watch \
+  -allowProvisioningUpdates build
+# 3. install (devices are on localNetwork transport — no cable needed)
+xcrun devicectl device install app --device "Zodiacs phone" /tmp/dd-ios/Build/Products/Release-iphoneos/PersonalOS.app
+xcrun devicectl device install app --device iPad             /tmp/dd-ios/Build/Products/Release-iphoneos/PersonalOS.app
+xcrun devicectl device install app --device "Michael's Apple Watch" "/tmp/dd-watch/Build/Products/Release-watchos/PersonalOS Watch.app"
+# 4. ALWAYS launch to verify — install success does not prove the signature
+xcrun devicectl device process launch --device "Zodiacs phone" net.blacksheepglobal.pitaya
+```
+
+Unlock the watch before step 4 or it reports `Locked`. If the phone reports
+`Security`, that is the Trust step above, not a build problem.
+
+### Then: the weekly chore was automated (same day)
+
+**His question — "any way to always trust developer?"** No, and the framing is
+worth correcting: there is no always-trust toggle, and the repeated Trust tap
+is not an independent setting. iOS keys trust to the *certificate*. When every
+profile signed by that cert expires, iOS purges the "Developer App" entry from
+Settings, so the next install lands untrusted. **Renew before the lapse and the
+entry never dies.** He chose "automate now, decide on paid later."
+
+**PROVEN, not asserted.** The hypothesis was tested directly: `--force` re-signed
+the phone with a brand-new profile *while the old one was still valid*, then
+launched it — `launch verified on Zodiacs phone`, **no Trust tap**. That is the
+whole premise of the timer, and it holds.
+
+**What is installed:**
+- `~/.local/bin/pitaya-resign.sh` — checks the soonest Pitaya profile's expiry;
+  exits in under a second unless it is within **3 days**, otherwise rebuilds
+  both targets and installs to every reachable device. Flags: `--check`,
+  `--force`, `--verify`.
+- `~/Library/LaunchAgents/net.blacksheepglobal.pitaya.resign.plist` — daily at
+  **09:30 and 18:30** (two slots to catch the devices on Wi-Fi). Loaded.
+- `~/VibeCoding/personal-os-signing` — a **detached** worktree at `origin/main`,
+  7.8 MB. Detached so it never locks the `main` branch or collides with a lane.
+- Logs: `~/Library/Logs/pitaya-resign.log`.
+
+**Three traps this hit, recorded so nobody re-learns them:**
+1. **Xcode reuses a still-valid profile.** `-allowProvisioningUpdates` will not
+   refresh something that has not expired, so a plain rebuild re-signs with the
+   OLD expiry. Moving the profiles aside first is what mints new 7-day ones.
+   This is the difference between a 3-day and a 7-day repush.
+2. **macOS ships bash 3.2, which has no `mapfile`.** The first draft of the
+   install loop would have silently installed to nothing. Caught by running it,
+   not by reading it. It now uses a tsv file plus `while read` (a pipe would run
+   the loop in a subshell and lose the counters).
+3. **`main` is the current `ios/` tree, not either lane branch.** See the
+   deferred item filed the same day — building from `claude/watch-app` would
+   have shipped a regressed iPhone app.
+
+**Known-soft edge:** the watch is frequently unreachable (asleep / off wrist —
+`RemotePairingError 1001`). The script logs the failure, installs the rest, and
+retries on the next run; the watch keeps whatever valid build it already has.
+
+---
+
+### Addendum, same day: two regressions the device found that the build did not
+
+Shipped to prod, then driven against the real phone. Both of these were mine,
+and neither would ever have appeared in a simulator.
+
+**1. Adding read types silently killed the whole sync.** `bootstrap()` derived
+`alreadyAsked` from `statusForAuthorizationRequest` over the FULL read set.
+Adding the four composition types flipped that call from `.unnecessary` to
+`.shouldRequest`, so `alreadyAsked` went false, the guard fell through to the
+`health.granted` UserDefaults flag, and on an install where that flag was never
+written bootstrap returned early — no snapshot, no weigh-ins, and no error
+anywhere he would see it. The tell was in the data, not the code: the app
+synced at 09:58 on the old build and nothing reached the server after the
+reinstall. Now split into `coreReadTypes` (has he EVER granted anything) and
+`readTypes` (does he still owe us the new ones), so growing the set can never
+flip the first question.
+
+**2. Concurrent syncs wrote 857 duplicate rows into production.** `@MainActor`
+serialises the code but every `await` is a suspension point, so the `syncNow()`
+calls from the `HKObserverQuery` handlers and from the new `scenePhase` hook
+interleaved: each drain read the SAME unsaved anchor, fetched the same page and
+posted it. **The near-twin rule cannot save you there** — its range query runs
+before the other in-flight request has committed, so every racer sees an empty
+window and inserts. `syncNow()` now coalesces onto one Task, and the server
+re-checks for an exact (measuredAt, weightKg) match immediately before insert.
+The real fix is a unique index on a HealthKit sample id; that needs a migration
+and is in deferred-items.
+
+The 857 were removed from prod: only `source=apple_health` rows created inside
+the backfill window, keeping the richest row of each group, verified first that
+no deleted row carried a field its survivor lacked. The 233 pre-existing rows
+were untouched.
+
+**Correct the headline number.** The raw jump was 233 → 1276, but 857 of those
+were the duplicates above. **The real recovery is 186 weigh-ins**, reaching back
+to 2022-07-05 at 110.5 kg and running to 2026-07-19 at 83.7 kg — four years of
+history the today-and-yesterday window could never have reached. Final table:
+419 rows, 0 duplicates, 186 apple_health / 201 vesync / 32 manual.
+
+Composition is still empty (`bodyFatPct`, `bmi`, `leanBodyMass` all 0 rows)
+because the new types have not been granted yet — that needs his tap on
+**Allow body composition**, which is the correct behaviour, not a bug.
+
+**The lesson worth keeping:** the build was green, the tests passed, the symbols
+were verified present in the binary, and the app still did nothing. Only
+querying the database after a real launch showed it. Install success proves
+nothing; a snapshot row with a fresh `updatedAt` proves something.
 
 ---
 

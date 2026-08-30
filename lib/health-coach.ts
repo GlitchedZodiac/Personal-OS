@@ -176,9 +176,10 @@ export async function getWeeklyHealthContext(input: {
       where: { loggedAt: { gte: rangeStart, lte: rangeEnd } },
       select: { amountMl: true },
     }),
+    // Every recorded column, nulls dropped downstream — the old 4-field
+    // select hid tape and every smart-scale reading from the coach.
     prisma.bodyMeasurement.findMany({
       where: { measuredAt: { gte: rangeStart, lte: rangeEnd } },
-      select: { measuredAt: true, weightKg: true, bodyFatPct: true, waistCm: true },
       orderBy: { measuredAt: "asc" },
     }),
   ]);

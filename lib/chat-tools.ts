@@ -1,6 +1,15 @@
+import {
+  buildTapeTrend,
+  compactMeasurement,
+  hasAnyMeasurementWhere,
+  hasTapeWhere,
+} from "@/lib/body-measurements";
+import { getTrainingWeek } from "@/lib/planner";
 import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg } from "@/lib/prs";
+import { listTrails } from "@/lib/trails";
 import {
+  addDaysToDateString,
   getDateStringInTimeZone,
   getUtcDayBoundsForTimeZone,
   getWeekStartDateString,
@@ -102,7 +111,23 @@ export async function executeGetHealthData(
             roundsCompleted?: number;
             stepSeconds?: number[];
             emom?: { roundsCompleted?: number; totalRounds?: number };
+            hrrDelta?: number;
+            hrrSeconds?: number;
+            avgCadenceSpm?: number;
+            routeAnalytics?: {
+              movingSeconds?: number;
+              stoppedSeconds?: number;
+              avgMovingPaceSecPerKm?: number | null;
+              gradeAdjustedPaceSecPerKm?: number | null;
+              totalElevGainM?: number;
+              totalElevLossM?: number;
+              minAltM?: number | null;
+              maxAltM?: number | null;
+              maxSpeedMps?: number | null;
+              breaks?: unknown[];
+            };
           };
+          const ra = m.routeAnalytics;
           return {
             id: w.id,
             startedAt: w.startedAt.toISOString(),
@@ -111,10 +136,43 @@ export async function executeGetHealthData(
             durationMinutes: w.durationMinutes,
             volumeKg: sessionVolumeKg(w.exercises),
             exercises: w.exercises,
+            // 2026-08-29 (the audit's blindness fixed): the physical facts
+            // and provenance the external auditor couldn't see.
+            distanceMeters: w.distanceMeters,
+            elevationGainM: w.elevationGainM,
+            avgHeartRateBpm: w.avgHeartRateBpm,
+            maxHeartRateBpm: w.maxHeartRateBpm,
+            caloriesBurned: w.caloriesBurned,
+            stepCount: w.stepCount,
+            packKg: w.packKg,
+            trailId: w.trailId,
+            source: w.externalSource ?? w.source,
+            createdAt: w.createdAt.toISOString(),
             // zone analytics when an HR stream existed (Strava/watch)
             zonePct: m.timeInZones?.pct,
             loadScore: m.loadScore,
             relativeEffort: m.relativeEffort,
+            hrr:
+              typeof m.hrrDelta === "number"
+                ? { delta: m.hrrDelta, seconds: m.hrrSeconds ?? 60 }
+                : undefined,
+            avgCadenceSpm: m.avgCadenceSpm,
+            // GPS analytics summary (moving/stopped, reconciled + grade-
+            // adjusted pace, climb/descent, absolute altitude, top speed)
+            routeAnalytics: ra
+              ? {
+                  movingSeconds: ra.movingSeconds,
+                  stoppedSeconds: ra.stoppedSeconds,
+                  avgMovingPaceSecPerKm: ra.avgMovingPaceSecPerKm,
+                  gradeAdjustedPaceSecPerKm: ra.gradeAdjustedPaceSecPerKm,
+                  totalElevGainM: ra.totalElevGainM,
+                  totalElevLossM: ra.totalElevLossM,
+                  minAltM: ra.minAltM,
+                  maxAltM: ra.maxAltM,
+                  maxSpeedMps: ra.maxSpeedMps,
+                  breakCount: ra.breaks?.length,
+                }
+              : undefined,
             // routine-run metadata (watch circuit/EMOM runs; web runner)
             sequenceId: m.sequenceId,
             sequenceName: m.sequenceName,
@@ -256,16 +314,54 @@ export async function executeGetHealthData(
       };
     }
 
+    case "trails": {
+      // Polyline excluded on purpose — coordinates are bulk the model can't
+      // use; names, counts and last-run stats are the conversation.
+      const trails = await listTrails();
+      return {
+        trails: trails.map((t) => ({
+          id: t.id,
+          name: t.name,
+          aliases: t.aliases,
+          distanceMeters: t.distanceMeters,
+          elevationGainM: t.elevationGainM,
+          runCount: t.runCount,
+          lastRun: t.lastRun
+            ? {
+                startedAt: t.lastRun.startedAt,
+                durationMinutes: t.lastRun.durationMinutes,
+                distanceMeters: t.lastRun.distanceMeters,
+                elevationGainM: t.lastRun.elevationGainM,
+                avgHeartRateBpm: t.lastRun.avgHeartRateBpm,
+              }
+            : null,
+        })),
+      };
+    }
+
+    case "training_week": {
+      const thisWeek = await getTrainingWeek(timeZone);
+      const nextWeek = await getTrainingWeek(
+        timeZone,
+        addDaysToDateString(thisWeek.weekStart, 7)
+      );
+      return { today: todayStr, thisWeek, nextWeek };
+    }
+
     case "weight_trend": {
       // Weight is long-horizon: recent raw rows (with ids, for edits) PLUS a
       // full-history weekly series so "how's my weight going" gets the whole
       // journey (VeSync history: daily readings since Dec 2025), compactly.
-      const [recent, all] = await Promise.all([
+      const [recent, all, tapeRows] = await Promise.all([
+        // ANY reading, not just weight. Filtering on weightKg here is what made
+        // his tape-only check-ins invisible to the AI (2026-08-26).
         prisma.bodyMeasurement.findMany({
-          where: { weightKg: { not: null } },
+          where: hasAnyMeasurementWhere(),
           orderBy: { measuredAt: "desc" },
           take: 20,
         }),
+        // The weekly series stays weight-only — a row with no weight has
+        // nothing to average into a weight trend.
         prisma.bodyMeasurement.findMany({
           where: { weightKg: { not: null } },
           orderBy: { measuredAt: "asc" },
@@ -275,6 +371,14 @@ export async function executeGetHealthData(
             bodyFatPct: true,
             muscleMassKg: true,
           },
+        }),
+        // Tape is sparse and long-horizon: 200+ daily VeSync scale rows would
+        // evict every tape row from the recent-20 window above, so it gets its
+        // own query (same reasoning as app/api/health/body/overview).
+        prisma.bodyMeasurement.findMany({
+          where: hasTapeWhere(),
+          orderBy: { measuredAt: "desc" },
+          take: 40,
         }),
       ]);
 
@@ -307,13 +411,18 @@ export async function executeGetHealthData(
           avgBodyFatPct: avg(b.bf),
           avgMuscleMassKg: avg(b.mm),
         })),
-        measurements: recent.map((m) => ({
-          id: m.id,
-          measuredAt: m.measuredAt.toISOString().slice(0, 10),
-          weightKg: m.weightKg,
-          bodyFatPct: m.bodyFatPct,
-          waistCm: m.waistCm,
-        })),
+        // Every recorded field, nulls dropped — not the old 3-column subset.
+        // The scale contributes composition columns chat can never write, so
+        // the read path has to surface more than the write path accepts.
+        measurements: recent.map((m) =>
+          compactMeasurement({
+            ...m,
+            measuredAt: m.measuredAt.toISOString().slice(0, 10),
+          })
+        ),
+        // latest / previous / delta per tape dimension, so "what are my
+        // measurements" and "how's my weight" both land in one call.
+        tape: buildTapeTrend(tapeRows),
       };
     }
 
@@ -369,22 +478,9 @@ export async function executeGetHealthData(
   }
 }
 
-// Proposal tools — the model proposes, the USER confirms in the UI, then the
-// client persists via the normal CRUD endpoints. Anything here is terminal
-// for the agentic loop.
-export const PROPOSAL_TOOL_NAMES = new Set([
-  "log_food",
-  "log_measurement",
-  "log_workout",
-  "log_water",
-  "edit_food_log",
-  "delete_entry",
-  "create_routine",
-  "update_routine",
-  "create_exercise",
-  "edit_workout_entry",
-  "save_food_product",
-]);
+// (The old PROPOSAL_TOOL_NAMES set was deleted 2026-08-29: it had drifted
+// out of sync with proposalKindFor — the single authority below — and
+// nothing consumed it.)
 
 /// Numeric measurement fields — the ones the model zero-fills.
 const MEASUREMENT_NUMERIC_FIELDS = [
@@ -454,7 +550,10 @@ export type ProposalKind =
   | "routine_update"
   | "exercise"
   | "edit_workout"
-  | "product";
+  | "product"
+  | "trail"
+  | "plan_week"
+  | "reminder";
 
 export function proposalKindFor(toolName: string): ProposalKind | null {
   switch (toolName) {
@@ -480,6 +579,14 @@ export function proposalKindFor(toolName: string): ProposalKind | null {
       return "edit_workout";
     case "save_food_product":
       return "product";
+    case "name_trail":
+      return "trail";
+    case "plan_training":
+      return "plan_week";
+    // 2026-08-29: reminders join the confirm-first shape — this was the one
+    // tool that wrote immediately with no card.
+    case "set_reminder":
+      return "reminder";
     default:
       return null;
   }

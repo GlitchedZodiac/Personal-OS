@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { formatStepPrescription } from "@/lib/sequences";
 import {
   getOrCreateMicrophoneStream,
   deactivateMicrophoneStream,
@@ -57,6 +58,16 @@ const KIND_TITLES: Record<string, string> = {
   exercise: "NEW MOVEMENT",
   edit_workout: "WORKOUT FIX",
   product: "SAVE TO MY USUALS",
+  trail: "NAME THIS TRAIL",
+  plan_week: "THE WEEK, PLANNED",
+  reminder: "PROPOSED REMINDER",
+};
+
+const weekdayLabel = (day: string) => {
+  const d = new Date(`${day}T12:00:00`);
+  return Number.isFinite(d.getTime())
+    ? d.toLocaleDateString("en-US", { weekday: "short", day: "numeric" })
+    : day;
 };
 
 // ————— Quick filters —————
@@ -671,13 +682,16 @@ export default function ChatPage() {
             set: data.set,
             assignments: data.assignments,
             exercises: data.exercises,
+            ...(typeof data.packKg === "number" ? { packKg: data.packKg } : {}),
           }),
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || "Edit failed");
         followUp = Array.isArray(data.exercises)
           ? "Structured — the session now carries what you actually did, measured against the recording. PRs checked."
-          : "Fixed — PRs recalculated.";
+          : typeof data.packKg === "number" && !data.match && !data.assignments
+            ? `Pack recorded — ${data.packKg} kg carried.`
+            : "Fixed — PRs recalculated.";
       } else if (kind === "product") {
         const res = await fetch("/api/health/favorites", {
           method: "POST",
@@ -696,6 +710,50 @@ export default function ChatPage() {
         });
         if (!res.ok) throw new Error("Save failed");
         followUp = `${String(data.foodDescription ?? "Product")} is in My usuals — one tap next time.`;
+      } else if (kind === "trail") {
+        const res = await fetch("/api/health/trails", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: data.name, workoutId: data.workoutId }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Save failed");
+        followUp = body.created
+          ? `${String(body.trail?.name ?? data.name)} saved — the watch lists it under Saved trails now.`
+          : `Linked to ${String(body.trail?.name ?? data.name)} — repeat runs compare from here.`;
+      } else if (kind === "plan_week") {
+        const res = await fetch("/api/health/planner", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            days: data.days,
+            replaceWeek: data.replaceWeek === true,
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Save failed");
+        const created = Number(body.created ?? 0);
+        const reminders = Number(body.remindersCreated ?? 0);
+        followUp = `${created} day${created === 1 ? "" : "s"} planned${
+          reminders ? ` · ${reminders} reminder${reminders === 1 ? "" : "s"} set` : ""
+        } — the week strip on Train has it, and the 7am nudge knows.`;
+      } else if (kind === "reminder") {
+        const res = await fetch("/api/reminders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: data.title,
+            remindAt: data.remindAt,
+            url: "/dashboard",
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Save failed");
+        followUp = `Reminder set — ${new Date(String(data.remindAt)).toLocaleString("en-US", {
+          weekday: "short",
+          hour: "numeric",
+          minute: "2-digit",
+        })}.`;
       } else if (kind === "delete") {
         const entity = String(data.entity ?? "food");
         const endpoint =
@@ -773,6 +831,15 @@ export default function ChatPage() {
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
                     {it.proteinG}P · {it.carbsG}C · {it.fatG}F
                   </p>
+                  {/* v4: fold-matched against saved usuals server-side */}
+                  {(() => {
+                    const raw = (data.items as { usual?: { foodDescription: string } }[])?.[i];
+                    return raw?.usual ? (
+                      <p className="mt-0.5 text-[10.5px] font-semibold text-[#3E7A54]">
+                        ≈ your usual · {raw.usual.foodDescription}
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
                 {editing ? (
                   <span className="flex items-center gap-2">
@@ -832,7 +899,7 @@ export default function ChatPage() {
                 {data.restSecondsDefault ? ` · rest ${data.restSecondsDefault}s` : ""}
               </p>
               <div className="mt-2">
-                {((data.steps as { exerciseName: string; sets?: number; reps?: number; seconds?: number; weightKg?: number; restSeconds?: number }[]) ?? []).map(
+                {((data.steps as { exerciseName: string; sets?: number; reps?: number; seconds?: number; toFailure?: boolean; weightKg?: number; restSeconds?: number }[]) ?? []).map(
                   (s, i) => (
                     <div
                       key={i}
@@ -843,13 +910,7 @@ export default function ChatPage() {
                       </span>
                       <span className="text-[12px] tabular-nums text-secondary-foreground">
                         {[
-                          s.sets && s.reps
-                            ? `${s.sets} × ${s.reps}`
-                            : s.reps
-                              ? `${s.reps} reps`
-                              : s.seconds
-                                ? `${s.seconds}s`
-                                : null,
+                          formatStepPrescription(s),
                           s.weightKg ? `${s.weightKg} kg` : null,
                           s.restSeconds ? `rest ${s.restSeconds}s` : null,
                         ]
@@ -879,6 +940,62 @@ export default function ChatPage() {
                   also answers to {(data.aliases as string[]).join(", ")}
                 </p>
               )}
+            </div>
+          )}
+
+          {kind === "trail" && (
+            <div className="py-2">
+              <p
+                className="text-[15px] font-bold text-foreground"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {String(data.name ?? "Trail")}
+              </p>
+              <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#8C2F51]">
+                names {String(data.label ?? "the workout")}
+              </p>
+            </div>
+          )}
+
+          {kind === "plan_week" && Array.isArray(data.days) && (
+            <div className="py-1">
+              {(data.days as Array<{
+                date?: string;
+                title?: string;
+                routineName?: string;
+                trailName?: string;
+                targetWeightKg?: number;
+                reminders?: Array<{ atLocal?: string; title?: string }>;
+              }>).map((d, i) => (
+                <div
+                  key={i}
+                  className="flex items-start justify-between border-b border-muted py-2.5 last:border-b-0"
+                >
+                  <div className="min-w-0 pr-2">
+                    <p className="text-[13.5px] font-semibold text-foreground">
+                      {String(d.title ?? "")}
+                      {d.targetWeightKg ? ` · ${d.targetWeightKg} kg` : ""}
+                    </p>
+                    {(d.routineName || d.trailName) && (
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {d.routineName ?? d.trailName}
+                      </p>
+                    )}
+                    {Array.isArray(d.reminders) && d.reminders.length > 0 && (
+                      <p className="mt-0.5 text-[11px] text-[#8C2F51]">
+                        {d.reminders
+                          .map((r) =>
+                            `${String(r.atLocal ?? "").slice(11)} ${String(r.title ?? "")}`.trim()
+                          )
+                          .join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
+                    {weekdayLabel(String(d.date ?? ""))}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
 
@@ -933,9 +1050,16 @@ export default function ChatPage() {
                         .map(([k, v]) =>
                           k === "weightKg" ? `${v} kg` : k === "seconds" ? `${v}s` : `${k} ${v}`
                         )
-                        .join(" · ")}
+                        .join(" · ") ||
+                      (typeof data.packKg === "number" ? `pack ${data.packKg} kg` : "")}
                 </>
               )}
+              {typeof data.packKg === "number" &&
+                Boolean(data.exercises || data.match || data.assignments) && (
+                  <div className="mt-1 text-[12.5px] text-secondary-foreground">
+                    pack · {String(data.packKg)} kg carried
+                  </div>
+                )}
             </div>
           )}
 
@@ -1002,6 +1126,12 @@ export default function ChatPage() {
                     .map(([k, v]) => `${k.replace(/G$/, "")} ${v}`)
                     .join(" · ")}
                 </>
+              ) : kind === "reminder" ? (
+                <>
+                  Remind you:{" "}
+                  <span className="font-semibold">{String(data.title ?? "…")}</span>
+                  {fmtWhen(data.remindAt) ? ` · ${fmtWhen(data.remindAt)}` : ""}
+                </>
               ) : (
                 Object.entries(data)
                   .filter(([k, v]) => k !== "message" && v != null && typeof v !== "object")
@@ -1052,6 +1182,40 @@ export default function ChatPage() {
                 {editing ? "Done" : "Edit"}
               </button>
             )}
+            {/* v4: single-item card matching a saved usual — the zero-drift
+                path: log the usual's exact macros, discard the estimate */}
+            {kind === "food" &&
+              items.length === 1 &&
+              (() => {
+                const usual = (data.items as { usual?: Record<string, unknown> }[])?.[0]?.usual;
+                if (!usual) return null;
+                return (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch("/api/health/favorites", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            ...usual,
+                            logNow: true,
+                            loggedAt: (data.items as { loggedAt?: string }[])?.[0]?.loggedAt,
+                          }),
+                        });
+                        if (!res.ok) throw new Error();
+                        await resolveCard(msg.id, "rejected");
+                        toast.success("Logged your usual — exact saved macros");
+                      } catch {
+                        toast.error("Couldn't log the usual");
+                      }
+                    }}
+                    className="flex-1 rounded-[10px] border border-[#BFDCC9] bg-[#EAF3ED] py-[11px] text-[13px] font-semibold text-[#3E7A54]"
+                    style={{ fontFamily: "var(--font-display)" }}
+                  >
+                    Log usual
+                  </button>
+                );
+              })()}
             <button
               onClick={() => resolveCard(msg.id, "rejected")}
               className="flex-1 rounded-[10px] border border-border py-[11px] text-[13px] font-semibold text-muted-foreground"

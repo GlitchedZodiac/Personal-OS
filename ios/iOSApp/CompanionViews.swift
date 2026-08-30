@@ -104,6 +104,46 @@ struct CompanionSettingsView: View {
     @EnvironmentObject private var model: CompanionModel
     @Environment(\.dismiss) private var dismiss
 
+    @ViewBuilder
+    private var healthDiagnostics: some View {
+        if let last = model.health.lastSyncAt {
+            LabeledContent("Last sync", value: last.formatted(
+                date: .omitted, time: .shortened
+            ))
+        }
+        if let result = model.health.lastResult {
+            Text(result).font(.footnote).foregroundStyle(.secondary)
+        }
+        // A failure no longer gets overwritten by the next partial success.
+        if let error = model.health.lastError {
+            Text(error).font(.footnote).foregroundStyle(.red)
+        }
+        switch model.health.backfill {
+        case .running(let sent):
+            LabeledContent("History import", value: "\(sent) weigh-ins…")
+        case .done(let total):
+            LabeledContent("History import", value: "\(total) weigh-ins")
+        case .failed(let message):
+            Text("History import failed: \(message)")
+                .font(.footnote).foregroundStyle(.red)
+        case .idle:
+            EmptyView()
+        }
+        // Apple Health carries only four of the thirteen composition columns;
+        // say so rather than let him wonder why muscle mass stays blank.
+        Text("Apple Health can carry weight, body fat, BMI and lean mass. Muscle mass, bone mass, body water, visceral fat, BMR and metabolic age are not Apple Health data types — those still come from the VeSync CSV import.")
+            .font(.caption2).foregroundStyle(.secondary)
+        if let note = model.health.backgroundDeliveryNote {
+            Text(note).font(.caption2).foregroundStyle(.secondary)
+        }
+        Button("Sync now") {
+            Task { await model.health.syncNow() }
+        }
+        Button("Re-import full history") {
+            Task { await model.health.rerunBackfill() }
+        }
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -113,20 +153,23 @@ struct CompanionSettingsView: View {
                         Button("Connect Apple Health") {
                             Task { await model.health.requestAccess() }
                         }
+                    case .needsMoreTypes:
+                        // Body composition was added to readTypes on
+                        // 2026-08-26; an already-connected install has to be
+                        // asked again or the new types stay unread forever.
+                        Label("Connected — body composition not yet allowed",
+                              systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("Your scale writes body fat, BMI and lean mass into Apple Health. Pitaya needs permission to read them.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        Button("Allow body composition") {
+                            Task { await model.health.requestAccess() }
+                        }
+                        healthDiagnostics
                     case .authorized:
                         Label("Connected", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
-                        if let last = model.health.lastSyncAt {
-                            LabeledContent("Last sync", value: last.formatted(
-                                date: .omitted, time: .shortened
-                            ))
-                        }
-                        if let result = model.health.lastResult {
-                            Text(result).font(.footnote).foregroundStyle(.secondary)
-                        }
-                        Button("Sync now") {
-                            Task { await model.health.syncNow() }
-                        }
+                        healthDiagnostics
                     case .denied:
                         Text("Health access denied — enable in Settings → Health → Data Access → Pitaya.")
                             .font(.footnote)

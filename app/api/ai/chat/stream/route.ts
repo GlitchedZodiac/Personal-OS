@@ -4,12 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { getUserTimeZone } from "@/lib/server-timezone";
 import { getDateStringInTimeZone, getZonedDateParts } from "@/lib/timezone";
 import { CHAT_SYSTEM_PROMPT, CHAT_RESPONSES_TOOLS } from "@/lib/ai-prompts";
-import {
-  executeGetHealthData,
-  proposalKindFor,
-  sanitizeProposalArgs,
-} from "@/lib/chat-tools";
+import { proposalKindFor, sanitizeProposalArgs } from "@/lib/chat-tools";
+import { type AppDataArgs, executeAppData } from "@/lib/ai/data-access";
 import { normalizeFoodItemsWithTiming } from "@/lib/food-timing";
+import { matchUsual } from "@/lib/food-match";
 import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 
 // Chat 2b — the Responses-API agentic loop with SSE streaming.
@@ -21,8 +19,19 @@ import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 
 export const maxDuration = 60;
 
-const MAX_TURNS = 5;
-const HISTORY_LIMIT = 20;
+// 6, not 5: a cross-domain question ("how did my spending track against my
+// training") can need a second read round after seeing the first. Costs
+// nothing when unused. The wall-clock guard below is the real backstop.
+const MAX_TURNS = 6;
+
+// maxDuration is 60s. Without a check, a slow multi-dataset turn can hit the
+// Vercel ceiling mid-stream and the user gets NOTHING. Bail at 42s and spend
+// the remainder on one final text turn.
+const SOFT_DEADLINE_MS = 42_000;
+// 12, down from 20 (2026-08-29): chat input averaged 7.1k tokens/call and
+// the replayed history was a big slice of it — a food log doesn't need last
+// week's conversation. Proposals are already compressed to one line each.
+const HISTORY_LIMIT = 12;
 const MAX_IMAGES = 6; // one capture's worth — plate, label, receipt…
 
 interface FunctionCallItem {
@@ -175,12 +184,26 @@ export async function POST(request: NextRequest) {
         let input: any[] = [...history, { role: "user", content: userContent }];
         let finalText = "";
 
+        const startedAt = Date.now();
+
         for (let turn = 0; turn < MAX_TURNS; turn++) {
+          // Out of time: stop reading, force one final text turn so he gets an
+          // answer (or an honest "ask me more narrowly") instead of silence.
+          const outOfTime =
+            turn > 0 && Date.now() - startedAt > SOFT_DEADLINE_MS;
+          if (outOfTime) {
+            input.push({
+              role: "system",
+              content:
+                "You are out of time. Answer NOW from what you already retrieved. Do not call any more tools. If you did not get enough, say so in one line and suggest a narrower question.",
+            });
+          }
+
           const response = await openai.responses.create({
             model: CHAT_MODEL,
             instructions,
             input,
-            tools: CHAT_RESPONSES_TOOLS as never,
+            tools: outOfTime ? [] : (CHAT_RESPONSES_TOOLS as never),
             reasoning: { effort: "low" },
             include: ["reasoning.encrypted_content"],
             store: false,
@@ -232,15 +255,44 @@ export async function POST(request: NextRequest) {
               // Zero-filled measurement fields never reach the card or the DB.
               args = sanitizeProposalArgs(call.name, args);
               if (call.name === "log_food") {
-                args = {
-                  ...args,
-                  items: normalizeFoodItemsWithTiming(
-                    args.items as never,
-                    message,
-                    timeZone,
-                    now
-                  ),
-                };
+                const items = normalizeFoodItemsWithTiming(
+                  args.items as never,
+                  message,
+                  timeZone,
+                  now
+                );
+                // v4 (token ROI): fuzzy-match each item against saved usuals
+                // so the card can offer the zero-token path. Deterministic,
+                // one small query, never blocks the proposal.
+                let annotated = items as Array<Record<string, unknown>>;
+                try {
+                  const usuals = await prisma.favoriteFoods.findMany({
+                    select: {
+                      id: true,
+                      foodDescription: true,
+                      mealType: true,
+                      calories: true,
+                      proteinG: true,
+                      carbsG: true,
+                      fatG: true,
+                      kind: true,
+                      servingLabel: true,
+                    },
+                    take: 40,
+                  });
+                  if (usuals.length > 0) {
+                    annotated = (items as Array<Record<string, unknown>>).map((it) => {
+                      const desc = String(it.foodDescription ?? "");
+                      const match = desc ? matchUsual(desc, usuals) : null;
+                      if (!match) return it;
+                      const full = usuals.find((u) => u.id === match.id);
+                      return full ? { ...it, usual: full } : it;
+                    });
+                  }
+                } catch {
+                  // favorites unavailable — the card just shows no shortcut
+                }
+                args = { ...args, items: annotated };
               }
               // Same ordering guard as the assistant row — a proposal must
               // not land ahead of the message that prompted it.
@@ -262,12 +314,14 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
-            if (call.name === "get_health_data") {
-              send({ type: "tool", name: call.name, query: args.query ?? "" });
-              const result = await executeGetHealthData(
-                args as { query?: string; days?: number },
-                timeZone,
-                todayStr
+            // `get_health_data` is still accepted so a turn already in flight
+            // against the previous deploy cannot break mid-stream.
+            if (call.name === "get_app_data" || call.name === "get_health_data") {
+              const dataset = String(args.dataset ?? args.query ?? "");
+              send({ type: "tool", name: "get_app_data", query: dataset });
+              const result = await executeAppData(
+                { ...(args as AppDataArgs), dataset },
+                { timeZone, todayStr }
               );
               input.push({
                 type: "function_call_output",
@@ -277,31 +331,9 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
-            if (call.name === "set_reminder") {
-              const remindAt = new Date(String(args.remindAt ?? ""));
-              if (Number.isFinite(remindAt.getTime())) {
-                await prisma.reminder.create({
-                  data: {
-                    title: String(args.title ?? "Reminder"),
-                    body: String(args.title ?? "Reminder"),
-                    remindAt,
-                    url: "/dashboard",
-                  },
-                });
-                input.push({
-                  type: "function_call_output",
-                  call_id: call.call_id,
-                  output: `Reminder created for ${remindAt.toISOString()}.`,
-                });
-              } else {
-                input.push({
-                  type: "function_call_output",
-                  call_id: call.call_id,
-                  output: "Invalid remindAt datetime — ask the user to clarify the time.",
-                });
-              }
-              continue;
-            }
+            // (set_reminder's inline write was removed 2026-08-29 — it now
+            // rides proposalKindFor like every other write: card → confirm
+            // → POST /api/reminders.)
 
             input.push({
               type: "function_call_output",
