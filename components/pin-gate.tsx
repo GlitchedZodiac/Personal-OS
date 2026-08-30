@@ -12,6 +12,36 @@ interface PinGateProps {
   children: React.ReactNode;
 }
 
+const OFFLINE_GRANT_KEY = "pitaya:offline-grant-at";
+/** how long a device may let itself in offline after its last real, server-checked sign-in */
+const OFFLINE_GRANT_MS = 30 * 24 * 60 * 60_000;
+
+function offlineGrantValid() {
+  try {
+    const at = Number(localStorage.getItem(OFFLINE_GRANT_KEY));
+    return Number.isFinite(at) && at > 0 && Date.now() - at < OFFLINE_GRANT_MS;
+  } catch {
+    return false;
+  }
+}
+
+/** a one-line, dismissable truth: you are in, but nothing was checked with the server */
+function OfflineEntryNotice() {
+  const [gone, setGone] = useState(false);
+  if (gone) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => setGone(true)}
+      className="fixed inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 px-4 py-1.5 text-[11px] font-semibold"
+      style={{ background: "#F6E3EB", color: "#8C2F51" }}
+    >
+      Offline — opened from this device. Your work is saved here and syncs when you reconnect.
+      <span style={{ opacity: 0.55 }}>tap to hide</span>
+    </button>
+  );
+}
+
 export function PinGate({ children }: PinGateProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
@@ -20,6 +50,8 @@ export function PinGate({ children }: PinGateProps) {
   const [pinConfigured, setPinConfigured] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  /** he got in without a server to check the PIN — say so rather than pretend */
+  const [offlineEntry, setOfflineEntry] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -32,6 +64,10 @@ export function PinGate({ children }: PinGateProps) {
       if (Number.isFinite(okUntil) && okUntil > Date.now()) {
         setIsAuthenticated(true);
         setIsChecking(false);
+        // A live memo chains back to a real server check minutes ago, so it renews the offline
+        // grant too. Without this, a device that always hits the fast path never records one —
+        // and would find itself locked out the first time it opened the app with no signal.
+        try { localStorage.setItem(OFFLINE_GRANT_KEY, String(Date.now())); } catch {}
         return;
       }
     } catch {
@@ -41,22 +77,44 @@ export function PinGate({ children }: PinGateProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const rememberGrant = () => {
+    try {
+      sessionStorage.setItem("pitaya:auth-ok-until", String(Date.now() + 10 * 60_000));
+      // sessionStorage dies with the tab, and a PWA relaunch is a new tab. The offline grant
+      // has to outlive that, so it lives in localStorage.
+      localStorage.setItem(OFFLINE_GRANT_KEY, String(Date.now()));
+    } catch {
+      // best effort
+    }
+  };
+
   const checkAuth = async () => {
     try {
       const res = await fetch("/api/auth");
       if (res.ok) {
         setIsAuthenticated(true);
-        try {
-          sessionStorage.setItem("pitaya:auth-ok-until", String(Date.now() + 10 * 60_000));
-        } catch {
-          // best effort
-        }
+        rememberGrant();
       } else if (res.status === 503) {
         setPinConfigured(false);
         setError(demoText("APP_PIN is not configured yet", "APP_PIN todavia no esta configurado"));
+      } else {
+        // The server SAID no. That is different from being unable to ask, and it revokes the
+        // offline grant — otherwise a signed-out device would keep letting itself back in.
+        try { localStorage.removeItem(OFFLINE_GRANT_KEY); } catch {}
       }
     } catch {
-      // Not authenticated
+      // We could not ask. On a plane, in a basement, on church wifi that has given up, the PIN
+      // is unverifiable — there is no server to check it against — so demanding one would lock
+      // him out of a notebook that is sitting on this device. If this device authenticated for
+      // real recently, let him in and keep working offline.
+      //
+      // What this does and does not grant: it unlocks the local UI only. Every API is still
+      // gated server-side by the signed cookie, so offline he can reach exactly what is already
+      // cached on this device and nothing more. It expires, and a real 401 clears it.
+      if (offlineGrantValid()) {
+        setIsAuthenticated(true);
+        setOfflineEntry(true);
+      }
     } finally {
       setIsChecking(false);
     }
@@ -76,11 +134,7 @@ export function PinGate({ children }: PinGateProps) {
 
       if (res.ok) {
         setSuccess(true);
-        try {
-          sessionStorage.setItem("pitaya:auth-ok-until", String(Date.now() + 10 * 60_000));
-        } catch {
-          // best effort
-        }
+        rememberGrant();
         setTimeout(() => setIsAuthenticated(true), 400);
       } else if (res.status === 429) {
         setError(demoText("Too many attempts. Wait a few minutes.", "Demasiados intentos. Espera unos minutos."));
@@ -96,7 +150,13 @@ export function PinGate({ children }: PinGateProps) {
         inputRef.current?.focus();
       }
     } catch {
-      setError(demoText("Something went wrong", "Algo salio mal"));
+      // The PIN is checked on the server. With no connection there is nothing to check it
+      // against — say that, instead of blaming him for typing it wrong.
+      setError(
+        typeof navigator !== "undefined" && navigator.onLine === false
+          ? demoText("No connection — the PIN is checked on the server", "Sin conexion — el PIN se verifica en el servidor")
+          : demoText("Something went wrong", "Algo salio mal"),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -118,7 +178,12 @@ export function PinGate({ children }: PinGateProps) {
   }
 
   if (isAuthenticated) {
-    return <>{children}</>;
+    return (
+      <>
+        {offlineEntry && <OfflineEntryNotice />}
+        {children}
+      </>
+    );
   }
 
   return (

@@ -25,6 +25,8 @@ export function PaneHeader({
   right,
   onKicker,
   onTitle,
+  titleGlyph = "\u270E",
+  titleHint = "Rename this page",
   children,
 }: {
   kicker: string;
@@ -32,8 +34,11 @@ export function PaneHeader({
   meta?: ReactNode;
   right?: ReactNode;
   onKicker?: () => void;
-  /** tap the title to rename what this pane is showing */
+  /** tap the title to rename what this pane is showing — or, on the Bible, to navigate */
   onTitle?: () => void;
+  /** the affordance drawn after the title: a pencil to rename, a chevron to open a menu */
+  titleGlyph?: string;
+  titleHint?: string;
   children?: ReactNode;
 }) {
   return (
@@ -68,9 +73,9 @@ export function PaneHeader({
         <>
           <span style={{ fontSize: 11, color: "#C9C7CD" }}>·</span>
           {onTitle ? (
-            <button type="button" onClick={onTitle} title="Rename this page" style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, background: "transparent", border: 0, padding: "3px 6px", marginLeft: -6, borderRadius: 7, cursor: "text", font: "inherit" }}>
+            <button type="button" onClick={onTitle} title={titleHint} aria-label={titleHint} style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, background: "transparent", border: 0, padding: "3px 6px", marginLeft: -6, borderRadius: 7, cursor: "pointer", font: "inherit" }}>
               <span style={{ fontFamily: DISPLAY, fontSize: 13, fontWeight: 600, color: "#232227", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{title}</span>
-              <span style={{ fontSize: 10, color: "#C9C7CD", flex: "none" }}>✎</span>
+              <span style={{ fontSize: 10, color: "#C9C7CD", flex: "none" }}>{titleGlyph}</span>
             </button>
           ) : (
             <span style={{ fontFamily: DISPLAY, fontSize: 13, fontWeight: 600, color: "#232227", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{title}</span>

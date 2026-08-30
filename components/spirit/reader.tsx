@@ -310,6 +310,17 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
     if (first) {
       const parts = refParts(first);
       props.onChapterChange?.(parts.book * 1000 + parts.chapter, q);
+      // Warm the chapters on either side so turning a page still works with no network. The
+      // service worker caches scripture forever (it cannot change), and these go through the
+      // SAME url builder as the real load, which is the only way the cache keys line up.
+      const warm = (chapter: number) => {
+        if (chapter < 1 || chapter > (CHAPTERS[parts.book - 1] ?? 1)) return;
+        const p2 = new URLSearchParams({ q: `${BOOKS[parts.book - 1]} ${chapter}`, pin: "1" });
+        if (dayMeta?.id) p2.set("dayId", dayMeta.id);
+        void fetch(`/api/spirit/passage?${p2.toString()}`).catch(() => {});
+      };
+      warm(parts.chapter - 1);
+      warm(parts.chapter + 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, dayMeta?.id]);
@@ -820,7 +831,11 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
         </div>
       )}
 
-      {/* the whole canon, three taps away — this is how you leave the chapter you are in */}
+      {/* The whole canon, three taps away. On the phone this pill IS the navigator. In the desk
+          it is NOT rendered: it sat inside the scrolling column, so moving to another chapter
+          meant scrolling the Bible back to the top first, and it duplicated the pane header a
+          few pixels above it. The desk header — which is frozen — carries navigation instead. */}
+      {!embedded && (
       <div className="relative mt-3.5">
         <button
           onClick={() => { setNavOpen((v) => !v); haptic("selection"); }}
@@ -866,10 +881,12 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
           </div>
         )}
       </div>
+      )}
 
-      {/* chapter chips · ESV⇄NBLA · Aa · ▶ */}
+      {/* chapter chips · ESV⇄NBLA · Aa · ▶ — the chips are navigation, so in the desk they
+          move up into the frozen header alongside the book/chapter/verse menu */}
       <div className="mt-3.5 flex items-center gap-1.5">
-        {chapterChips.map((c) => {
+        {!embedded && chapterChips.map((c) => {
           const on = c === cur?.chapter;
           return (
             <button

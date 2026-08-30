@@ -18,6 +18,7 @@ import { ClosingCard, type Proposal } from "./closing-card";
 import { RecordingChip, ReplayBar, type SegmentMeta, type TranscriptLine } from "./recording-control";
 import { useDesk, useDeskEvent } from "./desk-state";
 import { FindVersePopover } from "./find-verse";
+import { applyOutbox, flushOutbox, keepStorage, listOutbox, queueDelta } from "@/lib/ink-outbox";
 import { refParts } from "@/lib/bible-refs";
 import { PaneHeader, Chip, DISPLAY, cardShadow, Popover, Kicker } from "./ui";
 import { CheckIcon, RecDot } from "./desk-icons";
@@ -162,10 +163,10 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       if (movedStrokes.length) {
         const ids = new Set(movedStrokes.map((s) => s.id));
         setStrokes((ss) => ss.map((s) => (ids.has(s.id) ? movedStrokes.find((m) => m.id === s.id)! : s)));
-        pending.current.remove.push(...movedStrokes.map((s) => s.id));
-        pending.current.append.push(...movedStrokes);
+        enqueue({ remove: movedStrokes.map((s) => s.id), append: movedStrokes, objects: true });
+      } else {
+        enqueue({ objects: true });
       }
-      pending.current.objects = true;
       scheduleSave();
       haptic("soft");
     };
@@ -313,8 +314,14 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       const d = await r.json();
       const p = d.page as PageRow;
       setPage(p);
-      setStrokes((p.strokes ?? []) as Stroke[]);
-      setObjects((p.objects ?? []) as PageObject[]);
+      // Fold in anything the durable log still holds for this page. Without this a page
+      // recovered after a crash would render the SERVER's copy — his unsent paragraph would be
+      // safe on disk and yet invisible, which reads exactly like losing it.
+      const unsent = await listOutbox(p.id);
+      const merged = applyOutbox((p.strokes ?? []) as Stroke[], (p.objects ?? []) as PageObject[], unsent);
+      setStrokes(merged.strokes);
+      setObjects(merged.objects);
+      if (unsent.length) setSaving("offline");
       setHistory([]);
       setFuture([]);
       setLasso(null);
@@ -374,6 +381,29 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   useEffect(() => {
     pageRef.current = page;
   }, [page]);
+  /**
+   * The ONE way work becomes pending. It writes the durable log FIRST — before the in-memory
+   * queue, before any network — so a kill at any instant after this call still has his ink on
+   * disk. Ten call sites used to push straight into `pending.current`; eight of them had no
+   * durable copy at all, and `pending.current` is RAM. That is the shape of the bug that ate a
+   * paragraph on 2026-08-30: the ink was only ever in a ref, and the app restarted.
+   */
+  const enqueue = useCallback((d: { append?: Stroke[]; remove?: string[]; objects?: PageObject[] | true }) => {
+    const id = pageRef.current?.id;
+    const objs = d.objects === true ? objectsRef.current : d.objects;
+    if (id) void queueDelta({ pageId: id, append: d.append, remove: d.remove, objects: objs });
+    // Removals are folded in FIRST, cancelling any queued append of the same id: a stroke drawn
+    // and erased inside one debounce window must not be re-appended after the server removes it.
+    // New appends land after, so a move (same ids, new geometry) still replaces rather than dies.
+    if (d.remove?.length) {
+      const rm = new Set(d.remove);
+      pending.current.append = pending.current.append.filter((st) => !rm.has(st.id));
+      pending.current.remove.push(...d.remove);
+    }
+    if (d.append?.length) pending.current.append.push(...d.append);
+    if (d.objects) pending.current.objects = true;
+  }, []);
+
   const flushNow = useCallback(async () => {
     const cur = pageRef.current;
     if (!cur) return;
@@ -387,8 +417,10 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     if (objDirty) body.objects = objectsRef.current;
     try {
       const r = await fetch(`/api/spirit/ink/${cur.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      setSaving(r.ok ? "saved" : "offline");
       if (!r.ok) throw new Error("save failed");
+      // the server has it — now the durable log can let go of everything it was holding
+      const left = await flushOutbox();
+      setSaving(left.remaining > 0 ? "offline" : "saved");
     } catch {
       pending.current = { append: [...append, ...pending.current.append], remove: [...remove, ...pending.current.remove], objects: objDirty || pending.current.objects };
       setSaving("offline");
@@ -405,6 +437,24 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       }, 15000);
     }
   }, [flushNow, page]);
+  // Recover and retry. Anything the log still holds is replayed at boot — that is the case
+  // that lost his paragraph — then again whenever the connection returns, and on a slow
+  // heartbeat so a save that failed while he was NOT drawing still eventually lands.
+  useEffect(() => {
+    let alive = true;
+    keepStorage();
+    const drain = async () => {
+      const r = await flushOutbox();
+      if (!alive) return;
+      if (r.remaining > 0) setSaving("offline");
+      else if (r.sent > 0) { setSaving("saved"); toast.success(`Saved ${r.sent} change${r.sent === 1 ? "" : "s"} that were waiting.`); }
+    };
+    void drain();
+    const onOnline = () => void drain();
+    window.addEventListener("online", onOnline);
+    const id = setInterval(() => { if (navigator.onLine !== false) void drain(); }, 20000);
+    return () => { alive = false; window.removeEventListener("online", onOnline); clearInterval(id); };
+  }, []);
   useEffect(() => {
     const onHide = () => void flushNow();
     window.addEventListener("pagehide", onHide);
@@ -436,12 +486,8 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     const g = growBelow(boundaryY, delta, fromStrokes, fromObjects);
     setObjects(g.objects);
     setStrokes(g.strokes);
-    pending.current.objects = true;
     // moved strokes are re-written: remove the old ids, append the moved copies (same ids → replace)
-    if (g.moved.length) {
-      pending.current.remove.push(...g.moved.map((m) => m.id));
-      pending.current.append.push(...g.moved);
-    }
+    enqueue({ remove: g.moved.map((m) => m.id), append: g.moved, objects: g.objects });
     scheduleSave();
   };
   const lastGrowAt = useRef(0);
@@ -472,11 +518,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       const g = growBelow(floor, delta, others, currentObjects);
       setObjects(g.objects);
       setStrokes([...g.strokes, stroke]);
-      pending.current.objects = true;
-      if (g.moved.length) {
-        pending.current.remove.push(...g.moved.map((m) => m.id));
-        pending.current.append.push(...g.moved);
-      }
+      enqueue({ remove: g.moved.map((m) => m.id), append: g.moved, objects: g.objects });
       // never silent: say which heading moved, and hand him the way back
       haptic("soft");
       const movedLabel = String((secs[idx + 1].data as { label?: string })?.label ?? "the next section");
@@ -487,15 +529,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     if (readOnly) return;
     pushHistory();
     setStrokes(next);
-    if (delta.appended?.length) pending.current.append.push(...delta.appended);
-    if (delta.removed?.length) {
-      const rm = new Set(delta.removed);
-      // A stroke drawn and erased inside one debounce window queued append[X] AND remove[X].
-      // The server applies removals first — against a copy that never had X — then appends it,
-      // so the erased stroke came back on the next load. Cancel the append instead of racing.
-      pending.current.append = pending.current.append.filter((s) => !rm.has(s.id));
-      pending.current.remove.push(...delta.removed);
-    }
+    enqueue({ append: delta.appended, remove: delta.removed });
     scheduleSave();
     // an ERASE must never grow the page — only a new mark near the bottom edge can
     if (delta.appended?.length === 1 && !delta.removed?.length && (isSermon || page?.kind === "study" || page?.kind === "worksheet")) autoGrowFor(delta.appended[0], next, objects);
@@ -503,7 +537,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   const applyObjects = (next: PageObject[]) => {
     pushHistory();
     setObjects(next);
-    pending.current.objects = true;
+    enqueue({ objects: next });
     scheduleSave();
   };
   const redoRef = useRef<(() => void) | null>(null);
@@ -518,9 +552,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     const added = prev.strokes.filter((s) => !strokes.find((p) => p.id === s.id));
     setStrokes(prev.strokes);
     setObjects(prev.objects);
-    pending.current.remove.push(...removed);
-    pending.current.append.push(...added);
-    pending.current.objects = true;
+    enqueue({ remove: removed, append: added, objects: prev.objects });
     scheduleSave();
   };
   const redo = () => {
@@ -534,9 +566,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     const added = next.strokes.filter((s) => !strokes.find((p) => p.id === s.id));
     setStrokes(next.strokes);
     setObjects(next.objects);
-    pending.current.remove.push(...removed);
-    pending.current.append.push(...added);
-    pending.current.objects = true;
+    enqueue({ remove: removed, append: added, objects: next.objects });
     scheduleSave();
   };
   redoRef.current = redo;
@@ -659,7 +689,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     if (!moveObj) return;
     setMoveObj(null);
     haptic("light");
-    pending.current.objects = true;
+    enqueue({ objects: true });
     scheduleSave();
   };
 
@@ -827,10 +857,11 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       pushHistory();
       const remaining = strokes.filter((s) => !lasso.ids.has(s.id));
       setStrokes(remaining);
-      pending.current.remove.push(...Array.from(lasso.ids));
+      const converted: PageObject[] = [...objects];
       const o: PageObject = { id: newId(), type: "text", x: at.x, y: at.y, w: Math.max(260, Math.min(520, lasso.bounds.w + 40)), h: 60, t0: Date.now(), data: { text: p.text, label: "CONVERTED FROM INK" } };
-      setObjects((os) => [...os, o]);
-      pending.current.objects = true;
+      converted.push(o);
+      setObjects(converted);
+      enqueue({ remove: Array.from(lasso.ids), objects: converted });
       scheduleSave();
       setLasso(null);
     } finally {
@@ -1424,8 +1455,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
                     moveStart.current = null;
                     const ids = Array.from(lasso.ids);
                     const replaced = strokes.filter((s) => lasso.ids.has(s.id));
-                    pending.current.remove.push(...ids);
-                    pending.current.append.push(...replaced);
+                    enqueue({ remove: ids, append: replaced });
                     scheduleSave();
                     setMoving(false);
                     setLasso(null);

@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import { SpiritReader, type SpiritReaderHandle } from "@/components/spirit/reader";
+import { BibleNav } from "@/components/spirit/bible-nav";
 import { InkCanvas, type InkCanvasHandle, type StrokeEndInfo } from "./ink-canvas";
 import { useDesk, useDeskEvent, hlColor } from "./desk-state";
 import { ActionBarA, ActionBarB, type BarAction } from "./action-bar";
@@ -21,13 +22,34 @@ import { RefCardGhost } from "./ref-card";
 import { RefPopover, type RefPopoverState } from "./ref-popover";
 import { PaneHeader, Chip, Popover, Kicker } from "./ui";
 import { EyeIcon, LayersIcon, MarginIcon, PinIcon, PenIcon } from "./desk-icons";
-import { formatRef, refParts, BOOKS } from "@/lib/bible-refs";
+import { formatRef, refParts, BOOKS, BOOK_ABBREV, CHAPTERS } from "@/lib/bible-refs";
 import { type Stroke } from "@/lib/ink";
 import { askConfirm, askPrompt } from "./dialog";
 import { haptic } from "@/lib/haptics";
+import { applyOutbox, deleteSeqs, listOutbox, queueDelta } from "@/lib/ink-outbox";
 
 const MARGIN_W = [0, 122, 170] as const; // none · wide · wider — none is none
 const MARGIN_LABEL = ["MARGIN · NONE", "MARGIN · WIDE", "MARGIN · WIDER"] as const;
+
+/** one chapter forward or back, from the frozen header, with the ink dot the chips used to carry */
+function ChapterStep({ label, target, book, inked, onGo }: { label: string; target: number | null; book: number | null; inked: boolean; onGo: () => void }) {
+  const can = target !== null && book !== null;
+  return (
+    <button
+      type="button"
+      onClick={onGo}
+      disabled={!can}
+      title={can ? `${BOOK_ABBREV[book - 1]} ${target}` : undefined}
+      aria-label={can ? `Go to ${BOOKS[book - 1]} ${target}` : "No chapter that way"}
+      style={{ position: "relative", width: 22, height: 22, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 99, border: "1px solid #E4E2E6", background: "#FFFFFF", color: can ? "#454349" : "#D9D7DC", fontSize: 12, lineHeight: 1, cursor: can ? "pointer" : "default", padding: 0 }}
+    >
+      {label}
+      {can && inked && (
+        <span style={{ position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)", width: 3, height: 3, borderRadius: "50%", background: "#A63D63" }} />
+      )}
+    </button>
+  );
+}
 
 export interface BiblePaneProps {
   role: "main" | "reference";
@@ -82,6 +104,9 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [title, setTitle] = useState<string>(query ?? "");
   const [chapterKey, setChapterKey] = useState<number | null>(null);
+  // Navigation lives in the pane header, which does not scroll. The Reader's own in-column
+  // navigator is suppressed in the desk (see reader.tsx): one menu, always reachable.
+  const [navOpen, setNavOpen] = useState(false);
   const [sel, setSel] = useState<{ start: number | null; end: number | null }>({ start: null, end: null });
   const [barAnchor, setBarAnchor] = useState<{ x: number; y: number } | null>(null);
   const scrolledTo = useRef<string | null>(null);
@@ -268,7 +293,10 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       const layersBody = layersRes.ok ? await layersRes.json() : { pages: [] };
       const page = pageBody.pages?.[0] ?? null;
       setOverlay(page ? { id: page.id, chapterKey: ck, layerKey: lk, strokes: (page.strokes ?? []) as Stroke[], layout: page.layout ?? null } : null);
-      setStrokes(page ? ((page.strokes ?? []) as Stroke[]) : []);
+      // fold in any unsent marks for this layer, so ink recovered after a crash is VISIBLE
+      const serverStrokes = page ? ((page.strokes ?? []) as Stroke[]) : [];
+      const unsent = page ? await listOutbox(page.id) : [];
+      setStrokes(unsent.length ? applyOutbox(serverStrokes, [], unsent).strokes : serverStrokes);
       setLayers((layersBody.pages ?? []).map((p: { layerKey: string; strokeCount: number }) => ({ layerKey: p.layerKey, strokeCount: p.strokeCount })));
       setUnpinned(false);
       pending.current = { append: [], remove: [] };
@@ -332,13 +360,21 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       }
       setOverlay(page);
     }
-    await fetch(`/api/spirit/ink/${page.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ appendStrokes: append, removeStrokeIds: remove }),
-    }).catch(() => {
+    // Durable before the network — the overlay page exists only now (it is created lazily), so
+    // this is the first moment his verse ink can be written to the log with a real page id.
+    const seq = await queueDelta({ pageId: page.id, append, remove });
+    try {
+      const r = await fetch(`/api/spirit/ink/${page.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appendStrokes: append, removeStrokeIds: remove }),
+      });
+      if (!r.ok) throw new Error("overlay save failed");
+      if (seq !== null) await deleteSeqs([seq]);
+    } catch {
+      // it stays in the log; the notebook pane's drain loop replays it when the network returns
       pending.current = { append: [...append, ...pending.current.append], remove: [...remove, ...pending.current.remove] };
-    });
+    }
     setInkChapters((s) => new Set([...Array.from(s), chapterKey]));
     setLayers((ls) => {
       const i = ls.findIndex((l) => l.layerKey === layerKey);
@@ -695,6 +731,9 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   // and get scissored off by the pane's overflow:hidden. Spend each optional chip from a BUDGET
   // instead, so adding one collapses the row's long labels rather than pushing controls off.
   const chipCost =
+    96 +                                       // the navigator title + the two chapter steppers,
+                                               // which are no longer optional: they are the only
+                                               // way to move, so the OTHER chips give up room first
     (sel.start !== null ? 118 : 0) +           // "JONAH 2:1 SELECTED"
     (strokes.length > 0 && !unpinned && overlayVisibility !== "hide" ? 138 : 0) + // TEXT SIZE LOCKED
     (strokes.length || inkPast.length || inkFuture.length ? 64 : 0);              // ⤺ ⤻
@@ -715,6 +754,20 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const free2 = Boolean(free);
   const canvasEnabled = overlayVisibility !== "hide";
 
+  // The header is the ONLY navigation surface in the desk. It is frozen at the top of the pane,
+  // so "go to Exodus 24" never costs a scroll back to the top first.
+  const navBook = chapterKey ? Math.floor(chapterKey / 1000) : null;
+  const navChapter = chapterKey ? chapterKey % 1000 : null;
+  const maxChapter = navBook ? CHAPTERS[navBook - 1] ?? 1 : 1;
+  const prevChapter = navBook && navChapter && navChapter > 1 ? navChapter - 1 : null;
+  const nextChapter = navBook && navChapter && navChapter < maxChapter ? navChapter + 1 : null;
+  const stepChapter = (dir: -1 | 1) => {
+    const next = dir === -1 ? prevChapter : nextChapter;
+    if (!navBook || next === null) return;
+    haptic("selection");
+    setHistory((h) => (query ? [...h, query].slice(-12) : h));
+    onQueryChange(`${BOOKS[navBook - 1]} ${next}`);
+  };
   const headerRight = (
     // minWidth:0 so this can be squeezed rather than forcing the row wider than the pane
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap", minWidth: 0 }}>
@@ -803,7 +856,43 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
 
   return (
     <div ref={paneRef} data-pane-role={role} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, position: "relative", background: "#FFFFFF" }}>
-      <PaneHeader kicker={role === "main" ? "BIBLE" : "REFERENCE"} title={narrow ? undefined : `${title || query || "…"}`} meta={narrow ? undefined : "ESV"} onKicker={onKicker} right={headerRight}>
+      <PaneHeader
+        kicker={role === "main" ? "BIBLE" : "REFERENCE"}
+        // The title is no longer a label — it is the book/chapter/verse menu, and it shows at
+        // every width, because a pane you cannot navigate is worse than a pane with no subtitle.
+        title={`${title || query || "…"}`}
+        meta={narrow ? undefined : "ESV"}
+        onKicker={onKicker}
+        onTitle={() => { haptic("selection"); setNavOpen((v) => !v); }}
+        titleGlyph={navOpen ? "\u2303" : "\u2304"}
+        titleHint="Book, chapter, verse"
+        right={headerRight}
+      >
+        <span style={{ position: "relative", display: "flex", alignItems: "center", gap: 3, flex: "none" }}>
+          <ChapterStep label={"\u2039"} target={prevChapter} book={navBook} inked={prevChapter !== null && !!inkChaptersProp?.has(prevChapter)} onGo={() => stepChapter(-1)} />
+          <ChapterStep label={"\u203A"} target={nextChapter} book={navBook} inked={nextChapter !== null && !!inkChaptersProp?.has(nextChapter)} onGo={() => stepChapter(1)} />
+          {navOpen && (
+            <Popover width={300} onClose={() => setNavOpen(false)} style={{ top: 26, left: -140 }}>
+              <BibleNav
+                currentBook={navBook}
+                currentChapter={navChapter}
+                tokens={{ card: "#FFFFFF", ink: "#232227", sub: "#66646C", faint: "#96949B", rule: "#E4E2E6", chip: "#F2F1F2" }}
+                variant="popover"
+                onClose={() => setNavOpen(false)}
+                onPick={(q, verse) => {
+                  setNavOpen(false);
+                  // jumpToVerse already owns the hard part: it guards on the chapter the pane is
+                  // actually rendering, so picking a verse in the open chapter selects now rather
+                  // than arming a request that would hijack the next chapter he opens.
+                  if (verse) { jumpToVerse(verse, null); return; }
+                  if (query && q.trim().toLowerCase() === query.trim().toLowerCase()) return;
+                  setHistory((h) => (query ? [...h, query].slice(-12) : h));
+                  onQueryChange(q);
+                }}
+              />
+            </Popover>
+          )}
+        </span>
         {selectedLabel && <Chip tone="tint" style={{ color: "#A63D63" }}>{selectedLabel}</Chip>}
       </PaneHeader>
       <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflow: "auto", position: "relative" }}>
