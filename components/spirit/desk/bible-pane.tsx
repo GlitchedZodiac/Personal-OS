@@ -19,7 +19,7 @@ import { useDesk, useDeskEvent, hlColor } from "./desk-state";
 import { ActionBarA, ActionBarB, type BarAction } from "./action-bar";
 import { RefCardGhost } from "./ref-card";
 import { RefPopover, type RefPopoverState } from "./ref-popover";
-import { PaneHeader, Chip, Segmented, Popover, Kicker } from "./ui";
+import { PaneHeader, Chip, Popover, Kicker } from "./ui";
 import { EyeIcon, LayersIcon, MarginIcon, PinIcon, PenIcon } from "./desk-icons";
 import { formatRef, refParts, BOOKS } from "@/lib/bible-refs";
 import { type Stroke } from "@/lib/ink";
@@ -74,7 +74,7 @@ function refOf(el: HTMLElement | null): number | null {
 
 export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsumed, free, dayId, layerContext, onKicker, headerExtra }: BiblePaneProps) {
   const desk = useDesk();
-  const { pen, bibleMode, setBibleMode, overlayVisibility, setOverlayVisibility, overlayMargin, setOverlayMargin, hand, prefs, emit } = desk;
+  const { pen, overlayVisibility, setOverlayVisibility, overlayMargin, setOverlayMargin, hand, prefs, emit } = desk;
   const readerRef = useRef<SpiritReaderHandle | null>(null);
   const canvasRef = useRef<InkCanvasHandle | null>(null);
   const paneRef = useRef<HTMLDivElement | null>(null);
@@ -415,39 +415,15 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     if (last) refs.add(last);
     return Array.from(refs).sort((a, b) => a - b);
   };
-  const versesInBounds = (clientPts: { x: number; y: number }[]) => {
-    if (!contentRef.current) return [];
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const p of clientPts) {
-      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
-    }
-    const out: number[] = [];
-    contentRef.current.querySelectorAll<HTMLElement>("[data-verse]").forEach((v) => {
-      const r = v.getBoundingClientRect();
-      const cy = r.top + r.height / 2;
-      if (cy >= minY - 4 && cy <= maxY + 4 && r.right >= minX && r.left <= maxX) out.push(Number(v.getAttribute("data-verse")));
-    });
-    return out.sort((a, b) => a - b);
-  };
 
   // ——— gestures ———
   const onStrokeEnd = (stroke: Stroke, info: StrokeEndInfo): "keep" | "discard" => {
     if (stroke.region === "margin") return "keep";
-    if (bibleMode === "scratch") return "keep";
-    // STUDY — interpret, then evaporate
     const reader = readerRef.current;
-    if (!reader) return "discard";
-    // Each gesture evaporates ONLY when it actually did something. A gesture that consumed
-    // nothing was handwriting that happened to look like one, and handwriting is never eaten.
-    if (info.kind === "loop") {
-      const vs = versesInBounds(info.clientPts);
-      if (vs.length) {
-        reader.select(vs[0], vs[vs.length - 1]);
-        setBarAnchor(info.clientEnd);
-        setShowChips(false);
-        return "discard";
-      }
-    }
+    if (!reader) return "keep";
+    // Ink is a layer over print and it STAYS — the only strokes that ever evaporate are the
+    // two that visibly consume a suggestion chip. Circles and underlines are annotations he
+    // means to keep; selecting is a tap or a hold-drag, never the price of a mark.
     if (info.kind === "tick" || info.kind === "strike") {
       const v = refOf(verseElAt(info.clientStart.x, info.clientStart.y)) ?? refOf(verseElAt(info.clientEnd.x, info.clientEnd.y));
       if (v) {
@@ -459,15 +435,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
         }
       }
     }
-    if (info.kind === "underline") {
-      const v = refOf(verseElAt(info.clientStart.x, info.clientStart.y));
-      if (v) {
-        reader.select(v);
-        setBarAnchor(info.clientEnd);
-        return "discard";
-      }
-    }
-    // NOT a gesture — it is handwriting. Study mode evaporates MARKS, never words.
+    // everything else — loops, underlines, letters — is his ink
     return "keep";
   };
   const onHighlighterStroke = (stroke: Stroke, info: StrokeEndInfo): "keep" | "discard" => {
@@ -679,7 +647,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const chipCost =
     (sel.start !== null ? 118 : 0) +           // "JONAH 2:1 SELECTED"
     (strokes.length > 0 && !unpinned && overlayVisibility !== "hide" ? 138 : 0) + // TEXT SIZE LOCKED
-    (inkPast.length || inkFuture.length ? 64 : 0);                                // ⤺ ⤻
+    (strokes.length || inkPast.length || inkFuture.length ? 64 : 0);              // ⤺ ⤻
   const budgetW = contentSize.w > 0 ? Math.max(0, contentSize.w - chipCost) : 0;
   // a narrow pane (stacked Bible, ~360px) keeps every control but drops the long labels
   const narrow = budgetW > 0 && budgetW < 600;
@@ -752,7 +720,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
           </Popover>
         )}
       </div>
-      {strokes.length > 0 && (
+      {(strokes.length > 0 || inkPast.length > 0 || inkFuture.length > 0) && (
         <div style={{ display: "flex", alignItems: "center", gap: 2, border: "1px solid #E4E2E6", background: "#FFFFFF", borderRadius: 99, padding: "2px 3px" }}>
           <button type="button" title="Undo your last mark here" onClick={() => stepInk("undo")} disabled={!inkPast.length} style={{ width: 26, height: 22, borderRadius: 99, border: 0, background: "transparent", cursor: inkPast.length ? "pointer" : "default", opacity: inkPast.length ? 1 : 0.3, fontSize: 12, color: "#454349" }}>⤺</button>
           <button type="button" title="Redo" onClick={() => stepInk("redo")} disabled={!inkFuture.length} style={{ width: 26, height: 22, borderRadius: 99, border: 0, background: "transparent", cursor: inkFuture.length ? "pointer" : "default", opacity: inkFuture.length ? 1 : 0.3, fontSize: 12, color: "#454349" }}>⤻</button>
@@ -779,11 +747,6 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
         <MarginIcon />
         {!narrow && <span style={{ fontSize: 9, letterSpacing: "0.08em", fontWeight: 700, color: "#454349" }}>{MARGIN_LABEL[overlayMargin]}</span>}
       </button>
-      {tiny ? (
-        <button type="button" title="Study ↔ Scratch" onClick={() => { haptic("selection"); setBibleMode(bibleMode === "study" ? "scratch" : "study"); }} style={{ fontSize: 8.5, letterSpacing: "0.08em", fontWeight: 700, color: "#FFFFFF", background: "#A63D63", border: 0, borderRadius: 99, padding: "5px 10px", cursor: "pointer" }}>{bibleMode === "study" ? "STUDY" : "SCRATCH"}</button>
-      ) : (
-        <Segmented value={bibleMode} onChange={(m) => { haptic("selection"); setBibleMode(m); }} size="sm" options={[{ value: "study", label: "STUDY" }, { value: "scratch", label: "SCRATCH" }]} />
-      )}
       {headerExtra}
     </div>
   );
@@ -831,7 +794,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
               onRedoGesture={() => stepInk("redo")}
               onHover={onHover}
               onTap={onTap}
-              onHold={(pt) => (pt.pointerType === "pen" && bibleMode !== "study" ? false : onHold(pt))}
+              onHold={onHold}
               onSelectDragStart={onSelectDragStart}
               onSelectDragMove={onSelectDragMove}
               onSelectDragEnd={(c) => {

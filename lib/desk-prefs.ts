@@ -4,7 +4,8 @@
 // resumes instantly before the network answers.
 
 export type Handedness = "left" | "right";
-export type BibleMode = "study" | "scratch";
+/** RETIRED 2026-08-30 (his call): study vs scratch merged into one mode — ink always
+ * keeps, chip gestures still act. The stored prefs key is simply ignored on read. */
 export type OverlayVisibility = "show" | "dim" | "hide";
 export type MarginStep = 0 | 1 | 2; // none · wide · wider
 export type ActionBarStyle = "A" | "B"; // pen-positioned · fixed upper-right
@@ -31,7 +32,6 @@ export interface SavedPalette {
 
 export interface DeskPrefs {
   handedness: Handedness;
-  bibleMode: BibleMode;
   overlay: { margin: MarginStep; visibility: OverlayVisibility; defaultLayer: "my" | "context" };
   actionBar: ActionBarStyle;
   pen: PenDefaults;
@@ -81,7 +81,6 @@ export const INK_NAMES: Record<string, string> = {
 
 export const DEFAULT_DESK_PREFS: DeskPrefs = {
   handedness: "left",
-  bibleMode: "study",
   // no margin unless he asks for one (or margin ink exists and the layer is shown) — "no random whitespace"
   overlay: { margin: 0, visibility: "show", defaultLayer: "my" },
   actionBar: "A",

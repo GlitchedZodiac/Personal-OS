@@ -51,6 +51,13 @@ interface Layout {
 interface DeskTab extends Layout {
   id: string;
   label: string;
+  /**
+   * Each tab stands in its own place in the Bible (2026-08-30, his report: switching tabs
+   * reset the Bible to another book). A tab is an arrangement AND a position — that is what
+   * makes flipping between two references worth doing.
+   */
+  mainQ?: string | null;
+  refQ?: string | null;
 }
 const TAB_TEMPLATES: { key: string; label: string; sub: string; make: () => Layout }[] = [
   { key: "notebook", label: "Notebook", sub: "one full page", make: () => ({ preset: "custom", writing: ["notebook"], text: [] }) },
@@ -123,19 +130,31 @@ export function DeskShell(props: DeskShellProps) {
   const tab = tabs.find((t) => t.id === activeTab) ?? tabs[0];
   const layout: Layout = tab;
   // edits always land on the active tab (slot menus, events, presets)
+  const activeRef = useRef(activeTab);
+  activeRef.current = activeTab;
+  /** patch the ACTIVE tab — layout, or its own Bible position */
+  const updateTab = useCallback((next: (t: DeskTab) => Partial<DeskTab>) => {
+    setTabs((ts) => ts.map((t) => (t.id === (activeRef.current ?? ts[0].id) ? { ...t, ...next(t) } : t)));
+  }, []);
   const setLayout = (next: Layout | ((l: Layout) => Layout)) => {
-    setTabs((ts) => ts.map((t) => (t.id === (activeTab ?? ts[0].id) ? { ...t, ...(typeof next === "function" ? next(t) : next) } : t)));
+    updateTab((t) => (typeof next === "function" ? next(t) : next));
   };
   const [tabMenu, setTabMenu] = useState<string | null>(null);
   const tabsLoaded = useRef(false);
   const [nbFrac, setNbFrac] = useState(prefs.layouts[context]?.nbFrac ?? 0.535);
   const [stackFrac, setStackFrac] = useState(prefs.layouts[context]?.stackFrac ?? 0.6);
-  const [mainQ, setMainQ] = useState<string | null>(props.mainQ);
+  // the ACTIVE tab's position; writing goes back into that tab, so switching restores it
+  const mainQ = tab?.mainQ ?? props.mainQ;
+  const setMainQ = useCallback((q: string | null) => updateTab(() => ({ mainQ: q })), [updateTab]);
   // a verse the shell asked a Bible pane to show. `seq` re-arms it so tapping the same
   // reference card twice jumps twice.
   const [jump, setJump] = useState<{ refStart: number; refEnd: number | null; seq: number; to: "main" | "reference" } | null>(null);
+  // a verse dropped while no notebook was open — replayed once the pane mounts
+  const noteSeq = useRef(1);
+  const [pendingNote, setPendingNote] = useState<{ refStart: number; refEnd: number; label: string; text: string; seq: number } | null>(null);
   const clearJump = useCallback((seq: number) => setJump((j) => (j && j.seq === seq ? null : j)), []);
-  const [refQ, setRefQ] = useState<string | null>(props.refQ ?? props.mainQ);
+  const refQ = tab?.refQ ?? props.refQ ?? props.mainQ;
+  const setRefQ = useCallback((q: string | null) => updateTab(() => ({ refQ: q })), [updateTab]);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [dragging, setDragging] = useState<"v" | "h" | null>(null);
   const [size, setSize] = useState({ w: 1180, h: 820 });
@@ -145,15 +164,29 @@ export function DeskShell(props: DeskShellProps) {
   // because the system status bar is hidden in the companion (a canvas app owns its top edge)
   const [renaming, setRenaming] = useState<string | null>(null);
   const holdT = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pillsRef = useRef<HTMLDivElement | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [dict, setDict] = useState<{ startedAt: number } | null>(null);
   const [clock, setClock] = useState(() => new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
   const [batt, setBatt] = useState<{ level: number; charging: boolean } | null>(null);
   const [, setTick] = useState(0);
+  const dictRef = useRef(false);
+  useEffect(() => {
+    // keep the active pill in view — with six arrangements the row scrolls, and a tab you
+    // just switched to must never sit clipped off the edge
+    const id = requestAnimationFrame(() => {
+      pillsRef.current?.querySelector<HTMLElement>("[data-tab-active=\"1\"]")?.scrollIntoView({ inline: "nearest", block: "nearest" });
+    });
+    return () => cancelAnimationFrame(id);
+    // `dict` too: the capture pill takes the tabs' place while listening, and the row came
+    // back scrolled to the start with the active pill off-view
+     
+  }, [activeTab, dict]);
   useEffect(() => {
     const id = setInterval(() => {
       setClock(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
-      setTick((n) => n + 1); // drives the capture pill's elapsed label
+      // the capture pill's elapsed label rides the same tick — no second state update
+      setTick((n) => (dictRef.current ? n + 1 : n));
     }, 1000);
     return () => clearInterval(id);
   }, []);
@@ -191,8 +224,9 @@ export function DeskShell(props: DeskShellProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, activeTab]);
   useEffect(() => {
-    setMainQ(props.mainQ);
-    setRefQ(props.refQ ?? props.mainQ);
+    // a deep link (?q=) retargets the ACTIVE tab, not every tab
+    updateTab(() => ({ mainQ: props.mainQ, refQ: props.refQ ?? props.mainQ }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.mainQ, props.refQ]);
 
   useEffect(() => {
@@ -202,7 +236,11 @@ export function DeskShell(props: DeskShellProps) {
     ro.observe(el);
     setSize({ w: el.clientWidth, h: el.clientHeight });
     return () => ro.disconnect();
-  }, []);
+    // activeTab is in the deps because the desk div is keyed on it: after a tab switch the
+    // old node is detached and the observer was watching a corpse, so rotating the iPad no
+    // longer flipped the desk into portrait until a full reload.
+     
+  }, [activeTab]);
 
   useDeskEvent((e) => {
     if (e.type === "open-source") {
@@ -220,7 +258,19 @@ export function DeskShell(props: DeskShellProps) {
       setMainQ(e.q);
     }
     if (e.type === "dictate-state") {
+      dictRef.current = e.on;
       setDict(e.on ? { startedAt: e.startedAt ?? Date.now() } : null);
+    }
+    if (e.type === "send-to-notes") {
+      // "drag a verse to any notebook from anywhere" (his 2026-08-30 ask). A notebook pane on
+      // screen answers this itself; when the tab has none the drop used to land nowhere, so
+      // the shell opens one and the pane picks the event up as it mounts.
+      const hasNotebook = [...layout.writing, ...layout.text].includes("notebook");
+      if (!hasNotebook) {
+        setLayout((l) => ({ preset: "custom", writing: ["notebook"], text: l.text.length ? l.text : l.writing }));
+        setPendingNote({ ...e, seq: noteSeq.current++ });
+        toast(`Opened your notebook — ${e.label} dropped in`);
+      }
     }
     if (e.type === "jump-reference-pane") {
       // The panes handle this themselves when one is open. The case only the SHELL can fix is
@@ -353,7 +403,7 @@ export function DeskShell(props: DeskShellProps) {
     const kicker = () => setSlotMenu((m) => (m && m.col === col && m.index === index ? null : { col, index }));
     switch (kind) {
       case "notebook":
-        return <NotebookPane railSide={portrait ? (writingLeft ? "right" : "left") : railSide} showRail={portrait || textEmpty} context={context} initialPageId={pageId ?? null} dayId={dayId ?? null} onKicker={kicker} />;
+        return <NotebookPane railSide={portrait ? (writingLeft ? "right" : "left") : railSide} showRail={portrait || textEmpty} context={context} initialPageId={pageId ?? null} dayId={dayId ?? null} pendingNote={pendingNote} onNoteConsumed={() => setPendingNote(null)} onKicker={kicker} />;
       case "bible":
         return <BiblePane role="main" query={mainQ} onQueryChange={setMainQ} pendingJump={jump?.to === "main" ? jump : null} onJumpConsumed={clearJump} free={free} dayId={dayId ?? null} layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "reference":
@@ -477,7 +527,8 @@ export function DeskShell(props: DeskShellProps) {
             <button type="button" onClick={() => desk.emit({ type: "capture-voice" })} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#FFFFFF", background: "#232227", borderRadius: 99, padding: "3.5px 11px", cursor: "pointer", border: 0 }}>STOP</button>
           </div>
         ) : (
-          <div onPointerDown={onStripDown} onPointerUp={onStripUp} style={{ display: "flex", alignItems: "center", gap: 4, flex: "none", maxWidth: "48%", overflowX: "auto", scrollbarWidth: "none", touchAction: "pan-x" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flex: "0 1 auto", minWidth: 0 }}>
+            <div ref={pillsRef} onPointerDown={onStripDown} onPointerUp={onStripUp} style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, overflowX: "auto", scrollbarWidth: "none", touchAction: "pan-x" }}>
             {tabs.map((t) => {
               const on = t.id === activeTab;
               return (
@@ -488,6 +539,7 @@ export function DeskShell(props: DeskShellProps) {
                     onPointerDown={(e) => { if (e.pointerType === "pen") return; const id = t.id; holdT.current = setTimeout(() => renameTab(id), 480); }}
                     onPointerUp={() => { if (holdT.current) clearTimeout(holdT.current); }}
                     onPointerLeave={() => { if (holdT.current) clearTimeout(holdT.current); }}
+                    data-tab-active={on ? "1" : undefined}
                     style={{ display: "flex", alignItems: "center", gap: 6, height: 26, boxSizing: "border-box", padding: "0 11px", borderRadius: 99, background: on ? "#FFFFFF" : "transparent", boxShadow: on ? "inset 0 0 0 1.5px #A63D63" : "none", border: 0, cursor: "pointer", whiteSpace: "nowrap" }}
                   >
                     <TabThumb writing={t.writing.length} text={t.text.length} cols={Boolean(t.cols)} active={on} />
@@ -504,6 +556,9 @@ export function DeskShell(props: DeskShellProps) {
                 </div>
               );
             })}
+            </div>
+            {/* the + lives OUTSIDE the scroller — however many tabs there are, it is always
+                reachable. His report: the row cut off and "there's no way to add plus". */}
             <button type="button" title="New arrangement — hold a tab to rename" onClick={() => setPopover(popover === "layout" ? null : "layout")} style={{ flex: "none", width: 28, height: 28, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#96949B", background: "transparent", border: 0 }}>
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 1.5v9M1.5 6h9" /></svg>
             </button>

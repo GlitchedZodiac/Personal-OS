@@ -46,7 +46,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const rec = await prisma.recording.findUnique({ where: { id } });
     if (!rec) return NextResponse.json({ deleted: true });
-    if (rec.pageId) await prisma.inkPage.updateMany({ where: { id: rec.pageId }, data: { recordingId: null } });
+    // Only sever a link that actually points AT THIS recording. Matching on rec.pageId alone
+    // severed the page from whatever recording it currently held — which, after a re-record,
+    // is a different and perfectly good one.
+    if (rec.pageId) await prisma.inkPage.updateMany({ where: { id: rec.pageId, recordingId: id }, data: { recordingId: null } });
     await prisma.recording.delete({ where: { id } });
     return NextResponse.json({ deleted: true });
   } catch (error) {

@@ -13,7 +13,6 @@ import {
   mergeDeskPrefs,
   readLocalDeskPrefs,
   writeLocalDeskPrefs,
-  type BibleMode,
   type DeskContext,
   type DeskPrefs,
   type Handedness,
@@ -70,8 +69,6 @@ interface DeskStateValue {
   hand: Handedness;
   pen: PenState;
   setPen: (patch: Partial<PenState>) => void;
-  bibleMode: BibleMode;
-  setBibleMode: (m: BibleMode) => void;
   overlayVisibility: OverlayVisibility;
   setOverlayVisibility: (v: OverlayVisibility) => void;
   overlayMargin: MarginStep;
@@ -115,7 +112,6 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
     streamline: DEFAULT_DESK_PREFS.pen.streamline,
     hlCategory: "God",
   });
-  const [bibleMode, setBibleModeState] = useState<BibleMode>("study");
   const [overlayVisibility, setOverlayVisibilityState] = useState<OverlayVisibility>("show");
   const [overlayMargin, setOverlayMarginState] = useState<MarginStep>(1);
   const [context, setContext] = useState<DeskContext>(initialContext);
@@ -139,7 +135,6 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
       opacity: p.pen.opacity,
       streamline: p.pen.streamline,
     }));
-    setBibleModeState(p.bibleMode);
     setOverlayVisibilityState(p.overlay.visibility);
     setOverlayMarginState(p.overlay.margin);
   }
@@ -248,13 +243,6 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
     [updatePrefs],
   );
 
-  const setBibleMode = useCallback(
-    (m: BibleMode) => {
-      setBibleModeState(m);
-      updatePrefs((p) => ({ ...p, bibleMode: m }));
-    },
-    [updatePrefs],
-  );
   const setOverlayVisibility = useCallback(
     (v: OverlayVisibility) => {
       setOverlayVisibilityState(v);
@@ -300,8 +288,6 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
       hand: prefs.handedness,
       pen,
       setPen,
-      bibleMode,
-      setBibleMode,
       overlayVisibility,
       setOverlayVisibility,
       overlayMargin,
@@ -318,7 +304,7 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
       subscribe,
       dirtyPages,
     }),
-    [prefs, updatePrefs, pen, setPen, bibleMode, setBibleMode, overlayVisibility, setOverlayVisibility, overlayMargin, setOverlayMargin, context, popover, recording, recordingSeconds, emit, subscribe],
+    [prefs, updatePrefs, pen, setPen, overlayVisibility, setOverlayVisibility, overlayMargin, setOverlayMargin, context, popover, recording, recordingSeconds, emit, subscribe],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -4,7 +4,8 @@
 // dark pill menu (action bars, lasso menu), popover shell, section heads,
 // the 3-segment pill, kicker text. Tokens per docs/design/pitaya-tokens.md.
 
-import type { CSSProperties, ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Diamond } from "./desk-icons";
 
 export const DISPLAY = "var(--font-display)";
@@ -170,11 +171,12 @@ export function DarkPill({ children, style }: { children: ReactNode; style?: CSS
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 2,
+        gap: 3,
         background: "#232227",
-        borderRadius: 12,
+        borderRadius: 14,
         animation: "deskPopIn .26s cubic-bezier(.2,.9,.3,1.2) both",
-        padding: "5px 7px",
+        // +20% (his 2026-08-30 ask): these are Pencil targets with a palm on the glass
+        padding: "6px 9px",
         boxShadow: "0 10px 28px rgba(20,15,18,0.35)",
         ...style,
       }}
@@ -194,10 +196,10 @@ export function PillItem({ children, onClick, title, muted, style }: { children:
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 3,
-        padding: "6px 9px",
-        borderRadius: 8,
-        fontSize: 10,
+        gap: 4,
+        padding: "8px 12px",
+        borderRadius: 9,
+        fontSize: 12,
         fontWeight: 600,
         color: muted ? "#96949B" : "#F2F1F2",
         background: "transparent",
@@ -213,6 +215,22 @@ export function PillItem({ children, onClick, title, muted, style }: { children:
 }
 
 /** White floating popover (pen settings, layout picker, brush library, palette). */
+/**
+ * The popover shell — PORTALLED to <body>.
+ *
+ * Every pane menu used to render in place, inside its pane. Two walls killed that on the
+ * real desk: the pane's own `overflow: hidden` clipped anything taller or wider than the
+ * pane, and `PaneHeader` is a stacking context at zIndex 3, so a menu — whatever its own
+ * z — drew UNDER the seam toolbar (z 5) and the band (z 20). His words: "they hide behind
+ * things. they really should show up at the top."
+ *
+ * The call-site API is unchanged: `style` still positions relative to the PARENT of the
+ * Popover, exactly as `position: absolute` did. A zero-size anchor span finds that parent;
+ * the panel is portalled to <body> as `position: fixed`, its offsets translated from the
+ * parent's rect, clamped to the viewport, and capped in height so a long menu scrolls
+ * instead of vanishing off-screen. Positioning happens by direct style assignment in a
+ * layout effect (no setState — the react-compiler rules ban synchronous setState there).
+ */
 export function Popover({
   children,
   style,
@@ -224,25 +242,78 @@ export function Popover({
   onClose?: () => void;
   width?: number;
 }) {
+  const anchor = useRef<HTMLSpanElement | null>(null);
+  const panel = useRef<HTMLDivElement | null>(null);
+  // No mounted-flag dance: a popover only ever exists because he tapped something, which is
+  // always post-hydration, so `document` is there. (An earlier version gated the portal on a
+  // requestAnimationFrame and the menu never opened at all when the frame loop was starved.)
+  const canPortal = typeof document !== "undefined";
+  const place = useCallback(() => {
+    const el = panel.current;
+    const parent = anchor.current?.parentElement;
+    if (!el || !parent) return;
+    const r = parent.getBoundingClientRect();
+    const s = (style ?? {}) as Record<string, number | string | undefined>;
+    const num = (v: number | string | undefined) => (typeof v === "number" ? v : typeof v === "string" ? parseFloat(v) || 0 : 0);
+    let left: number;
+    if (s.left !== undefined) left = r.left + num(s.left);
+    else if (s.right !== undefined) left = r.right - num(s.right) - width;
+    else left = r.left;
+    let top: number;
+    if (s.top !== undefined) top = r.top + num(s.top);
+    else if (s.bottom !== undefined) top = r.bottom - num(s.bottom) - el.offsetHeight;
+    else top = r.bottom + 4;
+    left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+    top = Math.max(8, Math.min(top, window.innerHeight - 56));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.style.maxHeight = `${window.innerHeight - top - 12}px`;
+    el.style.visibility = "visible";
+  }, [style, width]);
+  useLayoutEffect(() => {
+    place();
+    // a rotation or a keyboard-driven viewport change would otherwise strand the panel at
+    // stale fixed coordinates
+    window.addEventListener("resize", place);
+    window.addEventListener("orientationchange", place);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("orientationchange", place);
+    };
+  }, [place]);
   return (
     <>
-      {onClose && <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 40 }} />}
-      <div
-        style={{
-          position: "absolute",
-          zIndex: 41,
-          width,
-          background: "#FFFFFF",
-          borderRadius: 14,
-          boxShadow: "0 16px 48px rgba(20,15,18,0.28)",
-          padding: 13,
-          animation: "deskPopIn .24s cubic-bezier(.2,.9,.3,1.15) both",
-          transformOrigin: "top right",
-          ...style,
-        }}
-      >
-        {children}
-      </div>
+      <span ref={anchor} style={{ position: "absolute", width: 0, height: 0 }} />
+      {canPortal && createPortal(
+        <>
+          {onClose && <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 80 }} />}
+          <div
+            ref={panel}
+            style={{
+              position: "fixed",
+              zIndex: 81,
+              width,
+              visibility: "hidden",
+              overflowY: "auto",
+              background: "#FFFFFF",
+              borderRadius: 14,
+              boxShadow: "0 16px 48px rgba(20,15,18,0.28)",
+              padding: 13,
+              animation: "deskPopIn .24s cubic-bezier(.2,.9,.3,1.15) both",
+              transformOrigin: "top right",
+              boxSizing: "border-box",
+              ...style,
+              left: undefined,
+              right: undefined,
+              top: undefined,
+              bottom: undefined,
+            }}
+          >
+            {children}
+          </div>
+        </>,
+        document.body,
+      )}
     </>
   );
 }
