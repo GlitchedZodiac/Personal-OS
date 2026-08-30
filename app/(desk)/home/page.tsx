@@ -110,6 +110,9 @@ export default function HomePage() {
     { key: "food", label: "Food", sub: hub ? `${hub.eating.loggedDays} of 7 days logged` : "…", icon: <FoodRailIcon />, href: "/health/food" },
     { key: "health", label: "Health", sub: hub?.measurements.weight7dAvg ? `${hub.measurements.weight7dAvg} kg · ${hub.measurements.delta !== null ? `${hub.measurements.delta > 0 ? "+" : ""}${hub.measurements.delta} this week` : "7-day avg"}` : "weight, sleep, recovery", icon: <HealthRailIcon />, href: "/health/body", badge: "iPad · round 2" },
     { key: "trends", label: "Trends", sub: "the scorecards come with Health's round", icon: <TrendsRailIcon />, href: "/health/body" },
+    // /spirit/recordings had NOTHING linking to it — four separate surfaces drew a recording
+    // dot and none of them was a door. "idk where it is" was a fair description.
+    { key: "recordings", label: "Recordings", sub: "every sermon you have kept", icon: <RecDot size={13} live={false} />, href: "/spirit/recordings", desk: true },
     { key: "settings", label: "Settings", sub: "handedness · pen defaults · recording consent · layouts", icon: <GearIcon size={16} />, href: "/spirit/desk-settings", desk: true },
     { key: "journal", label: "Journal", sub: "the thesis holds — its round comes later", icon: <JournalRailIcon />, badge: "deferred", dim: true },
   ];

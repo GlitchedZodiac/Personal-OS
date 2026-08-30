@@ -47,7 +47,11 @@ final class ShellViewController: UIViewController {
     }
     var onShake: (() -> Void)?
     private var webView: WKWebView?
-    private var lastActiveAt = Date()
+    /// When the app last went to the BACKGROUND. nil means it has never left since launch.
+    /// This used to be `lastActiveAt`, updated only inside refreshIfStale — so on a long
+    /// session the staleness test measured "time since launch" rather than "time spent away",
+    /// and any glance at Control Center an hour in tripped it.
+    private var lastResignedAt: Date?
 
     /// V2 desk: "the system status bar is hidden the way a canvas app hides it, so the band
     /// owns the top edge outright and carries the clock itself." The web band shows the clock;
@@ -141,6 +145,16 @@ final class ShellViewController: UIViewController {
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(noteResigned),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+    }
+
+    @objc private func noteResigned() {
+        lastResignedAt = Date()
     }
 
     /// The web band renders the battery glyph from this event; in Safari (no bridge) the
@@ -157,14 +171,22 @@ final class ShellViewController: UIViewController {
     /// A WKWebView document loaded once in viewDidLoad can survive weeks of suspend and resume,
     /// so the app can sit on a months-old bundle while the server has long since moved on —
     /// which is exactly how a round of Pencil fixes came to be judged against a build that was
-    /// never installed. Reload when the app has been away long enough that it cannot be
-    /// mid-thought, and never while there is unsaved ink in flight.
+    /// never installed.
+    ///
+    /// Two rules, both learned the hard way on 2026-08-30, when this reloaded in the middle of
+    /// a sermon and took the recorder with it:
+    ///
+    /// 1. Measure time spent AWAY, not time since launch. `didBecomeActive` fires for a
+    ///    dismissed Control Center, a notification banner, an unlock, a Split View resize —
+    ///    none of which means he put the app down. Only a real trip to the background counts.
+    /// 2. Never reload over work in progress. The web page raises
+    ///    `__pitayaHasUnsavedInk` for unsaved ink AND for a live or uploading recording; a
+    ///    fresher bundle is never worth either one.
     @objc private func refreshIfStale() {
-        guard let webView, Date().timeIntervalSince(lastActiveAt) > 900 else {
-            lastActiveAt = Date()
-            return
-        }
-        lastActiveAt = Date()
+        guard let webView else { return }
+        let awaySeconds = lastResignedAt.map { Date().timeIntervalSince($0) } ?? 0
+        lastResignedAt = nil
+        guard awaySeconds > 900 else { return }
         webView.evaluateJavaScript("window.__pitayaHasUnsavedInk === true") { [weak webView] result, _ in
             if (result as? Bool) == true { return }
             webView?.reload()

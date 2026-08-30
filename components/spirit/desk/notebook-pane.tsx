@@ -27,6 +27,7 @@ import { fmtSeconds, newId, pageHeightFor, strokeBounds, strokeDistanceTo, type 
 import { askConfirm, askPrompt } from "./dialog";
 import { haptic } from "@/lib/haptics";
 import { useWakeLock } from "@/lib/wake-lock";
+import { useRouter } from "next/navigation";
 import { getOrCreateMicrophoneStream, deactivateMicrophoneStream } from "@/lib/microphone";
 import { formatRef } from "@/lib/bible-refs";
 
@@ -251,6 +252,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   const [recElapsed, setRecElapsed] = useState(0);
   const [recLevel, setRecLevel] = useState(0);
   const [uploading, setUploading] = useState(0);
+  const router = useRouter();
   /**
    * The native shell reads this before it reloads a stale web view
    * (ios/iOSApp/WebShellView.swift — `refreshIfStale` on didBecomeActive). It used to mean
@@ -1328,6 +1330,10 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
                         ...(recordingRow.status !== "ready" && !transcribing && recState !== "recording" && recState !== "paused" ? [{ label: "Transcribe the recording", run: transcribeRecording }] : []),
                         ...(transcribing ? [{ label: "Transcribing…", run: () => {} }] : []),
                         { label: "Rename the recording", run: renameRecording },
+                        // Four places in the app draw a "there is a recording here" dot and not
+                        // one of them was a link — /spirit/recordings had zero inbound links,
+                        // so his own words were "idk where it is".
+                        { label: "Open in the recordings library", run: () => router.push("/spirit/recordings") },
                         { label: "Delete the recording", run: deleteRecording, danger: true },
                       ] : []),
                       { label: zoom === 1 ? "Zoom 150%" : "Zoom 100%", run: () => setZoom((z) => (z === 1 ? 1.5 : 1)) },
