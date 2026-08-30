@@ -26,6 +26,7 @@ import { SermonRecorder } from "@/lib/spirit-recording";
 import { fmtSeconds, newId, pageHeightFor, strokeBounds, strokeDistanceTo, type PageObject, type Stroke } from "@/lib/ink";
 import { askConfirm, askPrompt } from "./dialog";
 import { haptic } from "@/lib/haptics";
+import { useWakeLock } from "@/lib/wake-lock";
 import { getOrCreateMicrophoneStream, deactivateMicrophoneStream } from "@/lib/microphone";
 import { formatRef } from "@/lib/bible-refs";
 
@@ -235,12 +236,6 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   const [nbMenu, setNbMenu] = useState(false);
   const [moreMenu, setMoreMenu] = useState(false);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "offline">("idle");
-  // the native shell reads this before it reloads a stale web view — his ink is never worth
-  // trading for a fresher bundle
-  useEffect(() => {
-    (window as unknown as { __pitayaHasUnsavedInk?: boolean }).__pitayaHasUnsavedInk =
-      saving === "saving" || saving === "offline";
-  }, [saving]);
   const [lasso, setLasso] = useState<{ ids: Set<string>; polygon: { x: number; y: number }[]; bounds: { x: number; y: number; w: number; h: number }; client: { x: number; y: number } } | null>(null);
   const [lassoBusy, setLassoBusy] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -256,6 +251,22 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   const [recElapsed, setRecElapsed] = useState(0);
   const [recLevel, setRecLevel] = useState(0);
   const [uploading, setUploading] = useState(0);
+  /**
+   * The native shell reads this before it reloads a stale web view
+   * (ios/iOSApp/WebShellView.swift — `refreshIfStale` on didBecomeActive). It used to mean
+   * "unsaved ink", and on 2026-08-30 that cost him a sermon: the shell reloaded mid-service,
+   * the recorder went with the page, and the last ~12 minutes were never captured at all.
+   * A live recording is work in progress too. Nothing is worth a fresher bundle.
+   */
+  useEffect(() => {
+    (window as unknown as { __pitayaHasUnsavedInk?: boolean }).__pitayaHasUnsavedInk =
+      saving === "saving" || saving === "offline" ||
+      recState === "recording" || recState === "paused" ||
+      uploading > 0;
+  }, [saving, recState, uploading]);
+  // The screen going to sleep kills MediaRecorder outright — the other half of what stopped
+  // his sermon. Held only while the mic is actually live, never for a page that is just open.
+  useWakeLock(recState === "recording" || recState === "paused");
   const [seekTo, setSeekTo] = useState<number | null>(null);
   const [replayStroke, setReplayStroke] = useState<string | null>(null);
   const [noteCard, setNoteCard] = useState<{ text: string; refStart: number; label: string; kind: "question" | "observation"; strokeIds: string[] } | null>(null);
@@ -330,6 +341,27 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       setRecordingRow(d.recording ? { ...d.recording, transcript: (d.recording.transcript ?? []) as TranscriptLine[] } : null);
       if (d.recording?.id) {
         fetch(`/api/spirit/recordings/${d.recording.id}`).then((x) => (x.ok ? x.json() : null)).then((rr) => rr && setSegments(rr.segments ?? [])).catch(() => {});
+        // AN INTERRUPTED RECORDING. `status: "recording"` with no live recorder in this page
+        // means the tab went away mid-service — the reload on 2026-08-30 left the row stuck
+        // like this forever, and because the replay bar hid that status, 28 minutes of sermon
+        // looked like they had never existed. Close the row out and SAY SO; the audio that
+        // reached the server is all still there.
+        if (d.recording.status === "recording" && !recorder.current) {
+          const mins = Math.round((d.recording.durationSec ?? 0) / 60);
+          void fetch(`/api/spirit/recordings/${d.recording.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "uploaded" }),
+          }).catch(() => {});
+          setRecordingRow((r) => (r ? { ...r, status: "uploaded" } : r));
+          setRecState("stopped");
+          toast(
+            mins > 0
+              ? `That recording was interrupted — ${mins} minute${mins === 1 ? "" : "s"} were saved and are safe.`
+              : "That recording was interrupted. What reached the server is safe.",
+            { duration: 9000 },
+          );
+        }
       } else setSegments([]);
       onPageChange?.({ id: p.id, kind: p.kind, title: p.title, refStart: p.refStart });
       try {
@@ -1271,8 +1303,12 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {mode === "page" && page?.transcribedAt && <Chip tone="success">TRANSCRIBED ✓</Chip>}
+            {/* `status !== "recording"` in this gate meant an INTERRUPTED row fell through to
+                recState ("idle" after a reload) and drew a fresh Record button over an existing
+                recording. Tapping it POSTs a new row and repoints the page, orphaning the
+                sermon. Any row that exists now reads "stopped" once the mic is not live. */}
             {mode === "page" && isSermon && (
-              <RecordingChip state={recordingRow && recState === "idle" && recordingRow.status !== "recording" ? "stopped" : recState} elapsed={recState === "stopped" ? recordingRow?.durationSec ?? recElapsed : recElapsed} level={recLevel} onToggle={toggleRecording} onStart={startRecording} onStop={stopRecording} consent={prefs.recording.consent} uploading={uploading} />
+              <RecordingChip state={recordingRow && recState !== "recording" && recState !== "paused" ? "stopped" : recState} elapsed={recState === "stopped" ? recordingRow?.durationSec ?? recElapsed : recElapsed} level={recLevel} onToggle={toggleRecording} onStart={startRecording} onStop={stopRecording} consent={prefs.recording.consent} uploading={uploading} />
             )}
             {mode === "page" && !isSermon && <span style={{ fontSize: 10, color: "#A9A7AE" }}>{saving === "saving" ? "saving…" : saving === "offline" ? "offline — keeps retrying" : saving === "saved" ? "saved · just now" : isSermon ? "" : "strokes timestamp against the lesson"}</span>}
             {mode === "page" && (
@@ -1504,7 +1540,10 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       )}
 
       {/* replay (06a) */}
-      {mode === "page" && recordingRow && recState !== "recording" && recState !== "paused" && (recordingRow.status === "ready" || recordingRow.status === "audio_deleted" || recordingRow.status === "transcribing" || recordingRow.status === "uploaded") && (
+      {/* The gate used to allowlist four statuses and omit the two a BROKEN recording carries —
+          "recording" (interrupted) and "failed" (transcription died). The audio is on the
+          server in both cases; hiding the player is how 28 minutes of sermon looked lost. */}
+      {mode === "page" && recordingRow && recState !== "recording" && recState !== "paused" && (
         <ReplayBar
           recordingId={recordingRow.id}
           duration={recordingRow.durationSec}

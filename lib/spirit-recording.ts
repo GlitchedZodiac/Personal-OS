@@ -5,7 +5,7 @@
 // connection never loses more than two minutes and a crash keeps what was
 // already sent. Strokes timestamp against `elapsedSeconds()`.
 
-import { getOrCreateMicrophoneStream, deactivateMicrophoneStream } from "@/lib/microphone";
+import { getOrCreateRoomStream, releaseRoomStream } from "@/lib/microphone";
 
 export const SEGMENT_SECONDS = 120;
 
@@ -62,7 +62,9 @@ export class SermonRecorder {
   }
 
   async start() {
-    this.stream = await getOrCreateMicrophoneStream();
+    // the ROOM mic — raw, unprocessed. A sermon is far-field; the browser's call-tuned
+    // noise suppression and auto gain fight the room rather than help it.
+    this.stream = await getOrCreateRoomStream();
     this.startEpoch = Date.now();
     this.state = "recording";
     this.events.onStateChange?.(this.state);
@@ -138,7 +140,11 @@ export class SermonRecorder {
     } catch (err) {
       if (attempt < 4) {
         await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-        this.pendingUploads--;
+        // NO decrement here. The recursive call increments again and this frame's `finally`
+        // decrements on the way out, so decrementing here too drove the counter NEGATIVE — and
+        // the two guards that read it (`pendingUploads > 0`, before transcribing and before
+        // deleting audio) then opened while segments were still in flight. Over-counting during
+        // a retry is the safe direction: the gate stays shut until the audio has actually landed.
         return this.upload(index, startSec, durationSec, blob, attempt + 1);
       }
       this.events.onSegment?.(index, false, (err as Error).message);
@@ -183,7 +189,9 @@ export class SermonRecorder {
     }
     if (this.levelRaf) cancelAnimationFrame(this.levelRaf);
     this.audioCtx?.close().catch(() => {});
-    deactivateMicrophoneStream();
+    // Release outright rather than merely disabling the tracks. The room stream is ours alone,
+    // and leaving a muted-but-live mic around is what let a voice note silence a sermon.
+    releaseRoomStream();
     this.events.onStateChange?.(this.state);
     // let the last upload start
     await new Promise((r) => setTimeout(r, 50));

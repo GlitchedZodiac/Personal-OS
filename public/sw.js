@@ -3,6 +3,8 @@
 // fresh, cache is offline-fallback only; v5 2026-08-28: cross-origin GETs
 // are no longer intercepted — the MapLibre trail view streams thousands of
 // map/terrain tiles that would have grown this cache without bound)
+// localhost means `next dev`, where nothing is content-hashed and everything changes
+const IS_DEV = self.location.hostname === "localhost" || self.location.hostname === "127.0.0.1";
 const CACHE_NAME = "pitaya-v7";
 // Scripture lives in its own cache. It is the one thing in the app that is genuinely
 // immutable — ESV Romans 8 will read the same next year — so it is cached forever and
@@ -122,7 +124,11 @@ self.addEventListener("fetch", (event) => {
   // Immutable build assets (2026-08-29, speed round): content-hashed
   // filenames make cache-first strictly correct — first paint stops
   // waiting on the network for chunks that can never change.
-  if (event.request.url.includes("/_next/static/")) {
+  //
+  // NOT IN DEVELOPMENT. Dev chunk URLs are not content-hashed, so cache-first serves
+  // yesterday's JavaScript against today's source — it faked four separate bugs in one
+  // session on 2026-08-30 and cost two long hunts for defects that did not exist.
+  if (event.request.url.includes("/_next/static/") && !IS_DEV) {
     event.respondWith(
       caches.match(event.request).then(
         (cached) =>

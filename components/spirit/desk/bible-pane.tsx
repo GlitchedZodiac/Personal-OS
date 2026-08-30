@@ -65,6 +65,13 @@ export interface BiblePaneProps {
   layerContext?: { key: string; label: string } | null;
   onKicker?: () => void;
   headerExtra?: ReactNode;
+  /**
+   * Storage key for "where he was reading in THIS tab" — the verse he had selected and how far
+   * he had scrolled. Deliberately its OWN localStorage entry rather than a field on the desk
+   * prefs: prefs load asynchronously, and anything the pane writes before they arrive erases
+   * them. (It ate a saved tab that way, 2026-08-30.) Scroll position is per-device anyway.
+   */
+  placeKey?: string | null;
 }
 
 interface OverlayPage {
@@ -94,7 +101,7 @@ function refOf(el: HTMLElement | null): number | null {
   return v ? Number(v) : null;
 }
 
-export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsumed, free, dayId, layerContext, onKicker, headerExtra }: BiblePaneProps) {
+export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsumed, free, dayId, layerContext, onKicker, headerExtra, placeKey }: BiblePaneProps) {
   const desk = useDesk();
   const { pen, overlayVisibility, setOverlayVisibility, overlayMargin, setOverlayMargin, hand, prefs, emit } = desk;
   const readerRef = useRef<SpiritReaderHandle | null>(null);
@@ -104,6 +111,20 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [title, setTitle] = useState<string>(query ?? "");
   const [chapterKey, setChapterKey] = useState<number | null>(null);
+  const queryRef = useRef<string | null>(query);
+  queryRef.current = query;
+  const readPlace = useCallback((): { q: string; verse: number | null; scrollY: number } | null => {
+    if (!placeKey) return null;
+    try {
+      const raw = localStorage.getItem(placeKey);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }, [placeKey]);
+  const writePlace = useCallback((verse: number | null, scrollY: number) => {
+    if (!placeKey || !queryRef.current) return;
+    try { localStorage.setItem(placeKey, JSON.stringify({ q: queryRef.current, verse, scrollY })); } catch {}
+  }, [placeKey]);
+  const restoredOnce = useRef(false);
   // Navigation lives in the pane header, which does not scroll. The Reader's own in-column
   // navigator is suppressed in the desk (see reader.tsx): one menu, always reachable.
   const [navOpen, setNavOpen] = useState(false);
@@ -193,7 +214,55 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     if (role === "main") emit({ type: "open-reference", q, label, source: "crossref" });
     else onQueryChange(q);
   }, [role, emit, onQueryChange]);
-  const handleChapterChange = useCallback((ck: number) => setChapterKey(ck), []);
+  /**
+   * The Reader reports every chapter it settles on, and the query that got it there. Feeding
+   * that query back up is what keeps the tab's saved position honest no matter WHICH path moved
+   * the Reader — a chip, the navigator, the audio player's arrows, a cross-reference. Before
+   * this the query was thrown away here, and `mainQ` stayed null on every tab he owned while he
+   * read twenty chapters. Setting an identical string is a no-op upstream, so this cannot loop.
+   */
+  const handleChapterChange = useCallback((ck: number, q: string) => {
+    setChapterKey(ck);
+    if (q && q !== queryRef.current) onQueryChange(q);
+  }, [onQueryChange]);
+  /**
+   * Put him back where he was — once per mount, and only when the tab actually remembers a
+   * spot. Returns true if it took over, so the assignment auto-scroll stands down rather than
+   * fighting it (that fight is what made rotating feel random).
+   *
+   * This runs from TWO places on purpose. The passage can finish loading before the saved
+   * place has arrived from prefs — ESV chapters are cached, and effects run child-first, so
+   * the order is genuinely not guaranteed. Whichever arrives second does the work.
+   */
+  const restore = useCallback((canonical: string | null) => {
+    const saved = readPlace();
+    // only put him back if the saved spot belongs to the chapter actually on screen
+    if (restoredOnce.current || !saved || saved.q !== queryRef.current) return false;
+    if (!saved.verse && saved.scrollY <= 0) return false;
+    restoredOnce.current = true;
+    if (canonical) scrolledTo.current = canonical;
+    // Both the scroll and the selection have to wait for the column to lay out — and the
+    // selection has to land AFTER the Reader's own query effect, which clears sel/selEnd
+    // whenever the query prop changes. Applying it in the same settle loop covers both.
+    let n = 0;
+    const put = () => {
+      const sc = scrollRef.current;
+      const ready = !!sc && (saved.scrollY <= 0 || sc.scrollHeight > sc.clientHeight + saved.scrollY - 40);
+      if (ready) {
+        if (saved.scrollY > 0 && sc) sc.scrollTop = saved.scrollY;
+        // The Reader's handle directly, NOT selectVerseNow: that helper scrolls the verse into
+        // view, which would fight the scroll position we just restored, and it schedules on
+        // requestAnimationFrame, which never runs while the view is not compositing.
+        if (saved.verse) readerRef.current?.select(saved.verse, null);
+        return;
+      }
+      if (++n < 14) setTimeout(put, 60 * n);
+    };
+    setTimeout(put, 0);
+    return true;
+  }, [readPlace]);
+  const restoreRef = useRef(restore);
+  restoreRef.current = restore;
   const handlePassageLoaded = useCallback((d: { canonical: string }) => {
               setTitle(d.canonical);
               const ps = pendingSelect.current;
@@ -201,6 +270,11 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
                 pendingSelect.current = null;
                 selectVerseNow(ps.refStart, ps.refEnd);
               }
+              // PUT HIM BACK. Once per mount, and only when the tab actually remembers a spot:
+              // this is the rotate-and-reload case, where the pane is brand new but he never
+              // went anywhere. Claim `scrolledTo` so the assignment auto-scroll below does not
+              // then yank him to today's verse — that fight is what made rotating feel random.
+              if (!ps && restoreRef.current(d.canonical)) return;
               // opening a study reopens the Bible AT the assignment — once per chapter
               // load; the verses commit a tick after the data arrives, so retry briefly
               const key = `${d.canonical}`;
@@ -629,8 +703,58 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     const r = el.getBoundingClientRect();
     return { x: Math.min(r.right - 40, r.left + r.width * 0.55), y: r.bottom };
   }, []);
+  /** report where he is, so the tab can put him back here after a rotate or a reload */
+  const placeRef = useRef<{ verse: number | null; scrollY: number }>({ verse: null, scrollY: 0 });
+  const placeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** has he actually moved this session? an empty place must never overwrite a remembered one */
+  const placeDirty = useRef(false);
+  const reportPlace = useCallback((verse: number | null) => {
+    if (!placeKey) return;
+    const scrollY = Math.round(scrollRef.current?.scrollTop ?? 0);
+    // An EMPTY report before he has done anything is just the mount talking: the Reader emits
+    // onSelectionChange(null, null) the moment it renders. Once he has genuinely moved,
+    // clearing a selection IS real news and does get recorded.
+    if (!placeDirty.current && verse === null && scrollY <= 0) return;
+    placeDirty.current = true;
+    placeRef.current = { verse, scrollY };
+    if (placeTimer.current) clearTimeout(placeTimer.current);
+    // debounced — scrolling a chapter must not write on every frame
+    placeTimer.current = setTimeout(() => writePlace(placeRef.current.verse, placeRef.current.scrollY), 400);
+  }, [placeKey, writePlace]);
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc || !placeKey) return;
+    const onScroll = () => reportPlace(placeRef.current.verse);
+    sc.addEventListener("scroll", onScroll, { passive: true });
+    // Flush on the way OUT OF THE PAGE, reading the scroll live. Deliberately `pagehide` and
+    // not the effect cleanup: React re-invokes effects on mount in development, so a cleanup
+    // flush fires during a teardown that never really happened and writes an empty place over
+    // a real one.
+    const flush = () => {
+      if (placeDirty.current) writePlace(placeRef.current.verse, Math.round(sc.scrollTop));
+    };
+    window.addEventListener("pagehide", flush);
+    return () => {
+      sc.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pagehide", flush);
+      if (placeTimer.current) { clearTimeout(placeTimer.current); placeTimer.current = null; }
+      // Re-arm for the next mount. Both of these are REFS, which survive the simulated
+      // teardown React performs in development — leaving `restoredOnce` set meant the restore
+      // ran on the discarded pass and the real one silently skipped it, every single time.
+      restoredOnce.current = false;
+      placeDirty.current = false;
+    };
+  }, [placeKey, writePlace, reportPlace]);
+
+  // The other half of the restore: if the place arrived after the passage did, do it now.
+  useEffect(() => {
+    if (!title) return; // nothing rendered to scroll or select yet
+    restore(title);
+  }, [title, restore]);
+
   const onSelectionChange = useCallback((s: number | null, e: number | null) => {
     setSel({ start: s, end: e });
+    reportPlace(s);
     // The bar used to need a TAP recorded by the ink canvas — so with the ink layer hidden
     // (HIDE), or after selecting any other way, it simply never appeared. Anchor to the tap
     // when there is one and to the selected verse itself when there is not.
@@ -642,7 +766,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       setBarAnchor(null);
       setShowChips(false);
     }
-  }, [anchorForVerse]);
+  }, [anchorForVerse, reportPlace]);
   const barAction = (a: BarAction) => {
     haptic(a === "send" ? "success" : "light");
     const reader = readerRef.current;

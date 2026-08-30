@@ -30,16 +30,51 @@ function extFor(mime: string) {
   return "m4a";
 }
 
-async function transcribeOne(bytes: Uint8Array, mime: string, lang: string | null, index: number): Promise<{ lines: { start: number; end: number; text: string }[]; duration: number | null; model: string }> {
-  const file = await toFile(Buffer.from(bytes), `segment-${index}.${extFor(mime)}`, { type: mime });
+/** the vocabulary that is true of every sermon he records, whatever it is about */
+const DOMAIN_VOCAB =
+  "Sermón expositivo reformado. Biblia, versículos, la ley, la fe, el Espíritu, pacto, gracia, justificación, santificación.";
+const PROMPT_LIMIT = 850; // ≈224 tokens, whisper-1's ceiling; the newer models tolerate more
+
+/**
+ * Build the transcription prompt. Whisper-family models treat it as the text that PRECEDED
+ * this audio, which is why the tail of the previous segment is worth so much more than a
+ * keyword list: it fixes words split across a boundary, holds proper nouns steady, and stops
+ * the model drifting. The recording already knows its preacher and passage; none of that was
+ * being used.
+ */
+function buildPrompt(ctx: { preacher?: string | null; passageRef?: string | null; title?: string | null; tail?: string }) {
+  const who = ctx.preacher?.trim();
+  const where = ctx.passageRef?.trim();
+  const head = [
+    who && where ? `Sermón de ${who} sobre ${where}.` : who ? `Sermón de ${who}.` : where ? `Sermón sobre ${where}.` : null,
+    DOMAIN_VOCAB,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const tail = ctx.tail?.trim();
+  const full = tail ? `${head} ${tail}` : head;
+  // keep the TAIL when trimming — it is the part doing the real work
+  return full.length <= PROMPT_LIMIT ? full : full.slice(full.length - PROMPT_LIMIT);
+}
+
+async function transcribeOne(
+  bytes: Uint8Array,
+  mime: string,
+  lang: string | null,
+  index: number,
+  prompt: string,
+): Promise<{ lines: { start: number; end: number; text: string }[]; duration: number | null; model: string }> {
   const attempt = async (model: string) => {
+    // Rebuild the File per attempt — handing the same one to a second call after its stream
+    // has been consumed is not reliable, and the fallback path is exactly a second call.
+    const file = await toFile(Buffer.from(bytes), `segment-${index}.${extFor(mime)}`, { type: mime });
     const res = (await openai.audio.transcriptions.create({
       file,
       model,
       response_format: "verbose_json",
       timestamp_granularities: ["segment"],
       ...(lang ? { language: lang } : {}),
-      prompt: "Sermón expositivo reformado. Biblia, versículos, Gálatas, Romanos, la ley, la fe, el Espíritu, Abraham, pacto, gracia.",
+      prompt,
     } as Parameters<typeof openai.audio.transcriptions.create>[0])) as unknown as VerboseLike;
     return res;
   };
@@ -47,7 +82,11 @@ async function transcribeOne(bytes: Uint8Array, mime: string, lang: string | nul
   let res: VerboseLike;
   try {
     res = await attempt(model);
-  } catch {
+  } catch (err) {
+    // This used to be a bare `catch {}`. If the primary model rejects every call — because it
+    // does not support verbose_json, say — every segment silently paid two round trips and ran
+    // on the weaker model, and nothing anywhere said so. Now it is in the logs.
+    console.warn(`[recordings] ${TRANSCRIBE_MODEL} failed on segment ${index}, falling back to ${TRANSCRIBE_FALLBACK_MODEL}:`, (err as Error)?.message ?? err);
     model = TRANSCRIBE_FALLBACK_MODEL;
     res = await attempt(model);
   }
@@ -86,7 +125,17 @@ export async function transcribeRecording(recordingId: string, opts: { maxSegmen
   let failed = false;
   for (const seg of pending) {
     try {
-      const r = await transcribeOne(seg.bytes as unknown as Uint8Array, seg.mimeType, lang, seg.index);
+      // the tail of what we have so far, in time order — the previous segment's last words
+      const tail = transcript.length
+        ? [...transcript].sort((a, b) => a.start - b.start).slice(-6).map((l) => l.text).join(" ")
+        : "";
+      const r = await transcribeOne(
+        seg.bytes as unknown as Uint8Array,
+        seg.mimeType,
+        lang,
+        seg.index,
+        buildPrompt({ preacher: rec.preacher, passageRef: rec.passageRef, title: rec.title, tail }),
+      );
       for (const l of r.lines) {
         transcript.push({ start: seg.startSec + l.start, end: seg.startSec + l.end, text: l.text });
       }

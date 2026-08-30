@@ -48,6 +48,14 @@ export interface DeskTab {
   writing: string[]; // DocKind[] — the writing column (usually ["notebook"]) or []
   text: string[]; // DocKind[] — the text column, 1–2 docs (stacked unless cols)
   cols?: boolean;
+  // A tab is an arrangement AND a place. These were only ever declared on the shell's own
+  // richer DeskTab, so the stored type quietly disagreed with what actually round-trips
+  // through this file. Nothing was being stripped — the merge is shallow at the context
+  // level — but the two types should say the same thing.
+  mainQ?: string | null;
+  refQ?: string | null;
+  verse?: number | null;
+  scrollY?: number;
 }
 export interface DeskLayoutPrefs {
   preset: string;

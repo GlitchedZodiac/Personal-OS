@@ -58,6 +58,9 @@ interface DeskTab extends Layout {
    */
   mainQ?: string | null;
   refQ?: string | null;
+  /** and its own place INSIDE that chapter — the verse he had, and how far down he was */
+  verse?: number | null;
+  scrollY?: number;
 }
 const TAB_TEMPLATES: { key: string; label: string; sub: string; make: () => Layout }[] = [
   { key: "notebook", label: "Notebook", sub: "one full page", make: () => ({ preset: "custom", writing: ["notebook"], text: [] }) },
@@ -146,6 +149,11 @@ export function DeskShell(props: DeskShellProps) {
   // the ACTIVE tab's position; writing goes back into that tab, so switching restores it
   const mainQ = tab?.mainQ ?? props.mainQ;
   const setMainQ = useCallback((q: string | null) => updateTab(() => ({ mainQ: q })), [updateTab]);
+  // Where he is INSIDE the chapter, per tab. This lives in its own localStorage entry rather
+  // than on the tab: desk prefs load asynchronously, and a pane that reports its position
+  // before they arrive overwrites them — which cost a saved tab during smoke on 2026-08-30.
+  // Scroll position is a per-device thing anyway; it has no business syncing.
+  const placeKey = tab ? `spirit-place:${context}:${tab.id}` : null;
   // a verse the shell asked a Bible pane to show. `seq` re-arms it so tapping the same
   // reference card twice jumps twice.
   const [jump, setJump] = useState<{ refStart: number; refEnd: number | null; seq: number; to: "main" | "reference" } | null>(null);
@@ -208,6 +216,7 @@ export function DeskShell(props: DeskShellProps) {
     const saved = prefs.layouts[context]?.tabs as DeskTab[] | undefined;
     if (saved && saved.length && !tabsLoaded.current) {
       tabsLoaded.current = true;
+      canPersist.current = true; // his tabs are in hand — safe to write back from here on
       setTabs(saved);
       setActiveTab(prefs.layouts[context]?.activeTab ?? saved[0].id);
     }
@@ -217,14 +226,49 @@ export function DeskShell(props: DeskShellProps) {
   }, [context, prefs.layouts[context]?.tabs]);
   // persist the tab set whenever it changes (after the first paint)
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The latest tabs/activeTab, readable from a cleanup that closed over older ones.
+  const latest = useRef({ tabs, activeTab });
+  latest.current = { tabs, activeTab };
+  /**
+   * Nothing is written back until we know what was saved. `tabs` starts as the DEFAULT set
+   * (prefs are still the module default at first render and arrive a beat later), so a write
+   * in that window persists the defaults over his real tabs — and the restore then reads them
+   * back and they are gone. The grace period covers the case where there was genuinely nothing
+   * saved and the restore therefore never fires.
+   */
+  const canPersist = useRef(false);
+  useEffect(() => {
+    const t = setTimeout(() => { canPersist.current = true; }, 2500);
+    return () => clearTimeout(t);
+  }, []);
   useEffect(() => {
     if (persistTimer.current) clearTimeout(persistTimer.current);
-    persistTimer.current = setTimeout(() => saveLayout({ tabs, activeTab }), 600);
+    if (!canPersist.current) return;
+    persistTimer.current = setTimeout(() => { saveLayout({ tabs, activeTab }); persistTimer.current = null; }, 600);
     return () => { if (persistTimer.current) clearTimeout(persistTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, activeTab]);
+  /**
+   * Flush on UNMOUNT ONLY — its own effect with empty deps, which is the whole point.
+   * Clearing the timer above without flushing dropped any position change made in the last
+   * 600 ms before he navigated away. But flushing from THAT effect's cleanup fires on every
+   * deps change, and the first one lands before the saved tabs have loaded — which writes the
+   * DEFAULT tabs over his real ones and then loses them for good. (Caught in smoke, 2026-08-30,
+   * after it ate a custom tab.) The window between mount and restore is exactly why this must
+   * not run early.
+   */
+  useEffect(() => () => {
+    if (!persistTimer.current) return;
+    clearTimeout(persistTimer.current);
+    persistTimer.current = null;
+    if (tabsLoaded.current) saveLayout(latest.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
-    // a deep link (?q=) retargets the ACTIVE tab, not every tab
+    // A deep link (?q=) retargets the ACTIVE tab, not every tab. Guarded on there actually
+    // being one: without the guard this fires on every mount and stamps the shell's default
+    // passage over a tab that already knew where he was reading.
+    if (!props.mainQ && !props.refQ) return;
     updateTab(() => ({ mainQ: props.mainQ, refQ: props.refQ ?? props.mainQ }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.mainQ, props.refQ]);
@@ -405,7 +449,7 @@ export function DeskShell(props: DeskShellProps) {
       case "notebook":
         return <NotebookPane railSide={portrait ? (writingLeft ? "right" : "left") : railSide} showRail={portrait || textEmpty} context={context} initialPageId={pageId ?? null} dayId={dayId ?? null} pendingNote={pendingNote} onNoteConsumed={() => setPendingNote(null)} onKicker={kicker} />;
       case "bible":
-        return <BiblePane role="main" query={mainQ} onQueryChange={setMainQ} pendingJump={jump?.to === "main" ? jump : null} onJumpConsumed={clearJump} free={free} dayId={dayId ?? null} layerContext={notebookPageLayerContext} onKicker={kicker} />;
+        return <BiblePane role="main" query={mainQ} onQueryChange={setMainQ} placeKey={placeKey} pendingJump={jump?.to === "main" ? jump : null} onJumpConsumed={clearJump} free={free} dayId={dayId ?? null} layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "reference":
         return <BiblePane role="reference" query={refQ} onQueryChange={setRefQ} free layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "teaching":
@@ -431,14 +475,21 @@ export function DeskShell(props: DeskShellProps) {
   const paneBox: React.CSSProperties = { background: "#FFFFFF", borderRadius: 16, boxShadow: "0 2px 12px rgba(35,34,39,0.06)", overflow: "hidden", display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, position: "relative" };
   const textEmpty = layout.text.length === 0;
   const cols = Boolean(layout.cols) && layout.text.length > 1 && !portrait;
+  // KEYS, and they are load-bearing. Portrait and landscape render these two columns in
+  // opposite order inside an unkeyed fragment, so React reconciled them BY INDEX: rotating the
+  // iPad swapped the notebook and the Bible into each other's host divs, unmounting and
+  // remounting both. That is why rotating lost his chapter, his scroll position and his
+  // selection, and re-fired the auto-scroll to today's assignment verse. (His report,
+  // 2026-08-30: "when the screen changes orientation it doesn't stay on the same book chapter
+  // nor verse.") A stable key makes the reorder a move instead of a teardown.
   const writingCol = layout.writing.length ? (
-    <div style={{ ...paneBox, flex: textEmpty ? 1 : "none", width: textEmpty || portrait ? "auto" : `calc(${(nbFrac * (cols ? 0.72 : 1) * 100).toFixed(2)}% - 24px)`, transition: dragging === "v" ? "none" : "width .36s cubic-bezier(.25,1.15,.3,1)", height: portrait && !textEmpty ? `calc(${((1 - stackFrac) * 100).toFixed(2)}% - 7px)` : undefined }}>
+    <div key="writing-col" style={{ ...paneBox, flex: textEmpty ? 1 : "none", width: textEmpty || portrait ? "auto" : `calc(${(nbFrac * (cols ? 0.72 : 1) * 100).toFixed(2)}% - 24px)`, transition: dragging === "v" ? "none" : "width .36s cubic-bezier(.25,1.15,.3,1)", height: portrait && !textEmpty ? `calc(${((1 - stackFrac) * 100).toFixed(2)}% - 7px)` : undefined }}>
       {renderDoc(layout.writing[0], "writing", 0)}
       {slotMenuEl("writing", 0)}
     </div>
   ) : null;
   const textCol = textEmpty ? null : (
-    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: cols ? "row" : "column", height: portrait && writingCol ? `calc(${(stackFrac * 100).toFixed(2)}% - 7px)` : undefined }}>
+    <div key="text-col" style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: cols ? "row" : "column", height: portrait && writingCol ? `calc(${(stackFrac * 100).toFixed(2)}% - 7px)` : undefined }}>
       {layout.text.map((d, i) => (
         <div key={`${d}-${i}`} style={{ display: "contents" }}>
           {i > 0 && !cols && (
@@ -460,10 +511,10 @@ export function DeskShell(props: DeskShellProps) {
   // beside it. V2 merges them into one 40pt seam that is both the toolbar and the resize
   // handle." Resizing is untouched: startDrag("v"), finger-only, snaps at thirds.
   const seamV = writingCol && !textEmpty ? (
-    <SeamRail onSeamDown={startDrag("v")} dragging={dragging === "v"} writingLeft={writingLeft} />
+    <SeamRail key="seam-v" onSeamDown={startDrag("v")} dragging={dragging === "v"} writingLeft={writingLeft} />
   ) : null;
   const seamH = writingCol && !textEmpty ? (
-    <div onPointerDown={startDrag("h")} style={{ height: 14, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "row-resize", touchAction: "none" }}>
+    <div key="seam-h" onPointerDown={startDrag("h")} style={{ height: 14, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "row-resize", touchAction: "none" }}>
       <span style={{ width: 34, height: 4, borderRadius: 99, background: dragging === "h" ? "#A63D63" : "#C9C7CD" }} />
     </div>
   ) : null;
@@ -635,19 +686,7 @@ export function DeskShell(props: DeskShellProps) {
 
       {/* the desk */}
       <div ref={deskRef} key={activeTab} className="desk-page-in" style={{ position: "absolute", top: "calc(36px + var(--desk-top))", left: 12, right: 12, bottom: 12, display: "flex", flexDirection: portrait ? "column" : writingLeft ? "row" : "row-reverse", userSelect: dragging ? "none" : "auto" }}>
-        {portrait ? (
-          <>
-            {textCol}
-            {seamH}
-            {writingCol}
-          </>
-        ) : (
-          <>
-            {writingCol}
-            {seamV}
-            {textCol}
-          </>
-        )}
+        {portrait ? [textCol, seamH, writingCol] : [writingCol, seamV, textCol]}
       </div>
     </div>
   );
