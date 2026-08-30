@@ -1,7 +1,7 @@
 "use client";
 
 // Three popovers from the design: the pen settings (02c / 04 — Pencil
-// tools, color, width, BIBLE MODE toggle, gesture hints,
+// tools, color, width, gesture hints,
 // "All pen settings →"), the brush library (3b) and the free palette (3c).
 
 import Link from "next/link";
@@ -9,7 +9,7 @@ import { BRUSHES, type InkTool, WIDTH_STEPS } from "@/lib/ink";
 import { askPrompt } from "./dialog";
 import { INK_NAMES } from "@/lib/desk-prefs";
 import { useDesk, HL_CATEGORIES } from "./desk-state";
-import { Popover, Kicker, Segmented } from "./ui";
+import { Popover, Kicker } from "./ui";
 import { EraserIcon, HighlighterIcon, LassoIcon, MarkerIcon, PenIcon, PencilIcon } from "./desk-icons";
 
 const TOOLS: { key: "fountain" | "highlighter" | "pencil" | "marker" | "eraser" | "lasso"; name: string; desc: string }[] = [
@@ -21,8 +21,8 @@ const TOOLS: { key: "fountain" | "highlighter" | "pencil" | "marker" | "eraser" 
   { key: "lasso", name: "Lasso", desc: "Lasso — select ink" },
 ];
 
-export function PenPopover({ style, onClose, showBibleMode = true }: { style?: React.CSSProperties; onClose: () => void; showBibleMode?: boolean }) {
-  const { pen, setPen, bibleMode, setBibleMode, prefs, setPopover } = useDesk();
+export function PenPopover({ style, onClose }: { style?: React.CSSProperties; onClose: () => void }) {
+  const { pen, setPen, prefs, setPopover } = useDesk();
   const activeKey = pen.tool === "gpen" ? "fountain" : pen.tool === "text" ? "fountain" : pen.tool;
   const current = TOOLS.find((t) => t.key === activeKey) ?? TOOLS[0];
   const ic = (key: string, on: boolean) => {
@@ -101,15 +101,6 @@ export function PenPopover({ style, onClose, showBibleMode = true }: { style?: R
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 10, color: "#96949B" }}>{widthMm}</span>
       </div>
-      {showBibleMode && (
-        <>
-          <div style={{ height: 1, background: "#EDEBEE", margin: "11px 0" }} />
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 9, letterSpacing: "0.12em", fontWeight: 700, color: "#A9A7AE" }}>BIBLE MODE</span>
-            <Segmented value={bibleMode} onChange={setBibleMode} options={[{ value: "study", label: "STUDY" }, { value: "scratch", label: "SCRATCH" }]} />
-          </div>
-        </>
-      )}
       <div style={{ fontSize: 10, color: "#96949B", lineHeight: 1.6, marginTop: 10, background: "#FAF9FA", borderRadius: 10, padding: "9px 11px" }}>
 <span style={{ color: "#454349", fontWeight: 600 }}>Double-tap</span> the pencil — pen ⇄ eraser. Set it in iPad Settings › Apple&nbsp;Pencil.
       </div>

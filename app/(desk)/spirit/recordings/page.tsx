@@ -51,7 +51,7 @@ export default function RecordingsPage() {
     await openRec(id);
   };
   const del = async (id: string) => {
-    if (!(await askConfirm({ title: "Delete this recording?", body: "The page and its text layer stay; replay will fall back to the transcript.", confirmLabel: "Delete recording", danger: true }))) return;
+    if (!(await askConfirm({ title: "Delete this recording?", body: "The audio AND its transcript go — replay stops working for this sermon. Your page, your ink and its text layer stay.", confirmLabel: "Delete recording", danger: true }))) return;
     await fetch(`/api/spirit/recordings/${id}`, { method: "DELETE" });
     setOpen(null);
     await load();

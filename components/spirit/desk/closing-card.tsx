@@ -60,7 +60,7 @@ export function ClosingCard({
   };
   const small = variant === "page";
   return (
-    <div className="desk-page-in" style={{ background: "#FFFFFF", borderRadius: small ? 16 : 18, boxShadow: small ? "0 12px 40px rgba(0,0,0,0.25)" : "0 16px 48px rgba(0,0,0,0.28)", padding: small ? "15px 17px" : 18, width: small ? 430 : 420, maxWidth: "94vw", maxHeight: "86vh", overflowY: "auto", animation: "fadeUp .25s ease both" }}>
+    <div className="desk-page-in" style={{ background: "#FFFFFF", borderRadius: small ? 16 : 18, boxShadow: small ? "0 12px 40px rgba(0,0,0,0.25)" : "0 16px 48px rgba(0,0,0,0.28)", padding: small ? "15px 17px" : 18, width: small ? 430 : 420, maxWidth: "100%", maxHeight: "100%", overflowY: "auto", animation: "fadeUp .25s ease both" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ width: small ? 30 : 34, height: small ? 30 : 34, borderRadius: "50%", background: "#F6E3EB", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
           <CheckIcon size={small ? 13 : 15} />

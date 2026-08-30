@@ -67,11 +67,23 @@ export async function transcribeRecording(recordingId: string, opts: { maxSegmen
   });
   const total = await prisma.recordingSegment.count({ where: { recordingId } });
   const alreadyDone = await prisma.recordingSegment.count({ where: { recordingId, transcribedAt: { not: null } } });
+  // ——— #23: nothing to transcribe at all. Without this the row wedges at "transcribing"
+  // with no pending segments and no way back to a state the UI offers a retry from.
+  if (total === 0) {
+    const saved = await prisma.recording.update({ where: { id: recordingId }, data: { status: rec.status === "recording" ? rec.status : "uploaded", error: "no audio to transcribe" } });
+    return { recording: saved, done: 0, total: 0, finished: false, audioDeleted: false };
+  }
+  // ——— #9: claim the run. Two concurrent passes would both read the same `pending` set and
+  // append every line twice — doubling the transcript AND the AI spend. The claim is a
+  // conditional update: only the caller that flips uploaded → transcribing proceeds.
   if (rec.status !== "transcribing" && pending.length) {
-    await prisma.recording.update({ where: { id: recordingId }, data: { status: "transcribing" } });
+    const claim = await prisma.recording.updateMany({ where: { id: recordingId, status: { not: "transcribing" } }, data: { status: "transcribing" } });
+    if (claim.count === 0) return { recording: rec, done: alreadyDone, total, finished: false, audioDeleted: false, busy: true };
   }
   const lang = rec.lang && rec.lang !== "auto" ? rec.lang : null;
   const transcript = (Array.isArray(rec.transcript) ? (rec.transcript as unknown as TranscriptLine[]) : []) as TranscriptLine[];
+  let succeeded = 0;
+  let failed = false;
   for (const seg of pending) {
     try {
       const r = await transcribeOne(seg.bytes as unknown as Uint8Array, seg.mimeType, lang, seg.index);
@@ -86,7 +98,9 @@ export async function transcribeRecording(recordingId: string, opts: { maxSegmen
         prisma.recording.update({ where: { id: recordingId }, data: { transcript: JSON.parse(JSON.stringify(transcript)) } }),
         prisma.recordingSegment.update({ where: { id: seg.id }, data: { transcribedAt: new Date() } }),
       ]);
+      succeeded++;
     } catch (error) {
+      failed = true;
       console.error("[recordings] segment transcription failed", seg.index, error);
       await prisma.recording.update({
         where: { id: recordingId },
@@ -96,9 +110,12 @@ export async function transcribeRecording(recordingId: string, opts: { maxSegmen
     }
   }
   transcript.sort((a, b) => a.start - b.start);
-  const done = alreadyDone + pending.length;
-  const finished = done >= total && total > 0;
-  let status = finished ? "ready" : "transcribing";
+  // Only segments that ACTUALLY transcribed count. Counting the whole pending batch meant one
+  // failed call reported "ready" with a silent hole in the sermon — and, with retention set to
+  // drop-after-transcript, deleted the audio that hole came from. Permanently.
+  const done = alreadyDone + succeeded;
+  const finished = done >= total && total > 0 && !failed;
+  let status = failed ? "failed" : finished ? "ready" : "transcribing";
 
   // English gloss for non-English audio — one batched call, index-aligned.
   if (finished && lang && lang !== "en") {
@@ -138,6 +155,8 @@ export async function transcribeRecording(recordingId: string, opts: { maxSegmen
     data: {
       transcript: JSON.parse(JSON.stringify(transcript)),
       status,
+      // the error only clears when the pass genuinely completed — a cleared error on a
+      // half-transcribed sermon is how the retry path disappeared
       ...(finished ? { error: null } : {}),
     },
   });

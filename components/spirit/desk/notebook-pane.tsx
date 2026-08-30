@@ -73,6 +73,9 @@ export interface NotebookPaneProps {
   railSide: "left" | "right";
   /** false when the desk's seam is the toolbar (split landscape) — V2 */
   showRail?: boolean;
+  /** a verse dropped while this pane was not on screen — the shell opened it for us */
+  pendingNote?: { refStart: number; refEnd: number; label: string; text: string; seq: number } | null;
+  onNoteConsumed?: () => void;
   context: "study" | "sermon" | "free";
   initialPageId?: string | null;
   dayId?: string | null;
@@ -100,7 +103,7 @@ function resolveOnce(key: string, run: () => Promise<Response>) {
   return p;
 }
 
-export function NotebookPane({ railSide, showRail = true, context, initialPageId, dayId, onPageChange }: NotebookPaneProps) {
+export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteConsumed, context, initialPageId, dayId, onPageChange }: NotebookPaneProps) {
   const desk = useDesk();
   const { pen, setPen, popover, setPopover, prefs, setRecording, recordingSeconds, emit } = desk;
   const canvasRef = useRef<InkCanvasHandle | null>(null);
@@ -243,6 +246,7 @@ export function NotebookPane({ railSide, showRail = true, context, initialPageId
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
   const [freshCards, setFreshCards] = useState<Set<string>>(new Set());
   const [dictating, setDictating] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [proposal, setProposal] = useState<{ kind: "page" | "sermon"; data: Proposal } | null>(null);
   const [proposalBusy, setProposalBusy] = useState(false);
   const [recordingRow, setRecordingRow] = useState<RecordingRow | null>(null);
@@ -575,6 +579,16 @@ export function NotebookPane({ railSide, showRail = true, context, initialPageId
     setFreshCards((s) => new Set([...Array.from(s), o.id]));
     setTimeout(() => setFreshCards((s) => { const n = new Set(s); n.delete(o.id); return n; }), 6000);
   };
+
+  // the shell opened this pane for a verse dropped with no notebook on screen
+  const lastNote = useRef(0);
+  useEffect(() => {
+    if (!pendingNote || !page || pendingNote.seq === lastNote.current) return;
+    lastNote.current = pendingNote.seq;
+    void addRefCard(pendingNote.refStart, pendingNote.refEnd, pendingNote.label, pendingNote.text);
+    onNoteConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingNote, page]);
 
   useDeskEvent(
     (e) => {
@@ -972,31 +986,72 @@ export function NotebookPane({ railSide, showRail = true, context, initialPageId
       setRecording((r) => (r ? { ...r, paused: false, pausedAccum: r.pausedAccum + (r.pausedSince ? Date.now() - r.pausedSince : 0), pausedSince: null } : r));
     }
   };
+  const transcribeRecording = async () => {
+    if (!recordingRow || transcribing) return;
+    if (recState === "recording" || recState === "paused") return toast.error("Stop the recording first.");
+    const sr = recorder.current;
+    if (sr && sr.pendingUploads > 0) return toast.error("Still uploading the audio — try again in a moment.");
+    setTranscribing(true);
+    toast("Transcribing — this takes a minute for a full sermon.");
+    setRecordingRow((r) => (r ? { ...r, status: "transcribing" } : r));
+    for (let i = 0; i < 40; i++) {
+      const r = await fetch(`/api/spirit/recordings/${recordingRow.id}/transcribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ maxSegments: 5 }) }).catch(() => null);
+      if (!r?.ok) break;
+      const d = await r.json();
+      if (d.finished || d.status === "ready" || d.status === "audio_deleted") break;
+    }
+    const rr = await fetch(`/api/spirit/recordings/${recordingRow.id}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+    if (rr?.recording) {
+      setRecordingRow({ ...rr.recording, transcript: (rr.recording.transcript ?? []) as TranscriptLine[] });
+      setSegments(rr.segments ?? []);
+      toast.success(rr.recording.status === "ready" ? "Transcribed — tap any stroke to replay." : "Transcription did not finish — try again from ⋯.");
+    }
+    setTranscribing(false);
+  };
+  const renameRecording = async () => {
+    if (!recordingRow) return;
+    const name = await askPrompt({ title: "Name this recording", value: recordingRow.title ?? "", placeholder: "e.g. Jonah 2 — Pr. Marcos" });
+    if (!name) return;
+    const r = await fetch(`/api/spirit/recordings/${recordingRow.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: name }) }).catch(() => null);
+    if (r?.ok) { setRecordingRow((x) => (x ? { ...x, title: name } : x)); toast.success("Renamed."); }
+  };
+  const deleteRecording = async () => {
+    if (!recordingRow) return;
+    const live = recState === "recording" || recState === "paused";
+    const sure = await askConfirm({ title: live ? "Stop and delete this recording?" : "Delete this recording?", body: "The audio and its transcript go; your ink and the page stay. This cannot be undone.", confirmLabel: live ? "Stop and delete" : "Delete recording", danger: true });
+    if (!sure) return;
+    // never leave the mic hot or the recorder orphaned uploading into a row that is gone
+    if (live) { try { await recorder.current?.stop(); } catch { /* already stopped */ } setRecording(null); }
+    const r = await fetch(`/api/spirit/recordings/${recordingRow.id}`, { method: "DELETE" }).catch(() => null);
+    if (r?.ok) {
+      setRecordingRow(null);
+      setSegments([]);
+      setRecState("idle");
+      setPage((pg) => (pg ? { ...pg, recordingId: null } : pg));
+      toast.success("Recording deleted.");
+    } else toast.error("Couldn't delete it — try again.");
+  };
   const stopRecording = async () => {
     const sr = recorder.current;
     if (!sr || !recordingRow) return;
     const total = await sr.stop();
     setRecording(null);
     await fetch(`/api/spirit/recordings/${recordingRow.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ durationSec: total, status: "uploaded" }) }).catch(() => {});
-    toast.success("Recording kept — transcribing in the background.");
-    // wait for uploads then transcribe in a few calls
-    const poll = async () => {
+    // Transcription is HIS act now, not a side effect of stopping — it spends AI, so the
+    // recording keeps as audio until he asks for the text (⋯ → Transcribe the recording).
+    setRecState("stopped");
+    // Refresh the row once the audio has finished uploading: without this the chip sat at
+    // 0:00 and the replay bar never appeared, because nothing told the pane the recording
+    // now had a duration and segments.
+    void (async () => {
       for (let i = 0; i < 60 && sr.pendingUploads > 0; i++) await new Promise((r) => setTimeout(r, 500));
-      for (let i = 0; i < 40; i++) {
-        const r = await fetch(`/api/spirit/recordings/${recordingRow.id}/transcribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ maxSegments: 5 }) }).catch(() => null);
-        if (!r?.ok) break;
-        const d = await r.json();
-        if (d.finished || d.status === "ready" || d.status === "audio_deleted") break;
-      }
       const rr = await fetch(`/api/spirit/recordings/${recordingRow.id}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
       if (rr?.recording) {
         setRecordingRow({ ...rr.recording, transcript: (rr.recording.transcript ?? []) as TranscriptLine[] });
         setSegments(rr.segments ?? []);
-        toast.success("Sunday's recording is transcribed — tap any stroke to replay.");
       }
-    };
-    void poll();
-    setRecState("stopped");
+      toast.success("Recording kept — transcribe it from ⋯ whenever you want the text.");
+    })();
   };
 
   // ——— close the page (sermon) / transcribe (others) ———
@@ -1190,6 +1245,12 @@ export function NotebookPane({ railSide, showRail = true, context, initialPageId
                       { label: "Find a verse → card", run: () => setFindOpen(true) },
                       { label: isSermon ? "Close the page — read it" : "Transcribe this page", run: closePage },
                       { label: "Page list", run: () => nb && openList(nb) },
+                      ...(isSermon && recordingRow ? [
+                        ...(recordingRow.status !== "ready" && !transcribing && recState !== "recording" && recState !== "paused" ? [{ label: "Transcribe the recording", run: transcribeRecording }] : []),
+                        ...(transcribing ? [{ label: "Transcribing…", run: () => {} }] : []),
+                        { label: "Rename the recording", run: renameRecording },
+                        { label: "Delete the recording", run: deleteRecording, danger: true },
+                      ] : []),
                       { label: zoom === 1 ? "Zoom 150%" : "Zoom 100%", run: () => setZoom((z) => (z === 1 ? 1.5 : 1)) },
                       { label: "Export as PNG", run: () => { const png = canvasRef.current?.renderPng({ scale: 1.5 }); if (png) window.open(png, "_blank"); } },
                       { label: "Clear the ink", run: async () => { if (!strokes.length || !(await askConfirm({ title: "Clear every stroke on this page?", body: "The cards and sections stay. Undo brings the ink back while the page is open.", confirmLabel: "Clear ink", danger: true }))) return; applyStrokes([], { removed: strokes.map((x) => x.id) }); } },
@@ -1446,7 +1507,7 @@ export function NotebookPane({ railSide, showRail = true, context, initialPageId
         </div>
       )}
       {proposal && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 45, background: "rgba(35,34,39,0.18)", display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+        <div onClick={(e) => { if (e.target === e.currentTarget && !proposalBusy) setProposal(null); }} style={{ position: "absolute", inset: 0, zIndex: 45, background: "rgba(35,34,39,0.18)", display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
           <ClosingCard proposal={proposal.data} variant={proposal.kind} pageLabel={`${nb?.title ?? "page"} · ${page?.title ?? ""}`} onConfirm={(p) => void confirmProposal(p)} onCancel={() => setProposal(null)} busy={proposalBusy} />
         </div>
       )}

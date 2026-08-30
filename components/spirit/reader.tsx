@@ -156,6 +156,23 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
   const [err, setErr] = useState<string | null>(null);
   const [sel, setSel] = useState<number | null>(null);
   const [selEnd, setSelEnd] = useState<number | null>(null);
+  /**
+   * Tapping a verse: first tap selects it, a tap on a DIFFERENT verse extends the range to
+   * cover both, and a tap back on the anchor clears. His 2026-08-30 report — "when I select a
+   * verse and it's selected I need to be able to select more than one verse for reference or
+   * for highlighting. I can't select more than one" — the only multi-verse paths were a finger
+   * drag along the gutter and a circling gesture, neither of them obvious.
+   */
+  const tapVerse = useCallback((refInt: number) => {
+    setAskAnswer(null);
+    setBar("act");
+    if (sel === null) { setSel(refInt); setSelEnd(null); return; }
+    const end = selEnd ?? sel;
+    if (refInt === sel && selEnd === null) { setSel(null); setSelEnd(null); return; } // tap it again → clear
+    if (refInt < sel) { setSel(refInt); setSelEnd(end); return; }                     // extend upward
+    if (refInt > end) { setSelEnd(refInt); return; }                                  // extend downward
+    setSel(refInt); setSelEnd(null);                                                  // tap inside → collapse
+  }, [sel, selEnd]);
   const [bar, setBar] = useState<BarMode>("act");
   const [doneMsg, setDoneMsg] = useState("");
   const [legendOpen, setLegendOpen] = useState(false);
@@ -952,11 +969,12 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
             <div className="h-[225px] overflow-y-auto px-3 py-2">
               {data.verses.map((v) => {
                 const cat = accepted.get(v.refInt);
-                const on = sel === v.refInt;
+                // range-aware, like the prose branch — a two-verse selection must LOOK selected
+                const on = sel !== null && v.refInt >= sel && v.refInt <= (selEnd ?? sel);
                 return (
                   <div
                     key={v.refInt}
-                    onClick={() => { setSel(on ? null : v.refInt); setBar("act"); }}
+                    onClick={() => tapVerse(v.refInt)}
                     className="cursor-pointer rounded-lg px-2 py-1.5"
                     style={{
                       background: on ? chipAccentBg : cat ? `${categoryColor(cat)}${T.tintAlpha}` : "transparent",
@@ -1045,12 +1063,7 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
                   data-verse-num={v.verseNum}
                   id={`v-${v.refInt}`}
                   data-assigned={assigned ? "1" : undefined}
-                  onClick={() => {
-                    setSel(on ? null : v.refInt);
-                    setSelEnd(null);
-                    setBar("act");
-                    setAskAnswer(null);
-                  }}
+                  onClick={() => tapVerse(v.refInt)}
                   className="cursor-pointer rounded-[9px] px-[11px] py-[7px] transition-all"
                   style={{
                     background: on ? chipAccentBg : cat ? `${categoryColor(cat)}${T.tintAlpha}` : "transparent",
@@ -1422,7 +1435,9 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
             style={{
               // frozen to the SCREEN, centred, so he can follow along and still reach it —
               // body-mounted because a transformed ancestor would otherwise capture "fixed"
-              left: "50%",
+              // Biased to the reading half of the desk, not the middle: centred, it sat over
+              // the seam toolbar and the notebook's paper — the two places his hand lives.
+              left: "min(72%, calc(100% - 372px))",
               // translateZ gives the dock its own compositing layer, so the ink canvas
               // repainting underneath never drags it along
               transform: "translateX(-50%) translateZ(0)",
