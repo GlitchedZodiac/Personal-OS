@@ -7,7 +7,7 @@
 // sermon pages record in the header and replay by tapping a stroke;
 // worksheets submit — never auto-tick.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { toast } from "sonner";
 import { InkCanvas, type InkCanvasHandle } from "./ink-canvas";
 import { ToolRail } from "./tool-rail";
@@ -17,6 +17,8 @@ import { LassoMenu } from "./lasso-menu";
 import { ClosingCard, type Proposal } from "./closing-card";
 import { RecordingChip, ReplayBar, type SegmentMeta, type TranscriptLine } from "./recording-control";
 import { useDesk, useDeskEvent } from "./desk-state";
+import { FindVersePopover } from "./find-verse";
+import { refParts } from "@/lib/bible-refs";
 import { PaneHeader, Chip, DISPLAY, cardShadow, Popover, Kicker } from "./ui";
 import { CheckIcon, RecDot } from "./desk-icons";
 import { SermonRecorder } from "@/lib/spirit-recording";
@@ -69,6 +71,8 @@ interface RecordingRow {
 
 export interface NotebookPaneProps {
   railSide: "left" | "right";
+  /** false when the desk's seam is the toolbar (split landscape) — V2 */
+  showRail?: boolean;
   context: "study" | "sermon" | "free";
   initialPageId?: string | null;
   dayId?: string | null;
@@ -96,7 +100,7 @@ function resolveOnce(key: string, run: () => Promise<Response>) {
   return p;
 }
 
-export function NotebookPane({ railSide, context, initialPageId, dayId, onPageChange }: NotebookPaneProps) {
+export function NotebookPane({ railSide, showRail = true, context, initialPageId, dayId, onPageChange }: NotebookPaneProps) {
   const desk = useDesk();
   const { pen, setPen, popover, setPopover, prefs, setRecording, recordingSeconds, emit } = desk;
   const canvasRef = useRef<InkCanvasHandle | null>(null);
@@ -118,6 +122,53 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   // and re-rasterised at the new scale on release with the point under the fingers held
   // exactly in place. Two fingers moving together pan as well as scale.
   const pageWrapRef = useRef<HTMLDivElement | null>(null);
+  // FIND A VERSE (V2): the pencil-first picker — book, chapter, drag the range, drop the card
+  const [findOpen, setFindOpen] = useState(false);
+  // SPACE growers (V2): "drag down for more room — tap to add a little." Each sermon section
+  // head (after the first) wears a handle; dragging it moves that section and EVERYTHING
+  // below it — objects live, ink on release — so a packed section gains room mid-sermon.
+  const [gapDrag, setGapDrag] = useState<{ y: number; dy: number } | null>(null);
+  const spaceDown = (e: ReactPointerEvent, sectionY: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try { (e.target as Element).releasePointerCapture(e.pointerId); } catch { /* fine */ }
+    const y0 = e.clientY;
+    let moved = false;
+    pushHistory();
+    const baseObjects = objects;
+    setGapDrag({ y: sectionY, dy: 0 });
+    const apply = (dyRaw: number) => {
+      const dy = Math.max(0, Math.min(340, Math.round(dyRaw / 4) * 4));
+      setGapDrag({ y: sectionY, dy });
+      setObjects(baseObjects.map((o) => (o.y >= sectionY ? { ...o, y: o.y + dy } : o)));
+      return dy;
+    };
+    const mv = (ev: globalThis.PointerEvent) => {
+      const raw = (ev.clientY - y0) / scale;
+      if (Math.abs(raw) > 3) moved = true;
+      apply(raw);
+    };
+    const up = (ev: globalThis.PointerEvent) => {
+      window.removeEventListener("pointermove", mv);
+      window.removeEventListener("pointerup", up);
+      const dy = moved ? apply((ev.clientY - y0) / scale) : apply(28); // a tap adds a little
+      setGapDrag(null);
+      if (dy <= 0) { setHistory((h) => h.slice(0, -1)); return; }
+      // the ink below the boundary rides along — committed once, on release
+      const movedStrokes = strokes.filter((s) => strokeBounds(s).y >= sectionY - 6).map((s) => ({ ...s, pts: s.pts.map((pt) => ({ ...pt, y: pt.y + dy })) }));
+      if (movedStrokes.length) {
+        const ids = new Set(movedStrokes.map((s) => s.id));
+        setStrokes((ss) => ss.map((s) => (ids.has(s.id) ? movedStrokes.find((m) => m.id === s.id)! : s)));
+        pending.current.remove.push(...movedStrokes.map((s) => s.id));
+        pending.current.append.push(...movedStrokes);
+      }
+      pending.current.objects = true;
+      scheduleSave();
+      haptic("soft");
+    };
+    window.addEventListener("pointermove", mv);
+    window.addEventListener("pointerup", up);
+  };
   const pinchRef = useRef<{ wx: number; wy: number; k: number; fx: number; fy: number; sl: number; st: number } | null>(null);
   const onPinchZoom = (k: number, center: { x: number; y: number }) => {
     const sc = scrollRef.current, wrap = pageWrapRef.current;
@@ -451,9 +502,12 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     pending.current.objects = true;
     scheduleSave();
   };
+  const redoRef = useRef<(() => void) | null>(null);
   const undo = () => {
     const prev = history[history.length - 1];
     if (!prev) return;
+    const n = Math.abs(strokes.length - prev.strokes.length);
+    toast(`Undone${n ? ` — ${n} stroke${n === 1 ? "" : "s"}` : ""}`, { action: { label: "Redo", onClick: () => redoRef.current?.() } });
     setHistory((h) => h.slice(0, -1));
     setFuture((f) => [...f, { strokes, objects }]);
     const removed = strokes.filter((s) => !prev.strokes.find((p) => p.id === s.id)).map((s) => s.id);
@@ -468,6 +522,8 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
   const redo = () => {
     const next = future[future.length - 1];
     if (!next) return;
+    const n = Math.abs(strokes.length - next.strokes.length);
+    toast(`Redone${n ? ` — ${n} stroke${n === 1 ? "" : "s"}` : ""}`);
     setFuture((f) => f.slice(0, -1));
     setHistory((h) => [...h, { strokes, objects }]);
     const removed = strokes.filter((s) => !next.strokes.find((p) => p.id === s.id)).map((s) => s.id);
@@ -479,6 +535,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
     pending.current.objects = true;
     scheduleSave();
   };
+  redoRef.current = redo;
 
   // ——— objects: add helpers ———
   const nextFreeY = () => {
@@ -822,6 +879,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
       rec.onstop = async () => {
         deactivateMicrophoneStream();
         setDictating(false);
+        emit({ type: "dictate-state", on: false });
         const blob = new Blob(chunksRef.current, { type: mime });
         if (blob.size < 100) return;
         const form = new FormData();
@@ -836,6 +894,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
       recorderRef.current = rec;
       rec.start(250);
       setDictating(true);
+      emit({ type: "dictate-state", on: true, startedAt: Date.now() });
     } catch {
       toast.error("Could not access microphone.");
     }
@@ -1127,6 +1186,8 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
                     <Kicker>THIS PAGE</Kicker>
                     {[
                       { label: "New page", run: () => nb && newPage(nb) },
+                      { label: "Typed block", run: () => { setPen({ tool: "text" }); addTextBlock("", false, lastTap.current ?? undefined); } },
+                      { label: "Find a verse → card", run: () => setFindOpen(true) },
                       { label: isSermon ? "Close the page — read it" : "Transcribe this page", run: closePage },
                       { label: "Page list", run: () => nb && openList(nb) },
                       { label: zoom === 1 ? "Zoom 150%" : "Zoom 100%", run: () => setZoom((z) => (z === 1 ? 1.5 : 1)) },
@@ -1232,6 +1293,34 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
               >
                 <PageObjects objects={objects} fresh={freshCards} editingId={editing?.id ?? null} liftedId={moveObj?.id ?? null} />
               </InkCanvas>
+              {/* SPACE growers — V2: sermon sections gain room on demand. A handle above each
+                  section head (after the first); drag moves the section and everything below,
+                  tap adds a little. The live "+N" pill is the visible acknowledgement. */}
+              {isSermon && objects.filter((o) => o.type === "section").sort((a, b) => a.y - b.y).slice(1).map((sec) => (
+                <div key={`sp-${sec.id}`} style={{ position: "absolute", top: (sec.y - 30) * scale, right: 18 * scale, zIndex: 6, display: "flex", alignItems: "center", gap: 7 }}>
+                  {gapDrag && gapDrag.y === sec.y && (
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", color: "#FFFFFF", background: "rgba(35,34,39,0.82)", borderRadius: 99, padding: "2.5px 8px", fontVariantNumeric: "tabular-nums" }}>+{gapDrag.dy}</span>
+                  )}
+                  <div onPointerDown={(e) => spaceDown(e, sec.y)} title="Drag down for more room — tap to add a little" style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 7px 4px 9px", borderRadius: 8, cursor: "ns-resize", touchAction: "none", background: gapDrag && gapDrag.y === sec.y ? "#F1ECE6" : "transparent" }}>
+                    <span style={{ fontSize: 8.5, letterSpacing: "0.1em", fontWeight: 700, color: "#9A928A" }}>SPACE</span>
+                    <svg width="10" height="12" viewBox="0 0 10 12" fill="none" stroke="#9A928A" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M2 4 5 1l3 3M2 8l3 3 3-3" /></svg>
+                  </div>
+                </div>
+              ))}
+              {/* + ref — V2: opens FIND A VERSE. Rides the VERSES READ section, after its cards. */}
+              {isSermon && (() => {
+                const secs = objects.filter((o) => o.type === "section").sort((a, b) => a.y - b.y);
+                const vs = secs.find((s) => ((s.data as { label?: string }).label ?? "").toUpperCase().startsWith("VERSES"));
+                if (!vs) return null;
+                const next = secs.find((s) => s.y > vs.y);
+                const cards = objects.filter((o) => o.type === "refcard" && o.y >= vs.y && (!next || o.y < next.y));
+                const cx = Math.min(800 - 110, 24 + cards.length * 210);
+                return (
+                  <button type="button" onClick={() => setFindOpen(true)} style={{ position: "absolute", top: (vs.y + 30) * scale, left: cx * scale, zIndex: 6, display: "flex", alignItems: "center", gap: 5, border: `1.5px dashed ${findOpen ? "#A63D63" : "#D9D7DC"}`, background: findOpen ? "#F6E3EB" : "transparent", borderRadius: 99, padding: "6px 12px", cursor: "pointer" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: findOpen ? "#8C2F51" : "#96949B" }}>+ ref</span>
+                  </button>
+                );
+              })()}
               {/* typed-block editor: floats over the object in page coords */}
               {editingObj && (
                 <textarea
@@ -1276,7 +1365,19 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
           )}
           {mode === "page" && !page && <div style={{ padding: 24, fontSize: 12, color: "#96949B" }}>Opening the page…</div>}
         </div>
-        {mode === "page" && rail}
+        {mode === "page" && showRail && rail}
+        {findOpen && mode === "page" && page && (
+          <FindVersePopover
+            initialBook={page.refStart ? refParts(page.refStart).book : null}
+            onClose={() => setFindOpen(false)}
+            onDrop={(refStart, refEnd, label, peek) => {
+              setFindOpen(false);
+              void addRefCard(refStart, refEnd, label, peek, lastTap.current ?? undefined);
+              haptic("soft");
+            }}
+            style={{ top: 84, left: railSide === "left" ? undefined : 14, right: railSide === "left" ? 14 : undefined }}
+          />
+        )}
       </div>
 
       {/* worksheet footer (09) */}
@@ -1355,7 +1456,7 @@ export function NotebookPane({ railSide, context, initialPageId, dayId, onPageCh
         </div>
       )}
       {popover === "brush" && <BrushPopover style={{ right: railSide === "right" ? 66 : undefined, left: railSide === "left" ? 66 : undefined, top: 52 }} onClose={() => setPopover(null)} />}
-      {popover === "palette" && <PalettePopover style={{ right: railSide === "right" ? 66 : undefined, left: railSide === "left" ? 66 : undefined, bottom: 16 }} onClose={() => setPopover(null)} />}
+      {popover === "palette" && showRail && <PalettePopover style={{ right: railSide === "right" ? 66 : undefined, left: railSide === "left" ? 66 : undefined, bottom: 16 }} onClose={() => setPopover(null)} />}
       {answerObj && (answerObj.data as { filed?: boolean }).filed && <span style={{ display: "none" }}><CheckIcon /></span>}
       <span style={{ display: "none" }}>{stripW}{cardShadow}</span>
     </div>

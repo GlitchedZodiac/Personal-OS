@@ -10,6 +10,29 @@ They're ordered by cost-of-guessing-wrong, not by how interesting they are.
 
 ---
 
+## ANSWERED — Michael, 2026-08-29
+
+1. **A — Freeze.** His words: "when I circle on the Bible think of it as it
+   being like a layer on top of the Bible or that page." Ink is a layer over a
+   printed page; the page never re-breaks under it. The overlay-drift deferred
+   fix is now DELETED, not built: enforce freeze-at-first-ink instead.
+2. **Thin, no separate focus mode.** ("Zero-chrome" = a Procreate-style state
+   where every toolbar/header hides and only paper + scripture remain — not
+   web-vs-app.) He didn't ask for the mode; the V2 sermon-desk design answers
+   it his way: chrome pared to one 36 pt band, no hidden state. Revisit only
+   if he asks after living with the band.
+3. **A — The roll, dressed as a journal.** His words: "think google docs
+   pageless."
+4. **A — The pen case, and the case is exactly: ballpoint · brush/G-pen ·
+   sketch pencil, plus highlighter and eraser as tools.** Those five are the
+   whole instrument set.
+5. **Portrait = single-screen, swipe-driven.** One pane at a time (notebook or
+   Bible; a stacked pair only if it stays simple), with **two-finger
+   left/right swipes switching tabs, the way Logos does it.** Not a shrunken
+   desk.
+
+---
+
 ## 1 · When ink lands on scripture, do the words ever move again?
 
 The circle you drew around "God" in Jonah 2:1 that ended up around "Then Jonah

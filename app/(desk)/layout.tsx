@@ -31,6 +31,8 @@ export default function DeskLayout({ children }: { children: React.ReactNode }) 
         @keyframes deskCardDrop { 0% { opacity: 0; transform: scale(.6) rotate(-3deg); } 60% { opacity: 1; transform: scale(1.05) rotate(.6deg); } 100% { transform: none; } }
         @keyframes deskChipPop { 0% { transform: scale(.7); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: none; } }
         @keyframes deskToolPop { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+        @keyframes deskPulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+        @keyframes deskVu { 0%,100% { transform:scaleY(0.3); } 50% { transform:scaleY(1); } }
         @keyframes deskPulseRing { 0% { box-shadow: 0 0 0 0 rgba(166,61,99,.45); } 100% { box-shadow: 0 0 0 14px rgba(166,61,99,0); } }
         @keyframes deskSlideInRight { from { transform: translateX(48px); opacity: 0; } to { transform: none; opacity: 1; } }
         @keyframes deskShimmer { from { background-position: -200px 0; } to { background-position: 200px 0; } }

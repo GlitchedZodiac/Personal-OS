@@ -49,6 +49,11 @@ final class ShellViewController: UIViewController {
     private var webView: WKWebView?
     private var lastActiveAt = Date()
 
+    /// V2 desk: "the system status bar is hidden the way a canvas app hides it, so the band
+    /// owns the top edge outright and carries the clock itself." The web band shows the clock;
+    /// the battery arrives over the bridge below.
+    override var prefersStatusBarHidden: Bool { true }
+
     override var canBecomeFirstResponder: Bool { true }
 
     override func viewDidLoad() {
@@ -125,12 +130,28 @@ final class ShellViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         becomeFirstResponder()
+        // the band carries the battery now that the status bar is gone — keep the page told
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        NotificationCenter.default.addObserver(self, selector: #selector(sendBattery), name: UIDevice.batteryLevelDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(sendBattery), name: UIDevice.batteryStateDidChangeNotification, object: nil)
+        sendBattery()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(refreshIfStale),
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
+    }
+
+    /// The web band renders the battery glyph from this event; in Safari (no bridge) the
+    /// glyph simply never appears and the clock stands alone.
+    @objc private func sendBattery() {
+        let level = UIDevice.current.batteryLevel
+        guard level >= 0, let webView else { return } // -1 while the simulator has no battery
+        let state = UIDevice.current.batteryState
+        let charging = state == .charging || state == .full
+        let js = "window.dispatchEvent(new CustomEvent('pitaya-battery',{detail:{level:\(level),charging:\(charging)}}))"
+        DispatchQueue.main.async { webView.evaluateJavaScript(js, completionHandler: nil) }
     }
 
     /// A WKWebView document loaded once in viewDidLoad can survive weeks of suspend and resume,
@@ -296,6 +317,7 @@ extension ShellViewController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        sendBattery() // the page's listener mounts with the page — tell it again on every load
         // WebKit can add the scribble interaction lazily — sometimes not until the first pencil
         // contact — so one pass at didFinish is not enough. Sweep again over the next few
         // seconds. Each pass is a cheap walk of a shallow view tree.

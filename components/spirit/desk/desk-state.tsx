@@ -56,6 +56,8 @@ export type DeskEvent =
   // does), but the notebook pane owns the page context they write into
   | { type: "capture-photo" }
   | { type: "capture-voice" }
+  // the notebook reports recording state so the V2 band can wear the LISTENING pill and STOP it
+  | { type: "dictate-state"; on: boolean; startedAt?: number }
   | { type: "answer-box"; question: string; dayId: string; refStart: number }
   | { type: "worksheet-open"; dayId: string }
   | { type: "study-step"; step: number }
