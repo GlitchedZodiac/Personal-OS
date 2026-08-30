@@ -153,7 +153,25 @@ export function DeskShell(props: DeskShellProps) {
   // than on the tab: desk prefs load asynchronously, and a pane that reports its position
   // before they arrive overwrites them — which cost a saved tab during smoke on 2026-08-30.
   // Scroll position is a per-device thing anyway; it has no business syncing.
+  // Everything a tab has to remember on its own, so flipping between arrangements carries the
+  // work with it: which chapter and where in it (main), the same for the reference Bible, and
+  // which notebook page. His ask: "each tab handles its own save state Bible and notes and
+  // reference wise so I can flip back and forth between them."
   const placeKey = tab ? `spirit-place:${context}:${tab.id}` : null;
+  const refPlaceKey = tab ? `spirit-place-ref:${context}:${tab.id}` : null;
+  const pageKey = tab ? `spirit-desk-page:${context}:${tab.id}` : null;
+  /**
+   * A `?page=` deep link opens the desk ON a specific page. It must apply ONCE, to whatever tab
+   * is showing when he arrives — not follow him into every tab he flips to afterwards, which
+   * would hand every arrangement the same notes and undo the whole point of per-tab state.
+   * Switching tabs by hand is what releases it.
+   */
+  const [deepPage, setDeepPage] = useState<string | null>(pageId ?? null);
+  const goToTab = useCallback((id: string) => {
+    setDeepPage(null);
+    setActiveTab(id);
+    haptic("selection");
+  }, []);
   // a verse the shell asked a Bible pane to show. `seq` re-arms it so tapping the same
   // reference card twice jumps twice.
   const [jump, setJump] = useState<{ refStart: number; refEnd: number | null; seq: number; to: "main" | "reference" } | null>(null);
@@ -381,10 +399,7 @@ export function DeskShell(props: DeskShellProps) {
   const stepTab = (dir: 1 | -1) => {
     const i = tabs.findIndex((t) => t.id === activeTab);
     const n = tabs[(i + dir + tabs.length) % tabs.length];
-    if (n) {
-      setActiveTab(n.id);
-      haptic("selection");
-    }
+    if (n) goToTab(n.id);
   };
   // finger swipe on the tab strip → previous / next tab
   const swipe = useRef<{ x: number; t: number } | null>(null);
@@ -447,11 +462,11 @@ export function DeskShell(props: DeskShellProps) {
     const kicker = () => setSlotMenu((m) => (m && m.col === col && m.index === index ? null : { col, index }));
     switch (kind) {
       case "notebook":
-        return <NotebookPane railSide={portrait ? (writingLeft ? "right" : "left") : railSide} showRail={portrait || textEmpty} context={context} initialPageId={pageId ?? null} dayId={dayId ?? null} pendingNote={pendingNote} onNoteConsumed={() => setPendingNote(null)} onKicker={kicker} />;
+        return <NotebookPane railSide={portrait ? (writingLeft ? "right" : "left") : railSide} showRail={portrait || textEmpty} context={context} initialPageId={deepPage} pageKey={pageKey} dayId={dayId ?? null} pendingNote={pendingNote} onNoteConsumed={() => setPendingNote(null)} onKicker={kicker} />;
       case "bible":
         return <BiblePane role="main" query={mainQ} onQueryChange={setMainQ} placeKey={placeKey} pendingJump={jump?.to === "main" ? jump : null} onJumpConsumed={clearJump} free={free} dayId={dayId ?? null} layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "reference":
-        return <BiblePane role="reference" query={refQ} onQueryChange={setRefQ} free layerContext={notebookPageLayerContext} onKicker={kicker} />;
+        return <BiblePane role="reference" query={refQ} onQueryChange={setRefQ} placeKey={refPlaceKey} free layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "teaching":
         return <TeachingPane onKicker={kicker} onStep={(s, t) => setStepInfo({ step: s, total: t })} />;
       case "source":
@@ -586,7 +601,7 @@ export function DeskShell(props: DeskShellProps) {
                 <div key={t.id} style={{ position: "relative", flex: "none" }}>
                   <button
                     type="button"
-                    onClick={() => { if (on) setTabMenu(tabMenu === t.id ? null : t.id); else { setActiveTab(t.id); haptic("selection"); } }}
+                    onClick={() => { if (on) setTabMenu(tabMenu === t.id ? null : t.id); else goToTab(t.id); }}
                     onPointerDown={(e) => { if (e.pointerType === "pen") return; const id = t.id; holdT.current = setTimeout(() => renameTab(id), 480); }}
                     onPointerUp={() => { if (holdT.current) clearTimeout(holdT.current); }}
                     onPointerLeave={() => { if (holdT.current) clearTimeout(holdT.current); }}

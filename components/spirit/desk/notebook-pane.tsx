@@ -81,6 +81,13 @@ export interface NotebookPaneProps {
   onNoteConsumed?: () => void;
   context: "study" | "sermon" | "free";
   initialPageId?: string | null;
+  /**
+   * Storage key for "which page THIS tab was on". It used to be keyed by context alone, so
+   * every tab in Free reading shared one notebook page and flipping between arrangements did
+   * not flip the notes with them. His ask, 2026-08-30: "each tab handles its own save state
+   * Bible and notes and reference wise so I can flip back and forth between them."
+   */
+  pageKey?: string | null;
   dayId?: string | null;
   onKicker?: () => void;
   onPageChange?: (page: { id: string; kind: string; title: string; refStart: number | null } | null) => void;
@@ -106,7 +113,7 @@ function resolveOnce(key: string, run: () => Promise<Response>) {
   return p;
 }
 
-export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteConsumed, context, initialPageId, dayId, onPageChange }: NotebookPaneProps) {
+export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteConsumed, context, initialPageId, pageKey, dayId, onPageChange }: NotebookPaneProps) {
   const desk = useDesk();
   const { pen, setPen, popover, setPopover, prefs, setRecording, recordingSeconds, emit } = desk;
   const canvasRef = useRef<InkCanvasHandle | null>(null);
@@ -319,6 +326,8 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   }, [loadNotebooks]);
 
   // ——— open a page ———
+  /** which page THIS tab remembers — per tab, not per context (see pageKey above) */
+  const pageMemo = pageKey ?? `spirit-desk-page:${context}`;
   const openPage = useCallback(
     async (id: string) => {
       await flushNow();
@@ -367,11 +376,11 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       } else setSegments([]);
       onPageChange?.({ id: p.id, kind: p.kind, title: p.title, refStart: p.refStart });
       try {
-        localStorage.setItem(`spirit-desk-page:${context}`, p.id);
+        localStorage.setItem(pageMemo, p.id);
       } catch {}
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [context, onPageChange],
+    [context, onPageChange, pageMemo],
   );
 
   // boot: the right page for the context
@@ -388,7 +397,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       }
       const remembered = (() => {
         try {
-          return localStorage.getItem(`spirit-desk-page:${context}`);
+          return localStorage.getItem(pageMemo);
         } catch {
           return null;
         }
@@ -401,7 +410,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       if (r.ok) openPage((await r.json()).page.id);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context, initialPageId, dayId]);
+  }, [context, initialPageId, dayId, pageMemo]);
 
   // ——— saving ———
   // the flush reads the LATEST objects/page through refs: the debounced timer
@@ -1254,7 +1263,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       duration: 12000,
     });
     try {
-      localStorage.removeItem(`spirit-desk-page:${context}`);
+      localStorage.removeItem(pageMemo);
     } catch {}
     setPage(null);
     setStrokes([]);
