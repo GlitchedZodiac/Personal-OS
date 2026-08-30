@@ -6,8 +6,12 @@
 // Link · Memorize · Ask · ⋯. He picks one after living with both.
 
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { DarkPill, PillItem } from "./ui";
 import { HL_CATEGORIES } from "./desk-state";
+
+/** the dark action pill's rendered height (measured: 41px) — used to keep it on screen */
+const BAR_H = 41;
 
 /** the grip: press and drag the selected verses onto a notebook */
 function DragGrip({ onDragStart }: { onDragStart?: (e: ReactPointerEvent) => void }) {
@@ -55,10 +59,24 @@ export function ActionBarA({
   onDragStart?: (e: ReactPointerEvent) => void;
 }) {
   // rises beside the tip on the free-hand side so the palm never covers it
-  const left = hand === "left" ? x + 16 : x - 290;
-  const top = Math.max(8, y - 52);
-  return (
-    <div style={{ position: "fixed", left: Math.max(8, Math.min(left, (typeof window !== "undefined" ? window.innerWidth : 1180) - 380)), top, zIndex: 55, animation: "deskPopIn .26s cubic-bezier(.2,.9,.3,1.2) both" }}>
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1180;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 820;
+  const left = Math.max(8, Math.min(hand === "left" ? x + 16 : x - 290, vw - 380));
+  // Clamp the TOP as well as the left. It only had a lower bound, so a selection anchored below
+  // the fold — extending a selection down the chapter, or a verse restored from a saved place —
+  // put the bar off the bottom of the screen entirely. Measured at 1194px in an 1180px-tall
+  // portrait viewport on 2026-08-30, which is exactly what "I can't see it" looks like.
+  const top = Math.max(8, Math.min(y - 52, vh - BAR_H - 8));
+  /**
+   * PORTALLED TO <body>, and that is the whole point. `position: fixed` resolves against the
+   * nearest ancestor carrying a transform, and the desk's own entrance animation
+   * (`.desk-page-in`) sets one — so the bar was positioned relative to the desk rather than the
+   * viewport, and a clamp computed against the screen put it off the bottom anyway. Measured on
+   * 2026-08-30: style top 1131px rendering at y 1184 in an 1180px-tall viewport. Popover was
+   * portalled for exactly this reason; this never was.
+   */
+  const bar = (
+    <div style={{ position: "fixed", left, top, zIndex: 55, animation: "deskPopIn .26s cubic-bezier(.2,.9,.3,1.2) both" }}>
       <DarkPill>
         <DragGrip onDragStart={onDragStart} />
         <PillItem title="Highlight — six categories" onClick={() => onAction("hl")}>
@@ -96,6 +114,7 @@ export function ActionBarA({
       )}
     </div>
   );
+  return typeof document !== "undefined" ? createPortal(bar, document.body) : bar;
 }
 
 export function ActionBarB({ onAction, onHighlight, showChips, marked, onUnmark, onDragStart }: { onAction: (a: BarAction) => void; onHighlight: (category: string) => void; showChips: boolean; marked?: string[]; onUnmark?: () => void; onDragStart?: (e: ReactPointerEvent) => void }) {

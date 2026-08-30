@@ -191,7 +191,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const pending = useRef<{ append: Stroke[]; remove: string[] }>({ append: [], remove: [] });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const creating = useRef<Promise<OverlayPage | null> | null>(null);
-  const lastTapClient = useRef<{ x: number; y: number } | null>(null);
+  const lastTapClient = useRef<{ x: number; y: number; t: number } | null>(null);
 
   // the margin is not "random whitespace": it exists when he asked for one, or when margin
   // ink is on the shown layer — and collapses entirely while the layer is hidden
@@ -561,7 +561,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     return "keep";
   };
   const onTap = (pt: { x: number; y: number; clientX: number; clientY: number; pointerType: string }) => {
-    lastTapClient.current = { x: pt.clientX, y: pt.clientY };
+    lastTapClient.current = { x: pt.clientX, y: pt.clientY, t: Date.now() };
     const els = document.elementsFromPoint(pt.clientX, pt.clientY).filter((el) => !isInkLayer(el)) as HTMLElement[];
     const first = els[0];
     if (!first) return false;
@@ -759,12 +759,20 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     // (HIDE), or after selecting any other way, it simply never appeared. Anchor to the tap
     // when there is one and to the selected verse itself when there is not.
     if (s !== null) {
+      // Anchor to the tap only if it was JUST NOW; otherwise to the selected verse itself.
+      // `prev ?? tap ?? anchor` had two ways of putting the bar where he was not looking:
+      // `lastTapClient` is never cleared, so a tap from minutes ago — possibly since scrolled
+      // off-screen, possibly over the other pane — beat the real selection; and `prev` meant
+      // extending a selection left the bar pinned to the FIRST verse. Either one reads as
+      // "the menu doesn't show up".
       const tap = lastTapClient.current;
-      setBarAnchor((prev) => prev ?? tap ?? anchorForVerse(s, e));
+      const fresh = tap && Date.now() - tap.t < 1200 ? { x: tap.x, y: tap.y } : null;
+      setBarAnchor(fresh ?? anchorForVerse(s, e) ?? (tap ? { x: tap.x, y: tap.y } : null));
     }
     if (s === null) {
       setBarAnchor(null);
       setShowChips(false);
+      lastTapClient.current = null;
     }
   }, [anchorForVerse, reportPlace]);
   const barAction = (a: BarAction) => {
