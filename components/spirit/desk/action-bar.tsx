@@ -5,8 +5,29 @@
 // pane header, labelled. Same contents: Highlight (six) · Note · Send ·
 // Link · Memorize · Ask · ⋯. He picks one after living with both.
 
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { DarkPill, PillItem } from "./ui";
 import { HL_CATEGORIES } from "./desk-state";
+
+/** the grip: press and drag the selected verses onto a notebook */
+function DragGrip({ onDragStart }: { onDragStart?: (e: ReactPointerEvent) => void }) {
+  if (!onDragStart) return null;
+  return (
+    <button
+      type="button"
+      title="Drag this onto a notebook"
+      onPointerDown={onDragStart}
+      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "8px 10px", borderRadius: 9, background: "rgba(255,255,255,0.10)", border: 0, cursor: "grab", color: "#F2F1F2", touchAction: "none", marginRight: 2 }}
+    >
+      <svg width="11" height="13" viewBox="0 0 11 13" fill="currentColor" aria-hidden>
+        <circle cx="3" cy="2" r="1.3" /><circle cx="8" cy="2" r="1.3" />
+        <circle cx="3" cy="6.5" r="1.3" /><circle cx="8" cy="6.5" r="1.3" />
+        <circle cx="3" cy="11" r="1.3" /><circle cx="8" cy="11" r="1.3" />
+      </svg>
+      <span style={{ fontSize: 11, fontWeight: 600 }}>Drag</span>
+    </button>
+  );
+}
 
 export type BarAction = "hl" | "note" | "send" | "link" | "mem" | "ask" | "more";
 
@@ -19,6 +40,7 @@ export function ActionBarA({
   showChips,
   marked,
   onUnmark,
+  onDragStart,
 }: {
   x: number;
   y: number;
@@ -29,13 +51,16 @@ export function ActionBarA({
   /** categories already on this selection — the chips read ON and a ⌫ appears */
   marked?: string[];
   onUnmark?: () => void;
+  /** press-and-drag the selection onto a notebook */
+  onDragStart?: (e: ReactPointerEvent) => void;
 }) {
   // rises beside the tip on the free-hand side so the palm never covers it
   const left = hand === "left" ? x + 16 : x - 290;
   const top = Math.max(8, y - 52);
   return (
-    <div style={{ position: "fixed", left: Math.max(8, Math.min(left, (typeof window !== "undefined" ? window.innerWidth : 1180) - 300)), top, zIndex: 55, animation: "deskPopIn .26s cubic-bezier(.2,.9,.3,1.2) both" }}>
+    <div style={{ position: "fixed", left: Math.max(8, Math.min(left, (typeof window !== "undefined" ? window.innerWidth : 1180) - 380)), top, zIndex: 55, animation: "deskPopIn .26s cubic-bezier(.2,.9,.3,1.2) both" }}>
       <DarkPill>
+        <DragGrip onDragStart={onDragStart} />
         <PillItem title="Highlight — six categories" onClick={() => onAction("hl")}>
           <span style={{ display: "flex", gap: 2 }}>
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#D9A23E" }} />
@@ -73,10 +98,11 @@ export function ActionBarA({
   );
 }
 
-export function ActionBarB({ onAction, onHighlight, showChips, marked, onUnmark }: { onAction: (a: BarAction) => void; onHighlight: (category: string) => void; showChips: boolean; marked?: string[]; onUnmark?: () => void }) {
+export function ActionBarB({ onAction, onHighlight, showChips, marked, onUnmark, onDragStart }: { onAction: (a: BarAction) => void; onHighlight: (category: string) => void; showChips: boolean; marked?: string[]; onUnmark?: () => void; onDragStart?: (e: ReactPointerEvent) => void }) {
   return (
     <div style={{ position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 3, background: "#232227", borderRadius: 13, padding: "6px 9px", animation: "fadeUp .2s ease both" }}>
+        <DragGrip onDragStart={onDragStart} />
         <PillItem title="Highlight" onClick={() => onAction("hl")} style={{ padding: "5px 8px" }}>
           <span style={{ display: "flex", gap: 2 }}>
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#4C7DBF" }} />

@@ -12,7 +12,7 @@
 // the rail + "which tool" chip; a press-hold on a verse lifts a reference
 // card across the seam. Nothing floats over text.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import { SpiritReader, type SpiritReaderHandle } from "@/components/spirit/reader";
 import { InkCanvas, type InkCanvasHandle, type StrokeEndInfo } from "./ink-canvas";
 import { useDesk, useDeskEvent, hlColor } from "./desk-state";
@@ -496,6 +496,43 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     const r = el.getBoundingClientRect();
     setHover({ left: r.left - pr.left, top: r.bottom - pr.top - 3, width: r.width, num: Number(el.getAttribute("data-verse-num")) });
   };
+  /**
+   * Drag the current selection out of the action bar and onto a notebook.
+   *
+   * The hold-on-a-verse gesture still works, but it is invisible and it needs the ink canvas
+   * to be live — so with the layer hidden there was no way to reference a verse at all. A grip
+   * on the bar is unambiguous: press it, drag, let go over a notebook.
+   */
+  const startDragFromBar = (e: ReactPointerEvent) => {
+    if (sel.start === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const a = sel.start;
+    const b = sel.end ?? sel.start;
+    const parts: string[] = [];
+    for (let r = a; r <= b; r++) {
+      const v = readerRef.current?.getVerse(r);
+      if (v) parts.push(v.lines ? v.lines.join(" ") : v.text);
+    }
+    haptic("medium");
+    setDrag({ refStart: a, refEnd: b, label: formatRef(a, b), text: parts.join(" "), x: e.clientX, y: e.clientY, hot: false });
+    const mv = (ev: globalThis.PointerEvent) => {
+      const hot = document.elementsFromPoint(ev.clientX, ev.clientY).some((el) => (el as HTMLElement).closest?.("[data-notebook-drop]"));
+      setDrag((d) => (d ? { ...d, x: ev.clientX, y: ev.clientY, hot } : d));
+    };
+    const up = (ev: globalThis.PointerEvent) => {
+      window.removeEventListener("pointermove", mv);
+      window.removeEventListener("pointerup", up);
+      const overNotebook = document.elementsFromPoint(ev.clientX, ev.clientY).some((el) => (el as HTMLElement).closest?.("[data-notebook-drop]"));
+      setDrag(null);
+      haptic(overNotebook ? "success" : "light");
+      // dropping anywhere but a notebook still files it — the shell opens one (his 08-30 ask:
+      // "drag verse or verses to any notebook from anywhere")
+      emit({ type: "send-to-notes", refStart: a, refEnd: b, label: formatRef(a, b), text: parts.join(" "), source: overNotebook ? `drag:${ev.clientX},${ev.clientY}` : undefined });
+    };
+    window.addEventListener("pointermove", mv);
+    window.addEventListener("pointerup", up);
+  };
   const onHold = (pt: { x: number; y: number; clientX: number; clientY: number; pointerType: string }) => {
     const el = verseElAt(pt.clientX, pt.clientY);
     const ref = refOf(el);
@@ -549,14 +586,27 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   };
 
   // ——— action bar ———
+  /** where the action bar should sit when there was no tap to anchor it to */
+  const anchorForVerse = useCallback((s: number, e: number | null) => {
+    const el = contentRef.current?.querySelector<HTMLElement>(`#v-${e ?? s}`);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: Math.min(r.right - 40, r.left + r.width * 0.55), y: r.bottom };
+  }, []);
   const onSelectionChange = useCallback((s: number | null, e: number | null) => {
     setSel({ start: s, end: e });
-    if (s !== null) { const tap = lastTapClient.current; if (tap) setBarAnchor((prev) => prev ?? tap); }
+    // The bar used to need a TAP recorded by the ink canvas — so with the ink layer hidden
+    // (HIDE), or after selecting any other way, it simply never appeared. Anchor to the tap
+    // when there is one and to the selected verse itself when there is not.
+    if (s !== null) {
+      const tap = lastTapClient.current;
+      setBarAnchor((prev) => prev ?? tap ?? anchorForVerse(s, e));
+    }
     if (s === null) {
       setBarAnchor(null);
       setShowChips(false);
     }
-  }, []);
+  }, [anchorForVerse]);
   const barAction = (a: BarAction) => {
     haptic(a === "send" ? "success" : "light");
     const reader = readerRef.current;
@@ -674,7 +724,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
           <button type="button" onClick={() => { const prev = history[history.length - 1]; if (prev) { setHistory((h) => h.slice(0, -1)); onQueryChange(prev); } }} style={{ fontSize: 13, color: history.length ? "#96949B" : "#D9D7DC", background: "none", border: 0, cursor: history.length ? "pointer" : "default" }} aria-label="Back">‹</button>
         </>
       )}
-      {prefs.actionBar === "B" && sel.start !== null && <ActionBarB onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} />}
+      {prefs.actionBar === "B" && sel.start !== null && <ActionBarB onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} onDragStart={startDragFromBar} />}
       {pinned && (
         // It was called "PAGE PINNED" and the footer claimed the page was "frozen like print"
         // with a captured type size. None of that was true: the ONLY effect is that the Aa type
@@ -824,7 +874,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       )}
       {/* action bar A — rises beside the tip */}
       {prefs.actionBar === "A" && sel.start !== null && barAnchor && (
-        <ActionBarA x={barAnchor.x} y={barAnchor.y} hand={hand} onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} />
+        <ActionBarA x={barAnchor.x} y={barAnchor.y} hand={hand} onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} onDragStart={startDragFromBar} />
       )}
       {drag && <RefCardGhost label={drag.label} text={drag.text} x={drag.x} y={drag.y} />}
       {popover && (

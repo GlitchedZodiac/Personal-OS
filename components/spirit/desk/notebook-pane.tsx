@@ -1015,6 +1015,16 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     const r = await fetch(`/api/spirit/recordings/${recordingRow.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: name }) }).catch(() => null);
     if (r?.ok) { setRecordingRow((x) => (x ? { ...x, title: name } : x)); toast.success("Renamed."); }
   };
+  /** Rename the open page — his 2026-08-30 ask: "how do I edit the title of a page". */
+  const renamePage = async () => {
+    if (!page) return;
+    const name = await askPrompt({ title: "Name this page", value: page.title ?? "", placeholder: "e.g. Trusting God when it's dark" });
+    if (name === null) return;
+    const title = name.trim();
+    setPage((p) => (p ? { ...p, title } : p));
+    const r = await fetch(`/api/spirit/ink/${page.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) }).catch(() => null);
+    if (r?.ok) { toast.success("Renamed."); void loadNotebooks?.(); } else toast.error("Couldn't rename it — try again.");
+  };
   const deleteRecording = async () => {
     if (!recordingRow) return;
     const live = recState === "recording" || recState === "paused";
@@ -1224,7 +1234,8 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       <PaneHeader
         kicker="NOTEBOOK"
         onKicker={() => setNbMenu((v) => !v)}
-        title={mode === "list" ? listNotebook?.title : nb?.title ?? page?.title ?? "…"}
+        title={mode === "list" ? listNotebook?.title : page?.title || nb?.title || "…"}
+        onTitle={mode === "page" && page ? renamePage : undefined}
         meta={mode === "list" ? `${listPages.length} pages` : page ? (pageIndex ? `p. ${pageIndex}` : page.subtitle ?? "") : ""}
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1241,6 +1252,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
                     <Kicker>THIS PAGE</Kicker>
                     {[
                       { label: "New page", run: () => nb && newPage(nb) },
+                      { label: "Rename this page", run: renamePage },
                       { label: "Typed block", run: () => { setPen({ tool: "text" }); addTextBlock("", false, lastTap.current ?? undefined); } },
                       { label: "Find a verse → card", run: () => setFindOpen(true) },
                       { label: isSermon ? "Close the page — read it" : "Transcribe this page", run: closePage },
