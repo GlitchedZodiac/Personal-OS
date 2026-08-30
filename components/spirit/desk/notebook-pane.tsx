@@ -13,6 +13,7 @@ import { InkCanvas, type InkCanvasHandle } from "./ink-canvas";
 import { ToolRail } from "./tool-rail";
 import { BrushPopover, PalettePopover } from "./pen-popovers";
 import { PageObjects, hitObject, objectRect } from "./page-objects";
+import { RefCardGhost } from "./ref-card";
 import { LassoMenu } from "./lasso-menu";
 import { ClosingCard, type Proposal } from "./closing-card";
 import { RecordingChip, ReplayBar, type SegmentMeta, type TranscriptLine } from "./recording-control";
@@ -712,6 +713,34 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   // ——— MOVE A PAGE OBJECT: press and hold it, then drag. Text blocks, reference cards and
   // photos all move; the ink stays put. Saved through the same objects PATCH. ———
   const [moveObj, setMoveObj] = useState<{ id: string; dx: number; dy: number } | null>(null);
+  /**
+   * PLACE FIRST, THEN PICK. He drags the Ref button out of the rail, drops it where he wants
+   * the card, and only then is asked which verse. Every other route into the page hands
+   * addRefCard no position at all, so the card lands at a fixed slot cycling x = 24/234/444 at
+   * `nextFreeY()` — the very bottom of all the ink on the page, which on a sermon page is
+   * thousands of units from the pen. His words: "currently when I add a reference it adds to
+   * [a fixed spot] regardless of where I'm at."
+   */
+  const [refGhost, setRefGhost] = useState<{ x: number; y: number } | null>(null);
+  const refDrop = useRef<{ x: number; y: number } | null>(null);
+  const onRefDragStart = (e: ReactPointerEvent) => {
+    e.preventDefault();
+    setRefGhost({ x: e.clientX, y: e.clientY });
+    haptic("light");
+    const move = (ev: globalThis.PointerEvent) => setRefGhost({ x: ev.clientX, y: ev.clientY });
+    const up = (ev: globalThis.PointerEvent) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setRefGhost(null);
+      const overPage = document.elementsFromPoint(ev.clientX, ev.clientY).some((el) => (el as HTMLElement).closest?.("[data-notebook-drop]"));
+      refDrop.current = overPage && canvasRef.current ? canvasRef.current.clientToPage(ev.clientX, ev.clientY) : null;
+      if (!overPage) return; // dropped outside the page — no card, no picker
+      haptic("soft");
+      setFindOpen(true);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
   const onObjectHold = (pt: { x: number; y: number; clientX: number; clientY: number; pointerType: string }) => {
     // a pen holding a writing tool is WRITING — pausing mid-word must never lift an object
     if (pt.pointerType === "pen" && (pen.tool === "fountain" || pen.tool === "gpen" || pen.tool === "pencil" || pen.tool === "marker")) return false;
@@ -789,6 +818,22 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     }
     if (o.type === "refcard") {
       const d = o.data as { refStart: number; refEnd: number; label: string };
+      // The ✕ in the card's top-right. Page objects sit UNDER the ink canvas and never receive
+      // DOM events, so the badge is drawn in ref-card.tsx and the hit is caught here, against
+      // the same corner in page coordinates. His ask, 2026-08-30: "I need to be able to remove
+      // a bad reference too."
+      const r = objectRect(o);
+      const inRemove = pt.x >= r.x + r.w - 30 && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + 28;
+      if (inRemove && !penWriting) {
+        pushHistory();
+        const without = objects.filter((x) => x.id !== o.id);
+        setObjects(without);
+        enqueue({ objects: without });
+        scheduleSave();
+        haptic("warning");
+        toast(`${d.label} removed`, { action: { label: "Undo", onClick: () => undo() }, duration: 12000 });
+        return true;
+      }
       emit({ type: "jump-reference-pane", refStart: d.refStart, refEnd: d.refEnd });
       return true;
     }
@@ -1298,6 +1343,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
         setPen({ tool: "text" });
         addTextBlock("", false, lastTap.current ?? undefined);
       }}
+      onRefDragStart={onRefDragStart}
       compact={paneW < 420}
     />
   );
@@ -1520,13 +1566,18 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
           {mode === "page" && !page && <div style={{ padding: 24, fontSize: 12, color: "#96949B" }}>Opening the page…</div>}
         </div>
         {mode === "page" && showRail && rail}
+        {/* the card following his pen while he chooses where it goes */}
+        {refGhost && <RefCardGhost label="REFERENCE" text="drop it where you want it, then pick the verse" x={refGhost.x} y={refGhost.y} />}
         {findOpen && mode === "page" && page && (
           <FindVersePopover
             initialBook={page.refStart ? refParts(page.refStart).book : null}
-            onClose={() => setFindOpen(false)}
+            onClose={() => { setFindOpen(false); refDrop.current = null; }}
             onDrop={(refStart, refEnd, label, peek) => {
               setFindOpen(false);
-              void addRefCard(refStart, refEnd, label, peek, lastTap.current ?? undefined);
+              // where he dropped the ghost, if he dragged one; otherwise his last tap
+              const at = refDrop.current ?? lastTap.current ?? undefined;
+              refDrop.current = null;
+              void addRefCard(refStart, refEnd, label, peek, at);
               haptic("soft");
             }}
             style={{ top: 84, left: railSide === "left" ? undefined : 14, right: railSide === "left" ? 14 : undefined }}

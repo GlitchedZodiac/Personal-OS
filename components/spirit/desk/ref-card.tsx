@@ -40,9 +40,16 @@ export function RefCard({ data, width = 196, fresh, selected }: { data: RefCardD
           DROPPED · {fmtSeconds(data.droppedAt)}
         </span>
       )}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
         <span style={{ fontFamily: DISPLAY, fontSize: 12.5, fontWeight: 700, color: "#8C2F51" }}>{data.label}</span>
-        <OpenExternalIcon />
+        <span style={{ display: "flex", alignItems: "center", gap: 7, flex: "none" }}>
+          <OpenExternalIcon />
+          {/* Remove. Drawn, not hidden behind a gesture, because a wrong reference on a page is
+              something he needs to be able to undo at a glance. The tap is caught by the ink
+              canvas's hit-test (notebook-pane onTap) against this same corner, since page
+              objects sit under the canvas and never receive DOM events themselves. */}
+          {!fresh && <span data-ref-remove style={{ fontSize: 12, lineHeight: 1, color: "#C9C7CD", fontWeight: 600 }}>✕</span>}
+        </span>
       </div>
       <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 11, color: "#66646C", lineHeight: 1.5, marginTop: 4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>
         “{data.text}”

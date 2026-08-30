@@ -22,6 +22,7 @@ import {
   PencilIcon,
   RedoIcon,
   TextToolIcon,
+  RefCardIcon,
   UndoIcon,
   HandIcon,
 } from "./desk-icons";
@@ -85,6 +86,7 @@ export function ToolRail({
   canUndo,
   canRedo,
   onText,
+  onRefDragStart,
   compact,
 }: {
   side: "left" | "right";
@@ -93,6 +95,8 @@ export function ToolRail({
   canUndo?: boolean;
   canRedo?: boolean;
   onText?: () => void;
+  /** press and DRAG this onto the page; where it lands is where the reference card goes */
+  onRefDragStart?: (e: React.PointerEvent) => void;
   compact?: boolean;
 }) {
   const { pen, setPen, popover, setPopover } = useDesk();
@@ -173,6 +177,16 @@ export function ToolRail({
       <RailBtn label="Hand" {...hand}><HandIcon size={iconSize} color={hand.color} /></RailBtn>
       <Rule />
       <RailBtn label="Type" aria-label="Typed block" onClick={onText} style={{ ...penBtn.style, background: pen.tool === "text" ? "#F6E3EB" : "transparent", boxShadow: pen.tool === "text" ? "inset 0 0 0 1.5px #A63D63" : "none" }}><TextToolIcon size={15} color={pen.tool === "text" ? "#8C2F51" : "#66646C"} /></RailBtn>
+      {/* Drag it to the spot, THEN pick the verse. Every other route drops the card at a fixed
+          slot far from the pen — measured on his 2026-08-30 sermon page, one landed 512 units
+          left of where he was writing and six seconds later he was back writing where he had
+          been. His ask: "a new menu button so I can drag into the notebook to the location I
+          want the reference before I'm prompted for the reference." */}
+      {onRefDragStart && (
+        <RailBtn label="Ref" aria-label="Reference card — drag onto the page" onPointerDown={onRefDragStart} style={{ ...penBtn.style, background: "transparent", boxShadow: "none", touchAction: "none", cursor: "grab" }}>
+          <RefCardIcon size={15} color="#66646C" />
+        </RailBtn>
+      )}
       <Rule />
       <RailBtn label="Undo" aria-label="Undo" onClick={() => { haptic("light"); onUndo?.(); }} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canUndo ? 1 : 0.4 }}><UndoIcon /></RailBtn>
       <RailBtn label="Redo" aria-label="Redo" onClick={() => { haptic("light"); onRedo?.(); }} style={{ ...penBtn.style, height: 32, background: "transparent", boxShadow: "none", opacity: canRedo ? 1 : 0.4 }}><RedoIcon /></RailBtn>
