@@ -5,7 +5,11 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-23 (SPIRIT ON IPAD — round 7: **he confirms the pen works** — "incredibly responsive". A splitting eraser, the dead margin explained and removed, a trimmed rail, honest chips, and a V2 design prompt written from a week of real use.)
+**Last updated:** 2026-08-29 (SPIRIT ON IPAD — pre-V2 checkpoint: his design-zip verified byte-identical to the V1 archive in docs/design (no V2 outputs exist yet — the V2 prompt has never been run); the iPad branch confirmed fully merged into main, prod Ready; `docs/design/pitaya-ipad-v2-decisions.md` written — the five product decisions (freeze-vs-reflow scripture, zero-chrome focus mode, roll-vs-sheets page model, pen-case-vs-sliders, portrait's job) that must be answered before the V2 design run, plus surgical amendments to the V2 prompt where it accidentally pre-decided #1 (the "must survive reflow" constraint) and #4 (screen 2 ordering resident sliders). Main has meanwhile moved ahead with the other lane's v5 health/watch work — unrelated, nothing conflicts.)
+
+---
+
+**Superseded:** 2026-08-23 (SPIRIT ON IPAD — round 7: **he confirms the pen works** — "incredibly responsive". A splitting eraser, the dead margin explained and removed, a trimmed rail, honest chips, and a V2 design prompt written from a week of real use.)
 
 ---
 

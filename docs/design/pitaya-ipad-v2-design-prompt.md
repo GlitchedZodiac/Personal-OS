@@ -1,7 +1,9 @@
 # Pitaya · Spirit on iPad — V2 design prompt
 
 **How to use this:** paste everything below the line into Claude on the design
-surface. It is written to stand alone — you do not need to open the V1 files
+surface, **together with `pitaya-ipad-v2-decisions.md` with its answers filled
+in** — five product decisions this brief deliberately leaves to Michael, not to
+the designer. It is written to stand alone — you do not need to open the V1 files
 first, though they are listed at the end and Claude should read them before
 proposing changes to a screen that already exists.
 
@@ -160,8 +162,9 @@ Please produce, in the existing `.dc.html` idiom (1180×820 for landscape, plus
 
 2. **The tool surface, V2** — whatever replaces the permanent rail. Show it
    collapsed, expanded, and mid-use with a pen in hand. Show it on both sides
-   (I am right-handed but the desk can flip). Include the size and opacity
-   controls at a size a pencil tip can actually land on.
+   (I am right-handed but the desk can flip). If the pen model keeps live
+   size/opacity controls (Decision 4 in the decisions sheet), size them so a
+   pencil tip can actually land on them.
 
 3. **The pen menu in place** — the double-tap-to-open interaction, the quick
    colour dot, and the full nib/colour/width/opacity surface. Show where it
@@ -191,11 +194,18 @@ Please produce, in the existing `.dc.html` idiom (1180×820 for landscape, plus
 - **No hover states as the only affordance.** This hardware has no hover.
 - **No haptic-only feedback.** This hardware has none. Every acknowledgement
   needs to be visible.
-- **Ink over scripture must survive reflow.** Anything you design that changes
-  the text column's width has to answer: what happens to the circle I drew
-  around a word?
-- **Keep the tab-arrangement model.** Saved multi-pane arrangements swiped
-  across the top is the best thing about the app and works exactly as I hoped.
+- **Ink must never lie about which words it marks.** Whether an inked
+  chapter's text ever reflows *at all* is Decision 1 in the decisions sheet —
+  do not assume either answer; design to the answer it gives you. Anything you
+  design that changes the text column has to say what happens to the circle I
+  drew around a word.
+- **Keep the tab-arrangement model, visibly.** Saved multi-pane arrangements
+  swiped across the top is the best thing about the app and works exactly as I
+  hoped — the tab pills stay permanently visible in whatever the one top band
+  becomes, never behind a menu.
+- **The Pencil's barrel double-tap is taken.** It toggles pen ⇄ eraser
+  natively and honours my iPadOS setting. Any pen-menu gesture you design is
+  on-screen only.
 
 ## What is already fixed — do not redesign these
 
