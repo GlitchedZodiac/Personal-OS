@@ -246,3 +246,51 @@ Newest at top. Annotate `[resolved by X, date]` instead of deleting.
 - **[2026-08-08] [phase1]** — `reasoning_effort: "none"` hardcoded in `lib/openai-text.ts` | revisit per-model once CHAT_MODEL strategy settles (Claude/AI-Gateway decision) | `lib/openai-text.ts`
 - **[2026-08-08] [phase1]** — PWA service worker audit [resolved 2026-08-14b: network-first means JS can't go stale while online (cache is offline-fallback only); precache list refreshed to the live IA (stale routes could brick addAll installs — now per-asset allSettled), CACHE_NAME bumped to pitaya-v4]
 - **[2026-08-08] [phase1]** — water logging one-request-per-glass [resolved 2026-08-14b: POST /api/health/water accepts {glasses:n} → createMany; the dock sends one request]
+
+## [main] Bible overlay ink has no durable home before its page exists
+
+**Found:** 2026-08-30, in the offline-durability audit.
+
+The Bible overlay page is created lazily, on the first stroke over a
+chapter (`bible-pane.tsx` `flush()`, the `creating.current` POST). The
+outbox is keyed by page id, so if that POST fails — which is exactly
+what happens offline — there is no id to log the strokes under, and they
+go back into `pending.current`, which is RAM. Circling a word in a
+chapter he has never inked before, while offline, is still losable if
+the app dies before the connection returns.
+
+Notebook handwriting (where he lost the paragraph) is fully covered;
+this is the one remaining hole.
+
+**Pickup hint:** give `OutboxRow` an optional `create` descriptor and
+allow a `local:<chapterKey>:<layerKey>` page id. At drain time, a row
+with a local id POSTs the overlay page first, then PATCHes, then
+rewrites any other rows carrying that local id to the real one.
+`loadOverlay` would need to match local rows by chapterKey+layerKey as
+well as by page id.
+
+## [main] Server PATCH of ink is an unserialised read-modify-write
+
+`app/api/spirit/ink/[id]/route.ts` reads the whole `strokes` column,
+merges, and writes it back with no row lock or version check. Two
+overlapping flushes for the same page can silently drop a batch. This
+became more reachable once the outbox added a drain loop alongside the
+debounced save — the single-flight guard on `flushOutbox` closes the
+client-side window, but two devices, or a drain racing a `flushNow`,
+still can. Wants either a transaction with `SELECT ... FOR UPDATE` or an
+append-only strokes table.
+
+## [main] Offline cold launch is unproven on real hardware
+
+The service-worker read cache is verified (allowlisted APIs served 200
+with the dev server stopped), but a full cold launch with no network was
+not provable in this environment: dev mode cannot hydrate without its
+HMR socket, and the browser pane refused to register a service worker on
+the production origin. Confirm on the iPad with airplane mode.
+
+## [main] Typed blocks are RAM-only until blur
+
+`notebook-pane.tsx` keeps typed block text in React state and only
+commits on blur. A kill mid-paragraph loses it — the same class of bug
+as the ink, in the one place he types rather than writes. Should route
+through `enqueue()` on a debounce like strokes do.

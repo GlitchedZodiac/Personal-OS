@@ -5,7 +5,56 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-30 (SPIRIT ON IPAD — V2 round 1: his Claude-Design V2 FOUND (he'd exported the wrong zip — `(1).zip` from Aug 28 held it) and its Sermon Desk screen PORTED: one 36pt band replacing status bar + desk bar + tab strip, the tool rail dissolved into the seam, the per-tool sheet, FIND A VERSE, SPACE growers, visible undo/redo answers, native status-bar hide + battery bridge. His five V2 decisions recorded and answered.)
+**Last updated:** 2026-08-30 (SPIRIT ON IPAD — round 8: DURABILITY. He lost a paragraph of handwriting; root cause was that unsaved work lived only in a `useRef`, requeued on failure with no retry and no durable copy. `lib/ink-outbox.ts` is now an IndexedDB write-ahead log written BEFORE the network, replayed at boot/online/heartbeat, and folded back into the page so recovered ink is visible. All ten queue sites now go through one `enqueue()` door — the first cut covered only two. Offline reading added to the service worker (scripture cached forever + neighbour warming; his read APIs network-first/cache-fallback). The PIN gate can now open offline on a device that authenticated within 30 days. Plus his church report: the Bible's duplicate in-column navigator is gone — navigation is the frozen pane header.)
+
+**Previous:** 2026-08-30 (SPIRIT ON IPAD — V2 round 1: his Claude-Design V2 FOUND (he'd exported the wrong zip — `(1).zip` from Aug 28 held it) and its Sermon Desk screen PORTED: one 36pt band replacing status bar + desk bar + tab strip, the tool rail dissolved into the seam, the per-tool sheet, FIND A VERSE, SPACE growers, visible undo/redo answers, native status-bar hide + battery bridge. His five V2 decisions recorded and answered.)
+
+---
+
+## 2026-08-30 · Spirit on iPad — round 8: nothing he writes can be lost
+
+**The report:** *"Major bug - I wrote a whole paragraph and it's not there. Likely because it
+wasn't saved before the app restarted. We need to enable offline saving capabilities... 
+guaranteeing all saved content."*
+
+**Root cause (traced, not guessed).** The 1.2 s debounce was not the story — a debounce alone
+cannot swallow a paragraph. Unsaved strokes lived in `pending.current`, a `useRef`. When a
+PATCH failed, the deltas were put BACK into that same ref with **no retry timer and no durable
+copy**. An offline stretch followed by the app restarting took everything buffered, silently,
+with the header still reading "saved".
+
+**What shipped**
+
+- **`lib/ink-outbox.ts`** — a write-ahead log in IndexedDB. A stroke is written there the moment
+  it exists, *before* any network attempt, and deleted only once the server confirms it.
+  Replayed at boot, on `online`, and on a 20 s heartbeat. Single-flight, so the four triggers
+  cannot race on the delete. `navigator.storage.persist()` asks iOS not to evict it.
+- **One door.** The first cut wired only 2 of the 10 sites that queue work — undo, redo, lasso
+  moves, section growth and ink-to-text had no durable copy at all. Every site now goes through
+  `enqueue()`, which writes the log first and the memory queue second.
+- **Recovered ink is visible.** `openPage` and `loadOverlay` fold unsent deltas over the server
+  copy via `applyOutbox`, so it is on the page, not merely safe on disk.
+- **Offline reading**, which was simply absent — the SW skipped every `/api` request, so with no
+  connection the app was blank rather than degraded. Scripture is cached forever in its own
+  store (it cannot change) and the chapters either side of the open one are warmed. His own read
+  endpoints are network-first with a cache fallback. Nothing that writes is cached.
+- **The PIN gate could not be satisfied offline** — it is checked on the server — so the app
+  locked him out of a notebook sitting on the device. A device that authenticated for real
+  within 30 days may now open itself offline. It unlocks the local UI only; every API stays
+  gated by the signed cookie, and a real 401 revokes the grant. A banner says so.
+- **Two Bible navigators → one** (his church report). The book/chapter/verse menu lived inside
+  the scrolling column, so moving anywhere meant scrolling back to the top, and it duplicated
+  the pane header a few pixels above it. Navigation is now the header title itself plus two
+  chapter steppers carrying the ink dots the chips used to. The phone reader keeps its pill.
+
+**Self-smoke, with the dev server genuinely stopped:** ink written while every PATCH was
+rejected survived a full app restart and synced — server 2 → 3 strokes, outbox drained, label
+honest throughout. `/api/spirit/notebooks` and `/api/spirit/ink` served 200 from cache with
+nothing listening on the port. Build green, 338/338 tests.
+
+**Known gap, surfaced not hidden:** Bible overlay ink on a chapter with no overlay page yet is
+still losable offline — the page is created lazily and the outbox is keyed by page id. Notebook
+handwriting is fully covered. See `docs/deferred-items.md`.
 
 ---
 
