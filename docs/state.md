@@ -5,7 +5,84 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-29d (V5 — PITAYA REPLACES STRAVA: native parity
+**Last updated:** 2026-08-30 (SPIRIT ON IPAD — V2 round 1: his Claude-Design V2 FOUND (he'd exported the wrong zip — `(1).zip` from Aug 28 held it) and its Sermon Desk screen PORTED: one 36pt band replacing status bar + desk bar + tab strip, the tool rail dissolved into the seam, the per-tool sheet, FIND A VERSE, SPACE growers, visible undo/redo answers, native status-bar hide + battery bridge. His five V2 decisions recorded and answered.)
+
+---
+
+## 2026-08-30 · Spirit on iPad — V2 round 1: the Sermon Desk chrome, ported
+
+**The confirm he asked for:** his zip "(2)" was byte-identical V1 — but Downloads held
+`Health app design system (1).zip` from Aug 28, 8 MB: the full live export of the Claude
+Design project, and its `Pitaya iPad 01 - Sermon Desk.dc.html` nearly doubled (46→82 KB).
+That IS his V2 — eleven other screens differ only by renamed cross-links. Headline: *"The
+desk chrome, V2 — one band, and the rail dissolved into the seam."* Per its own numbers:
+chrome falls from 25.7% of the glass to 18.4%; panes gain 44pt of height and 28pt of width.
+
+**PORTED (PORT GATE — from the design file, element by element):**
+- **THE BAND** (`desk-shell.tsx`): one 36pt strip at the very top — home ‹, diamond, page
+  title + chip, tab pills wearing miniature arrangement thumbnails, + for a new arrangement,
+  layout picker, ⇄ flip, photo, mic, hairline, clock (+ battery when the shell reports it).
+  The 50pt desk bar, the 32pt tab strip and their gap are gone; the desk starts at 36pt.
+  Tabs: tap to switch, tap-again for the menu, **hold to rename inline in the band** (DONE
+  commits, Escape cancels — no prompt dialog). While dictating the tabs yield to a
+  **LISTENING pill** (pulse, VU, elapsed, "→ lands at the caret", STOP) driven by a new
+  `dictate-state` desk event the notebook emits.
+- **THE SEAM** (`seam-rail.tsx`, new): the 14pt gutter + 54pt rail merged into one 40pt strip
+  that is both toolbar and resize handle. Tools at the top (brush · highlighter · eraser ·
+  hand), the colour dot (tap cycles the four inks), four width presets each showing its nib
+  at true size, grip dots at the foot. Resizing unchanged: finger-only, snaps at thirds —
+  only the seam's own background starts a drag (`target === currentTarget`).
+- **THE SHEET**: tap the active tool again → its sheet, anchored to the seam, opening over
+  the paper and never over scripture. Brush: the PEN CASE — **BALLPOINT · PENCIL · BRUSH**
+  (his 2026-08-29 answer; the design's MARKER nib predates it — deviation surfaced), four
+  inks + full palette, WIDTH slider + preset chips, OPACITY. Highlighter: category swatches
+  instead of inks (app semantics — deviation surfaced). Eraser: width alone, with the
+  design's note verbatim. Hand: no sheet.
+- **FIND A VERSE** (`find-verse.tsx`, new): "no typing — book, chapter, then drag the range."
+  All 66 books, real chapter counts, verse grid fed by `/api/spirit/passage` so the count is
+  true and the peek line is the actual verse text; drag-across range; **Drop on the page** →
+  a refcard via `addRefCard`. Reachable from the sermon page's `+ ref` chip (after the
+  VERSES READ cards) and from the ⋯ menu on any page.
+- **SPACE GROWERS** (`notebook-pane.tsx`): every sermon section after the first wears a SPACE
+  handle — drag moves that section and everything below it (objects live, ink committed on
+  release, one history entry, "+N" pill as the visible answer); a tap adds 28.
+- **VISIBLE ANSWERS**: undo/redo now toast what they did ("Undone — 2 strokes · Redo") —
+  this hardware has no haptics, so every gesture answers on screen.
+- **NATIVE** (`WebShellView.swift`): `prefersStatusBarHidden` — a canvas app owns its top
+  edge; battery monitoring bridged as `pitaya-battery` events (re-sent on every page load);
+  in Safari the glyph simply never appears. Built for device (EXIT 0).
+- The old rail survives ONLY in portrait and full-width-notebook tabs (no seam to carry the
+  tools there — portrait V2 is its own decision, already answered: single-screen, two-finger
+  tab swipes, not yet built). Typed block moved to the ⋯ menu.
+
+**Self-smoke (dev, 1180×820):** band renders one strip, old strip gone, clock live; eraser
+sheet = width-only + note; brush sheet = case + sliders (screenshot verified against the
+design); nib note swaps; colour dot cycled four distinct inks in four taps; width preset set;
+seam drag resized 739→797 live and snapped; hold-a-tab opened the inline rename and Escape
+closed it; FIND A VERSE end-to-end — Galatians → ch 3 → v 6 → footer "Gal 3:6" + real
+Abraham peek → Drop → card on page → **persisted to the DB** → smoke card removed (screen
+and DB confirmed clean, his 1 Cor 1:10 card untouched). Build green, 330/330 vitest.
+
+**Untested live (needs the device):** SPACE growers on a real sermon page (the machinery
+reuses the proven object-move + delta path), the LISTENING pill against real dictation, the
+battery glyph, and the hidden status bar. **His five decisions recorded** in
+`pitaya-ipad-v2-decisions.md` (freeze; thin-no-focus-mode; pageless roll; 3-pen case;
+portrait single-screen + two-finger tab swipes).
+
+**Deviations, surfaced:** MARKER nib → his pen case; highlighter sheet shows categories not
+inks; the design's title-tap-rename maps to tab rename (the page's own ✎ already renames the
+sermon); the sheet's near-bottom-edge flip-up and the "outer bottom corner turns the page"
+gesture are not built (deferred); hit boxes are the 36pt band + the screen edge, not a
+literal 52pt.
+
+---
+
+**Superseded:** 2026-08-29 (SPIRIT ON IPAD — pre-V2 checkpoint: his design-zip verified byte-identical to the V1 archive in docs/design (no V2 outputs exist yet — the V2 prompt has never been run); the iPad branch confirmed fully merged into main, prod Ready; `docs/design/pitaya-ipad-v2-decisions.md` written — the five product decisions (freeze-vs-reflow scripture, zero-chrome focus mode, roll-vs-sheets page model, pen-case-vs-sliders, portrait's job) that must be answered before the V2 design run, plus surgical amendments to the V2 prompt where it accidentally pre-decided #1 (the "must survive reflow" constraint) and #4 (screen 2 ordering resident sliders). Main has meanwhile moved ahead with the other lane's v5 health/watch work — unrelated, nothing conflicts.)
+
+---
+
+**Superseded:** 2026-08-23 (SPIRIT ON IPAD — round 7: **he confirms the pen works** — "incredibly responsive". A splitting eraser, the dead margin explained and removed, a trimmed rail, honest chips, and a V2 design prompt written from a week of real use.)
+**Superseded (was current on main):** 2026-08-29d (V5 — PITAYA REPLACES STRAVA: native parity
 from the watch's own collection, the audit's data-quality bugs root-fixed
 with approved repairs run, sleep/HRV ingestion fixed + four new zero-effort
 metrics, and a real speed round on both the wrist and the phone. Earlier

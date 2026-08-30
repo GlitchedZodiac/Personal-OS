@@ -18,11 +18,10 @@ import { TeachingPane } from "./teaching-pane";
 import { SourcePane } from "./source-pane";
 import { SundayPane } from "./sunday-pane";
 import { PenPopover } from "./pen-popovers";
-import { Popover, Kicker, IconButton, DISPLAY } from "./ui";
-import { Diamond, FlipIcon, LayoutGridIcon, PenIcon, GPenIcon, HighlighterIcon, PencilIcon, MarkerIcon, EraserIcon, LassoIcon, MicIcon, PhotoIcon } from "./desk-icons";
+import { Popover, Kicker, DISPLAY } from "./ui";
+import { FlipIcon, PenIcon, GPenIcon, HighlighterIcon, PencilIcon, MarkerIcon, EraserIcon, LassoIcon, MicIcon, PhotoIcon } from "./desk-icons";
 import { SEAM_STOPS_H, SEAM_STOPS_V, nearestStop, type DeskContext } from "@/lib/desk-prefs";
-import { hlColor } from "./desk-state";
-import { askPrompt } from "./dialog";
+import { SeamRail } from "./seam-rail";
 import { haptic } from "@/lib/haptics";
 import { BOOKS, refParts } from "@/lib/bible-refs";
 import { toast } from "sonner";
@@ -74,6 +73,35 @@ const defaultTabsFor = (context: DeskContext): DeskTab[] => {
   if (context === "free") return [t("bible", "bible"), t("nb-bible", "nb-bible"), t("notebook", "nb"), t("bible-ref", "bible-ref")];
   return [t("study", "study", "Study"), t("nb-bible", "nb-bible"), t("bible", "bible"), t("notebook", "nb"), t("three", "three", "All three")];
 };
+/** a 28pt band control with the full 36pt row as its hit area — the band sits on the
+ * screen's top edge, so Fitts does the rest */
+function BandBtn({ title, onClick, active, children }: { title: string; onClick?: () => void; active?: boolean; children: ReactNode }) {
+  return (
+    <button type="button" title={title} onClick={onClick} style={{ width: 28, height: 28, flex: "none", borderRadius: 9, background: active ? "#F6E3EB" : "#FFFFFF", border: `1px solid ${active ? "#A63D63" : "#E4E2E6"}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+      {children}
+    </button>
+  );
+}
+
+/** the 15×11 arrangement thumbnail a tab pill wears — writing pane tinted, text panes outlined */
+function TabThumb({ writing, text, cols, active }: { writing: number; text: number; cols?: boolean; active: boolean }) {
+  const line = active ? "#C98BA8" : "#A9A7AE";
+  return (
+    <span style={{ display: "flex", gap: 1.5, width: 15, height: 11, flex: "none" }}>
+      {writing > 0 && <span style={{ flex: 1.1, background: active ? "#F0D3E0" : "#DEDCE0", borderRadius: 1.5 }} />}
+      {text > 0 && (text > 1 && !cols ? (
+        <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <span style={{ flex: 1.2, border: `1px solid ${line}`, borderRadius: 1.5, boxSizing: "border-box" }} />
+          <span style={{ flex: 1, border: `1px solid ${line}`, borderRadius: 1.5, boxSizing: "border-box" }} />
+        </span>
+      ) : (
+        Array.from({ length: Math.min(text, 2) }, (_, i) => <span key={i} style={{ flex: 1, border: `1px solid ${line}`, borderRadius: 1.5, boxSizing: "border-box" }} />)
+      ))}
+      {writing === 0 && text === 0 && <span style={{ flex: 1, border: `1px solid ${line}`, borderRadius: 1.5, boxSizing: "border-box" }} />}
+    </span>
+  );
+}
+
 const newTabId = () => `t-${Math.random().toString(36).slice(2, 8)}`;
 const PRESETS: Record<"study" | "sermon" | "free" | "source", Layout> = {
   study: { preset: "study", writing: ["notebook"], text: ["teaching"] },
@@ -113,6 +141,31 @@ export function DeskShell(props: DeskShellProps) {
   const [size, setSize] = useState({ w: 1180, h: 820 });
   const [slotMenu, setSlotMenu] = useState<{ col: "writing" | "text"; index: number } | null>(null);
   const [stepInfo, setStepInfo] = useState<{ step: number; total: number } | null>(null);
+  // V2 band state — inline tab rename, the capture pill, and the clock the band carries
+  // because the system status bar is hidden in the companion (a canvas app owns its top edge)
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const holdT = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [renameVal, setRenameVal] = useState("");
+  const [dict, setDict] = useState<{ startedAt: number } | null>(null);
+  const [clock, setClock] = useState(() => new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+  const [batt, setBatt] = useState<{ level: number; charging: boolean } | null>(null);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setClock(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+      setTick((n) => n + 1); // drives the capture pill's elapsed label
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    // the companion posts battery level; in a plain browser the glyph simply never appears
+    const onBatt = (ev: Event) => {
+      const d = (ev as CustomEvent<{ level?: number; charging?: boolean }>).detail;
+      if (d && typeof d.level === "number") setBatt({ level: d.level, charging: Boolean(d.charging) });
+    };
+    window.addEventListener("pitaya-battery", onBatt);
+    return () => window.removeEventListener("pitaya-battery", onBatt);
+  }, []);
   const deskRef = useRef<HTMLDivElement | null>(null);
   const flip = useRef(false);
 
@@ -166,6 +219,9 @@ export function DeskShell(props: DeskShellProps) {
       // no reference pane: the main follows
       setMainQ(e.q);
     }
+    if (e.type === "dictate-state") {
+      setDict(e.on ? { startedAt: e.startedAt ?? Date.now() } : null);
+    }
     if (e.type === "jump-reference-pane") {
       // The panes handle this themselves when one is open. The case only the SHELL can fix is
       // a tab with no Bible at all — Study is Notebook | Teaching — where the tap used to fire
@@ -214,11 +270,19 @@ export function DeskShell(props: DeskShellProps) {
     });
     setTabMenu(null);
   };
-  const renameTab = async (id: string) => {
+  // V2: renaming happens IN the band — the title slot becomes the field, DONE commits.
+  // Reached from the tab menu or by holding a tab pill (the layout menu says so).
+  const renameTab = (id: string) => {
     const cur = tabs.find((t) => t.id === id);
     setTabMenu(null);
-    const name = await askPrompt({ title: "Name this tab", value: cur?.label ?? "", placeholder: "e.g. Sunday · three texts" });
-    if (name) setTabs((ts) => ts.map((t) => (t.id === id ? { ...t, label: name } : t)));
+    setRenaming(id);
+    setRenameVal(cur?.label ?? "");
+  };
+  const commitRename = () => {
+    const id = renaming;
+    setRenaming(null);
+    const name = renameVal.trim();
+    if (id && name) setTabs((ts) => ts.map((t) => (t.id === id ? { ...t, label: name } : t)));
   };
   const stepTab = (dir: 1 | -1) => {
     const i = tabs.findIndex((t) => t.id === activeTab);
@@ -289,7 +353,7 @@ export function DeskShell(props: DeskShellProps) {
     const kicker = () => setSlotMenu((m) => (m && m.col === col && m.index === index ? null : { col, index }));
     switch (kind) {
       case "notebook":
-        return <NotebookPane railSide={portrait ? (writingLeft ? "right" : "left") : railSide} context={context} initialPageId={pageId ?? null} dayId={dayId ?? null} onKicker={kicker} />;
+        return <NotebookPane railSide={portrait ? (writingLeft ? "right" : "left") : railSide} showRail={portrait || textEmpty} context={context} initialPageId={pageId ?? null} dayId={dayId ?? null} onKicker={kicker} />;
       case "bible":
         return <BiblePane role="main" query={mainQ} onQueryChange={setMainQ} pendingJump={jump?.to === "main" ? jump : null} onJumpConsumed={clearJump} free={free} dayId={dayId ?? null} layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "reference":
@@ -318,7 +382,7 @@ export function DeskShell(props: DeskShellProps) {
   const textEmpty = layout.text.length === 0;
   const cols = Boolean(layout.cols) && layout.text.length > 1 && !portrait;
   const writingCol = layout.writing.length ? (
-    <div style={{ ...paneBox, flex: textEmpty ? 1 : "none", width: textEmpty || portrait ? "auto" : `calc(${(nbFrac * (cols ? 0.72 : 1) * 100).toFixed(2)}% - 7px)`, transition: dragging === "v" ? "none" : "width .36s cubic-bezier(.25,1.15,.3,1)", height: portrait && !textEmpty ? `calc(${((1 - stackFrac) * 100).toFixed(2)}% - 7px)` : undefined }}>
+    <div style={{ ...paneBox, flex: textEmpty ? 1 : "none", width: textEmpty || portrait ? "auto" : `calc(${(nbFrac * (cols ? 0.72 : 1) * 100).toFixed(2)}% - 24px)`, transition: dragging === "v" ? "none" : "width .36s cubic-bezier(.25,1.15,.3,1)", height: portrait && !textEmpty ? `calc(${((1 - stackFrac) * 100).toFixed(2)}% - 7px)` : undefined }}>
       {renderDoc(layout.writing[0], "writing", 0)}
       {slotMenuEl("writing", 0)}
     </div>
@@ -341,13 +405,12 @@ export function DeskShell(props: DeskShellProps) {
       ))}
     </div>
   );
+  // V2: the vertical seam IS the toolbar — see seam-rail.tsx and the design's own note:
+  // "the 14pt gutter between the panes was already dead space and the 54pt rail sat right
+  // beside it. V2 merges them into one 40pt seam that is both the toolbar and the resize
+  // handle." Resizing is untouched: startDrag("v"), finger-only, snaps at thirds.
   const seamV = writingCol && !textEmpty ? (
-    <div onPointerDown={startDrag("v")} style={{ width: 14, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "col-resize", touchAction: "none", position: "relative" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        {[0, 1, 2].map((i) => <span key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: dragging === "v" ? "#A63D63" : "#C9C7CD" }} />)}
-      </div>
-      {dragging === "v" && <span style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", fontSize: 9, fontWeight: 600, color: "#FFFFFF", background: "rgba(35,34,39,0.82)", borderRadius: 99, padding: "3px 9px", zIndex: 6 }}>snaps at ⅓ · ½ · ⅔ — finger only</span>}
-    </div>
+    <SeamRail onSeamDown={startDrag("v")} dragging={dragging === "v"} writingLeft={writingLeft} />
   ) : null;
   const seamH = writingCol && !textEmpty ? (
     <div onPointerDown={startDrag("h")} style={{ height: 14, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "row-resize", touchAction: "none" }}>
@@ -367,43 +430,105 @@ export function DeskShell(props: DeskShellProps) {
       default: return <PenIcon size={13} color={c} strokeWidth={2} />;
     }
   };
-  const toolName = pen.tool === "fountain" ? "Fountain" : pen.tool === "gpen" ? "G-pen" : pen.tool === "highlighter" ? "Highlighter" : pen.tool === "pencil" ? "Pencil" : pen.tool === "marker" ? "Marker" : pen.tool === "eraser" ? "Eraser" : pen.tool === "lasso" ? "Lasso" : "Text";
-  const inkDot = pen.tool === "highlighter" ? hlColor(pen.hlCategory) : pen.color;
 
   return (
     <div style={{ position: "absolute", inset: 0, background: "#F2F1F2", fontFamily: "var(--font-body)", overflow: "hidden", ["--desk-top" as string]: "env(safe-area-inset-top, 0px)" }}>
-      {/* the desk bar — below the iPad's status bar */}
-      <div style={{ position: "absolute", top: "var(--desk-top)", left: 0, right: 0, height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", boxSizing: "border-box", zIndex: 20, animation: "deskFadeIn .3s ease both" }}>
-        <Link href="/home" style={{ display: "flex", alignItems: "center", gap: 6, background: "#FFFFFF", border: "1px solid #E4E2E6", borderRadius: 99, padding: "6px 13px 6px 10px", textDecoration: "none" }}>
+      {/* THE BAND — V2: two horizontal bands became one, locked at 36pt. In the companion
+          the system status bar is hidden (a canvas app owns its top edge), so the band
+          carries the clock — and the battery, when the shell reports it. Ported from
+          `Pitaya iPad 01 - Sermon Desk.dc.html`. */}
+      <div style={{ position: "absolute", top: "var(--desk-top)", left: 0, right: 0, height: 36, display: "flex", alignItems: "center", gap: 7, padding: "0 12px", boxSizing: "border-box", zIndex: 20, animation: "deskFadeIn .3s ease both" }}>
+        <Link href="/home" title="Home" style={{ width: 28, height: 28, flex: "none", borderRadius: 9, background: "#FFFFFF", border: "1px solid #E4E2E6", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
           <span style={{ fontSize: 14, color: "#8C2F51", lineHeight: 1 }}>‹</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#454349" }}>Home</span>
         </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 4, minWidth: 0 }}>
-          <Diamond />
-          <span style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 600, color: "#232227", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
-          {chip && <span style={{ fontSize: 10, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", borderRadius: 99, padding: "3px 9px", whiteSpace: "nowrap" }}>{chip}</span>}
-          {stepInfo && context === "study" && <span style={{ fontSize: 10, color: "#96949B", whiteSpace: "nowrap" }}>step {stepInfo.step} of {stepInfo.total}</span>}
-        </div>
+        <svg width="10" height="10" viewBox="0 0 10 10" style={{ flex: "none", marginLeft: 1 }}><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="#A63D63" /></svg>
+
+        {renaming ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "none", background: "#FFFFFF", borderRadius: 9, boxShadow: "inset 0 0 0 1.5px #A63D63", padding: "0 6px 0 9px", height: 28, boxSizing: "border-box" }}>
+            <input
+              autoFocus
+              value={renameVal}
+              onChange={(e) => setRenameVal(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenaming(null); }}
+              style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 600, color: "#232227", border: 0, outline: "none", background: "transparent", width: Math.max(80, renameVal.length * 8 + 16), padding: 0 }}
+            />
+            <button type="button" onClick={commitRename} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#FFFFFF", background: "#A63D63", borderRadius: 99, padding: "3px 10px", cursor: "pointer", border: 0 }}>DONE</button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, flex: "none", maxWidth: "26%" }}>
+            <span style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 600, color: "#232227", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
+            {chip && <span style={{ fontSize: 9.5, fontWeight: 700, color: "#8C2F51", background: "#F6E3EB", borderRadius: 99, padding: "2px 7px", whiteSpace: "nowrap" }}>{chip}</span>}
+            {stepInfo && context === "study" && <span style={{ fontSize: 10, color: "#96949B", whiteSpace: "nowrap" }}>step {stepInfo.step} of {stepInfo.total}</span>}
+          </div>
+        )}
+
         <span style={{ flex: 1 }} />
-        <div style={{ position: "relative" }}>
-          <button type="button" onClick={() => setPopover(popover === "pen" ? null : "pen")} style={{ display: "flex", alignItems: "center", gap: 7, background: popover === "pen" ? "#F6E3EB" : "#FFFFFF", border: `1px solid ${popover === "pen" ? "#A63D63" : "#E4E2E6"}`, borderRadius: 99, padding: "6px 12px", cursor: "pointer" }}>
-            {toolIcon()}
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#454349" }}>{toolName}</span>
-            <span style={{ width: 9, height: 9, borderRadius: "50%", background: inkDot, transition: "background .2s" }} />
-            <span style={{ fontSize: 9, color: "#A9A7AE" }}>⌄</span>
-          </button>
-          {popover === "pen" && <PenPopover style={{ right: 0, top: 40 }} onClose={() => setPopover(null)} />}
-        </div>
-        <div style={{ position: "relative" }}>
-          <IconButton title="Layouts" active={popover === "layout"} onClick={() => setPopover(popover === "layout" ? null : "layout")}>
-            <LayoutGridIcon color={popover === "layout" ? "#8C2F51" : "#454349"} />
-          </IconButton>
+
+        {dict ? (
+          /* the capture pill takes the tabs' room while listening — dictation lands at the caret */
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flex: "none", background: "#FFFFFF", borderRadius: 99, boxShadow: "inset 0 0 0 1.5px #C24040", padding: "0 6px 0 12px", height: 26, boxSizing: "border-box" }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#C24040", animation: "deskPulse 1.4s ease-in-out infinite" }} />
+            <span style={{ fontSize: 10, letterSpacing: "0.1em", fontWeight: 700, color: "#8E3232" }}>LISTENING</span>
+            <span style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 12 }}>
+              {[0, 1, 2, 3].map((i) => <span key={i} style={{ width: 2.5, background: "#C24040", borderRadius: 2, height: "100%", transformOrigin: "bottom", animation: `deskVu .7s ease-in-out infinite ${i * 0.1}s` }} />)}
+            </span>
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: "#232227", fontVariantNumeric: "tabular-nums" }}>{(() => { const s = Math.max(0, Math.floor((Date.now() - dict.startedAt) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; })()}</span>
+            <span style={{ fontSize: 10, color: "#96949B" }}>→ lands at the caret</span>
+            <button type="button" onClick={() => desk.emit({ type: "capture-voice" })} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "#FFFFFF", background: "#232227", borderRadius: 99, padding: "3.5px 11px", cursor: "pointer", border: 0 }}>STOP</button>
+          </div>
+        ) : (
+          <div onPointerDown={onStripDown} onPointerUp={onStripUp} style={{ display: "flex", alignItems: "center", gap: 4, flex: "none", maxWidth: "48%", overflowX: "auto", scrollbarWidth: "none", touchAction: "pan-x" }}>
+            {tabs.map((t) => {
+              const on = t.id === activeTab;
+              return (
+                <div key={t.id} style={{ position: "relative", flex: "none" }}>
+                  <button
+                    type="button"
+                    onClick={() => { if (on) setTabMenu(tabMenu === t.id ? null : t.id); else { setActiveTab(t.id); haptic("selection"); } }}
+                    onPointerDown={(e) => { if (e.pointerType === "pen") return; const id = t.id; holdT.current = setTimeout(() => renameTab(id), 480); }}
+                    onPointerUp={() => { if (holdT.current) clearTimeout(holdT.current); }}
+                    onPointerLeave={() => { if (holdT.current) clearTimeout(holdT.current); }}
+                    style={{ display: "flex", alignItems: "center", gap: 6, height: 26, boxSizing: "border-box", padding: "0 11px", borderRadius: 99, background: on ? "#FFFFFF" : "transparent", boxShadow: on ? "inset 0 0 0 1.5px #A63D63" : "none", border: 0, cursor: "pointer", whiteSpace: "nowrap" }}
+                  >
+                    <TabThumb writing={t.writing.length} text={t.text.length} cols={Boolean(t.cols)} active={on} />
+                    <span style={{ fontFamily: DISPLAY, fontSize: 11.5, fontWeight: on ? 700 : 600, color: on ? "#8C2F51" : "#66646C" }}>{t.label}</span>
+                  </button>
+                  {tabMenu === t.id && (
+                    <Popover width={200} onClose={() => setTabMenu(null)} style={{ left: 0, top: 32 }}>
+                      <Kicker>THIS TAB</Kicker>
+                      <button type="button" onClick={() => renameTab(t.id)} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 6, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#232227", background: "transparent", border: 0, cursor: "pointer" }}>Rename</button>
+                      <button type="button" onClick={() => { setTabs((ts) => { const i = ts.findIndex((x) => x.id === t.id); const copy = { ...t, id: newTabId(), label: `${t.label} 2` }; const next = ts.slice(); next.splice(i + 1, 0, copy); return next; }); setTabMenu(null); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 2, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#232227", background: "transparent", border: 0, cursor: "pointer" }}>Duplicate</button>
+                      {tabs.length > 1 && <button type="button" onClick={() => removeTab(t.id)} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 2, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#B4533F", background: "transparent", border: 0, cursor: "pointer" }}>Close tab</button>}
+                    </Popover>
+                  )}
+                </div>
+              );
+            })}
+            <button type="button" title="New arrangement — hold a tab to rename" onClick={() => setPopover(popover === "layout" ? null : "layout")} style={{ flex: "none", width: 28, height: 28, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#96949B", background: "transparent", border: 0 }}>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 1.5v9M1.5 6h9" /></svg>
+            </button>
+          </div>
+        )}
+
+        <span style={{ flex: 1 }} />
+
+        {portrait && (
+          /* portrait has no seam to carry the tools yet — the pen chip stays until portrait V2 */
+          <div style={{ position: "relative", flex: "none" }}>
+            <BandBtn title="Pen" active={popover === "pen"} onClick={() => setPopover(popover === "pen" ? null : "pen")}>{toolIcon()}</BandBtn>
+            {popover === "pen" && <PenPopover style={{ right: 0, top: 34 }} onClose={() => setPopover(null)} />}
+          </div>
+        )}
+        <div style={{ position: "relative", flex: "none" }}>
+          <BandBtn title="Layouts" active={popover === "layout"} onClick={() => setPopover(popover === "layout" ? null : "layout")}>
+            <svg width="14" height="14" viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1.4" fill="none" stroke={popover === "layout" ? "#8C2F51" : "#454349"} strokeWidth="1.5" /><rect x="9" y="1" width="6" height="6" rx="1.4" fill="none" stroke={popover === "layout" ? "#8C2F51" : "#454349"} strokeWidth="1.5" /><rect x="1" y="9" width="6" height="6" rx="1.4" fill="none" stroke={popover === "layout" ? "#8C2F51" : "#454349"} strokeWidth="1.5" /><rect x="9" y="9" width="6" height="6" rx="1.4" fill="none" stroke={popover === "layout" ? "#8C2F51" : "#454349"} strokeWidth="1.5" /></svg>
+          </BandBtn>
           {popover === "layout" && (
-            <Popover width={324} onClose={() => setPopover(null)} style={{ right: 0, top: 40, maxHeight: "calc(100vh - 120px)", overflowY: "auto" }}>
+            <Popover width={324} onClose={() => setPopover(null)} style={{ right: 0, top: 34, maxHeight: "calc(100vh - 90px)", overflowY: "auto" }}>
               <Kicker>NEW TAB · PICK AN ARRANGEMENT</Kicker>
               <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 5, marginTop: 10 }}>
-                {TAB_TEMPLATES.map((t) => {
-                  const l = t.make();
+                {TAB_TEMPLATES.map((tpl) => {
+                  const l = tpl.make();
                   const thumb = (
                     <div style={{ width: 54, height: 36, flex: "none", border: "1px solid #E4E2E6", borderRadius: 6, display: "flex", gap: 2, padding: 3, boxSizing: "border-box", background: "#FAF9FA", flexDirection: writingLeft ? "row" : "row-reverse" }}>
                       {l.writing.length > 0 && <span style={{ flex: 1.15, background: "#F0D3E0", borderRadius: 3 }} />}
@@ -416,11 +541,11 @@ export function DeskShell(props: DeskShellProps) {
                     </div>
                   );
                   return (
-                    <button key={t.key} type="button" onClick={() => addTab(t.key)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 10, cursor: "pointer", background: "transparent", border: "1px solid #EDEBEE", textAlign: "left", minWidth: 0, overflow: "hidden" }}>
+                    <button key={tpl.key} type="button" onClick={() => addTab(tpl.key)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 10, cursor: "pointer", background: "transparent", border: "1px solid #EDEBEE", textAlign: "left", minWidth: 0, overflow: "hidden" }}>
                       {thumb}
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: "#232227", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.label}</div>
-                        <div style={{ fontSize: 9.5, color: "#96949B" }}>{t.sub}</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#232227", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tpl.label}</div>
+                        <div style={{ fontSize: 9.5, color: "#96949B" }}>{tpl.sub}</div>
                       </div>
                     </button>
                   );
@@ -429,49 +554,32 @@ export function DeskShell(props: DeskShellProps) {
               <div style={{ display: "flex", gap: 6, marginTop: 10, borderTop: "1px solid #EDEBEE", paddingTop: 9 }}>
                 <button type="button" onClick={() => pickPreset(context === "free" ? "free" : context === "sermon" ? "sermon" : "study")} style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", border: 0, borderRadius: 99, padding: "5px 11px", cursor: "pointer" }}>Reset this tab to the {context} desk</button>
               </div>
-              <div style={{ fontSize: 10, color: "#96949B", lineHeight: 1.55, marginTop: 9 }}>Tabs are yours: swipe the strip with a finger, tap a pane&apos;s kicker to swap what it shows, ⇄ flips sides. Seams snap to thirds, finger-only.</div>
+              <div style={{ fontSize: 10, color: "#96949B", lineHeight: 1.55, marginTop: 9 }}>⇄ Flip swaps sides · seams snap to thirds, finger-only. Thumbnails follow your handedness. Hold a tab in the band to rename it.</div>
             </Popover>
           )}
         </div>
-        {/* capture lives up here now, not in the writing rail — a photo and a voice note are
-            things he ADDS to the page, not things the pen does with it */}
+        <BandBtn title="Flip — swap sides" onClick={doFlip}><FlipIcon /></BandBtn>
         {layout.writing.includes("notebook") && (
           <>
-            <IconButton title="Photo — add to this page" onClick={() => desk.emit({ type: "capture-photo" })}><PhotoIcon size={16} color="#454349" /></IconButton>
-            <IconButton title="Speak — dictate into this page" onClick={() => desk.emit({ type: "capture-voice" })}><MicIcon size={16} color="#454349" /></IconButton>
+            <BandBtn title="Photo — add to this page" onClick={() => desk.emit({ type: "capture-photo" })}><PhotoIcon size={14} color="#454349" /></BandBtn>
+            <BandBtn title="Dictate into the page" active={Boolean(dict)} onClick={() => desk.emit({ type: "capture-voice" })}><MicIcon size={14} color={dict ? "#8C2F51" : "#454349"} /></BandBtn>
           </>
         )}
-        <IconButton title="Flip — swap sides" onClick={doFlip}><FlipIcon /></IconButton>
-      </div>
-
-      {/* the tab strip — Logos-style arrangements; finger-swipe or tap */}
-      <div onPointerDown={onStripDown} onPointerUp={onStripUp} style={{ position: "absolute", top: "calc(50px + var(--desk-top))", left: 12, right: 12, height: 32, display: "flex", alignItems: "center", gap: 6, zIndex: 19, overflowX: "auto", scrollbarWidth: "none", touchAction: "pan-x" }}>
-        {tabs.map((t) => {
-          const on = t.id === activeTab;
-          return (
-            <div key={t.id} style={{ position: "relative", flex: "none" }}>
-              <button type="button" onClick={() => { if (on) setTabMenu(tabMenu === t.id ? null : t.id); else { setActiveTab(t.id); haptic("selection"); } }} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: on ? "#FFFFFF" : "#66646C", background: on ? "#232227" : "#FFFFFF", border: `1px solid ${on ? "#232227" : "#E4E2E6"}`, borderRadius: 99, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
-                {t.label}
-                {on && <span style={{ fontSize: 9, opacity: 0.7 }}>⌄</span>}
-              </button>
-              {tabMenu === t.id && (
-                <Popover width={200} onClose={() => setTabMenu(null)} style={{ left: 0, top: 34 }}>
-                  <Kicker>THIS TAB</Kicker>
-                  <button type="button" onClick={() => renameTab(t.id)} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 6, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#232227", background: "transparent", border: 0, cursor: "pointer" }}>Rename</button>
-                  <button type="button" onClick={() => { setTabs((ts) => { const i = ts.findIndex((x) => x.id === t.id); const copy = { ...t, id: newTabId(), label: `${t.label} 2` }; const next = ts.slice(); next.splice(i + 1, 0, copy); return next; }); setTabMenu(null); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 2, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#232227", background: "transparent", border: 0, cursor: "pointer" }}>Duplicate</button>
-                  {tabs.length > 1 && <button type="button" onClick={() => removeTab(t.id)} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 2, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#B4533F", background: "transparent", border: 0, cursor: "pointer" }}>Close tab</button>}
-                </Popover>
-              )}
-            </div>
-          );
-        })}
-        <button type="button" title="New tab" onClick={() => setPopover(popover === "layout" ? null : "layout")} style={{ flex: "none", width: 26, height: 26, borderRadius: "50%", background: "#FFFFFF", border: "1px solid #E4E2E6", color: "#8C2F51", fontSize: 15, lineHeight: 1, cursor: "pointer" }}>+</button>
-        <span style={{ flex: 1 }} />
-        {size.w > 900 && <span style={{ flex: "none", fontSize: 9.5, color: "#A9A7AE", whiteSpace: "nowrap" }}>swipe the strip · tap a pane&apos;s kicker to change it</span>}
+        <span style={{ width: 1, height: 15, background: "#DEDCE0", flex: "none", margin: "0 3px" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "none" }}>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: "#66646C", fontVariantNumeric: "tabular-nums" }}>{clock}</span>
+          {batt && (
+            <svg width="21" height="11" viewBox="0 0 25 12">
+              <rect x="0.5" y="0.5" width="21" height="11" rx="3" fill="none" stroke="#B4B2B8" />
+              <rect x="2" y="2" width={Math.max(1.5, 18 * batt.level)} height="8" rx="1.6" fill={batt.charging ? "#5E9B72" : batt.level < 0.2 ? "#C24040" : "#66646C"} />
+              <path d="M23.5 4v4a2 2 0 0 0 0-4Z" fill="#B4B2B8" />
+            </svg>
+          )}
+        </div>
       </div>
 
       {/* the desk */}
-      <div ref={deskRef} key={activeTab} className="desk-page-in" style={{ position: "absolute", top: "calc(88px + var(--desk-top))", left: 12, right: 12, bottom: 12, display: "flex", flexDirection: portrait ? "column" : writingLeft ? "row" : "row-reverse", userSelect: dragging ? "none" : "auto" }}>
+      <div ref={deskRef} key={activeTab} className="desk-page-in" style={{ position: "absolute", top: "calc(36px + var(--desk-top))", left: 12, right: 12, bottom: 12, display: "flex", flexDirection: portrait ? "column" : writingLeft ? "row" : "row-reverse", userSelect: dragging ? "none" : "auto" }}>
         {portrait ? (
           <>
             {textCol}
