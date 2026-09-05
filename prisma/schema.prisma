@@ -1511,6 +1511,26 @@ model RecordingSegment {
   @@map("spirit_recording_segments")
 }
 
+/// A hymn as he met it: the words, and the sheet he photographed them from.
+/// Body is plain text — blank line = new stanza; a lone "Coro:" / "Chorus:" /
+/// "Estribillo:" line labels the stanza that follows (lib/hymns.ts parses it).
+/// The photo column is named photoData ON PURPOSE: FORBIDDEN_FIELDS in
+/// lib/ai/data-registry.ts lists that name, and tests/ai-data-access.test.ts
+/// fails the build if it is ever allowlisted to a model — the name is the
+/// safety mechanism.
+model Hymn {
+  id        String    @id @default(uuid())
+  title     String
+  body      String
+  photoData String?
+  /// soft delete — the InkPage precedent; a mis-tap is never the end of a hymn
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("spirit_hymns")
+}
+
 model EsvPassage {
   queryKey     String   @id // normalized query, e.g. "judges 4"
   canonical    String

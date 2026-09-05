@@ -52,7 +52,10 @@ const INSTRUCTIONS =
   "macros, body measurements, routines, training plans, spirit and journal. " +
   "query_data reads every dataset; prefer log_recipe/save_recipe over raw " +
   "log_food for repeat meals so macros stay consistent. When you need data " +
-  "or a capability Pitaya doesn't have, file it with report_gap.";
+  "or a capability Pitaya doesn't have, file it with report_gap. His hymn " +
+  "library grows by conversation: save_hymn stores lyrics (plain text, blank " +
+  "line between stanzas, a lone 'Coro:' line labels the refrain); get_hymn " +
+  "reads one back in full.";
 
 export async function handleMcpMessage(raw: unknown): Promise<McpHttpResponse> {
   // The 2025-06-18 revision dropped JSON-RPC batching — reject arrays.

@@ -144,6 +144,14 @@ describe("exclusions", () => {
       expect(all).not.toContain("photoData");
     }
   });
+
+  it("hymns expose their words but never the sheet photo", () => {
+    const spec = REGISTRY.find((s) => s.key === "spirit_hymns")!;
+    expect(spec).toBeTruthy();
+    const all = [...(spec.fields ?? []), ...(spec.detailFields ?? [])];
+    expect(all).toContain("body");
+    expect(all).not.toContain("photoData");
+  });
 });
 
 describe("catalog", () => {

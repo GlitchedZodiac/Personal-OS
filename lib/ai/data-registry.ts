@@ -372,6 +372,19 @@ export const REGISTRY: readonly DatasetSpec[] = [
     refFields: { start: "refStart", end: "refEnd" },
   },
   {
+    key: "spirit_hymns",
+    kind: "table",
+    // photoData is deliberately absent — base64 must never reach the model
+    // (FORBIDDEN_FIELDS enforces the name at CI).
+    summary: "Hymns he has collected — titles and words.",
+    model: "hymn",
+    fields: ["id", "title", "createdAt", "updatedAt"],
+    detailFields: ["body"],
+    baseWhere: { deletedAt: null },
+    orderBy: { title: "asc" },
+    search: ["title", "body"],
+  },
+  {
     key: "spirit_recordings",
     kind: "table",
     summary: "Sermon recordings with transcripts.",

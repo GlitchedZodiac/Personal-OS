@@ -962,6 +962,58 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     },
   },
 
+  // ── Hymns — the library he can grow by conversation, before any screen exists
+  {
+    def: {
+      name: "save_hymn",
+      description:
+        "Save a hymn to his hymn library (or update the one with the same title, case-insensitively). Body is plain text: blank line between stanzas; a lone 'Coro:' / 'Chorus:' / 'Estribillo:' line labels the refrain stanza that follows. Text only — photos of hymn sheets go through the app, never through MCP.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          body: { type: "string", description: "The full lyrics, line breaks preserved" },
+        },
+        required: ["title", "body"],
+      },
+    },
+    handler: async (args) => {
+      const title = str(args.title);
+      const body = str(args.body);
+      if (!title) return { error: "title is required" };
+      if (!body) return { error: "body (the words) is required" };
+      const existing = await prisma.hymn.findFirst({ where: { title: { equals: title, mode: "insensitive" }, deletedAt: null } });
+      const hymn = existing
+        ? await prisma.hymn.update({ where: { id: existing.id }, data: { title, body } })
+        : await prisma.hymn.create({ data: { title, body } });
+      return { hymn: { id: hymn.id, title: hymn.title }, created: !existing };
+    },
+  },
+  {
+    def: {
+      name: "get_hymn",
+      description:
+        "Read ONE hymn's complete lyrics by id or (case-insensitive) title. Exists because query_data clips long strings at ~600 characters — reading a hymn through it hands back half a hymn; this returns the whole thing.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          title: { type: "string" },
+        },
+      },
+    },
+    handler: async (args) => {
+      const id = str(args.id);
+      const title = str(args.title);
+      if (!id && !title) return { error: "give an id or a title" };
+      const hymn = id
+        ? await prisma.hymn.findUnique({ where: { id } })
+        : await prisma.hymn.findFirst({ where: { title: { equals: title, mode: "insensitive" }, deletedAt: null } });
+      if (!hymn || hymn.deletedAt) return { error: "no such hymn" };
+      return { hymn: { id: hymn.id, title: hymn.title, body: hymn.body } };
+    },
+  },
+
   // ── The gap-finder ────────────────────────────────────────────────────
   {
     def: {

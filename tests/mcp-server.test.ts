@@ -28,11 +28,29 @@ vi.mock("@/lib/prs", () => ({
 }));
 
 const favorites: Array<Record<string, unknown> & { id: string }> = [];
+let hymns: Record<string, unknown>[] = [];
 const foodLogs: Array<Record<string, unknown> & { id: string }> = [];
 let seq = 0;
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    hymn: {
+      findFirst: vi.fn(async ({ where }: { where: { title?: { equals?: string } } }) => {
+        const t = where?.title?.equals?.toLowerCase();
+        return hymns.find((h) => String(h.title).toLowerCase() === t && !h.deletedAt) ?? null;
+      }),
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => hymns.find((h) => h.id === where.id) ?? null),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        const row = { id: `hymn-${++seq}`, deletedAt: null, ...data };
+        hymns.push(row);
+        return row;
+      }),
+      update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const row = hymns.find((h) => h.id === where.id)!;
+        Object.assign(row, data);
+        return row;
+      }),
+    },
     favoriteFoods: {
       findMany: vi.fn(async () => favorites),
       findFirst: vi.fn(
@@ -105,6 +123,7 @@ const callTool = async (name: string, args: object) => {
 };
 
 beforeEach(() => {
+  hymns = [];
   favorites.length = 0;
   foodLogs.length = 0;
 });
@@ -172,6 +191,8 @@ describe("MCP protocol core", () => {
       "plan_training",
       "get_training_week",
       "name_trail",
+      "save_hymn",
+      "get_hymn",
       "report_gap",
     ]) {
       expect(names).toContain(expected);
@@ -254,3 +275,19 @@ describe("MCP tool handlers", () => {
     expect(String(parsed.error)).toContain("Unknown tool");
   });
 });
+
+describe("hymns over MCP", () => {
+  it("save → upsert-by-title → get returns the FULL body", async () => {
+    const body = "Venid al Padre,\nsu gracia dio.\n\nCoro:\nGloria a Dios\n" + "x".repeat(700);
+    const first = await callTool("save_hymn", { title: "Venid, Glorificad", body });
+    expect(first.isError).toBe(false);
+    expect(first.parsed.created).toBe(true);
+    const second = await callTool("save_hymn", { title: "venid, glorificad", body: body + "\nmore" });
+    expect(second.parsed.created).toBe(false); // same title, case-insensitive → update
+    const got = await callTool("get_hymn", { title: "VENID, GLORIFICAD" });
+    expect(got.parsed.hymn.body.length).toBeGreaterThan(700); // never clipped
+    const missing = await callTool("get_hymn", { title: "no such hymn" });
+    expect(missing.isError).toBe(true);
+  });
+});
+
