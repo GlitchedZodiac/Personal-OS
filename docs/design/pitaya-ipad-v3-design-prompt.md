@@ -165,6 +165,32 @@ surface, and that tap does nothing else** — never draws, never selects. Your p
 make dismissal *visible* — how does a sheet/menu leave so I trust it heard me?
 (Within the motion law of §3.)
 
+### 6. Hymns — a new room in the house
+
+A hymn library is coming: I photograph the printed hymn sheets from my church
+(Spanish, title in bold caps, stanzas separated by blank lines, sometimes a labelled
+**Coro:**), the app reads them into text, and I build a collection I can search and
+read from. The data layer is being built now; **the screens are yours to design
+before anything is built** — this is a port-first feature.
+
+Design four surfaces, in the existing language:
+
+1. **The library** — searchable (by name, and by a half-remembered line), each hymn
+   showing its title and first line; adding by camera, paste, or typing.
+2. **The confirm step** — the honest moment after the camera: the read text in an
+   editable form, one card per hymn found (a photo can contain the tail of one hymn
+   and the start of the next — the real sheets do), a flag when a hymn runs off the
+   page edge, and a duplicate-title resolution (replace / append / skip).
+3. **The hymn reader** — the words, big, in the scripture serif; stanza numbers; the
+   chorus set apart; the original photographed sheet one tap away as the source of
+   truth.
+4. **The desk pane** — a Hymn pane that joins the tab arrangements (Bible | Hymn on a
+   Sunday), with its own picker in the pane header like the Bible's navigator.
+
+Constraints particular to hymns: lyric lines are lines — never re-wrapped prose; the
+reader is read-only (no ink over hymns this round); Spanish and English both live
+here.
+
 ## Constraints — unchanged from V2, still binding
 
 - The scripture column is sacred; take space from chrome, never from the serif.
@@ -190,6 +216,7 @@ relevant), all icons as inline SVG:
    surface class, annotated with the §3 law.
 5. **A full desk, in use, V3** — comments open on a marked verse, notebook beside
    it, the honest busy state.
+6. **The hymn set** — library, confirm step, reader, and the Hymn desk pane (§6).
 
 ## The archive
 
