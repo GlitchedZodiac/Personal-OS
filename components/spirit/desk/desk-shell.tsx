@@ -315,8 +315,12 @@ export function DeskShell(props: DeskShellProps) {
       // no Bible on the desk (Study opens Notebook | Teaching): the Bible stacks in over the text doc
       setLayout((l) => (l.text.includes("bible") ? l : { preset: "custom", writing: l.writing, text: ["bible", ...l.text.filter((k) => k !== "bible")].slice(0, 2) as DocKind[] }));
     }
-    if (e.type === "open-reference" && !layout.text.includes("reference")) {
-      // no reference pane: the main follows
+    if (e.type === "open-reference" && ![...layout.writing, ...layout.text].includes("reference")) {
+      // No reference pane ANYWHERE — only then does the main follow. This used to check
+      // layout.text alone while the pane's own guard checks the live DOM, so a Reference
+      // Bible living in the WRITING column made the shell yank the main pane even though a
+      // reference pane was right there — one face of his "sometimes it takes me to another
+      // part of the Bible and I lose my spot."
       setMainQ(e.q);
     }
     if (e.type === "dictate-state") {

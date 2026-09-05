@@ -11,7 +11,7 @@
 // on the desk, with the same body.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BOOKS, BOOK_ABBREV, CHAPTERS } from "@/lib/bible-refs";
+import { BOOKS, BOOK_ABBREV, CHAPTERS, refInt } from "@/lib/bible-refs";
 import { parseReadingRef } from "@/lib/spirit-refs";
 import { haptic } from "@/lib/haptics";
 
@@ -119,13 +119,26 @@ export function BibleNav({
     return BOOKS.slice(from, to).map((name, i) => ({ name, index: from + i }));
   }, [testament]);
 
-  const go = (b: number, c: number, v?: number | null) => {
+  const go = (b: number, c: number, vNum?: number | null) => {
     const q = `${BOOKS[b]} ${c}`;
-    pushRecent(v ? `${q}:${v}` : q);
+    pushRecent(vNum ? `${q}:${vNum}` : q);
     haptic("selection");
-    onPick(q, v ?? null);
+    // consumers expect a canonical refInt, never a bare verse number
+    onPick(q, vNum ? refInt(b + 1, c, vNum) : null);
     onClose();
   };
+
+  /** the verse stage: which chapter is asking, and how many verses it has */
+  const [versePick, setVersePick] = useState<{ ch: number; count: number | null } | null>(null);
+  useEffect(() => {
+    if (!versePick || book === null || versePick.count !== null) return;
+    let alive = true;
+    fetch(`/api/spirit/passage?q=${encodeURIComponent(`${BOOKS[book]} ${versePick.ch}`)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive) setVersePick((v) => (v && v.ch === versePick.ch ? { ...v, count: (d?.verses?.length as number) || 0 } : v)); })
+      .catch(() => { if (alive) setVersePick((v) => (v && v.ch === versePick.ch ? { ...v, count: 0 } : v)); });
+    return () => { alive = false; };
+  }, [versePick, book]);
 
   const chapters = book !== null ? (CHAPTERS[book] ?? 1) : 0;
   const compact = variant === "popover";
@@ -148,6 +161,7 @@ export function BibleNav({
               onClose();
             } else if (suggestions.length) {
               setBook(suggestions[0]);
+              setVersePick(null);
               setTerm("");
             }
           }}
@@ -189,7 +203,17 @@ export function BibleNav({
       {typed.length === 0 && suggestions.length > 0 && (
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8, flex: "none" }}>
           {suggestions.map((b) => (
-            <button key={b} type="button" onClick={() => { setBook(b); setTerm(""); haptic("selection"); }} style={{ fontSize: 11.5, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", border: 0, borderRadius: 99, padding: "5px 11px", cursor: "pointer" }}>
+            <button key={b} type="button" onClick={() => {
+              // "jn 3:16" typed, John chip tapped — the :16 must survive the tap, not vanish
+              const digits = /(\d+)\s*[:.]\s*(\d+)/.exec(term) ?? /(?:^|\s)(\d+)\s*$/.exec(term);
+              if (digits) {
+                const ch = Math.max(1, Math.min(Number(digits[1]) || 1, CHAPTERS[b] ?? 1));
+                const vs = digits[2] ? Number(digits[2]) : null;
+                go(b, ch, vs);
+                return;
+              }
+              setBook(b); setVersePick(null); setTerm(""); haptic("selection");
+            }} style={{ fontSize: 11.5, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", border: 0, borderRadius: 99, padding: "5px 11px", cursor: "pointer" }}>
               {BOOKS[b]}
             </button>
           ))}
@@ -224,7 +248,7 @@ export function BibleNav({
               <button
                 key={b.index}
                 type="button"
-                onClick={() => { setBook(b.index); haptic("selection"); }}
+                onClick={() => { setBook(b.index); setVersePick(null); haptic("selection"); }}
                 style={{ textAlign: "left", fontSize: 12.5, fontWeight: b.index === (currentBook ?? 0) - 1 ? 700 : 500, color: b.index === (currentBook ?? 0) - 1 ? "#8C2F51" : T.ink, background: b.index === (currentBook ?? 0) - 1 ? "#F6E3EB" : "transparent", border: 0, borderRadius: 8, padding: "9px 10px", cursor: "pointer", minHeight: 38 }}
               >
                 {b.name}
@@ -235,9 +259,43 @@ export function BibleNav({
       ) : (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flex: "none" }}>
-            <button type="button" onClick={() => setBook(null)} style={{ fontSize: 12, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer", padding: 0 }}>‹ All books</button>
-            <span style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, color: T.ink }}>{BOOKS[book]}</span>
+            {versePick ? (
+              <button type="button" onClick={() => setVersePick(null)} style={{ fontSize: 12, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer", padding: 0 }}>‹ Chapters</button>
+            ) : (
+              <button type="button" onClick={() => { setBook(null); setVersePick(null); }} style={{ fontSize: 12, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer", padding: 0 }}>‹ All books</button>
+            )}
+            <span style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, color: T.ink }}>{BOOKS[book]}{versePick ? ` ${versePick.ch}` : ""}</span>
           </div>
+          {versePick ? (
+            /* His field note: "our Book Chapter selection also ends there — it doesn't let me
+               select a verse too, and sometimes we're not asked to reference verse 1 but verse
+               30." The header hint has promised "Book, chapter, verse" all along. */
+            <div style={{ overflowY: "auto", marginTop: 10, minHeight: 0, flex: 1 }}>
+              <button
+                type="button"
+                onClick={() => go(book, versePick.ch)}
+                style={{ display: "block", width: "100%", textAlign: "left", fontFamily: DISPLAY, fontSize: 13, fontWeight: 700, color: "#8C2F51", background: "#F6E3EB", border: 0, borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}
+              >
+                Read {BOOK_ABBREV[book]} {versePick.ch} →
+              </button>
+              {versePick.count === null && <div style={{ fontSize: 11, color: T.faint, marginTop: 10 }}>…</div>}
+              {versePick.count !== null && versePick.count > 0 && (
+                <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: `repeat(${compact ? 5 : 7}, minmax(0, 1fr))`, gap: 5 }}>
+                  {Array.from({ length: versePick.count }, (_, i) => i + 1).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => go(book, versePick.ch, v)}
+                      style={{ fontFamily: DISPLAY, fontSize: 12, fontWeight: 600, color: T.ink, background: T.chip, border: 0, borderRadius: 9, height: 36, cursor: "pointer", fontVariantNumeric: "tabular-nums" }}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {versePick.count === 0 && <div style={{ fontSize: 11, color: T.faint, marginTop: 10 }}>Couldn&apos;t load the verses — &ldquo;Read {BOOK_ABBREV[book]} {versePick.ch}&rdquo; still works.</div>}
+            </div>
+          ) : (
           <div style={{ overflowY: "auto", marginTop: 10, minHeight: 0, flex: 1, display: "grid", gridTemplateColumns: `repeat(${compact ? 5 : 8}, minmax(0, 1fr))`, gap: 5 }}>
             {Array.from({ length: chapters }, (_, i) => i + 1).map((c) => {
               const on = book === (currentBook ?? 0) - 1 && c === currentChapter;
@@ -245,7 +303,7 @@ export function BibleNav({
                 <button
                   key={c}
                   type="button"
-                  onClick={() => go(book, c)}
+                  onClick={() => { setVersePick({ ch: c, count: null }); haptic("selection"); }}
                   style={{ fontFamily: DISPLAY, fontSize: 12.5, fontWeight: 600, color: on ? "#FFFFFF" : T.ink, background: on ? "#A63D63" : T.chip, border: 0, borderRadius: 9, height: 40, cursor: "pointer" }}
                 >
                   {c}
@@ -253,6 +311,7 @@ export function BibleNav({
               );
             })}
           </div>
+          )}
         </>
       )}
     </div>

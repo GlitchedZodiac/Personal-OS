@@ -88,7 +88,6 @@ export default function DeskSettingsPage() {
             {row("Overlay margin", <div style={{ display: "flex", gap: 5 }}>{(["none", "wide", "wider"] as const).map((m, i) => <button key={m} type="button" onClick={() => save({ overlay: { ...prefs.overlay, margin: i as 0 | 1 | 2 } })} style={pill(prefs.overlay.margin === i)}>{m}</button>)}</div>)}
             {row("Overlay opens", <div style={{ display: "flex", gap: 5 }}>{(["show", "dim", "hide"] as const).map((v) => <button key={v} type="button" onClick={() => save({ overlay: { ...prefs.overlay, visibility: v } })} style={pill(prefs.overlay.visibility === v)}>{v === "show" ? "shown" : v === "dim" ? "dimmed" : "hidden"}</button>)}</div>)}
             {row("Default layer", <><button type="button" onClick={() => save({ overlay: { ...prefs.overlay, defaultLayer: prefs.overlay.defaultLayer === "my" ? "context" : "my" } })} style={{ fontSize: 11, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", borderRadius: 99, padding: "4px 12px", border: 0, cursor: "pointer" }}>{prefs.overlay.defaultLayer === "my" ? "My layer" : "The context's layer"} ⌄</button><span style={{ fontSize: 10, color: "#96949B" }}>study/sermon layers arm themselves in context</span></>)}
-            {row("Action bar", <div style={{ display: "flex", gap: 5 }}>{(["A", "B"] as const).map((a) => <button key={a} type="button" onClick={() => save({ actionBar: a })} style={pill(prefs.actionBar === a)}>{a === "A" ? "A · pen-positioned" : "B · fixed upper-right"}</button>)}</div>)}
           </div>
 
           <div style={card}>

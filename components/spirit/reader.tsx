@@ -86,6 +86,8 @@ export interface SpiritReaderProps {
   externalActionBar?: boolean;
   /** the chapter is pinned by overlay ink — type controls lock */
   typeLocked?: boolean;
+  /** the host's way out of the lock — shown inside the Aa sheet, next to the size it locks */
+  onUnlockType?: () => void;
   /** extra inset (the overlay's writing margin) — side + px */
   marginInset?: { side: "left" | "right"; px: number } | null;
   /** render a child layer over the text column (the overlay canvas) */
@@ -179,7 +181,6 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
   const [legendCounts, setLegendCounts] = useState<Record<string, { count: number; refs: string[] }> | null>(null);
   const [legendRow, setLegendRow] = useState<string | null>(null);
   const [typeOpen, setTypeOpen] = useState(false);
-  const [biOn, setBiOn] = useState(false);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [noteKind, setNoteKind] = useState<string>("Question");
   const [noteText, setNoteText] = useState("");
@@ -911,19 +912,7 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
         })}
         <div className="flex-1" />
         <button
-          onClick={() => setBiOn((b) => !b)}
-          className="rounded-full border px-2.5 py-1.5 text-[10.5px] font-bold transition-colors"
-          style={{
-            fontFamily: "var(--font-display)",
-            borderColor: biOn ? "#A63D63" : T.rule,
-            background: biOn ? "#A63D63" : T.card,
-            color: biOn ? "#FFFFFF" : T.sub,
-          }}
-        >
-          ESV ⇄ NBLA
-        </button>
-        <button
-          onClick={() => !props.typeLocked && setTypeOpen(true)}
+          onClick={() => setTypeOpen(true)}
           className="relative flex h-[30px] w-[30px] items-center justify-center rounded-full border text-[12px] font-semibold"
           style={{ fontFamily: "var(--font-serif)", borderColor: T.rule, background: T.card, color: props.typeLocked ? "#D9D7DC" : T.ink }}
           aria-label={props.typeLocked ? "Type set when first inked — unpin to reflow" : "Type & theme"}
@@ -967,68 +956,14 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
         <p className="mt-8 text-center text-[12.5px]" style={{ color: T.faint }}>{err}</p>
       )}
 
-      {/* bilingual card — English pane live, Spanish pane awaiting license */}
-      {data && biOn && (
-        <>
-          <div
-            className="mt-3 overflow-hidden rounded-[18px]"
-            style={{ background: T.card, boxShadow: T.shadow }}
-          >
-            <div
-              className="flex items-center justify-between border-b px-3.5 py-[9px]"
-              style={{ borderColor: T.rule }}
-            >
-              <span className="text-[9.5px] font-bold tracking-[0.14em]" style={{ color: T.faint }}>
-                ENGLISH · ESV
-              </span>
-              <span className="text-[9.5px]" style={{ color: T.faint }}>locked to verse</span>
-            </div>
-            <div className="h-[225px] overflow-y-auto px-3 py-2">
-              {data.verses.map((v) => {
-                const cat = accepted.get(v.refInt);
-                // range-aware, like the prose branch — a two-verse selection must LOOK selected
-                const on = sel !== null && v.refInt >= sel && v.refInt <= (selEnd ?? sel);
-                return (
-                  <div
-                    key={v.refInt}
-                    onClick={() => tapVerse(v.refInt)}
-                    className="cursor-pointer rounded-lg px-2 py-1.5"
-                    style={{
-                      background: on ? chipAccentBg : cat ? `${categoryColor(cat)}${T.tintAlpha}` : "transparent",
-                      borderLeft: cat ? `3px solid ${categoryColor(cat)}` : "3px solid transparent",
-                    }}
-                  >
-                    <div className="text-[13.5px] leading-[1.65]" style={{ fontFamily, color: T.ink }}>
-                      <span className="mr-[5px] align-super text-[9px] font-bold text-[#A63D63]">{v.verseNum}</span>
-                      {v.lines ? v.lines.join(" ") : v.text}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div
-              className="flex items-center justify-between border-b border-t px-3.5 py-[9px]"
-              style={{ borderColor: T.rule, background: T.chip }}
-            >
-              <span className="text-[9.5px] font-bold tracking-[0.14em]" style={{ color: T.faint }}>
-                ESPAÑOL · NBLA
-              </span>
-              <span className="text-[9.5px]" style={{ color: T.faint }}>se desplazan juntos</span>
-            </div>
-            <div className="flex h-[120px] items-center justify-center px-6 text-center">
-              <span className="text-[11.5px] italic leading-[1.6]" style={{ color: T.faint }}>
-                El panel ya está construido — la NBLA llega cuando se aclare la licencia.
-              </span>
-            </div>
-          </div>
-          <p className="mt-2 text-center text-[10px]" style={{ color: T.faint }}>
-            One selection, both panes — marks live on the verse, not the translation.
-          </p>
-        </>
-      )}
+      {/* RETIRED (his field test): the ESV⇄NBLA bilingual card. The Spanish pane was a
+          hardcoded placeholder awaiting a license that has no API to grant it, and turning the
+          card on swapped out the verse markup — data-verse, #v-…, data-text-column — that
+          selection, highlights, ink anchoring and the auto-scroll all depend on. The header's
+          translation switcher (multi-Bible round) is its successor. */}
 
       {/* verses */}
-      {data && !biOn && (
+      {data && (
         <div
           data-text-column="1"
           className="relative mt-3 rounded-[18px] px-3.5 py-4"
@@ -1969,7 +1904,23 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
             <p className="mt-0.5 text-xs" style={{ color: T.faint }}>
               The typography is the product — set it once, read for years.
             </p>
-            <div className="mt-4 flex items-center gap-3">
+            {props.typeLocked && (
+              /* Demoted here from a header chip ("TEXT SIZE LOCKED") — the lock belongs beside
+                 the control it disables, where unlocking is one obvious tap. */
+              <div className="mt-3 flex items-center gap-3 rounded-[12px] px-3.5 py-[9px]" style={{ background: isDark ? "#3A2B33" : "#F6E3EB" }}>
+                <span className="min-w-0 flex-1 text-[11.5px] leading-[1.5]" style={{ color: isDark ? "#DCA8BE" : "#8C2F51" }}>
+                  Size is locked so your ink stays on the right words.
+                </span>
+                <button
+                  onClick={() => props.onUnlockType?.()}
+                  className="flex-none rounded-full px-3 py-[5px] text-[10.5px] font-bold"
+                  style={{ fontFamily: "var(--font-display)", background: "#A63D63", color: "#FFFFFF" }}
+                >
+                  Unlock
+                </button>
+              </div>
+            )}
+            <div className="mt-4 flex items-center gap-3" style={props.typeLocked ? { opacity: 0.45, pointerEvents: "none" } : undefined}>
               <button
                 onClick={() => update({ size: Math.max(0, prefs.size - 1) })}
                 className="flex h-[38px] w-11 items-center justify-center rounded-[11px] border text-[13px]"

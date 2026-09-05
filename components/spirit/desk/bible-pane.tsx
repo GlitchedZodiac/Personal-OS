@@ -2,25 +2,23 @@
 
 // The Bible pane (02 · 05 · 07): the Reader, hosted, with a pen.
 //
-// Two modes, toggled from the pen settings and echoed in the header:
-// STUDY — pen marks on the text column are gestures that evaporate (circle
-// = select the range, tick/strike = accept/dismiss a suggested mark);
-// SCRATCH — the chapter freezes like print and every stroke keeps. The
-// overlay is orthogonal (05): one ink layer over the whole page; margin
-// ink ALWAYS keeps. The highlighter is the only thing that creates a
-// highlight (tap a verse number = whole verse, drag = span). Hover shows
-// the rail + "which tool" chip; a press-hold on a verse lifts a reference
-// card across the seam. Nothing floats over text.
+// One mode (STUDY/SCRATCH merged 2026-08-30, his call): pen marks on the
+// text column are gestures — a tick/strike answers a suggestion chip —
+// while the OVERLAY is the ink that keeps: one layer over the whole page,
+// margin ink always kept, anchored per verse so reflow cannot shear it.
+// The highlighter is the only thing that creates a highlight (tap a verse
+// number = whole verse, drag = span). A press-hold on a verse lifts a
+// reference card across the seam. Nothing floats over text.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { SpiritReader, type SpiritReaderHandle } from "@/components/spirit/reader";
 import { BibleNav } from "@/components/spirit/bible-nav";
 import { InkCanvas, type InkCanvasHandle, type StrokeEndInfo } from "./ink-canvas";
 import { useDesk, useDeskEvent, hlColor } from "./desk-state";
-import { ActionBarA, ActionBarB, type BarAction } from "./action-bar";
+import { ActionBarA, type BarAction } from "./action-bar";
 import { RefCardGhost } from "./ref-card";
 import { PaneHeader, Chip, Popover, Kicker } from "./ui";
-import { EyeIcon, LayersIcon, MarginIcon, PinIcon, PenIcon } from "./desk-icons";
+import { EyeIcon, PenIcon } from "./desk-icons";
 import { formatRef, refParts, BOOKS, BOOK_ABBREV, CHAPTERS } from "@/lib/bible-refs";
 import { type Stroke } from "@/lib/ink";
 import { askConfirm, askPrompt } from "./dialog";
@@ -63,7 +61,6 @@ export interface BiblePaneProps {
   /** the context layer available on this chapter ("This study · wk 3" / "Sermon · Aug 23") */
   layerContext?: { key: string; label: string } | null;
   onKicker?: () => void;
-  headerExtra?: ReactNode;
   /**
    * Storage key for "where he was reading in THIS tab" — the verse he had selected and how far
    * he had scrolled. Deliberately its OWN localStorage entry rather than a field on the desk
@@ -100,9 +97,9 @@ function refOf(el: HTMLElement | null): number | null {
   return v ? Number(v) : null;
 }
 
-export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsumed, free, dayId, layerContext, onKicker, headerExtra, placeKey }: BiblePaneProps) {
+export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsumed, free, dayId, layerContext, onKicker, placeKey }: BiblePaneProps) {
   const desk = useDesk();
-  const { pen, overlayVisibility, setOverlayVisibility, overlayMargin, setOverlayMargin, hand, prefs, emit } = desk;
+  const { pen, overlayVisibility, setOverlayVisibility, overlayMargin, setOverlayMargin, hand, emit } = desk;
   const readerRef = useRef<SpiritReaderHandle | null>(null);
   const canvasRef = useRef<InkCanvasHandle | null>(null);
   /** the reader's own box — the honest height source for the overlay canvas (see the RO below) */
@@ -114,6 +111,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const [chapterKey, setChapterKey] = useState<number | null>(null);
   const queryRef = useRef<string | null>(query);
   queryRef.current = query;
+  const selRef = useRef<number | null>(null);
   const readPlace = useCallback((): { q: string; verse: number | null; scrollY: number } | null => {
     if (!placeKey) return null;
     try {
@@ -121,9 +119,9 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       return raw ? JSON.parse(raw) : null;
     } catch { return null; }
   }, [placeKey]);
-  const writePlace = useCallback((verse: number | null, scrollY: number) => {
-    if (!placeKey || !queryRef.current) return;
-    try { localStorage.setItem(placeKey, JSON.stringify({ q: queryRef.current, verse, scrollY })); } catch {}
+  const writePlace = useCallback((verse: number | null, scrollY: number, q: string) => {
+    if (!placeKey || !q) return;
+    try { localStorage.setItem(placeKey, JSON.stringify({ q, verse, scrollY })); } catch {}
   }, [placeKey]);
   const restoredOnce = useRef(false);
   // Navigation lives in the pane header, which does not scroll. The Reader's own in-column
@@ -144,7 +142,53 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       }
     });
   }, []);
-  const [history, setHistory] = useState<string[]>([]);
+  /**
+   * Where he WAS, so a jump is never a one-way door. Four things used to push here and one
+   * button (reference panes only) could pop; now every mover records {chapter, verse, scroll}
+   * and the main pane gets a labelled Back pill. His field note: "sometimes it takes me to
+   * another part of the Bible and I lose my spot."
+   */
+  const [history, setHistory] = useState<{ q: string; verse: number | null; scrollY: number }[]>([]);
+  /** capture the CURRENT place — call before navigating away from it */
+  const pushBack = useCallback(() => {
+    const q = queryRef.current;
+    if (!q) return;
+    const entry = { q, verse: selRef.current, scrollY: Math.round(scrollRef.current?.scrollTop ?? 0) };
+    setHistory((h) => [...h, entry].slice(-12));
+  }, []);
+  /** pane-initiated moves set this so handleChapterChange doesn't double-record them */
+  const historyPushed = useRef(false);
+  /** a Back in flight: the spot to reinstate once the previous chapter is on screen */
+  const pendingReturn = useRef<{ verse: number | null; scrollY: number } | null>(null);
+  const applyReturn = useCallback((spot: { verse: number | null; scrollY: number }) => {
+    // the same settle-retry the place-restore uses: the column grows a tick after the data
+    let n = 0;
+    const put = () => {
+      const sc = scrollRef.current;
+      const ready = !!sc && (spot.scrollY <= 0 || sc.scrollHeight > sc.clientHeight + spot.scrollY - 40);
+      if (ready) {
+        if (sc && spot.scrollY > 0) sc.scrollTop = spot.scrollY;
+        if (spot.verse) readerRef.current?.select(spot.verse, null);
+        return;
+      }
+      if (++n < 14) setTimeout(put, 60 * n);
+    };
+    setTimeout(put, 0);
+  }, []);
+  const goBack = useCallback(() => {
+    const prev = history[history.length - 1];
+    if (!prev) return;
+    setHistory((h) => h.slice(0, -1));
+    haptic("selection");
+    if (prev.q === queryRef.current) {
+      // same chapter — just reinstate the spot
+      applyReturn({ verse: prev.verse, scrollY: prev.scrollY });
+      return;
+    }
+    historyPushed.current = true; // returning is a move; it must not record itself
+    pendingReturn.current = { verse: prev.verse, scrollY: prev.scrollY };
+    onQueryChange(prev.q);
+  }, [history, onQueryChange, applyReturn]);
   /** a verse to select as soon as the next passage finishes loading */
   const pendingSelect = useRef<{ refStart: number; refEnd: number | null } | null>(null);
   /**
@@ -168,10 +212,11 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       selectVerseNow(refStart, refEnd);
       return;
     }
-    setHistory((h) => (query ? [...h, query].slice(-12) : h));
+    pushBack();
+    historyPushed.current = true;
     pendingSelect.current = { refStart, refEnd };
     onQueryChange(target);
-  }, [query, chapterKey, onQueryChange, selectVerseNow]);
+  }, [chapterKey, onQueryChange, selectVerseNow, pushBack]);
   const [showChips, setShowChips] = useState(false);
   const [hover, setHover] = useState<{ left: number; top: number; width: number; num: number } | null>(null);
   const [hoverTip, setHoverTip] = useState<{ x: number; y: number } | null>(null);
@@ -221,10 +266,19 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
    * this the query was thrown away here, and `mainQ` stayed null on every tab he owned while he
    * read twenty chapters. Setting an identical string is a no-op upstream, so this cannot loop.
    */
+  // stable, or it re-renders a 30-verse chapter through the reader's memo on every commit
+  const handleUnlockType = useCallback(() => setUnpinned(true), []);
   const handleChapterChange = useCallback((ck: number, q: string) => {
     setChapterKey(ck);
-    if (q && q !== queryRef.current) onQueryChange(q);
-  }, [onQueryChange]);
+    if (q && q !== queryRef.current) {
+      // The Reader moved ITSELF (the audio player's ‹ ›, a two-part assignment button) — the
+      // pane finds out here, after the fact. Record where he was, unless a pane-side path
+      // already did for this same move.
+      if (!historyPushed.current) pushBack();
+      onQueryChange(q);
+    }
+    historyPushed.current = false;
+  }, [onQueryChange, pushBack]);
   /**
    * Put him back where he was — once per mount, and only when the tab actually remembers a
    * spot. Returns true if it took over, so the assignment auto-scroll stands down rather than
@@ -270,6 +324,13 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
                 pendingSelect.current = null;
                 selectVerseNow(ps.refStart, ps.refEnd);
               }
+              const ret = pendingReturn.current;
+              if (ret) {
+                pendingReturn.current = null;
+                scrolledTo.current = `${d.canonical}`; // Back owns the scroll; the assignment auto-scroll stands down
+                applyReturn(ret);
+                return;
+              }
               // PUT HIM BACK. Once per mount, and only when the tab actually remembers a spot:
               // this is the rotate-and-reload case, where the pane is brand new but he never
               // went anywhere. Claim `scrolledTo` so the assignment auto-scroll below does not
@@ -309,7 +370,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
                 };
                 setTimeout(attempt, 0); // a timer, not rAF — rAF starves when the view isn't compositing (background tab, hidden pane)
               }
-              }, [selectVerseNow]);
+              }, [selectVerseNow, applyReturn]);
   // Locked only while ink is actually ON SCREEN — reflowing text under a hidden layer cannot
   // visibly move anything, so there is nothing to protect and no reason to take the Aa away.
   const pinned = strokes.length > 0 && !unpinned && overlayVisibility !== "hide";
@@ -323,9 +384,14 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       // used to go nowhere at all.
       const soleBible = role === "main" && !document.querySelector('[data-pane-role="reference"]');
       if (e.type === "open-reference" && (role === "reference" || soleBible)) {
-        setHistory((h) => (query ? [...h, query].slice(-12) : h));
+        pushBack();
+        historyPushed.current = true;
         onQueryChange(e.q);
       } else if (e.type === "open-main" && role === "main") {
+        // this path never recorded history — a notes-chip tap or the Sunday pane could move
+        // him with no way back
+        pushBack();
+        historyPushed.current = true;
         onQueryChange(e.q);
       } else if (e.type === "jump-reference-pane" && (role === "reference" || soleBible)) {
         jumpToVerse(e.refStart, e.refEnd ?? null);
@@ -741,8 +807,11 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     placeDirty.current = true;
     placeRef.current = { verse, scrollY };
     if (placeTimer.current) clearTimeout(placeTimer.current);
-    // debounced — scrolling a chapter must not write on every frame
-    placeTimer.current = setTimeout(() => writePlace(placeRef.current.verse, placeRef.current.scrollY), 400);
+    // debounced — scrolling a chapter must not write on every frame. The chapter is captured
+    // NOW, not when the timer fires: a report in flight across a chapter change used to stamp
+    // the old scroll under the new chapter's name.
+    const qAtSchedule = queryRef.current ?? "";
+    placeTimer.current = setTimeout(() => writePlace(placeRef.current.verse, placeRef.current.scrollY, qAtSchedule), 400);
   }, [placeKey, writePlace]);
   useEffect(() => {
     const sc = scrollRef.current;
@@ -754,7 +823,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     // flush fires during a teardown that never really happened and writes an empty place over
     // a real one.
     const flush = () => {
-      if (placeDirty.current) writePlace(placeRef.current.verse, Math.round(sc.scrollTop));
+      if (placeDirty.current) writePlace(placeRef.current.verse, Math.round(sc.scrollTop), queryRef.current ?? "");
     };
     window.addEventListener("pagehide", flush);
     return () => {
@@ -777,6 +846,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
 
   const onSelectionChange = useCallback((s: number | null, e: number | null) => {
     setSel({ start: s, end: e });
+    selRef.current = s;
     reportPlace(s);
     // The bar used to need a TAP recorded by the ink canvas — so with the ink layer hidden
     // (HIDE), or after selecting any other way, it simply never appeared. Anchor to the tap
@@ -885,19 +955,19 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   // breakpoints against the raw pane width is what let the row grow past the pane's right edge
   // and get scissored off by the pane's overflow:hidden. Spend each optional chip from a BUDGET
   // instead, so adding one collapses the row's long labels rather than pushing controls off.
+  const backLabel = history.length ? history[history.length - 1].q : null;
   const chipCost =
+    (backLabel && role === "main" ? 110 : 0) + // the Back pill ("← John 3")
     96 +                                       // the navigator title + the two chapter steppers,
                                                // which are no longer optional: they are the only
                                                // way to move, so the OTHER chips give up room first
     (sel.start !== null ? 118 : 0) +           // "JONAH 2:1 SELECTED"
-    (strokes.length > 0 && !unpinned && overlayVisibility !== "hide" ? 138 : 0) + // TEXT SIZE LOCKED
     (strokes.length || inkPast.length || inkFuture.length ? 64 : 0);              // ⤺ ⤻
   const budgetW = contentSize.w > 0 ? Math.max(0, contentSize.w - chipCost) : 0;
   // a narrow pane (stacked Bible, ~360px) keeps every control but drops the long labels
   const narrow = budgetW > 0 && budgetW < 600;
   // a third-of-the-desk pane (~240px, three columns): one eye button that cycles, one mode chip that toggles
   const tiny = budgetW > 0 && budgetW < 360;
-  const layerLabel = narrow ? "" : layerKey === "my" ? "MY LAYER" : layerContext && layerContext.key === layerKey ? layerContext.label.toUpperCase() : layerKey.toUpperCase();
   const markedOnSelection = sel.start === null ? [] : Array.from(new Set((readerRef.current?.highlightsAt(sel.start, sel.end ?? sel.start) ?? []).map((h) => h.category)));
   const unmarkSelection = () => {
     if (sel.start === null) return;
@@ -920,7 +990,8 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     const next = dir === -1 ? prevChapter : nextChapter;
     if (!navBook || next === null) return;
     haptic("selection");
-    setHistory((h) => (query ? [...h, query].slice(-12) : h));
+    pushBack();
+    historyPushed.current = true;
     onQueryChange(`${BOOKS[navBook - 1]} ${next}`);
   };
   const headerRight = (
@@ -929,55 +1000,14 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       {role === "reference" && (
         <>
           {!tiny && <span style={{ fontSize: 10, color: "#A9A7AE" }}>follows links</span>}
-          <button type="button" onClick={() => { const prev = history[history.length - 1]; if (prev) { setHistory((h) => h.slice(0, -1)); onQueryChange(prev); } }} style={{ fontSize: 13, color: history.length ? "#96949B" : "#D9D7DC", background: "none", border: 0, cursor: history.length ? "pointer" : "default" }} aria-label="Back">‹</button>
+          <button type="button" onClick={goBack} style={{ fontSize: 13, color: history.length ? "#96949B" : "#D9D7DC", background: "none", border: 0, cursor: history.length ? "pointer" : "default" }} aria-label="Back">‹</button>
         </>
       )}
-      {prefs.actionBar === "B" && sel.start !== null && <ActionBarB onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} onDragStart={startDragFromBar} />}
-      {pinned && (
-        // It was called "PAGE PINNED" and the footer claimed the page was "frozen like print"
-        // with a captured type size. None of that was true: the ONLY effect is that the Aa type
-        // sheet will not open, so that changing the size cannot reflow the text out from under
-        // his ink. Name that, and let the chip itself be the way out.
-        <Chip tone="tint" title="Text size is locked so your ink stays on the right words. Tap to unlock." onClick={() => setUnpinned(true)}><PinIcon /> TEXT SIZE LOCKED</Chip>
-      )}
-      <div style={{ position: "relative" }}>
-        <button type="button" onClick={() => setLayersOpen((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${layersOpen ? "#A63D63" : "#E9CFDC"}`, background: layersOpen ? "#F0D3E0" : "#F6E3EB", borderRadius: 99, padding: "4px 10px", cursor: "pointer" }}>
-          <LayersIcon />
-          <span style={{ fontSize: 9, letterSpacing: "0.08em", fontWeight: 700, color: "#8C2F51" }}>{layerLabel}</span>
-          <span style={{ fontSize: 9, color: "#B07A93" }}>⌄</span>
-        </button>
-        {layersOpen && (
-          <Popover width={238} onClose={() => setLayersOpen(false)} style={{ top: 30, left: 0 }}>
-            <Kicker>LAYERS ON {title.toUpperCase()}</Kicker>
-            {[{ key: "my", label: "My layer" }, ...(layerContext ? [{ key: layerContext.key, label: layerContext.label }] : [])].map((l) => {
-              const count = l.key === layerKey ? strokes.length : layers.find((x) => x.layerKey === l.key)?.strokeCount ?? 0;
-              const on = l.key === layerKey;
-              return (
-                <button key={l.key} type="button" onClick={() => { setLayerKey(l.key); setLayersOpen(false); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "7px 9px", borderRadius: 9, cursor: "pointer", background: on ? "#F6E3EB" : "transparent", boxShadow: on ? "inset 0 0 0 1.5px #A63D63" : "inset 0 0 0 1px #F2F1F2", border: 0, textAlign: "left" }}>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: "#232227" }}>{l.label}</span>
-                  <span style={{ flex: 1 }} />
-                  <span style={{ fontSize: 9.5, color: "#96949B" }}>{count} stroke{count === 1 ? "" : "s"}</span>
-                </button>
-              );
-            })}
-            {layers.filter((l) => l.layerKey !== "my" && l.layerKey !== layerContext?.key).map((l) => (
-              <button key={l.layerKey} type="button" onClick={() => { setLayerKey(l.layerKey); setLayersOpen(false); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, marginTop: 4, padding: "7px 9px", borderRadius: 9, cursor: "pointer", background: l.layerKey === layerKey ? "#F6E3EB" : "transparent", boxShadow: l.layerKey === layerKey ? "inset 0 0 0 1.5px #A63D63" : "inset 0 0 0 1px #F2F1F2", border: 0, textAlign: "left" }}>
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: "#232227" }}>{l.layerKey.replace(/^layer:/, "")}</span>
-                <span style={{ flex: 1 }} />
-                <span style={{ fontSize: 9.5, color: "#96949B" }}>{l.strokeCount}</span>
-              </button>
-            ))}
-            {strokes.length > 0 && (
-              <button type="button" onClick={() => void clearLayer()} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 6, borderRadius: 9, fontSize: 11.5, fontWeight: 600, color: "#B4533F", background: "transparent", border: 0, cursor: "pointer" }}>
-                Clear my ink on this chapter · {strokes.length} stroke{strokes.length === 1 ? "" : "s"}
-              </button>
-            )}
-            <button type="button" onClick={async () => { const nm = await askPrompt({ title: "Name the layer", placeholder: "e.g. Sunday · Galatians series" }); if (nm?.trim()) { setLayerKey(`layer:${nm.trim()}`); setLayersOpen(false); } }} style={{ fontSize: 10, color: "#96949B", padding: "8px 9px 2px", borderTop: "1px solid #EDEBEE", marginTop: 8, lineHeight: 1.5, background: "none", border: 0, cursor: "pointer", width: "100%", textAlign: "left" }}>
-              + new layer · layers are contexts, not versions — ink saves to the active one
-            </button>
-          </Popover>
-        )}
-      </div>
+      {/* DEMOTED (his field test: "some of them are legacy and useless"): the TEXT SIZE
+          LOCKED chip lives inside the Aa sheet now, next to the size it locks; the layers
+          pill and the margin cycler live behind ⋯ below — nothing else in the app ever
+          creates layers, and margin is a set-once that overrides itself. */}
+
       {(strokes.length > 0 || inkPast.length > 0 || inkFuture.length > 0) && (
         <div style={{ display: "flex", alignItems: "center", gap: 2, border: "1px solid #E4E2E6", background: "#FFFFFF", borderRadius: 99, padding: "2px 3px" }}>
           <button type="button" title="Undo your last mark here" onClick={() => stepInk("undo")} disabled={!inkPast.length} style={{ width: 26, height: 22, borderRadius: 99, border: 0, background: "transparent", cursor: inkPast.length ? "pointer" : "default", opacity: inkPast.length ? 1 : 0.3, fontSize: 12, color: "#454349" }}>⤺</button>
@@ -1001,11 +1031,48 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
         </div>
       </div>
       )}
-      <button type="button" onClick={() => { haptic("selection"); setOverlayMargin(((overlayMargin + 1) % 3) as 0 | 1 | 2); }} title="margin: none · wide · wider" style={{ display: "flex", alignItems: "center", gap: 5, border: "1px solid #E4E2E6", background: "#FFFFFF", borderRadius: 99, padding: "4px 10px", cursor: "pointer" }}>
-        <MarginIcon />
-        {!narrow && <span style={{ fontSize: 9, letterSpacing: "0.08em", fontWeight: 700, color: "#454349" }}>{MARGIN_LABEL[overlayMargin]}</span>}
-      </button>
-      {headerExtra}
+      <div style={{ position: "relative", flex: "none" }}>
+        <button type="button" onClick={() => setLayersOpen((v) => !v)} title="Margin · layers · clear ink" aria-label="Pane menu" style={{ width: 26, height: 24, borderRadius: 99, border: "1px solid #E4E2E6", background: layersOpen ? "#F6E3EB" : "#FFFFFF", color: "#66646C", fontSize: 12, cursor: "pointer" }}>⋯</button>
+        {layersOpen && (
+          <Popover width={252} onClose={() => setLayersOpen(false)} style={{ top: 30, right: 0 }}>
+            {strokes.length > 0 && (
+              <button type="button" onClick={() => void clearLayer()} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", borderRadius: 9, fontSize: 11.5, fontWeight: 600, color: "#B4533F", background: "transparent", border: 0, cursor: "pointer" }}>
+                Clear my ink on this chapter · {strokes.length} stroke{strokes.length === 1 ? "" : "s"}
+              </button>
+            )}
+            <Kicker style={{ display: "block", marginTop: strokes.length ? 8 : 0 }}>MARGIN</Kicker>
+            <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+              {MARGIN_LABEL.map((m, i) => (
+                <button key={m} type="button" onClick={() => { haptic("selection"); setOverlayMargin(i as 0 | 1 | 2); }} style={{ flex: 1, fontSize: 9, letterSpacing: "0.04em", fontWeight: 700, borderRadius: 99, padding: "5px 0", cursor: "pointer", border: 0, background: overlayMargin === i ? "#A63D63" : "#FAF9FA", color: overlayMargin === i ? "#FFFFFF" : "#66646C" }}>
+                  {m.replace("MARGIN · ", "")}
+                </button>
+              ))}
+            </div>
+            <Kicker style={{ display: "block", marginTop: 10 }}>LAYERS ON {title.toUpperCase()}</Kicker>
+            {[{ key: "my", label: "My layer" }, ...(layerContext ? [{ key: layerContext.key, label: layerContext.label }] : [])].map((l) => {
+              const count = l.key === layerKey ? strokes.length : layers.find((x) => x.layerKey === l.key)?.strokeCount ?? 0;
+              const on = l.key === layerKey;
+              return (
+                <button key={l.key} type="button" onClick={() => { setLayerKey(l.key); setLayersOpen(false); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "7px 9px", borderRadius: 9, cursor: "pointer", background: on ? "#F6E3EB" : "transparent", boxShadow: on ? "inset 0 0 0 1.5px #A63D63" : "inset 0 0 0 1px #F2F1F2", border: 0, textAlign: "left" }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: "#232227" }}>{l.label}</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: 9.5, color: "#96949B" }}>{count} stroke{count === 1 ? "" : "s"}</span>
+                </button>
+              );
+            })}
+            {layers.filter((l) => l.layerKey !== "my" && l.layerKey !== layerContext?.key).map((l) => (
+              <button key={l.layerKey} type="button" onClick={() => { setLayerKey(l.layerKey); setLayersOpen(false); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, marginTop: 4, padding: "7px 9px", borderRadius: 9, cursor: "pointer", background: l.layerKey === layerKey ? "#F6E3EB" : "transparent", boxShadow: l.layerKey === layerKey ? "inset 0 0 0 1.5px #A63D63" : "inset 0 0 0 1px #F2F1F2", border: 0, textAlign: "left" }}>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: "#232227" }}>{l.layerKey.replace(/^layer:/, "")}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ fontSize: 9.5, color: "#96949B" }}>{l.strokeCount}</span>
+              </button>
+            ))}
+            <button type="button" onClick={async () => { const nm = await askPrompt({ title: "Name the layer", placeholder: "e.g. Sunday · Galatians series" }); if (nm?.trim()) { setLayerKey(`layer:${nm.trim()}`); setLayersOpen(false); } }} style={{ fontSize: 10, color: "#96949B", padding: "8px 9px 2px", borderTop: "1px solid #EDEBEE", marginTop: 8, lineHeight: 1.5, background: "none", border: 0, cursor: "pointer", width: "100%", textAlign: "left" }}>
+              + new layer · layers are contexts, not versions — ink saves to the active one
+            </button>
+          </Popover>
+        )}
+      </div>
     </div>
   );
 
@@ -1023,6 +1090,20 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
         titleHint="Book, chapter, verse"
         right={headerRight}
       >
+        {role === "main" && backLabel && (
+          // A LABELLED pill, deliberately not another bare arrow: ‹ › beside it already mean
+          // previous/next chapter and ⤺ already means ink-undo — a third arrow would read as a
+          // fourth stepper. This one says where it goes.
+          <button
+            type="button"
+            onClick={goBack}
+            title={`Back to ${backLabel}`}
+            style={{ flex: "none", display: "flex", alignItems: "center", gap: 4, border: "1px solid #E4E2E6", background: "#FFFFFF", borderRadius: 99, padding: "3.5px 10px", cursor: "pointer", fontSize: 10.5, fontWeight: 600, color: "#454349", maxWidth: 128, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}
+          >
+            <span aria-hidden style={{ color: "#96949B" }}>←</span>
+            {narrow ? "Back" : backLabel}
+          </button>
+        )}
         <span style={{ position: "relative", display: "flex", alignItems: "center", gap: 3, flex: "none" }}>
           <ChapterStep label={"\u2039"} target={prevChapter} book={navBook} inked={prevChapter !== null && !!inkChaptersProp?.has(prevChapter)} onGo={() => stepChapter(-1)} />
           <ChapterStep label={"\u203A"} target={nextChapter} book={navBook} inked={nextChapter !== null && !!inkChaptersProp?.has(nextChapter)} onGo={() => stepChapter(1)} />
@@ -1041,7 +1122,8 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
                   // than arming a request that would hijack the next chapter he opens.
                   if (verse) { jumpToVerse(verse, null); return; }
                   if (query && q.trim().toLowerCase() === query.trim().toLowerCase()) return;
-                  setHistory((h) => (query ? [...h, query].slice(-12) : h));
+                  pushBack();
+                  historyPushed.current = true;
                   onQueryChange(q);
                 }}
               />
@@ -1062,6 +1144,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
             role={role}
             externalActionBar
             typeLocked={pinned}
+            onUnlockType={handleUnlockType}
             marginInset={marginInsetProp}
             inkChapters={inkChaptersProp}
             onOpenRef={handleOpenRef}
@@ -1120,7 +1203,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
         </div>
       )}
       {/* action bar A — rises beside the tip */}
-      {prefs.actionBar === "A" && sel.start !== null && barAnchor && (
+      {sel.start !== null && barAnchor && (
         <ActionBarA x={barAnchor.x} y={barAnchor.y} hand={hand} onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} onDragStart={startDragFromBar} />
       )}
       {drag && <RefCardGhost label={drag.label} text={drag.text} x={drag.x} y={drag.y} />}

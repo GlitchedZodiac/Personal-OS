@@ -59,6 +59,10 @@ function normalizeBookText(raw: string): string {
     .replace(/\./g, "")
     .replace(/^i{1,3}(?=\s)/, (m) => String(m.length))
     .replace(/^(1st|2nd|3rd)\b/, (m) => m[0])
+    // "1co" / "2tim" — the digit filter below demands "1 corinthians"-shaped candidates, so a
+    // missing space after the numeral silently excluded every numbered book. It was literally
+    // the placeholder's own example ("1co 13") that could never parse.
+    .replace(/^([123])(?=[a-z])/, "$1 ")
     .replace(/\s+/g, " ")
     .trim();
 }

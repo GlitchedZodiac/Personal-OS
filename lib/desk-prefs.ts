@@ -8,7 +8,6 @@ export type Handedness = "left" | "right";
  * keeps, chip gestures still act. The stored prefs key is simply ignored on read. */
 export type OverlayVisibility = "show" | "dim" | "hide";
 export type MarginStep = 0 | 1 | 2; // none · wide · wider
-export type ActionBarStyle = "A" | "B"; // pen-positioned · fixed upper-right
 export type DeskContext = "study" | "sermon" | "free";
 export type Retention = "90d" | "forever" | "after_transcript";
 
@@ -33,7 +32,6 @@ export interface SavedPalette {
 export interface DeskPrefs {
   handedness: Handedness;
   overlay: { margin: MarginStep; visibility: OverlayVisibility; defaultLayer: "my" | "context" };
-  actionBar: ActionBarStyle;
   pen: PenDefaults;
   palettes: SavedPalette[];
   recording: { consent: boolean; retention: Retention; consentShownAt?: string | null };
@@ -91,7 +89,6 @@ export const DEFAULT_DESK_PREFS: DeskPrefs = {
   handedness: "left",
   // no margin unless he asks for one (or margin ink exists and the layer is shown) — "no random whitespace"
   overlay: { margin: 0, visibility: "show", defaultLayer: "my" },
-  actionBar: "A",
   pen: {
     tool: "fountain",
     brush: "fountain",
