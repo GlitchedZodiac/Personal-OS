@@ -256,6 +256,9 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   const [dictating, setDictating] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [proposal, setProposal] = useState<{ kind: "page" | "sermon"; data: Proposal } | null>(null);
+  /** "find the references on this page": recognized handwritten refs, awaiting his keep/skip */
+  const [refScan, setRefScan] = useState<{ raw: string; label: string; refStart: number; refEnd: number; bbox?: number[] | null; keep: boolean }[] | null>(null);
+  const [refScanBusy, setRefScanBusy] = useState(false);
   const [proposalBusy, setProposalBusy] = useState(false);
   const [recordingRow, setRecordingRow] = useState<RecordingRow | null>(null);
   const [segments, setSegments] = useState<SegmentMeta[]>([]);
@@ -1223,6 +1226,50 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   };
 
   // ——— close the page (sermon) / transcribe (others) ———
+  /**
+   * His call from the field test: "yes — on a button, after the service." Reads the page's
+   * handwriting once (one AI call, manual, metered by the transcribe route which persists
+   * NOTHING on POST) and proposes a live card for every reference he wrote by hand —
+   * "Ro 8:28" in ink becomes a tappable card, placed beside the handwriting that named it.
+   */
+  const scanForRefs = async () => {
+    if (!page || refScanBusy || strokes.length === 0) return;
+    const img = canvasRef.current?.renderPng({ region: { x: 0, y: 0, w: PAGE_W, h: Math.min(height, 3200) }, scale: 1.1, background: "#FFFFFF" });
+    if (!img) return;
+    setRefScanBusy(true);
+    try {
+      const p = await recognize(img, "page");
+      const existing = new Set(objects.filter((o) => o.type === "refcard").map((o) => `${(o.data as { refStart?: number }).refStart}`));
+      const seen = new Set<string>();
+      const found = ((p?.refs ?? []) as { raw: string; label: string; refStart: number; refEnd: number; bbox?: number[] | null }[])
+        .filter((r) => r.refStart >= 1_001_001)
+        .filter((r) => !existing.has(String(r.refStart)))
+        .filter((r) => (seen.has(`${r.refStart}-${r.refEnd}`) ? false : (seen.add(`${r.refStart}-${r.refEnd}`), true)))
+        .map((r) => ({ raw: r.raw, label: r.label, refStart: r.refStart, refEnd: r.refEnd, bbox: r.bbox, keep: true }));
+      if (!found.length) {
+        toast("No references found in the handwriting on this page.");
+        return;
+      }
+      setRefScan(found);
+    } finally {
+      setRefScanBusy(false);
+    }
+  };
+  const confirmRefScan = async () => {
+    const kept = (refScan ?? []).filter((r) => r.keep);
+    setRefScan(null);
+    const scanH = Math.min(height, 3200);
+    for (const r of kept) {
+      // the bbox is fractional over the rendered page — place the card beside the ink that
+      // named it; anything unplaceable falls back to addRefCard's own logic
+      const at = r.bbox && r.bbox.length === 4
+        ? { x: Math.min(PAGE_W - 220, r.bbox[0] * PAGE_W + r.bbox[2] * PAGE_W + 14), y: Math.max(120, r.bbox[1] * scanH) }
+        : undefined;
+      await addRefCard(r.refStart, r.refEnd, r.label, "", at);
+    }
+    if (kept.length) toast.success(`${kept.length} reference${kept.length === 1 ? "" : "s"} placed from your handwriting.`);
+  };
+
   const closePage = async () => {
     if (!page) return;
     await flushNow();
@@ -1418,6 +1465,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
                       { label: "Rename this page", run: renamePage },
                       { label: "Typed block", run: () => { setPen({ tool: "text" }); addTextBlock("", false, lastTap.current ?? undefined); } },
                       { label: "Find a verse → card", run: () => setFindOpen(true) },
+                      ...(strokes.length > 0 ? [{ label: refScanBusy ? "Reading your handwriting…" : "Find references in my handwriting", run: () => void scanForRefs() }] : []),
                       { label: isSermon ? "Close the page — read it" : "Transcribe this page", run: closePage },
                       { label: "Page list", run: () => nb && openList(nb) },
                       ...(isSermon && recordingRow ? [
@@ -1605,6 +1653,28 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
           {mode === "page" && !page && <div style={{ padding: 24, fontSize: 12, color: "#96949B" }}>Opening the page…</div>}
         </div>
         {mode === "page" && showRail && rail}
+        {refScan && (
+          <div onPointerDown={(e) => { if (e.target === e.currentTarget) { e.preventDefault(); setRefScan(null); } }} style={{ position: "absolute", inset: 0, zIndex: 42 }}>
+            <div style={{ position: "absolute", left: 16, right: 16, bottom: 16, zIndex: 43, background: "#FFFDF9", border: "1px solid #EDE7E0", borderRadius: 12, padding: "12px 14px", boxShadow: "0 10px 30px rgba(20,15,18,0.15)", maxHeight: "60%", overflowY: "auto" }}>
+              <div style={{ fontSize: 9.5, letterSpacing: "0.12em", fontWeight: 700, color: "#96949B" }}>REFERENCES IN YOUR HANDWRITING</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 9 }}>
+                {refScan.map((r, i) => (
+                  <button key={`${r.refStart}-${i}`} type="button" onClick={() => setRefScan((s2) => s2 ? s2.map((x, j) => (j === i ? { ...x, keep: !x.keep } : x)) : s2)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, borderRadius: 99, padding: "6px 12px", cursor: "pointer", border: r.keep ? "none" : "1px solid #E4E2E6", background: r.keep ? "#F6E3EB" : "#FFFFFF", color: r.keep ? "#8C2F51" : "#96949B" }}>
+                    {r.label}
+                    <span style={{ fontSize: 9 }}>{r.keep ? "✓" : "✕"}</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 9.5, color: "#A9A7AE", marginTop: 8, lineHeight: 1.5 }}>read from “{refScan[0]?.raw}”-style ink · tap to keep or skip · cards land beside the handwriting</div>
+              <div style={{ display: "flex", gap: 7, marginTop: 10, justifyContent: "flex-end" }}>
+                <button type="button" onClick={() => setRefScan(null)} style={{ fontSize: 10, color: "#A9A7AE", background: "none", border: 0, cursor: "pointer" }}>not now</button>
+                <button type="button" onClick={() => void confirmRefScan()} style={{ fontSize: 10.5, fontWeight: 600, color: "#FFFFFF", background: "#A63D63", borderRadius: 9, padding: "6px 14px", border: 0, cursor: "pointer" }}>
+                  Place {refScan.filter((r) => r.keep).length} card{refScan.filter((r) => r.keep).length === 1 ? "" : "s"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {refPeek && (
           <RefPopover
             state={refPeek}

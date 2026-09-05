@@ -98,7 +98,10 @@ export async function recognizeInk(opts: {
         ],
       },
     ],
-    max_completion_tokens: 1800,
+    // A dense full page runs 40+ lines; with per-line bboxes the strict JSON
+    // alone can pass 4000 tokens. 1800 truncated his real Aug-30 sermon page
+    // mid-array — the parse failed and the whole scan came back empty.
+    max_completion_tokens: 8000,
     response_format: {
       type: "json_schema",
       json_schema: { name: "ink_recognition", strict: true, schema: SCHEMA as unknown as Record<string, unknown> },
@@ -110,6 +113,10 @@ export async function recognizeInk(opts: {
     inputTokens: completion.usage?.prompt_tokens ?? 0,
     outputTokens: completion.usage?.completion_tokens ?? 0,
   });
+  if (completion.choices[0]?.finish_reason === "length") {
+    // truncated JSON parses to {} below — say so instead of returning a silent blank
+    console.error("recognizeInk: output hit the token cap — transcript truncated");
+  }
   const raw = completion.choices[0]?.message?.content?.trim() || "{}";
   let parsed: {
     lines?: { text: string; bbox: number[] | null }[];
