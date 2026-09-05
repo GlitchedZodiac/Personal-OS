@@ -19,7 +19,6 @@ import { InkCanvas, type InkCanvasHandle, type StrokeEndInfo } from "./ink-canva
 import { useDesk, useDeskEvent, hlColor } from "./desk-state";
 import { ActionBarA, ActionBarB, type BarAction } from "./action-bar";
 import { RefCardGhost } from "./ref-card";
-import { RefPopover, type RefPopoverState } from "./ref-popover";
 import { PaneHeader, Chip, Popover, Kicker } from "./ui";
 import { EyeIcon, LayersIcon, MarginIcon, PinIcon, PenIcon } from "./desk-icons";
 import { formatRef, refParts, BOOKS, BOOK_ABBREV, CHAPTERS } from "@/lib/bible-refs";
@@ -106,6 +105,8 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const { pen, overlayVisibility, setOverlayVisibility, overlayMargin, setOverlayMargin, hand, prefs, emit } = desk;
   const readerRef = useRef<SpiritReaderHandle | null>(null);
   const canvasRef = useRef<InkCanvasHandle | null>(null);
+  /** the reader's own box — the honest height source for the overlay canvas (see the RO below) */
+  const readerBoxRef = useRef<HTMLDivElement | null>(null);
   const paneRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -182,7 +183,6 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const [layersOpen, setLayersOpen] = useState(false);
   const [unpinned, setUnpinned] = useState(false);
   const [inkChapters, setInkChapters] = useState<Set<number>>(new Set());
-  const [popover, setPopover] = useState<RefPopoverState | null>(null);
   const [drag, setDrag] = useState<{ refStart: number; refEnd: number; label: string; text: string; x: number; y: number; hot: boolean } | null>(null);
   // the overlay's own undo stack — the tool rail belongs to the notebook, so the Bible
   // needs its own way back (two-finger tap, the header ⤺, and clear-the-layer)
@@ -349,10 +349,24 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   // ——— content size → overlay canvas size ———
   useEffect(() => {
     const el = contentRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setContentSize({ w: el.clientWidth, h: el.scrollHeight }));
+    const rd = readerBoxRef.current;
+    if (!el || !rd) return;
+    // Measure the READER'S OWN BOX, never the parent's scrollHeight. The canvas is an
+    // absolutely-positioned child of the parent sized to this very value, so parent
+    // scrollHeight = max(reader, canvas) — a ratchet that could grow but never shrink.
+    // Long chapter → short chapter left the canvas propping the scroller open with
+    // thousands of pixels of empty white below the last verse ("the Bible would scroll
+    // all the way past the bottom into an empty white page" — his field test).
+    const read = () => {
+      setContentSize({ w: el.clientWidth, h: Math.ceil(rd.getBoundingClientRect().height) });
+      // the range may have just shrunk under him — never leave him parked in the void
+      const sc = scrollRef.current;
+      if (sc && sc.scrollTop > sc.scrollHeight - sc.clientHeight) sc.scrollTop = Math.max(0, sc.scrollHeight - sc.clientHeight);
+    };
+    const ro = new ResizeObserver(read);
     ro.observe(el);
-    setContentSize({ w: el.clientWidth, h: el.scrollHeight });
+    ro.observe(rd);
+    read();
     return () => ro.disconnect();
   }, []);
 
@@ -586,6 +600,15 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     const clickable = sup ?? btn ?? verse ?? (first.closest?.("[role=button], a") as HTMLElement | null);
     if (clickable) {
       clickable.click();
+      return true;
+    }
+    // Nothing interactive under the tap. If a selection is up, this tap means "put it away" —
+    // and it must do ONLY that (consume it, so the same contact cannot also ink). Before this,
+    // the dark action pill followed him around the chapter until he happened to re-tap the
+    // exact anchor verse. His field note: "clicking out of anything wasn't clean."
+    if (sel.start !== null) {
+      readerRef.current?.clearSelection();
+      haptic("light");
       return true;
     }
     return false;
@@ -1029,6 +1052,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       </PaneHeader>
       <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflow: "auto", position: "relative" }}>
         <div ref={contentRef} style={{ position: "relative", minHeight: "100%" }}>
+          <div ref={readerBoxRef}>
           <SpiritReader
             ref={readerRef}
             embedded
@@ -1046,8 +1070,10 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
             onChapterChange={handleChapterChange}
             onSelectionChange={onSelectionChange}
           />
+          </div>
           {contentSize.w > 0 && (
             <InkCanvas
+              reanchor={marginPx}
               ref={canvasRef}
               strokes={strokes}
               onStrokesChange={onStrokesChange}
@@ -1098,14 +1124,6 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
         <ActionBarA x={barAnchor.x} y={barAnchor.y} hand={hand} onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} onDragStart={startDragFromBar} />
       )}
       {drag && <RefCardGhost label={drag.label} text={drag.text} x={drag.x} y={drag.y} />}
-      {popover && (
-        <RefPopover
-          state={popover}
-          onClose={() => setPopover(null)}
-          onPeekFull={() => setPopover((p) => (p ? { ...p, full: true } : p))}
-          onOpenReference={(q, label) => emit({ type: "open-reference", q, label })}
-        />
-      )}
       <style jsx global>{`
         @keyframes hoverPulse { 0%,100% { opacity:0.3; } 50% { opacity:0.5; } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }

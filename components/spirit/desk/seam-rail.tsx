@@ -179,6 +179,17 @@ export function SeamRail({ onSeamDown, dragging, writingLeft }: {
 
       {dragging && <span style={{ position: "absolute", bottom: 34, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", fontSize: 9, fontWeight: 600, color: "#FFFFFF", background: "rgba(35,34,39,0.86)", borderRadius: 99, padding: "3px 9px", zIndex: 9, pointerEvents: "none" }}>snaps at ⅓ · ½ · ⅔ — finger only</span>}
 
+      {/* The scrim came from his field test: "clicking out of anything wasn't clean." With no
+          backdrop, tapping the page to dismiss the sheet DREW A STROKE with the sheet still
+          open — the worst offender on the desk. One pointerdown outside: the sheet closes and
+          that contact does nothing else. Fixed + portal-free is fine here: the seam has no
+          transformed ancestors, and z 9 sits under the sheet's 10. */}
+      {sheet && activeSlot !== null && activeSlot !== 3 && (
+        <div
+          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setSheet(false); }}
+          style={{ position: "fixed", inset: 0, zIndex: 9, cursor: "default" }}
+        />
+      )}
       {sheet && activeSlot !== null && activeSlot !== 3 && (
         <div style={{ position: "absolute", top: 2, [writingLeft ? "right" : "left"]: 46, width: 230, zIndex: 10, background: "#FFFFFF", borderRadius: 14, boxShadow: "0 16px 46px rgba(20,15,18,0.3)", padding: 12, animation: "deskFadeIn .18s ease both", cursor: "default" }} onPointerDown={(e) => e.stopPropagation()}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

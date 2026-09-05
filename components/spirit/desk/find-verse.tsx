@@ -79,8 +79,10 @@ export function FindVersePopover({ initialBook, onClose, onDrop, style }: {
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, zIndex: 8 }} />
-      <div style={{ position: "absolute", zIndex: 9, width: 436, maxWidth: "calc(100% - 24px)", background: "#FFFFFF", borderRadius: 15, boxShadow: "0 20px 56px rgba(20,15,18,0.32)", padding: 13, animation: "deskFadeIn .2s ease both", ...style }}>
+      {/* z 20: the typed-block textarea (z 12) and the lasso handle (z 11) used to out-rank
+          this backdrop and swallow the outside tap — the picker then "wouldn't close" */}
+      <div onClick={onClose} onPointerDown={(e) => { e.preventDefault(); onClose(); }} style={{ position: "absolute", inset: 0, zIndex: 20 }} />
+      <div style={{ position: "absolute", zIndex: 21, width: 436, maxWidth: "calc(100% - 24px)", background: "#FFFFFF", borderRadius: 15, boxShadow: "0 20px 56px rgba(20,15,18,0.32)", padding: 13, animation: "deskFadeIn .2s ease both", ...style }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <span style={{ fontSize: 9, letterSpacing: "0.13em", fontWeight: 700, color: "#96949B" }}>FIND A VERSE</span>
           <span style={{ fontSize: 10, color: "#A9A7AE" }}>no typing — book, chapter, then drag the range</span>

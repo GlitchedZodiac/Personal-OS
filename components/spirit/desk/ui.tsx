@@ -301,7 +301,9 @@ export function Popover({
       <span ref={anchor} style={{ position: "absolute", width: 0, height: 0 }} />
       {canPortal && createPortal(
         <>
-          {onClose && <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 80 }} />}
+          {/* pointerdown as well as click: a pen contact that drifts a few px between down and up
+          never synthesizes a click on iPadOS, and the menu read as refusing to close */}
+      {onClose && <div onClick={onClose} onPointerDown={(e) => { e.preventDefault(); onClose(); }} style={{ position: "fixed", inset: 0, zIndex: 80 }} />}
           <div
             ref={panel}
             style={{

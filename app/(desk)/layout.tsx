@@ -26,7 +26,14 @@ export default function DeskLayout({ children }: { children: React.ReactNode }) 
         @keyframes deskFadeOut { from { opacity: 1; } to { opacity: 0; } }
         @keyframes deskPopIn { from { opacity: 0; transform: translateY(10px) scale(.94); } to { opacity: 1; transform: none; } }
         @keyframes deskPopOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(.96); } }
-        @keyframes deskPageIn { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+        /* OPACITY ONLY — and this is a law, not a taste. deskPageIn used to animate
+           translateY(14px) scale(.985) on the desk root and the notebook page — both
+           ancestors of the ink. For its 380ms, getBoundingClientRect returned a scaled,
+           shifted box, so clientToPage stored every stroke begun in that window ~1.5%
+           off and up to 14px high, PERMANENTLY, and position:fixed descendants (the
+           action bar) resolved against the desk instead of the screen. Motion on
+           anything containing ink may fade and clip; it may never transform. */
+        @keyframes deskPageIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes deskStaggerIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
         @keyframes deskCardDrop { 0% { opacity: 0; transform: scale(.6) rotate(-3deg); } 60% { opacity: 1; transform: scale(1.05) rotate(.6deg); } 100% { transform: none; } }
         @keyframes deskChipPop { 0% { transform: scale(.7); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: none; } }

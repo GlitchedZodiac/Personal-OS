@@ -76,6 +76,12 @@ export interface InkCanvasProps {
   onStrokeEnd?: (stroke: Stroke, info: StrokeEndInfo) => "keep" | "discard" | void;
   onHighlighterStroke?: (stroke: Stroke, info: StrokeEndInfo) => "keep" | "discard" | void;
   onHover?: (pt: { x: number; y: number; clientX: number; clientY: number } | null) => void;
+  /**
+   * Bump to force anchored strokes to re-resolve their verse offsets and repaint. The host
+   * knows about reflows this component cannot see — a margin-inset change shifts every verse
+   * sideways without changing any box this canvas measures.
+   */
+  reanchor?: number;
   /** return true when the tap hit something (a pen tap then makes no dot) */
   onTap?: (pt: { x: number; y: number; clientX: number; clientY: number; pointerType: string }) => boolean | void;
   onLasso?: (selected: Stroke[], polygon: InkPoint[], bounds: { x: number; y: number; w: number; h: number }) => void;
@@ -149,6 +155,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
     background = "dots",
     children,
     alpha = 1,
+    reanchor,
     onStrokeEnd,
     onHighlighterStroke,
     onHover,
@@ -309,9 +316,9 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   /** ids under the eraser right now — hidden live, committed as one removal on lift */
   const [erasedNow, setErasedNow] = useState<Set<string> | null>(null);
   // ——— drawing the committed layer ———
-  const redrawBase = useCallback(() => {
+  const redrawBase = useCallback((): boolean => {
     const c = baseRef.current;
-    if (!c || viewport.w <= 0 || viewport.h <= 0) return;
+    if (!c || viewport.w <= 0 || viewport.h <= 0) return false;
     const W = Math.round(viewport.w * dpr);
     const H = Math.round(viewport.h * dpr);
     if (c.width !== W || c.height !== H) {
@@ -319,7 +326,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       c.height = H;
     }
     const ctx = c.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, H);
     ctx.scale(dpr * scale, dpr * scale);
@@ -361,6 +368,7 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
       }
       drawStroke(ctx, s, { offsetX: off?.x ?? 0, offsetY: off?.y ?? 0, alphaScale: alpha });
     }
+    return true;
   }, [strokes, viewport, scale, dpr, selectedIds, highlightStrokeId, alpha, offsetFor, erasedNow]);
 
   // what the committed canvas currently shows. `refs` holds the very stroke OBJECTS painted:
@@ -385,6 +393,10 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   const paintToBase = (s: Stroke) => {
     const c = baseRef.current;
     if (!c || viewport.w <= 0) return;
+    // If the bitmap was drawn for a different viewport/scale than now, appending would put
+    // ONE stroke at the new scale on top of everything at the old one. Let the layout-effect
+    // repaint handle it wholesale instead.
+    if (drawn.current && !drawn.current.key.startsWith(`${viewport.left}|${viewport.top}|${viewport.w}|${viewport.h}|${scale}|`)) { drawn.current = null; return; }
     const ctx = c.getContext("2d");
     if (!ctx) return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -396,8 +408,15 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
   };
 
   // what the base canvas currently shows: the ids in order + the viewport/scale it was drawn for
-  const baseKey = `${viewport.left}|${viewport.top}|${viewport.w}|${viewport.h}|${scale}|${dpr}|${alpha}|${highlightStrokeId ?? ""}|${selectedIds ? Array.from(selectedIds).join(",") : ""}|e${erasedNow ? erasedNow.size : -1}`;
-  useEffect(() => {
+  const baseKey = `${viewport.left}|${viewport.top}|${viewport.w}|${viewport.h}|${scale}|${dpr}|${alpha}|${highlightStrokeId ?? ""}|${selectedIds ? Array.from(selectedIds).join(",") : ""}|e${erasedNow ? erasedNow.size : -1}|a${reanchor ?? 0}`;
+  // LAYOUT effect, deliberately. The canvas's CSS box follows `scale` in the same painted
+  // frame (measure() is a layout effect too), but this repaint used to run in a PASSIVE
+  // effect — one or more frames later. For every frame of a seam drag and its 360ms settle
+  // animation, the browser stretched the old bitmap into the new box: his strokes sheared
+  // and swam while the objects (CSS-scaled) moved correctly, then "snapped back" the moment
+  // a new stroke forced the real repaint. He was watching the repair, not the damage.
+  // Per-frame cost is fine — live pinch-zoom already drives this same path continuously.
+  useLayoutEffect(() => {
     const prev = drawn.current;
     const c = baseRef.current;
     const samePrefix = (n: number) => !!prev && prev.refs.length >= n && strokes.slice(0, n).every((s, i) => prev.refs[i] === s);
@@ -419,8 +438,10 @@ export const InkCanvas = forwardRef<InkCanvasHandle, InkCanvasProps>(function In
         return;
       }
     }
-    redrawBase();
-    drawn.current = { refs: strokes.slice(), key: baseKey };
+    // Record ONLY what truly painted. redrawBase bails (false) on a zero-sized viewport
+    // mid-resize; marking that as done left a blank or stale canvas believed current.
+    if (redrawBase()) drawn.current = { refs: strokes.slice(), key: baseKey };
+    else drawn.current = null;
   }, [redrawBase, strokes, baseKey, dpr, scale, viewport, alpha, offsetFor]);
 
   // THE STROKE MIRROR — the `strokes` PROP is only as fresh as the last React render.

@@ -7,13 +7,14 @@
 // sermon pages record in the header and replay by tapping a stroke;
 // worksheets submit — never auto-tick.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { toast } from "sonner";
 import { InkCanvas, type InkCanvasHandle } from "./ink-canvas";
 import { ToolRail } from "./tool-rail";
 import { BrushPopover, PalettePopover } from "./pen-popovers";
 import { PageObjects, hitObject, objectRect } from "./page-objects";
 import { RefCardGhost } from "./ref-card";
+import { RefPopover, type RefPopoverState } from "./ref-popover";
 import { LassoMenu } from "./lasso-menu";
 import { ClosingCard, type Proposal } from "./closing-card";
 import { RecordingChip, ReplayBar, type SegmentMeta, type TranscriptLine } from "./recording-control";
@@ -247,6 +248,8 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "offline">("idle");
   const [lasso, setLasso] = useState<{ ids: Set<string>; polygon: { x: number; y: number }[]; bounds: { x: number; y: number; w: number; h: number }; client: { x: number; y: number } } | null>(null);
   const [lassoBusy, setLassoBusy] = useState(false);
+  /** single tap on a reference card → the verse, right there (his field-test ask) */
+  const [refPeek, setRefPeek] = useState<(RefPopoverState & { cardId: string }) | null>(null);
   const [moving, setMoving] = useState(false);
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
   const [freshCards, setFreshCards] = useState<Set<string>>(new Set());
@@ -294,6 +297,21 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   
   // ...and at least tall enough to fill the scroller, so the band below the last line is live
   // paper he can write on rather than dead background
+  /**
+   * Keep the same PAGE-SPACE point under his eyes when the scale changes. Widening the Bible
+   * shrinks the notebook's scale, which shrinks the scroll range; the browser then clamps
+   * scrollTop and the page walks out from under him mid-thought (his field test: "it would
+   * also move my notes"). Layout effect so the correction lands in the same painted frame.
+   */
+  const prevScaleRef = useRef(scale);
+  useLayoutEffect(() => {
+    const prev = prevScaleRef.current;
+    prevScaleRef.current = scale;
+    const sc = scrollRef.current;
+    if (!sc || prev === scale || prev <= 0) return;
+    sc.scrollTop = (sc.scrollTop / prev) * scale;
+  }, [scale]);
+
   const height = useMemo(() => {
     const content = pageHeightFor(strokes, objects);
     const fillsPane = paneH > 0 && scale > 0 ? Math.ceil(paneH / scale) : 0;
@@ -309,11 +327,11 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     if (!el) return;
     const ro = new ResizeObserver(() => {
       setPaneW(Math.max(240, el.clientWidth - 2));
-    setPaneH(el.clientHeight);
       setPaneH(el.clientHeight);
     });
     ro.observe(el);
     setPaneW(Math.max(240, el.clientWidth - 2));
+    setPaneH(el.clientHeight); // the initial read used to skip this — fillsPane stayed 0 until the first RO tick
     return () => ro.disconnect();
   }, [mode]);
 
@@ -584,6 +602,16 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     enqueue({ objects: next });
     scheduleSave();
   };
+  /** take a reference card off the page — undoable, announced, durable */
+  const removeRefCard = (id: string, label: string) => {
+    pushHistory();
+    const without = objects.filter((x) => x.id !== id);
+    setObjects(without);
+    enqueue({ objects: without });
+    scheduleSave();
+    haptic("warning");
+    toast(`${label} removed`, { action: { label: "Undo", onClick: () => undo() }, duration: 12000 });
+  };
   const redoRef = useRef<(() => void) | null>(null);
   const undo = () => {
     const prev = history[history.length - 1];
@@ -818,23 +846,34 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     }
     if (o.type === "refcard") {
       const d = o.data as { refStart: number; refEnd: number; label: string };
-      // The ✕ in the card's top-right. Page objects sit UNDER the ink canvas and never receive
-      // DOM events, so the badge is drawn in ref-card.tsx and the hit is caught here, against
-      // the same corner in page coordinates. His ask, 2026-08-30: "I need to be able to remove
-      // a bad reference too."
+      // The ✕ in the card's top-right — a shortcut; the popover below carries Remove as a
+      // full-size button, which is what makes deletion reachable while the pen holds a
+      // writing tool. Gated on the card no longer being "fresh": the badge is only DRAWN
+      // after the 6s drop animation, and an invisible live delete target under a card he
+      // just dropped is a trap. Zone grown 30×28 → 44×36 page units (it was ~16px on screen
+      // at half-width, under any honest touch minimum).
       const r = objectRect(o);
-      const inRemove = pt.x >= r.x + r.w - 30 && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + 28;
-      if (inRemove && !penWriting) {
-        pushHistory();
-        const without = objects.filter((x) => x.id !== o.id);
-        setObjects(without);
-        enqueue({ objects: without });
-        scheduleSave();
-        haptic("warning");
-        toast(`${d.label} removed`, { action: { label: "Undo", onClick: () => undo() }, duration: 12000 });
+      const inRemove = pt.x >= r.x + r.w - 44 && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + 36;
+      if (inRemove && !penWriting && !freshCards.has(o.id)) {
+        removeRefCard(o.id, d.label);
         return true;
       }
-      emit({ type: "jump-reference-pane", refStart: d.refStart, refEnd: d.refEnd });
+      // ONE tap → the verse pops up beside the card. The old behaviour emitted a jump into
+      // whichever Bible pane would take it — which silently no-ops if that pane was ever
+      // scrolled past 40px, so the tap read as "nothing happened" and he tapped again. The
+      // jump is still here, as the popover's explicit "Open in the Bible →".
+      setRefPeek({
+        cardId: o.id,
+        kind: "REFERENCE CARD",
+        label: d.label,
+        q: d.label,
+        refStart: d.refStart,
+        refEnd: d.refEnd,
+        x: pt.clientX,
+        y: pt.clientY,
+        full: true,
+      });
+      haptic("selection");
       return true;
     }
     if (o.type === "text" && penWriting) return false; // write across a typed block if you like
@@ -1566,6 +1605,19 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
           {mode === "page" && !page && <div style={{ padding: 24, fontSize: 12, color: "#96949B" }}>Opening the page…</div>}
         </div>
         {mode === "page" && showRail && rail}
+        {refPeek && (
+          <RefPopover
+            state={refPeek}
+            onClose={() => setRefPeek(null)}
+            onOpenReference={() => {
+              if (refPeek.refStart) emit({ type: "jump-reference-pane", refStart: refPeek.refStart, refEnd: refPeek.refEnd });
+            }}
+            onRemove={() => {
+              const card = objects.find((x) => x.id === refPeek.cardId);
+              if (card) removeRefCard(card.id, refPeek.label);
+            }}
+          />
+        )}
         {/* the card following his pen while he chooses where it goes */}
         {refGhost && <RefCardGhost label="REFERENCE" text="drop it where you want it, then pick the verse" x={refGhost.x} y={refGhost.y} />}
         {findOpen && mode === "page" && page && (
@@ -1638,7 +1690,9 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
         />
       )}
       {noteCard && (
-        <div style={{ position: "absolute", left: 16, right: 16, bottom: 16, zIndex: 40, background: "#FFFDF9", border: "1px solid #EDE7E0", borderRadius: 12, padding: "11px 13px", boxShadow: "0 10px 30px rgba(20,15,18,0.15)", animation: "fadeUp .2s ease both" }}>
+        // tap anywhere off the card = "not now" — the card must never demand its own button
+        <div onPointerDown={(e) => { if (e.target === e.currentTarget) { e.preventDefault(); setNoteCard(null); } }} style={{ position: "absolute", inset: 0, zIndex: 40 }}>
+        <div style={{ position: "absolute", left: 16, right: 16, bottom: 16, background: "#FFFDF9", border: "1px solid #EDE7E0", borderRadius: 12, padding: "11px 13px", boxShadow: "0 10px 30px rgba(20,15,18,0.15)", animation: "fadeUp .2s ease both" }}>
           <div style={{ fontSize: 13, color: "#454349", lineHeight: 1.5 }}>{noteCard.text || "(ink note — the words didn't transcribe; it keeps as ink)"}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, flexWrap: "wrap" }}>
             <span style={{ fontSize: 9, color: "#96949B" }}>anchored to {noteCard.label} · kind proposed:</span>
@@ -1651,6 +1705,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
             <button type="button" onClick={() => setNoteCard(null)} style={{ fontSize: 10, color: "#A9A7AE", background: "none", border: 0, cursor: "pointer" }}>not now</button>
             <button type="button" onClick={() => void saveNote()} style={{ fontSize: 10.5, fontWeight: 600, color: "#FFFFFF", background: "#A63D63", borderRadius: 9, padding: "6px 12px", border: 0, cursor: "pointer" }}>keep it</button>
           </div>
+        </div>
         </div>
       )}
       {proposal && (
