@@ -132,7 +132,10 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const scrolledTo = useRef<string | null>(null);
   /** select a verse in the passage that is already on screen, and bring it into view */
   const selectVerseNow = useCallback((refStart: number, refEnd: number | null) => {
-    requestAnimationFrame(() => {
+    // a timer, not rAF — the same lesson the assignment auto-scroll below already carries:
+    // rAF starves whenever the view is not compositing (hidden pane, backgrounded app),
+    // and a jump that fired in that state silently selected nothing
+    setTimeout(() => {
       readerRef.current?.select(refStart, refEnd);
       const el = contentRef.current?.querySelector<HTMLElement>(`#v-${refStart}`);
       const sc = scrollRef.current;
@@ -1132,7 +1135,20 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
         </span>
         {selectedLabel && <Chip tone="tint" style={{ color: "#A63D63" }}>{selectedLabel}</Chip>}
       </PaneHeader>
-      <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflow: "auto", position: "relative" }}>
+      <div
+        ref={scrollRef}
+        style={{ flex: 1, minHeight: 0, overflow: "auto", position: "relative" }}
+        onClick={(e) => {
+          // The canvas-tap path clears the selection when the overlay is on; this is its twin
+          // for overlay HIDE, where clicks reach the DOM directly. Same rule: tapping nothing
+          // interactive puts the selection away.
+          if (sel.start === null) return;
+          const t = e.target as HTMLElement;
+          if (t.closest?.("[data-verse],button,sup,a,[role=button],[data-ink-canvas]")) return;
+          readerRef.current?.clearSelection();
+          haptic("light");
+        }}
+      >
         <div ref={contentRef} style={{ position: "relative", minHeight: "100%" }}>
           <div ref={readerBoxRef}>
           <SpiritReader
