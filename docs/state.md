@@ -5,9 +5,46 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-08-30 (SPIRIT ON IPAD — round 8: DURABILITY. He lost a paragraph of handwriting; root cause was that unsaved work lived only in a `useRef`, requeued on failure with no retry and no durable copy. `lib/ink-outbox.ts` is now an IndexedDB write-ahead log written BEFORE the network, replayed at boot/online/heartbeat, and folded back into the page so recovered ink is visible. All ten queue sites now go through one `enqueue()` door — the first cut covered only two. Offline reading added to the service worker (scripture cached forever + neighbour warming; his read APIs network-first/cache-fallback). The PIN gate can now open offline on a device that authenticated within 30 days. Plus his church report: the Bible's duplicate in-column navigator is gone — navigation is the frozen pane header.)
+**Last updated:** 2026-09-05 (SPIRIT ON IPAD — round 9: THE FIELD-TEST ROUND. First: the seven
+stale commits deployed — he had field-tested two-round-old code twice; prod + the iPad shell are
+now current, and deploy-per-round is the standing pattern. Then his 8-item church list, each fixed
+at the traced mechanism: one tap on a reference card opens the verse (the dead RefPopover rewired,
+"tap again" deleted, Remove finally pen-reachable); one tap outside closes everything (pen sheet,
+selection, find-verse, note card, menus — all on pointerdown); resize no longer shears notes
+(bitmap repaint moved into the layout frame, entrance animation de-transformed — the motion law:
+opacity/clip only over ink — scroll anchored across scale changes); the white void below short
+chapters closed (the canvas-feeds-scrollHeight ratchet broken by measuring the reader's own box);
+a Back pill restoring chapter+verse+scroll from every jump path including the audio arrows; the
+navigator gained a verse stage ("verse 30, not verse 1"); menu census executed (bilingual card +
+ActionBarB + headerExtra retired, TEXT-SIZE-LOCK into the Aa sheet, margin/layers behind ⋯).
+FIVE TRANSLATIONS: ESV + KJV/WEB/BSB/RVR09 live now (helloao, keyless), RVR60 wired awaiting his
+API.Bible key; per-tab per-pane switcher, marks carry across translations on refInts, prefixed
+cache keys (no schema change), FUMS + attribution honored, NBLA permission letter drafted for him.
+Handwriting ref-scan on a button — proven on his real Aug-30 sermon page (5 refs proposed;
+root-caused a silent token-cap truncation that also would have blanked close-page). HYMNS backend:
+model/API/OCR-propose/MCP save_hymn+get_hymn — the library grows by conversation; screens wait on
+the V3 design per his call. V3 design prompt written (bubbles, selection surface, motion, menu
+census, hymns screens) — HIS STEP: paste into Claude Design. 357 tests, driven verification.)
 
-**Previous:** 2026-08-30 (SPIRIT ON IPAD — V2 round 1: his Claude-Design V2 FOUND (he'd exported the wrong zip — `(1).zip` from Aug 28 held it) and its Sermon Desk screen PORTED: one 36pt band replacing status bar + desk bar + tab strip, the tool rail dissolved into the seam, the per-tool sheet, FIND A VERSE, SPACE growers, visible undo/redo answers, native status-bar hide + battery bridge. His five V2 decisions recorded and answered.)
+**Previous:** 2026-08-30 (SPIRIT ON IPAD — round 8: DURABILITY. He lost a paragraph of handwriting; root cause was that unsaved work lived only in a `useRef`, requeued on failure with no retry and no durable copy. `lib/ink-outbox.ts` is now an IndexedDB write-ahead log written BEFORE the network, replayed at boot/online/heartbeat, and folded back into the page so recovered ink is visible. All ten queue sites now go through one `enqueue()` door — the first cut covered only two. Offline reading added to the service worker (scripture cached forever + neighbour warming; his read APIs network-first/cache-fallback). The PIN gate can now open offline on a device that authenticated within 30 days. Plus his church report: the Bible's duplicate in-column navigator is gone — navigation is the frozen pane header.)
+
+---
+
+## 2026-09-05 · Spirit on iPad — round 9: the field-test round
+
+The header blurb above is the full record. What waits on Michael:
+
+- **Paste the V3 prompt into Claude Design** — `docs/design/pitaya-ipad-v3-design-prompt.md`.
+  Verse comment-bubbles, the selection surface, motion language, menu redesign AND the hymns
+  screens all wait on that design (his call: ports, not interpretations).
+- **RVR60**: sign up at scripture.api.bible → create an app → add Reina-Valera 1960 → set
+  `API_BIBLE_KEY` (+ optionally `API_BIBLE_RVR60_ID`) in Vercel env. The switcher lights it up
+  by itself once the key exists.
+- **NBLA**: send `docs/nbla-permission-request.md` to Lockman (their permission form) — the app
+  builds nothing NBLA until they answer.
+- **ESV cache compliance decision** — see deferred-items; his call, nothing changed yet.
+- The hymns UI does not exist on purpose; `save_hymn` over MCP ("Claude, save this hymn…")
+  and the API are live, so the library can grow before its screens do.
 
 ---
 
