@@ -58,6 +58,11 @@ interface PassageData {
   verses: Verse[];
   layer: Layer;
   suggested: { refInt: number; category: string }[];
+  /** which Bible this text is, and the line its license asks us to show */
+  translation?: string;
+  attribution?: string;
+  /** api.bible view token — fired through FUMS when the text renders */
+  fumsToken?: string | null;
 }
 
 interface Assignment {
@@ -88,6 +93,8 @@ export interface SpiritReaderProps {
   typeLocked?: boolean;
   /** the host's way out of the lock — shown inside the Aa sheet, next to the size it locks */
   onUnlockType?: () => void;
+  /** which Bible to load — a registry id from /api/spirit/translations; default esv */
+  translation?: string;
   /** extra inset (the overlay's writing margin) — side + px */
   marginInset?: { side: "left" | "right"; px: number } | null;
   /** render a child layer over the text column (the overlay canvas) */
@@ -288,11 +295,22 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.canonical]);
 
+  /**
+   * ONE url builder for the real load and the neighbour warm-up. The service worker's
+   * scripture cache keys on the full URL — build the two differently (add ?t= to one and
+   * not the other) and offline silently halves: everything fetches twice and nothing warms.
+   */
+  const passageUrl = useCallback((query: string) => {
+    const params = new URLSearchParams({ q: query, pin: "1" });
+    if (dayMeta?.id) params.set("dayId", dayMeta.id);
+    if (props.translation && props.translation !== "esv") params.set("t", props.translation);
+    return `/api/spirit/passage?${params.toString()}`;
+     
+  }, [dayMeta?.id, props.translation]);
+
   const load = useCallback(async () => {
     if (!q) return;
-    const params = new URLSearchParams({ q, pin: "1" });
-    if (dayMeta?.id) params.set("dayId", dayMeta.id);
-    const res = await fetch(`/api/spirit/passage?${params.toString()}`);
+    const res = await fetch(passageUrl(q));
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       setErr(body.error ?? "Couldn't load the passage");
@@ -316,15 +334,13 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
       // SAME url builder as the real load, which is the only way the cache keys line up.
       const warm = (chapter: number) => {
         if (chapter < 1 || chapter > (CHAPTERS[parts.book - 1] ?? 1)) return;
-        const p2 = new URLSearchParams({ q: `${BOOKS[parts.book - 1]} ${chapter}`, pin: "1" });
-        if (dayMeta?.id) p2.set("dayId", dayMeta.id);
-        void fetch(`/api/spirit/passage?${p2.toString()}`).catch(() => {});
+        void fetch(passageUrl(`${BOOKS[parts.book - 1]} ${chapter}`)).catch(() => {});
       };
       warm(parts.chapter - 1);
       warm(parts.chapter + 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, dayMeta?.id]);
+  }, [q, passageUrl]);
 
   useEffect(() => {
     load();
@@ -743,6 +759,27 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
     },
   }));
 
+  // FUMS — api.bible's required view tracking. Fires once per rendered passage that
+  // carries a token; public-domain and ESV passages never have one.
+  const fumsFired = useRef<string | null>(null);
+  useEffect(() => {
+    const token = data?.fumsToken;
+    if (!token || fumsFired.current === token) return;
+    fumsFired.current = token;
+    try {
+      const w = window as unknown as { _BAPI?: { t: (t: string) => void } };
+      const fire = () => { try { w._BAPI?.t(token); } catch { /* tracking must never break reading */ } };
+      if (w._BAPI) fire();
+      else {
+        const sc = document.createElement("script");
+        sc.src = "https://fums.api.bible/f3.js";
+        sc.async = true;
+        sc.onload = fire;
+        document.head.appendChild(sc);
+      }
+    } catch { /* never let tracking break the reader */ }
+  }, [data?.fumsToken]);
+
   const isDark = prefs.theme !== "light";
   const chipAccentBg = isDark ? "#3A2B33" : "#F6E3EB";
   const chipAccentFg = isDark ? "#DCA8BE" : "#8C2F51";
@@ -966,6 +1003,7 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
       {data && (
         <div
           data-text-column="1"
+          data-translation={data.translation ?? "esv"}
           className="relative mt-3 rounded-[18px] px-3.5 py-4"
           style={{ background: T.card, boxShadow: T.shadow }}
         >
@@ -1276,6 +1314,12 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
           {assignedHere?.to && (
             <p className="px-2.5 pt-1 text-center text-[10px] leading-[1.6]" style={{ color: T.faint }}>
               the rest of the chapter is here if you want it — it just isn&apos;t assigned
+            </p>
+          )}
+          {data.attribution && (
+            // for licensed texts (RVR60) this line is a term of use, not decoration
+            <p className="border-t px-2.5 pb-0.5 pt-2.5 text-[9.5px] leading-[1.55]" style={{ color: T.faint, borderColor: T.rule, marginTop: 10 }}>
+              {data.attribution}
             </p>
           )}
         </div>

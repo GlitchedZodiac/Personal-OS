@@ -61,6 +61,9 @@ interface DeskTab extends Layout {
   /** and its own place INSIDE that chapter — the verse he had, and how far down he was */
   verse?: number | null;
   scrollY?: number;
+  /** which Bible each pane reads — registry ids; default esv */
+  translation?: string;
+  refTranslation?: string;
 }
 const TAB_TEMPLATES: { key: string; label: string; sub: string; make: () => Layout }[] = [
   { key: "notebook", label: "Notebook", sub: "one full page", make: () => ({ preset: "custom", writing: ["notebook"], text: [] }) },
@@ -157,6 +160,10 @@ export function DeskShell(props: DeskShellProps) {
   // work with it: which chapter and where in it (main), the same for the reference Bible, and
   // which notebook page. His ask: "each tab handles its own save state Bible and notes and
   // reference wise so I can flip back and forth between them."
+  const translation = tab?.translation ?? "esv";
+  const setTranslation = useCallback((id: string) => updateTab(() => ({ translation: id })), [updateTab]);
+  const refTranslation = tab?.refTranslation ?? "esv";
+  const setRefTranslation = useCallback((id: string) => updateTab(() => ({ refTranslation: id })), [updateTab]);
   const placeKey = tab ? `spirit-place:${context}:${tab.id}` : null;
   const refPlaceKey = tab ? `spirit-place-ref:${context}:${tab.id}` : null;
   const pageKey = tab ? `spirit-desk-page:${context}:${tab.id}` : null;
@@ -468,9 +475,9 @@ export function DeskShell(props: DeskShellProps) {
       case "notebook":
         return <NotebookPane railSide={portrait ? (writingLeft ? "right" : "left") : railSide} showRail={portrait || textEmpty} context={context} initialPageId={deepPage} pageKey={pageKey} dayId={dayId ?? null} pendingNote={pendingNote} onNoteConsumed={() => setPendingNote(null)} onKicker={kicker} />;
       case "bible":
-        return <BiblePane role="main" query={mainQ} onQueryChange={setMainQ} placeKey={placeKey} pendingJump={jump?.to === "main" ? jump : null} onJumpConsumed={clearJump} free={free} dayId={dayId ?? null} layerContext={notebookPageLayerContext} onKicker={kicker} />;
+        return <BiblePane role="main" query={mainQ} onQueryChange={setMainQ} translation={translation} onTranslationChange={setTranslation} placeKey={placeKey} pendingJump={jump?.to === "main" ? jump : null} onJumpConsumed={clearJump} free={free} dayId={dayId ?? null} layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "reference":
-        return <BiblePane role="reference" query={refQ} onQueryChange={setRefQ} placeKey={refPlaceKey} free layerContext={notebookPageLayerContext} onKicker={kicker} />;
+        return <BiblePane role="reference" query={refQ} onQueryChange={setRefQ} translation={refTranslation} onTranslationChange={setRefTranslation} placeKey={refPlaceKey} free layerContext={notebookPageLayerContext} onKicker={kicker} />;
       case "teaching":
         return <TeachingPane onKicker={kicker} onStep={(s, t) => setStepInfo({ step: s, total: t })} />;
       case "source":

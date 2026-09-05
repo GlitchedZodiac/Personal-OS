@@ -61,6 +61,9 @@ export interface BiblePaneProps {
   /** the context layer available on this chapter ("This study · wk 3" / "Sermon · Aug 23") */
   layerContext?: { key: string; label: string } | null;
   onKicker?: () => void;
+  /** which Bible this pane shows — a registry id; default esv. Lives on the tab. */
+  translation?: string | null;
+  onTranslationChange?: (id: string) => void;
   /**
    * Storage key for "where he was reading in THIS tab" — the verse he had selected and how far
    * he had scrolled. Deliberately its OWN localStorage entry rather than a field on the desk
@@ -97,7 +100,27 @@ function refOf(el: HTMLElement | null): number | null {
   return v ? Number(v) : null;
 }
 
-export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsumed, free, dayId, layerContext, onKicker, placeKey }: BiblePaneProps) {
+interface TranslationRow { id: string; label: string; name: string; lang: string }
+let translationsCache: TranslationRow[] | null = null;
+function useTranslations(): TranslationRow[] {
+  const [list, setList] = useState<TranslationRow[]>(translationsCache ?? [{ id: "esv", label: "ESV", name: "English Standard Version", lang: "en" }]);
+  useEffect(() => {
+    if (translationsCache) return;
+    let alive = true;
+    fetch("/api/spirit/translations")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!alive || !d?.translations?.length) return;
+        translationsCache = d.translations as TranslationRow[];
+        setList(translationsCache);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  return list;
+}
+
+export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsumed, free, dayId, layerContext, onKicker, translation, onTranslationChange, placeKey }: BiblePaneProps) {
   const desk = useDesk();
   const { pen, overlayVisibility, setOverlayVisibility, overlayMargin, setOverlayMargin, hand, emit } = desk;
   const readerRef = useRef<SpiritReaderHandle | null>(null);
@@ -109,6 +132,9 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [title, setTitle] = useState<string>(query ?? "");
   const [chapterKey, setChapterKey] = useState<number | null>(null);
+  const activeTranslation = translation ?? "esv";
+  const translations = useTranslations();
+  const [tOpen, setTOpen] = useState(false);
   const queryRef = useRef<string | null>(query);
   queryRef.current = query;
   const selRef = useRef<number | null>(null);
@@ -1043,7 +1069,18 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
                 Clear my ink on this chapter · {strokes.length} stroke{strokes.length === 1 ? "" : "s"}
               </button>
             )}
-            <Kicker style={{ display: "block", marginTop: strokes.length ? 8 : 0 }}>MARGIN</Kicker>
+            <Kicker style={{ display: "block", marginTop: strokes.length ? 8 : 0 }}>TRANSLATION</Kicker>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+              {translations.map((x) => {
+                const on = x.id === activeTranslation;
+                return (
+                  <button key={x.id} type="button" title={x.name} onClick={() => { setLayersOpen(false); if (!on) { haptic("selection"); onTranslationChange?.(x.id); } }} style={{ fontSize: 9.5, fontWeight: 700, borderRadius: 99, padding: "5px 10px", cursor: "pointer", border: 0, background: on ? "#A63D63" : "#FAF9FA", color: on ? "#FFFFFF" : "#66646C" }}>
+                    {x.label}
+                  </button>
+                );
+              })}
+            </div>
+            <Kicker style={{ display: "block", marginTop: 10 }}>MARGIN</Kicker>
             <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
               {MARGIN_LABEL.map((m, i) => (
                 <button key={m} type="button" onClick={() => { haptic("selection"); setOverlayMargin(i as 0 | 1 | 2); }} style={{ flex: 1, fontSize: 9, letterSpacing: "0.04em", fontWeight: 700, borderRadius: 99, padding: "5px 0", cursor: "pointer", border: 0, background: overlayMargin === i ? "#A63D63" : "#FAF9FA", color: overlayMargin === i ? "#FFFFFF" : "#66646C" }}>
@@ -1086,7 +1123,40 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
         // The title is no longer a label — it is the book/chapter/verse menu, and it shows at
         // every width, because a pane you cannot navigate is worse than a pane with no subtitle.
         title={`${title || query || "…"}`}
-        meta={narrow ? undefined : "ESV"}
+        meta={
+          // The decorative "ESV" string became the TRANSLATION SWITCHER — the natural home the
+          // menu census predicted for it. Hidden when narrow, like the string it replaced.
+          narrow ? undefined : (
+            <span style={{ position: "relative", display: "inline-flex" }}>
+              <button
+                type="button"
+                onClick={() => { haptic("selection"); setTOpen((v) => !v); }}
+                title="Translation"
+                style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 700, color: "#96949B", background: "none", border: 0, padding: 0, cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                {(translations.find((x) => x.id === activeTranslation)?.label ?? activeTranslation.toUpperCase())}
+                <span style={{ fontSize: 8 }}>⌄</span>
+              </button>
+              {tOpen && (
+                <Popover width={224} onClose={() => setTOpen(false)} style={{ top: 24, left: -60 }}>
+                  <Kicker>TRANSLATION</Kicker>
+                  {translations.map((x) => {
+                    const on = x.id === activeTranslation;
+                    return (
+                      <button key={x.id} type="button" onClick={() => { setTOpen(false); if (!on) { haptic("selection"); onTranslationChange?.(x.id); } }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "7px 9px", borderRadius: 9, cursor: "pointer", background: on ? "#F6E3EB" : "transparent", boxShadow: on ? "inset 0 0 0 1.5px #A63D63" : "inset 0 0 0 1px #F2F1F2", border: 0, textAlign: "left" }}>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#232227", width: 48, flex: "none" }}>{x.label}</span>
+                        <span style={{ fontSize: 10, color: "#96949B", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.name}</span>
+                      </button>
+                    );
+                  })}
+                  <div style={{ fontSize: 9, color: "#A9A7AE", lineHeight: 1.5, marginTop: 8, borderTop: "1px solid #EDEBEE", paddingTop: 7 }}>
+                    Your marks live on the verses, not the translation — they follow you across Bibles.
+                  </div>
+                </Popover>
+              )}
+            </span>
+          )
+        }
         onKicker={onKicker}
         onTitle={() => { haptic("selection"); setNavOpen((v) => !v); }}
         titleGlyph={navOpen ? "\u2303" : "\u2304"}
@@ -1159,6 +1229,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
             dayId={dayId ?? null}
             role={role}
             externalActionBar
+            translation={activeTranslation}
             typeLocked={pinned}
             onUnlockType={handleUnlockType}
             marginInset={marginInsetProp}

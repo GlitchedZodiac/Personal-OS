@@ -29,6 +29,7 @@ const OFFLINE_READ_APIS = [
   "/api/spirit/ink",       // page lists and single pages (/api/spirit/ink/<id>)
   "/api/spirit/highlights",
   "/api/spirit/prefs",
+  "/api/spirit/translations",
 ];
 
 // Assets to cache on install — every URL must resolve or install fails,

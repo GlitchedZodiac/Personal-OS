@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getPassage } from "@/lib/esv";
+import { getPassageFor } from "@/lib/passage-service";
 
-// GET ?q=Judges+4&pin=1&dayId= — the Reader's one call: cached ESV verse
-// model merged with HIS layer (highlights, notes, links, threads) and
-// the day's suggested highlights (suggestions vanish once a highlight
-// exists on that verse — accepting creates the highlight).
+// GET ?q=Judges+4&t=esv&pin=1&dayId= — the Reader's one call: the cached verse
+// model for the requested TRANSLATION (?t=, default esv) merged with HIS layer
+// (highlights, notes, links, threads) and the day's suggested highlights. The
+// layer is keyed by refInt, so one set of marks rides every translation — that
+// is the whole reason refInt exists.
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,8 +15,9 @@ export async function GET(request: NextRequest) {
     if (!q) return NextResponse.json({ error: "q required" }, { status: 400 });
     const pin = searchParams.get("pin") === "1";
     const dayId = searchParams.get("dayId");
+    const t = searchParams.get("t");
 
-    const model = await getPassage(q, { pin });
+    const model = await getPassageFor(t, q, { pin });
     if (model.verses.length === 0) {
       return NextResponse.json({ error: "Passage not found" }, { status: 404 });
     }

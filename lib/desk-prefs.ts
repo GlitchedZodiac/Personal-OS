@@ -54,6 +54,8 @@ export interface DeskTab {
   refQ?: string | null;
   verse?: number | null;
   scrollY?: number;
+  translation?: string;
+  refTranslation?: string;
 }
 export interface DeskLayoutPrefs {
   preset: string;
