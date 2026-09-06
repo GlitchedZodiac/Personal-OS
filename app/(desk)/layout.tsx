@@ -42,6 +42,13 @@ export default function DeskLayout({ children }: { children: React.ReactNode }) 
         @keyframes deskVu { 0%,100% { transform:scaleY(0.3); } 50% { transform:scaleY(1); } }
         @keyframes deskPulseRing { 0% { box-shadow: 0 0 0 0 rgba(166,61,99,.45); } 100% { box-shadow: 0 0 0 14px rgba(166,61,99,0); } }
         @keyframes deskSlideInRight { from { transform: translateX(48px); opacity: 0; } to { transform: none; opacity: 1; } }
+        /* V3 §8 — menus clip downward from their anchor + fade; leave clips back. No transform,
+           so a menu over ink can never poison stroke coordinates even by accident. */
+        @keyframes deskMenuIn { from { opacity: 0; clip-path: inset(0 0 92% 0 round 14px); } to { opacity: 1; clip-path: inset(0 0 0 0 round 14px); } }
+        @keyframes deskMenuOut { from { opacity: 1; clip-path: inset(0 0 0 0 round 14px); } to { opacity: 0; clip-path: inset(0 0 92% 0 round 14px); } }
+        /* V3 §8 — the outside tap is consumed AND acknowledged: a raspberry ring blooms at the
+           tap point (420ms) so "nothing happened" reads as "that closed it". */
+        @keyframes deskRingBloom { 0% { opacity: .55; box-shadow: 0 0 0 3px rgba(166,61,99,.5); } 100% { opacity: 0; box-shadow: 0 0 0 26px rgba(166,61,99,0); } }
         @keyframes deskShimmer { from { background-position: -200px 0; } to { background-position: 200px 0; } }
         .desk-root button { transition: transform .14s cubic-bezier(.2,.8,.2,1), background-color .18s ease, color .18s ease, box-shadow .18s ease, border-color .18s ease, opacity .18s ease; }
         .desk-root button:not([data-no-press]):active { transform: scale(.95); }

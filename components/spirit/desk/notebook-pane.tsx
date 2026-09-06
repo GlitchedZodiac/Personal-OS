@@ -28,6 +28,7 @@ import { SermonRecorder } from "@/lib/spirit-recording";
 import { fmtSeconds, newId, pageHeightFor, strokeBounds, strokeDistanceTo, type PageObject, type Stroke } from "@/lib/ink";
 import { askConfirm, askPrompt } from "./dialog";
 import { haptic } from "@/lib/haptics";
+import { ringBloom } from "./patterns";
 import { useWakeLock } from "@/lib/wake-lock";
 import { useRouter } from "next/navigation";
 import { getOrCreateMicrophoneStream, deactivateMicrophoneStream } from "@/lib/microphone";
@@ -1654,7 +1655,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
         </div>
         {mode === "page" && showRail && rail}
         {refScan && (
-          <div onPointerDown={(e) => { if (e.target === e.currentTarget) { e.preventDefault(); setRefScan(null); } }} style={{ position: "absolute", inset: 0, zIndex: 42 }}>
+          <div onPointerDown={(e) => { if (e.target === e.currentTarget) { e.preventDefault(); ringBloom(e.clientX, e.clientY); setRefScan(null); } }} style={{ position: "absolute", inset: 0, zIndex: 42 }}>
             <div style={{ position: "absolute", left: 16, right: 16, bottom: 16, zIndex: 43, background: "#FFFDF9", border: "1px solid #EDE7E0", borderRadius: 12, padding: "12px 14px", boxShadow: "0 10px 30px rgba(20,15,18,0.15)", maxHeight: "60%", overflowY: "auto" }}>
               <div style={{ fontSize: 9.5, letterSpacing: "0.12em", fontWeight: 700, color: "#96949B" }}>REFERENCES IN YOUR HANDWRITING</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 9 }}>
@@ -1761,7 +1762,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       )}
       {noteCard && (
         // tap anywhere off the card = "not now" — the card must never demand its own button
-        <div onPointerDown={(e) => { if (e.target === e.currentTarget) { e.preventDefault(); setNoteCard(null); } }} style={{ position: "absolute", inset: 0, zIndex: 40 }}>
+        <div onPointerDown={(e) => { if (e.target === e.currentTarget) { e.preventDefault(); ringBloom(e.clientX, e.clientY); setNoteCard(null); } }} style={{ position: "absolute", inset: 0, zIndex: 40 }}>
         <div style={{ position: "absolute", left: 16, right: 16, bottom: 16, background: "#FFFDF9", border: "1px solid #EDE7E0", borderRadius: 12, padding: "11px 13px", boxShadow: "0 10px 30px rgba(20,15,18,0.15)", animation: "fadeUp .2s ease both" }}>
           <div style={{ fontSize: 13, color: "#454349", lineHeight: 1.5 }}>{noteCard.text || "(ink note — the words didn't transcribe; it keeps as ink)"}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, flexWrap: "wrap" }}>

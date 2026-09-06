@@ -7,6 +7,7 @@
 import { useCallback, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Diamond } from "./desk-icons";
+import { ringBloom, E_SWIFT } from "./patterns";
 
 export const DISPLAY = "var(--font-display)";
 export const SERIF = "var(--font-serif)";
@@ -303,7 +304,7 @@ export function Popover({
         <>
           {/* pointerdown as well as click: a pen contact that drifts a few px between down and up
           never synthesizes a click on iPadOS, and the menu read as refusing to close */}
-      {onClose && <div onClick={onClose} onPointerDown={(e) => { e.preventDefault(); onClose(); }} style={{ position: "fixed", inset: 0, zIndex: 80 }} />}
+      {onClose && <div onClick={onClose} onPointerDown={(e) => { e.preventDefault(); ringBloom(e.clientX, e.clientY); onClose(); }} style={{ position: "fixed", inset: 0, zIndex: 80 }} />}
           <div
             ref={panel}
             style={{
@@ -316,8 +317,8 @@ export function Popover({
               borderRadius: 14,
               boxShadow: "0 16px 48px rgba(20,15,18,0.28)",
               padding: 13,
-              animation: "deskPopIn .24s cubic-bezier(.2,.9,.3,1.15) both",
-              transformOrigin: "top right",
+              // V3 §8 — clip downward from the anchor + fade; no transform, ever
+              animation: `deskMenuIn .2s ${E_SWIFT} both`,
               boxSizing: "border-box",
               ...style,
               left: undefined,

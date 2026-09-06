@@ -25,6 +25,7 @@ import { PalettePopover } from "./pen-popovers";
 import { PenIcon, GPenIcon, PencilIcon, HighlighterIcon, EraserIcon, HandIcon } from "./desk-icons";
 import type { InkTool } from "@/lib/ink";
 import { haptic } from "@/lib/haptics";
+import { ringBloom } from "./patterns";
 
 /** the four inks of the design's colour cycle — already the desk's own palette */
 const INKS = ["#5F4B8B", "#B85C8A", "#5E7FA6", "#232227"];
@@ -186,7 +187,7 @@ export function SeamRail({ onSeamDown, dragging, writingLeft }: {
           transformed ancestors, and z 9 sits under the sheet's 10. */}
       {sheet && activeSlot !== null && activeSlot !== 3 && (
         <div
-          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setSheet(false); }}
+          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); ringBloom(e.clientX, e.clientY); setSheet(false); }}
           style={{ position: "fixed", inset: 0, zIndex: 9, cursor: "default" }}
         />
       )}

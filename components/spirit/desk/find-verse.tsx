@@ -8,6 +8,7 @@
 // itself uses, so what you drop is what you saw.
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { ringBloom } from "./patterns";
 import { BOOKS, BOOK_ABBREV, CHAPTERS, refInt } from "@/lib/bible-refs";
 
 interface Verse { refInt: number; text?: string; lines?: string[] }
@@ -81,7 +82,7 @@ export function FindVersePopover({ initialBook, onClose, onDrop, style }: {
     <>
       {/* z 20: the typed-block textarea (z 12) and the lasso handle (z 11) used to out-rank
           this backdrop and swallow the outside tap — the picker then "wouldn't close" */}
-      <div onClick={onClose} onPointerDown={(e) => { e.preventDefault(); onClose(); }} style={{ position: "absolute", inset: 0, zIndex: 20 }} />
+      <div onClick={onClose} onPointerDown={(e) => { e.preventDefault(); ringBloom(e.clientX, e.clientY); onClose(); }} style={{ position: "absolute", inset: 0, zIndex: 20 }} />
       <div style={{ position: "absolute", zIndex: 21, width: 436, maxWidth: "calc(100% - 24px)", background: "#FFFFFF", borderRadius: 15, boxShadow: "0 20px 56px rgba(20,15,18,0.32)", padding: 13, animation: "deskFadeIn .2s ease both", ...style }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <span style={{ fontSize: 9, letterSpacing: "0.13em", fontWeight: 700, color: "#96949B" }}>FIND A VERSE</span>
