@@ -48,6 +48,8 @@ export default function DeskLayout({ children }: { children: React.ReactNode }) 
         @keyframes deskMenuOut { from { opacity: 1; clip-path: inset(0 0 0 0 round 14px); } to { opacity: 0; clip-path: inset(0 0 92% 0 round 14px); } }
         /* V3 §8 — the outside tap is consumed AND acknowledged: a raspberry ring blooms at the
            tap point (420ms) so "nothing happened" reads as "that closed it". */
+        /* V3 §2 — the selection surface's gap: margin/height animate, never transform */
+        @keyframes deskGapIn { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 360px; } }
         @keyframes deskRingBloom { 0% { opacity: .55; box-shadow: 0 0 0 3px rgba(166,61,99,.5); } 100% { opacity: 0; box-shadow: 0 0 0 26px rgba(166,61,99,0); } }
         @keyframes deskShimmer { from { background-position: -200px 0; } to { background-position: 200px 0; } }
         .desk-root button { transition: transform .14s cubic-bezier(.2,.8,.2,1), background-color .18s ease, color .18s ease, box-shadow .18s ease, border-color .18s ease, opacity .18s ease; }

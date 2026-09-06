@@ -93,6 +93,8 @@ export interface SpiritReaderProps {
   typeLocked?: boolean;
   /** V3 §4 — the host pane renders the attribution in its own footer; skip the in-column line */
   attributionInFooter?: boolean;
+  /** V3 §2 — the desk's selection surface, rendered inline in a gap under the anchor verse */
+  selectionSurface?: (sel: { start: number; end: number }) => React.ReactNode;
   /** the host's way out of the lock — shown inside the Aa sheet, next to the size it locks */
   onUnlockType?: () => void;
   /** which Bible to load — a registry id from /api/spirit/translations; default esv */
@@ -167,6 +169,8 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
   const [err, setErr] = useState<string | null>(null);
   const [sel, setSel] = useState<number | null>(null);
   const [selEnd, setSelEnd] = useState<number | null>(null);
+  /** V3 §2 — the FIRST-tapped verse: the surface's gap locks under it and never relocates */
+  const [selAnchor, setSelAnchor] = useState<number | null>(null);
   /**
    * Tapping a verse: first tap selects it, a tap on a DIFFERENT verse extends the range to
    * cover both, and a tap back on the anchor clears. His 2026-08-30 report — "when I select a
@@ -177,13 +181,24 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
   const tapVerse = useCallback((refInt: number) => {
     setAskAnswer(null);
     setBar("act");
-    if (sel === null) { setSel(refInt); setSelEnd(null); return; }
+    if (sel === null) { setSel(refInt); setSelEnd(null); setSelAnchor(refInt); return; }
+    if (props.externalActionBar) {
+      // V3 §2 — while the surface is open, scripture stays live: the anchor is FIXED and the
+      // other endpoint follows the tap. Growing and shrinking are the same one rule; verse
+      // taps never dismiss (only a tap outside, or the ✕, puts the surface away).
+      const a = selAnchor ?? sel;
+      const lo = Math.min(a, refInt);
+      const hi = Math.max(a, refInt);
+      setSel(lo);
+      setSelEnd(hi === lo ? null : hi);
+      return;
+    }
     const end = selEnd ?? sel;
     if (refInt === sel && selEnd === null) { setSel(null); setSelEnd(null); return; } // tap it again → clear
     if (refInt < sel) { setSel(refInt); setSelEnd(end); return; }                     // extend upward
     if (refInt > end) { setSelEnd(refInt); return; }                                  // extend downward
     setSel(refInt); setSelEnd(null);                                                  // tap inside → collapse
-  }, [sel, selEnd]);
+  }, [sel, selEnd, selAnchor, props.externalActionBar]);
   const [bar, setBar] = useState<BarMode>("act");
   const [doneMsg, setDoneMsg] = useState("");
   const [legendOpen, setLegendOpen] = useState(false);
@@ -280,6 +295,7 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
         setQ(props.query);
         setSel(null);
         setSelEnd(null);
+        setSelAnchor(null);
       }
     }
   }, [props.query]);
@@ -720,6 +736,7 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
   const clearSel = () => {
     setSel(null);
     setSelEnd(null);
+    setSelAnchor(null);
     setBar("act");
     setAskAnswer(null);
   };
@@ -1298,6 +1315,13 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
                     </div>
                   )}
                 </div>
+                {props.selectionSurface && sel !== null && v.refInt === (selAnchor ?? sel) && (
+                  /* V3 §2 — the gap opens under the FIRST-TAPPED verse and locks there.
+                     Max-height + opacity only: the surface sits over ink territory. */
+                  <div style={{ overflow: "hidden", animation: "deskGapIn .22s ease both" }}>
+                    {props.selectionSurface({ start: sel, end: selEnd ?? sel })}
+                  </div>
+                )}
                 {assignedHere?.to === v.verseNum && (
                   <div className="mb-1 mt-2.5 flex items-center gap-2.5 px-1">
                     <span className="h-px flex-1" style={{ background: T.rule }} />

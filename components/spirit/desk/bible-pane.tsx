@@ -15,7 +15,7 @@ import { SpiritReader, type SpiritReaderHandle } from "@/components/spirit/reade
 import { BibleNav } from "@/components/spirit/bible-nav";
 import { InkCanvas, type InkCanvasHandle, type StrokeEndInfo } from "./ink-canvas";
 import { useDesk, useDeskEvent, hlColor } from "./desk-state";
-import { ActionBarA, type BarAction } from "./action-bar";
+import { SelectionSurface } from "./selection-surface";
 import { RefCardGhost } from "./ref-card";
 import { PaneHeader, Popover, Kicker } from "./ui";
 import { EyeIcon, PenIcon } from "./desk-icons";
@@ -23,6 +23,7 @@ import { formatRef, refParts, BOOKS, BOOK_ABBREV, CHAPTERS } from "@/lib/bible-r
 import { type Stroke } from "@/lib/ink";
 import { askConfirm } from "./dialog";
 import { haptic } from "@/lib/haptics";
+import { toast } from "sonner";
 import { applyOutbox, deleteSeqs, listOutbox, queueDelta } from "@/lib/ink-outbox";
 import { ringBloom } from "./patterns";
 import { useReaderPrefs, READER_SIZES } from "@/lib/spirit-theme";
@@ -156,7 +157,6 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   // navigator is suppressed in the desk (see reader.tsx): one menu, always reachable.
   const [navOpen, setNavOpen] = useState(false);
   const [sel, setSel] = useState<{ start: number | null; end: number | null }>({ start: null, end: null });
-  const [barAnchor, setBarAnchor] = useState<{ x: number; y: number } | null>(null);
   const scrolledTo = useRef<string | null>(null);
   /** select a verse in the passage that is already on screen, and bring it into view */
   const selectVerseNow = useCallback((refStart: number, refEnd: number | null) => {
@@ -248,7 +248,6 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     pendingSelect.current = { refStart, refEnd };
     onQueryChange(target);
   }, [chapterKey, onQueryChange, selectVerseNow, pushBack]);
-  const [showChips, setShowChips] = useState(false);
   const [hover, setHover] = useState<{ left: number; top: number; width: number; num: number } | null>(null);
   const [hoverTip, setHoverTip] = useState<{ x: number; y: number } | null>(null);
   const [contentSize, setContentSize] = useState({ w: 0, h: 0 });
@@ -808,14 +807,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     });
   };
 
-  // ——— action bar ———
-  /** where the action bar should sit when there was no tap to anchor it to */
-  const anchorForVerse = useCallback((s: number, e: number | null) => {
-    const el = contentRef.current?.querySelector<HTMLElement>(`#v-${e ?? s}`);
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return { x: Math.min(r.right - 40, r.left + r.width * 0.55), y: r.bottom };
-  }, []);
+  // ——— the selection surface (V3 §2) — inline in the reader; actions live here ———
   /** report where he is, so the tab can put him back here after a rotate or a reload */
   const placeRef = useRef<{ verse: number | null; scrollY: number }>({ verse: null, scrollY: 0 });
   const placeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -872,34 +864,12 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     setSel({ start: s, end: e });
     selRef.current = s;
     reportPlace(s);
-    // The bar used to need a TAP recorded by the ink canvas — so with the ink layer hidden
-    // (HIDE), or after selecting any other way, it simply never appeared. Anchor to the tap
-    // when there is one and to the selected verse itself when there is not.
-    if (s !== null) {
-      // Anchor to the tap only if it was JUST NOW; otherwise to the selected verse itself.
-      // `prev ?? tap ?? anchor` had two ways of putting the bar where he was not looking:
-      // `lastTapClient` is never cleared, so a tap from minutes ago — possibly since scrolled
-      // off-screen, possibly over the other pane — beat the real selection; and `prev` meant
-      // extending a selection left the bar pinned to the FIRST verse. Either one reads as
-      // "the menu doesn't show up".
-      const tap = lastTapClient.current;
-      const fresh = tap && Date.now() - tap.t < 1200 ? { x: tap.x, y: tap.y } : null;
-      setBarAnchor(fresh ?? anchorForVerse(s, e) ?? (tap ? { x: tap.x, y: tap.y } : null));
-    }
-    if (s === null) {
-      setBarAnchor(null);
-      setShowChips(false);
-      lastTapClient.current = null;
-    }
-  }, [anchorForVerse, reportPlace]);
-  const barAction = (a: BarAction) => {
+    if (s === null) lastTapClient.current = null;
+  }, [reportPlace]);
+  const surfaceAction = (a: "send" | "link" | "mem" | "ask") => {
     haptic(a === "send" ? "success" : "light");
     const reader = readerRef.current;
     if (!reader || sel.start === null) return;
-    if (a === "hl") {
-      setShowChips((v) => !v);
-      return;
-    }
     if (a === "send") {
       const vs: string[] = [];
       for (let r = sel.start; r <= (sel.end ?? sel.start); r++) {
@@ -910,14 +880,26 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       reader.clearSelection();
       return;
     }
-    reader.setBar(a === "mem" ? "mem" : a === "more" ? "more" : a);
+    reader.setBar(a);
   };
   const applyCategory = (cat: string) => {
     if (sel.start === null) return;
     void readerRef.current?.applyHighlight(cat, sel.start, sel.end ?? sel.start);
-    setShowChips(false);
-    setBarAnchor(null);
+    toast(`${formatRef(sel.start, sel.end ?? sel.start)} · ${cat}`);
   };
+  /** §2/§3 — the external handoff. ref.ly resolves logosref links in the Logos app. */
+  const openLogos = useCallback((refStart: number, refEnd: number | null) => {
+    const a = refParts(refStart);
+    const book = (BOOKS[a.book - 1] ?? "").replace(/\s+/g, "");
+    if (!book) return;
+    let ref = `${book}${a.chapter}.${a.verse}`;
+    if (refEnd && refEnd !== refStart) {
+      const b = refParts(refEnd);
+      ref += b.chapter === a.chapter ? `-${b.verse}` : `-${b.chapter}.${b.verse}`;
+    }
+    haptic("light");
+    window.open(`https://ref.ly/logosref/${encodeURIComponent(ref)}`, "_blank", "noopener");
+  }, []);
 
   // ——— strokes change ———
   const onStrokesChange = (next: Stroke[], delta: { appended?: Stroke[]; removed?: string[] }) => {
@@ -1217,6 +1199,22 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
             onPassageLoaded={handlePassageLoaded}
             onChapterChange={handleChapterChange}
             onSelectionChange={onSelectionChange}
+            selectionSurface={(sr) => (
+              <SelectionSurface
+                sel={sr}
+                narrow={narrow}
+                marked={markedOnSelection}
+                onUnmark={unmarkSelection}
+                onHighlight={applyCategory}
+                onDragStart={startDragFromBar}
+                onSend={() => surfaceAction("send")}
+                onLink={() => surfaceAction("link")}
+                onMem={() => surfaceAction("mem")}
+                onAsk={() => surfaceAction("ask")}
+                onLogos={() => openLogos(sr.start, sr.end)}
+                onClear={() => { haptic("light"); readerRef.current?.clearSelection(); }}
+              />
+            )}
           />
           </div>
           {contentSize.w > 0 && (
@@ -1242,10 +1240,7 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
               onHold={onHold}
               onSelectDragStart={onSelectDragStart}
               onSelectDragMove={onSelectDragMove}
-              onSelectDragEnd={(c) => {
-                if (c) setBarAnchor(c);
-                haptic("light");
-              }}
+              onSelectDragEnd={() => haptic("light")}
               onDragMove={onDragMove}
               onDragEnd={onDragEnd}
               anchorFor={anchorFor}
@@ -1277,10 +1272,8 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: pen.tool === "highlighter" ? hlColor(pen.hlCategory) : pen.color, boxShadow: "inset 0 0 0 1.5px rgba(255,255,255,0.6)" }} />
         </div>
       )}
-      {/* action bar A — rises beside the tip */}
-      {sel.start !== null && barAnchor && (
-        <ActionBarA x={barAnchor.x} y={barAnchor.y} hand={hand} onAction={barAction} onHighlight={applyCategory} showChips={showChips} marked={markedOnSelection} onUnmark={unmarkSelection} onDragStart={startDragFromBar} />
-      )}
+      {/* V3 §2 — the selection surface renders INLINE, in the reader's gap under the anchor
+          verse; nothing floats over text anymore */}
       {drag && <RefCardGhost label={drag.label} text={drag.text} x={drag.x} y={drag.y} />}
       <style jsx global>{`
         @keyframes hoverPulse { 0%,100% { opacity:0.3; } 50% { opacity:0.5; } }
