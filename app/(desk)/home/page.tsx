@@ -1,17 +1,17 @@
 "use client";
 
-// 00 — Home: Spirit is the front door, the OS waits behind it. Resume
-// cards per context (Study at its step · Sunday's page · Free reading),
-// the notebook shelf, a mini-hub of exactly three glance widgets
-// (Training · Eating · Measurements), and the right rail — the honest
-// directory of everything the app already is on the phone. Tapping an
-// undesigned section slides the PHONE layout in as a ~500pt compact pane
-// over the rail, untouched, Done to dismiss.
+// V3 §10 — Home, rebuilt around the app's real structure: a 64pt bottom tab
+// bar with the phone's real tabs at iPad size — Today · Chat · Food · Spirit.
+// Journal is removed entirely. Spirit is the desk section (pick-up hero,
+// Sunday, free reading, the HIMNARIO, the shelf); Today grows the phone's
+// glance into tiles that open the PHONE layout in a compact ~500pt pane,
+// untouched — each earns its own iPad desk in a later round, nothing gets
+// restyled early. Greeting + streak persist across tabs.
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Diamond, GearIcon, TodayRailIcon, ChatRailIcon, FoodRailIcon, HealthRailIcon, TrendsRailIcon, JournalRailIcon, RecDot } from "@/components/spirit/desk/desk-icons";
+import { Diamond, GearIcon, TodayRailIcon, ChatRailIcon, FoodRailIcon, HealthRailIcon, TrendsRailIcon, RecDot } from "@/components/spirit/desk/desk-icons";
 import { DISPLAY, cardShadow } from "@/components/spirit/desk/ui";
 import { fmtSeconds } from "@/lib/ink";
 
@@ -29,6 +29,7 @@ interface Hub {
   sunday: { seriesId: string; title: string; currentWeek: number; expectedWeeks: number | null; page: { id: string; title: string; updatedAt: string; recordingId: string | null; transcribedAt: string | null; refs: number[] } | null; recording: { durationSec: number; status: string } | null; isSunday: boolean } | null;
 }
 interface Notebook { id: string; title: string; kind: string; accent: string; pageCount: number; recordingCount: number }
+interface HymnRow { id: string; title: string; updatedAt: string }
 
 function Spark({ points, color }: { points: (number | null)[]; color: string }) {
   const vals = points.map((p) => (p === null || p === undefined ? null : p));
@@ -44,20 +45,34 @@ function Spark({ points, color }: { points: (number | null)[]; color: string }) 
   );
 }
 
+type HomeTab = "today" | "chat" | "food" | "spirit";
+
+/** the hand-drawn hymn glyph — a small open hymnal; never lucide on designed surfaces */
+function HymnGlyph({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#A63D63" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 5.5C10 3.8 6.6 3.4 4 4.4v13.2c2.6-1 6-.6 8 1.1 2-1.7 5.4-2.1 8-1.1V4.4c-2.6-1-6-.6-8 1.1Z" />
+      <path d="M12 5.5v13.2" />
+      <path d="M15.5 9.2v4.1" />
+      <circle cx="14.4" cy="13.9" r="1.15" />
+    </svg>
+  );
+}
+
 export default function HomePage() {
   const router = useRouter();
+  const [tab, setTab] = useState<HomeTab>("spirit");
   const [today, setToday] = useState<Today | null>(null);
   const [hub, setHub] = useState<Hub | null>(null);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+  const [hymns, setHymns] = useState<HymnRow[] | null>(null);
   const [step, setStep] = useState<number | null>(null);
   const [freeRead, setFreeRead] = useState<string | null>(null);
-  const [readerTheme, setReaderTheme] = useState<string>("light");
   const [compact, setCompact] = useState<{ href: string; title: string } | null>(null);
   const [narrow, setNarrow] = useState(false);
-  const [stacked, setStacked] = useState(false); // portrait / under ~900pt: one column, the rail below
 
   useEffect(() => {
-    const check = () => { setNarrow(window.innerWidth < 700); setStacked(window.innerWidth < 900); };
+    const check = () => setNarrow(window.innerWidth < 700);
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
@@ -72,14 +87,11 @@ export default function HomePage() {
         const s = Number(localStorage.getItem(`spirit-step:${d.day.id}`));
         setStep(s > 0 ? s : 1);
       }
-      try {
-        setFreeRead(localStorage.getItem("spirit-last-free-read"));
-        const prefs = JSON.parse(localStorage.getItem("spirit-reader-prefs") ?? "{}");
-        if (prefs.theme) setReaderTheme(prefs.theme);
-      } catch {}
+      try { setFreeRead(localStorage.getItem("spirit-last-free-read")); } catch {}
     }).catch(() => {});
     fetch("/api/spirit/hub").then((r) => (r.ok ? r.json() : null)).then(setHub).catch(() => {});
     fetch("/api/spirit/notebooks").then((r) => (r.ok ? r.json() : null)).then((d) => setNotebooks(d?.notebooks ?? [])).catch(() => {});
+    fetch("/api/spirit/hymns").then((r) => (r.ok ? r.json() : null)).then((d) => setHymns((d?.hymns ?? []) as HymnRow[])).catch(() => {});
   }, []);
 
   const now = new Date();
@@ -104,138 +116,176 @@ export default function HomePage() {
   }, [sunday]);
 
   const card: React.CSSProperties = { background: "#FFFFFF", borderRadius: 16, padding: "15px 17px", boxShadow: cardShadow };
-  const railRows: { key: string; label: string; sub: string; icon: React.ReactNode; href?: string; badge?: string; dim?: boolean; desk?: boolean }[] = [
-    { key: "today", label: "Today", sub: hub ? `${hub.eating.kcalToday.toLocaleString()} kcal today · ${hub.training.sessionsThisWeek} session${hub.training.sessionsThisWeek === 1 ? "" : "s"} this week` : "…", icon: <TodayRailIcon />, href: "/dashboard" },
-    { key: "chat", label: "Chat", sub: "the notebook that talks back", icon: <ChatRailIcon />, href: "/chat" },
-    { key: "food", label: "Food", sub: hub ? `${hub.eating.loggedDays} of 7 days logged` : "…", icon: <FoodRailIcon />, href: "/health/food" },
-    { key: "health", label: "Health", sub: hub?.measurements.weight7dAvg ? `${hub.measurements.weight7dAvg} kg · ${hub.measurements.delta !== null ? `${hub.measurements.delta > 0 ? "+" : ""}${hub.measurements.delta} this week` : "7-day avg"}` : "weight, sleep, recovery", icon: <HealthRailIcon />, href: "/health/body", badge: "iPad · round 2" },
-    { key: "trends", label: "Trends", sub: "the scorecards come with Health's round", icon: <TrendsRailIcon />, href: "/health/body" },
-    // /spirit/recordings had NOTHING linking to it — four separate surfaces drew a recording
-    // dot and none of them was a door. "idk where it is" was a fair description.
-    { key: "recordings", label: "Recordings", sub: "every sermon you have kept", icon: <RecDot size={13} live={false} />, href: "/spirit/recordings", desk: true },
-    { key: "settings", label: "Settings", sub: "handedness · pen defaults · recording consent · layouts", icon: <GearIcon size={16} />, href: "/spirit/desk-settings", desk: true },
-    { key: "journal", label: "Journal", sub: "the thesis holds — its round comes later", icon: <JournalRailIcon />, badge: "deferred", dim: true },
+  const lastHymn = hymns?.length ? [...hymns].sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt))[0] : null;
+
+  const TABS: { key: HomeTab; label: string; icon: React.ReactNode }[] = [
+    { key: "today", label: "Today", icon: <TodayRailIcon /> },
+    { key: "chat", label: "Chat", icon: <ChatRailIcon /> },
+    { key: "food", label: "Food", icon: <FoodRailIcon /> },
+    { key: "spirit", label: "Spirit", icon: <Diamond size={13} /> },
   ];
 
   return (
-    <div style={{ position: "absolute", inset: 0, fontFamily: "var(--font-body)", overflow: "auto" }}>
-      <div style={{ position: "relative", minHeight: "100%", padding: "calc(40px + env(safe-area-inset-top, 0px)) 28px 24px", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 14 }}>
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: "0.18em", fontWeight: 600, color: "#96949B" }}>{dateKicker}</div>
-            <div style={{ fontFamily: DISPLAY, fontSize: 29, fontWeight: 700, color: "#232227", letterSpacing: "-0.02em", marginTop: 2 }}>{greet}, Michael.</div>
-          </div>
-          <span style={{ flex: 1 }} />
-          {today?.stats?.streak ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", padding: "6px 13px", borderRadius: 99, marginBottom: 3 }}><Diamond size={9} /> {today.stats.streak}-day streak</div>
-          ) : null}
-          <Link href="/spirit/desk-settings" aria-label="Settings" style={{ width: 36, height: 36, borderRadius: "50%", background: "#FFFFFF", border: "1px solid #E4E2E6", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 1 }}><GearIcon size={16} /></Link>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: stacked ? "column" : "row", gap: stacked ? 22 : 28, marginTop: 30, flex: 1, minHeight: 0 }}>
-          {/* left: the desk */}
-          <div className="desk-stagger" style={{ flex: stacked ? "none" : 1.83, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Diamond size={9} /><span style={{ fontSize: 10.5, letterSpacing: "0.16em", fontWeight: 700, color: "#8C2F51" }}>SPIRIT · THE DESK</span><span style={{ flex: 1, height: 1, background: "#E4E2E6" }} /><span style={{ fontSize: 10, color: "#96949B" }}>the desk remembers each context</span></div>
-
-            <div style={{ ...card, borderRadius: 18, padding: "18px 20px", display: "flex", alignItems: "center", gap: 18 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>{step && step > 1 ? "PICK UP WHERE YOU STOPPED" : "TODAY'S STUDY"} · STUDY LAYOUT</div>
-                <div style={{ fontFamily: DISPLAY, fontSize: 20, fontWeight: 700, color: "#232227", letterSpacing: "-0.01em", marginTop: 5 }}>{today?.day?.title ?? (today ? "No study is waiting" : "…")}</div>
-                <div style={{ fontSize: 11.5, color: "#66646C", marginTop: 3 }}>
-                  {today?.term && today?.day ? `Term ${today.term.orderIndex} · study ${(today.progress?.done ?? 0) + 1} of ${today.progress?.target ?? "?"} · step ${step ?? 1} of ${totalSteps} — ${stepTitles[(step ?? 1) - 1]} · ≈ ${minutesLeft} min left` : "the next term takes the lectern when it's announced"}
-                </div>
-                <div style={{ display: "flex", gap: 3, marginTop: 10, maxWidth: 300 }}>
-                  {Array.from({ length: totalSteps }).map((_, i) => <span key={i} style={{ flex: 1, height: 4, borderRadius: 99, background: i < (step ?? 1) ? "#A63D63" : "#DFDDE2" }} />)}
-                </div>
-              </div>
-              <div style={{ width: 86, flex: "none", textAlign: "center" }}>
-                <div style={{ width: 86, height: 58, border: "1px solid #E4E2E6", borderRadius: 9, display: "flex", gap: 3, padding: 4, boxSizing: "border-box", background: "#FAF9FA" }}><span style={{ flex: 1.1, background: "#F0D3E0", borderRadius: 4 }} /><span style={{ flex: 1, background: "#E4E2E6", borderRadius: 4 }} /></div>
-                <div style={{ fontSize: 8.5, color: "#A9A7AE", marginTop: 4 }}>Notebook | Teaching</div>
-              </div>
-              <Link href="/spirit/desk?ctx=study" style={{ flex: "none", display: "block", background: "#A63D63", color: "#FFFFFF", borderRadius: 11, padding: "13px 20px", fontFamily: DISPLAY, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
-                {step && step > 1 ? `Continue · ${stepTitles[step - 1]} →` : "Begin the study →"}
-              </Link>
+    <div style={{ position: "absolute", inset: 0, fontFamily: "var(--font-body)", display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        <div style={{ position: "relative", minHeight: "100%", maxWidth: 1060, margin: "0 auto", padding: "calc(34px + env(safe-area-inset-top, 0px)) 28px 24px", boxSizing: "border-box" }}>
+          {/* the greeting + streak persist across tabs (§10) */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 14 }}>
+            <div>
+              <div style={{ fontSize: 11, letterSpacing: "0.18em", fontWeight: 600, color: "#96949B" }}>{dateKicker}</div>
+              <div style={{ fontFamily: DISPLAY, fontSize: 29, fontWeight: 700, color: "#232227", letterSpacing: "-0.02em", marginTop: 2 }}>{greet}, Michael.</div>
             </div>
+            <span style={{ flex: 1 }} />
+            {today?.stats?.streak ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", padding: "6px 13px", borderRadius: 99, marginBottom: 3 }}><Diamond size={9} /> {today.stats.streak}-day streak</div>
+            ) : null}
+            <Link href="/spirit/desk-settings" aria-label="Settings" style={{ width: 36, height: 36, borderRadius: "50%", background: "#FFFFFF", border: "1px solid #E4E2E6", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 1 }}><GearIcon size={16} /></Link>
+          </div>
 
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <div style={{ ...card, flex: "1.15 1 260px" }}>
+          {/* ——— SPIRIT — the desk section ——— */}
+          {tab === "spirit" && (
+            <div className="desk-stagger" style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 26 }}>
+              <div style={{ ...card, borderRadius: 18, padding: "18px 20px", display: "flex", alignItems: "center", gap: 18 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>{step && step > 1 ? "PICK UP WHERE YOU STOPPED" : "TODAY'S STUDY"} · STUDY LAYOUT</div>
+                  <div style={{ fontFamily: DISPLAY, fontSize: 20, fontWeight: 700, color: "#232227", letterSpacing: "-0.01em", marginTop: 5 }}>{today?.day?.title ?? (today ? "No study is waiting" : "…")}</div>
+                  <div style={{ fontSize: 11.5, color: "#66646C", marginTop: 3 }}>
+                    {today?.term && today?.day ? `Term ${today.term.orderIndex} · study ${(today.progress?.done ?? 0) + 1} of ${today.progress?.target ?? "?"} · step ${step ?? 1} of ${totalSteps} — ${stepTitles[(step ?? 1) - 1]} · ≈ ${minutesLeft} min left` : "the next term takes the lectern when it's announced"}
+                  </div>
+                  <div style={{ display: "flex", gap: 3, marginTop: 10, maxWidth: 300 }}>
+                    {Array.from({ length: totalSteps }).map((_, i) => <span key={i} style={{ flex: 1, height: 4, borderRadius: 99, background: i < (step ?? 1) ? "#A63D63" : "#DFDDE2" }} />)}
+                  </div>
+                </div>
+                <div style={{ width: 86, flex: "none", textAlign: "center" }}>
+                  <div style={{ width: 86, height: 58, border: "1px solid #E4E2E6", borderRadius: 9, display: "flex", gap: 3, padding: 4, boxSizing: "border-box", background: "#FAF9FA" }}><span style={{ flex: 1.1, background: "#F0D3E0", borderRadius: 4 }} /><span style={{ flex: 1, background: "#E4E2E6", borderRadius: 4 }} /></div>
+                  <div style={{ fontSize: 8.5, color: "#A9A7AE", marginTop: 4 }}>Notebook | Teaching</div>
+                </div>
+                <Link href="/spirit/desk?ctx=study" style={{ flex: "none", display: "block", background: "#A63D63", color: "#FFFFFF", borderRadius: 11, padding: "13px 20px", fontFamily: DISPLAY, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+                  {step && step > 1 ? `Continue · ${stepTitles[step - 1]} →` : "Begin the study →"}
+                </Link>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ ...card, flex: "1.15 1 250px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>SUNDAY{sunday ? ` · ${sunday.title.split("—")[0].trim().toUpperCase()}` : ""}</span>
+                    {sunday && <span style={{ fontSize: 9, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", borderRadius: 99, padding: "2.5px 8px" }}>wk {sunday.currentWeek}{sunday.expectedWeeks ? ` of ≈${sunday.expectedWeeks}` : ""}</span>}
+                  </div>
+                  <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 600, color: "#232227", marginTop: 6 }}>{sunday?.page ? `Sunday's page — ${new Date(sunday.page.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : sunday?.isSunday ? "It's Sunday — take notes" : "Sunday's page"}</div>
+                  <div style={{ fontSize: 11, color: "#66646C", lineHeight: 1.55, marginTop: 3 }}>{sundayLine}</div>
+                  <Link href="/spirit/desk?ctx=sermon" style={{ display: "inline-block", marginTop: 10, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: sunday?.isSunday ? "#FFFFFF" : "#8C2F51", background: sunday?.isSunday ? "#A63D63" : "#F6E3EB", borderRadius: 9, padding: "8px 14px", textDecoration: "none" }}>{sunday?.isSunday ? "Take notes →" : "Open the sermon page →"}</Link>
+                </div>
+                <div style={{ ...card, flex: "1 1 220px" }}>
+                  <div style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>FREE READING</div>
+                  <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 600, color: "#232227", marginTop: 6 }}>{freeRead ?? "Pick up anywhere"}</div>
+                  <div style={{ fontSize: 11, color: "#66646C", lineHeight: 1.55, marginTop: 3 }}>{freeRead ? "where you left the shelf" : "the whole Bible, no term coupling"}</div>
+                  <Link href={`/spirit/desk?ctx=free${freeRead ? `&q=${encodeURIComponent(freeRead)}` : ""}`} style={{ display: "inline-block", marginTop: 10, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: "#454349", border: "1px solid #E4E2E6", borderRadius: 9, padding: "8px 14px", textDecoration: "none" }}>Open the reader →</Link>
+                </div>
+                {/* §10 — the HIMNARIO card */}
+                <div style={{ ...card, flex: "1 1 220px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>HIMNARIO</span>
+                    <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.08em", color: "#FFFFFF", background: "#A63D63", borderRadius: 99, padding: "2px 7px" }}>NEW</span>
+                    <span style={{ flex: 1 }} />
+                    <HymnGlyph />
+                  </div>
+                  <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 600, color: "#232227", marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {lastHymn ? lastHymn.title : "The hymns you actually sing"}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#66646C", lineHeight: 1.55, marginTop: 3 }}>
+                    {hymns === null ? "…" : hymns.length ? `${hymns.length} hymn${hymns.length === 1 ? "" : "s"} · search any line, accents forgiven` : "photograph a pliego — or just tell Claude one"}
+                  </div>
+                  <Link href="/spirit/hymns" style={{ display: "inline-block", marginTop: 10, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", borderRadius: 9, padding: "8px 14px", textDecoration: "none" }}>Open the himnario →</Link>
+                </div>
+              </div>
+
+              <div style={{ ...card, padding: "15px 17px 17px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>SUNDAY{sunday ? ` · ${sunday.title.split("—")[0].trim().toUpperCase()}` : ""}</span>
-                  {sunday && <span style={{ fontSize: 9, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", borderRadius: 99, padding: "2.5px 8px" }}>wk {sunday.currentWeek}{sunday.expectedWeeks ? ` of ≈${sunday.expectedWeeks}` : ""}</span>}
+                  <span style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>THE NOTEBOOK · SHELF</span>
+                  <Link href="/spirit/notebooks" style={{ fontSize: 11, fontWeight: 600, color: "#8C2F51", textDecoration: "none" }}>all notebooks ›</Link>
                 </div>
-                <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 600, color: "#232227", marginTop: 6 }}>{sunday?.page ? `Sunday's page — ${new Date(sunday.page.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : sunday?.isSunday ? "It's Sunday — take notes" : "Sunday's page"}</div>
-                <div style={{ fontSize: 11, color: "#66646C", lineHeight: 1.55, marginTop: 3 }}>{sundayLine}</div>
-                <Link href="/spirit/desk?ctx=sermon" style={{ display: "inline-block", marginTop: 10, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: sunday?.isSunday ? "#FFFFFF" : "#8C2F51", background: sunday?.isSunday ? "#A63D63" : "#F6E3EB", borderRadius: 9, padding: "8px 14px", textDecoration: "none" }}>{sunday?.isSunday ? "Take notes →" : "Open the sermon page →"}</Link>
+                <div style={{ display: "flex", gap: 10, marginTop: 11, flexWrap: "wrap" }}>
+                  {(notebooks.length ? notebooks : [{ id: "a", title: "Sermons", kind: "sermons", accent: "#A63D63", pageCount: 0, recordingCount: 0 }]).slice(0, 4).map((n) => (
+                    <Link key={n.id} href={`/spirit/notebooks?nb=${n.id}`} style={{ flex: "1 1 180px", border: "1px solid #E4E2E6", borderLeft: `4px solid ${n.accent}`, borderRadius: 10, padding: "10px 12px", textDecoration: "none", minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ fontFamily: DISPLAY, fontSize: 12.5, fontWeight: 600, color: "#232227", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.title}</span>{n.recordingCount > 0 && <RecDot size={6} live={false} />}</div>
+                      <div style={{ fontSize: 10, color: "#96949B", marginTop: 2 }}>{n.pageCount} page{n.pageCount === 1 ? "" : "s"}{n.kind === "sermons" && n.recordingCount ? ` · ${n.recordingCount} recording${n.recordingCount === 1 ? "" : "s"}` : n.kind === "term" ? " · study-fed" : n.kind === "worksheets" ? " · system-made" : ""}</div>
+                    </Link>
+                  ))}
+                </div>
               </div>
-              <div style={{ ...card, flex: "1 1 240px" }}>
-                <div style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>FREE READING</div>
-                <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 600, color: "#232227", marginTop: 6 }}>{freeRead ?? "Pick up anywhere"}{readerTheme !== "light" ? ` · ${readerTheme} surface` : ""}</div>
-                <div style={{ fontSize: 11, color: "#66646C", lineHeight: 1.55, marginTop: 3 }}>{freeRead ? "where you left the shelf" : "the whole Bible, no term coupling"}</div>
-                <Link href={`/spirit/desk?ctx=free${freeRead ? `&q=${encodeURIComponent(freeRead)}` : ""}`} style={{ display: "inline-block", marginTop: 10, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: "#454349", border: "1px solid #E4E2E6", borderRadius: 9, padding: "8px 14px", textDecoration: "none" }}>Open the reader →</Link>
-              </div>
+              <div style={{ fontSize: 10, color: "#A9A7AE", textAlign: "center", marginTop: 4 }}>serious, warm, unhurried — nothing here scores you, nothing is behind</div>
             </div>
+          )}
 
-            <div style={{ ...card, padding: "15px 17px 17px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>THE NOTEBOOK · SHELF</span>
-                <Link href="/spirit/notebooks" style={{ fontSize: 11, fontWeight: 600, color: "#8C2F51", textDecoration: "none" }}>all notebooks ›</Link>
+          {/* ——— TODAY — the phone's glance grown to tiles ——— */}
+          {tab === "today" && (
+            <div className="desk-stagger" style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 26 }}>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <button type="button" onClick={() => setCompact({ href: "/health/workouts", title: "Training" })} className="desk-lift" style={{ ...card, flex: "1 1 220px", minWidth: 220, borderRadius: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 9, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>TRAINING</div><div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, color: "#232227", marginTop: 3 }}>{hub ? hub.training.sessionsThisWeek : "…"}</div><div style={{ fontSize: 10, color: "#66646C", marginTop: 1 }}>session{hub?.training.sessionsThisWeek === 1 ? "" : "s"} this week{hub?.training.prsThisWeek ? ` · ${hub.training.prsThisWeek} PR` : ""}</div></div>
+                  <Spark points={hub?.training.spark ?? []} color="#A63D63" />
+                </button>
+                <button type="button" onClick={() => setCompact({ href: "/health/food", title: "Eating" })} className="desk-lift" style={{ ...card, flex: "1 1 220px", minWidth: 220, borderRadius: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 9, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>EATING</div><div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, color: "#232227", marginTop: 3 }}>{hub ? hub.eating.kcalToday.toLocaleString() : "…"}</div><div style={{ fontSize: 10, color: "#66646C", marginTop: 1 }}>kcal today · {hub ? `${hub.eating.loggedDays} of 7 days logged` : ""}</div></div>
+                  <Spark points={hub?.eating.spark ?? []} color="#232227" />
+                </button>
+                <button type="button" onClick={() => setCompact({ href: "/health/body", title: "Measurements" })} className="desk-lift" style={{ ...card, flex: "1 1 220px", minWidth: 220, borderRadius: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 9, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>MEASUREMENTS</div><div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, color: "#232227", marginTop: 3 }}>{hub?.measurements.weight7dAvg ?? "—"} {hub?.measurements.delta !== null && hub?.measurements.delta !== undefined && <span style={{ fontSize: 11, fontWeight: 600, color: hub.measurements.delta <= 0 ? "#5E9B72" : "#B4533F" }}>{hub.measurements.delta > 0 ? "+" : ""}{hub.measurements.delta}</span>}</div><div style={{ fontSize: 10, color: "#66646C", marginTop: 1 }}>kg · 7-day avg{hub?.measurements.lastMeasuredAt ? ` · checked ${new Date(hub.measurements.lastMeasuredAt).toLocaleDateString("en-US", { weekday: "short" })}` : ""}</div></div>
+                  <Spark points={hub?.measurements.spark ?? []} color="#A9A7AE" />
+                </button>
               </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 11 }}>
-                {(notebooks.length ? notebooks : [{ id: "a", title: "Sermons", kind: "sermons", accent: "#A63D63", pageCount: 0, recordingCount: 0 }]).slice(0, 4).map((n) => (
-                  <Link key={n.id} href={`/spirit/notebooks?nb=${n.id}`} style={{ flex: 1, border: "1px solid #E4E2E6", borderLeft: `4px solid ${n.accent}`, borderRadius: 10, padding: "10px 12px", textDecoration: "none", minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ fontFamily: DISPLAY, fontSize: 12.5, fontWeight: 600, color: "#232227", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.title}</span>{n.recordingCount > 0 && <RecDot size={6} live={false} />}</div>
-                    <div style={{ fontSize: 10, color: "#96949B", marginTop: 2 }}>{n.pageCount} page{n.pageCount === 1 ? "" : "s"}{n.kind === "sermons" && n.recordingCount ? ` · ${n.recordingCount} recording${n.recordingCount === 1 ? "" : "s"}` : n.kind === "term" ? " · study-fed" : n.kind === "worksheets" ? " · system-made" : ""}</div>
-                  </Link>
-                ))}
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <button type="button" onClick={() => setCompact({ href: "/health/body", title: "Health" })} className="desk-lift" style={{ ...card, flex: "1 1 220px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
+                  <span style={{ width: 34, height: 34, flex: "none", borderRadius: 11, background: "#F2F1F2", display: "flex", alignItems: "center", justifyContent: "center" }}><HealthRailIcon /></span>
+                  <span style={{ minWidth: 0 }}><span style={{ display: "block", fontFamily: DISPLAY, fontSize: 13.5, fontWeight: 600, color: "#232227" }}>Health · Sunday Report</span><span style={{ display: "block", fontSize: 10.5, color: "#96949B" }}>weight, sleep, recovery — iPad desk in a later round</span></span>
+                </button>
+                <button type="button" onClick={() => setCompact({ href: "/trends", title: "Trends" })} className="desk-lift" style={{ ...card, flex: "1 1 220px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
+                  <span style={{ width: 34, height: 34, flex: "none", borderRadius: 11, background: "#F2F1F2", display: "flex", alignItems: "center", justifyContent: "center" }}><TrendsRailIcon /></span>
+                  <span style={{ minWidth: 0 }}><span style={{ display: "block", fontFamily: DISPLAY, fontSize: 13.5, fontWeight: 600, color: "#232227" }}>Trends</span><span style={{ display: "block", fontSize: 10.5, color: "#96949B" }}>the scorecards, phone layout</span></span>
+                </button>
+                <button type="button" onClick={() => setCompact({ href: "/dashboard", title: "Up next" })} className="desk-lift" style={{ ...card, flex: "1 1 220px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
+                  <span style={{ width: 34, height: 34, flex: "none", borderRadius: 11, background: "#F2F1F2", display: "flex", alignItems: "center", justifyContent: "center" }}><TodayRailIcon /></span>
+                  <span style={{ minWidth: 0 }}><span style={{ display: "block", fontFamily: DISPLAY, fontSize: 13.5, fontWeight: 600, color: "#232227" }}>Up next</span><span style={{ display: "block", fontSize: 10.5, color: "#96949B" }}>the day&apos;s full glance — phone layout</span></span>
+                </button>
               </div>
+              <div style={{ fontSize: 10, color: "#A9A7AE", lineHeight: 1.55, textAlign: "center", marginTop: 4 }}>These open the phone layout in a compact pane, untouched — each earns its own iPad desk in a later round; nothing gets restyled early.</div>
             </div>
+          )}
 
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}><span style={{ fontSize: 10.5, letterSpacing: "0.16em", fontWeight: 700, color: "#96949B" }}>MINI-HUB</span><span style={{ flex: 1, height: 1, background: "#E4E2E6" }} /><span style={{ fontSize: 10, color: "#96949B" }}>tap → that section&apos;s app · phone layout, compact pane</span></div>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <button type="button" onClick={() => setCompact({ href: "/health/workouts", title: "Training" })} className="desk-lift" style={{ ...card, flex: "1 1 200px", minWidth: 200, borderRadius: 14, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
-                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 9, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>TRAINING</div><div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, color: "#232227", marginTop: 3 }}>{hub ? hub.training.sessionsThisWeek : "…"}</div><div style={{ fontSize: 10, color: "#66646C", marginTop: 1 }}>session{hub?.training.sessionsThisWeek === 1 ? "" : "s"} this week{hub?.training.prsThisWeek ? ` · ${hub.training.prsThisWeek} PR` : ""}</div></div>
-                <Spark points={hub?.training.spark ?? []} color="#A63D63" />
-              </button>
-              <button type="button" onClick={() => setCompact({ href: "/health/food", title: "Eating" })} className="desk-lift" style={{ ...card, flex: "1 1 200px", minWidth: 200, borderRadius: 14, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
-                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 9, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>EATING</div><div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, color: "#232227", marginTop: 3 }}>{hub ? hub.eating.kcalToday.toLocaleString() : "…"}</div><div style={{ fontSize: 10, color: "#66646C", marginTop: 1 }}>kcal today · {hub ? `${hub.eating.loggedDays} of 7 days logged` : ""}</div></div>
-                <Spark points={hub?.eating.spark ?? []} color="#232227" />
-              </button>
-              <button type="button" onClick={() => setCompact({ href: "/health/body", title: "Measurements" })} className="desk-lift" style={{ ...card, flex: "1 1 200px", minWidth: 200, borderRadius: 14, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: 0, textAlign: "left" }}>
-                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 9, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B" }}>MEASUREMENTS</div><div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, color: "#232227", marginTop: 3 }}>{hub?.measurements.weight7dAvg ?? "—"} {hub?.measurements.delta !== null && hub?.measurements.delta !== undefined && <span style={{ fontSize: 11, fontWeight: 600, color: hub.measurements.delta <= 0 ? "#5E9B72" : "#B4533F" }}>{hub.measurements.delta > 0 ? "+" : ""}{hub.measurements.delta}</span>}</div><div style={{ fontSize: 10, color: "#66646C", marginTop: 1 }}>kg · 7-day avg{hub?.measurements.lastMeasuredAt ? ` · checked ${new Date(hub.measurements.lastMeasuredAt).toLocaleDateString("en-US", { weekday: "short" })}` : ""}</div></div>
-                <Spark points={hub?.measurements.spark ?? []} color="#A9A7AE" />
+          {/* ——— CHAT / FOOD — the compact-pane rooms ——— */}
+          {(tab === "chat" || tab === "food") && (
+            <div style={{ ...card, marginTop: 26, padding: "26px 24px", textAlign: "center" }}>
+              <div style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 700, color: "#232227" }}>{tab === "chat" ? "Chat — the notebook that talks back" : "Food — logging and the day's plate"}</div>
+              <div style={{ fontSize: 11.5, color: "#66646C", lineHeight: 1.6, marginTop: 6, maxWidth: 460, marginLeft: "auto", marginRight: "auto" }}>
+                This room lives on the phone today. It opens here in a compact ~500pt pane, untouched — it earns its own iPad desk in a later round.
+              </div>
+              <button type="button" onClick={() => setCompact(tab === "chat" ? { href: "/chat", title: "Chat" } : { href: "/health/food", title: "Food" })} style={{ marginTop: 14, height: 42, padding: "0 20px", borderRadius: 11, fontFamily: DISPLAY, fontSize: 13, fontWeight: 600, color: "#FFFFFF", background: "#A63D63", border: 0, cursor: "pointer" }}>
+                Open {tab === "chat" ? "Chat" : "Food"} →
               </button>
             </div>
-            <div style={{ flex: 1 }} />
-            <div style={{ fontSize: 10, color: "#A9A7AE", textAlign: "center" }}>serious, warm, unhurried — nothing here scores you, nothing is behind</div>
-          </div>
-
-          {/* right: the rest of the OS */}
-          <div className="desk-page-in" style={{ flex: stacked ? "none" : 1, minWidth: 0, maxWidth: stacked ? "none" : 392, display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 10.5, letterSpacing: "0.16em", fontWeight: 700, color: "#96949B" }}>THE REST OF THE OS</span><span style={{ flex: 1, height: 1, background: "#E4E2E6" }} /></div>
-            <div style={{ background: "#FFFFFF", borderRadius: 16, marginTop: 12, boxShadow: cardShadow, overflow: "hidden", flex: stacked ? "none" : 1, display: stacked ? "grid" : "flex", gridTemplateColumns: stacked ? "1fr 1fr" : undefined, flexDirection: "column" }}>
-              {railRows.map((r, i) => {
-                const inner = (
-                  <>
-                    <span style={{ width: 34, height: 34, flex: "none", borderRadius: 11, background: "#F2F1F2", display: "flex", alignItems: "center", justifyContent: "center" }}>{r.icon}</span>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "block", fontFamily: DISPLAY, fontSize: 13.5, fontWeight: 600, color: "#232227" }}>{r.label}{r.badge && <span style={{ fontSize: 9, fontWeight: 600, color: "#96949B", background: "#F2F1F2", borderRadius: 99, padding: "2px 8px", verticalAlign: 2, marginLeft: 4 }}>{r.badge}</span>}</span>
-                      <span style={{ display: "block", fontSize: 10.5, color: "#96949B", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.sub}</span>
-                    </span>
-                    {!r.dim && <span style={{ fontSize: 13, color: "#C9C7CD" }}>›</span>}
-                  </>
-                );
-                const style: React.CSSProperties = { flex: 1, minHeight: stacked ? 64 : undefined, display: "flex", alignItems: "center", gap: 12, padding: stacked ? "8px 16px" : "0 16px", borderBottom: i < railRows.length - 1 ? "1px solid #F2F1F2" : "none", cursor: r.dim ? "default" : "pointer", opacity: r.dim ? 0.62 : 1, textDecoration: "none", background: "transparent", border: 0, borderBottomStyle: "solid", width: "100%", textAlign: "left" };
-                if (r.dim) return <div key={r.key} style={style}>{inner}</div>;
-                if (r.desk) return <Link key={r.key} href={r.href!} style={style}>{inner}</Link>;
-                return <button key={r.key} type="button" onClick={() => setCompact({ href: r.href!, title: r.label })} style={style}>{inner}</button>;
-              })}
-            </div>
-            <div style={{ fontSize: 10, color: "#A9A7AE", lineHeight: 1.55, marginTop: 10 }}>These live on the phone today — each earns its own desk in a later round (Health is round 2). Tapping one opens the phone layout in a compact pane, untouched.</div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* the compact pane — the phone layout in ~500pt, over the rail, Done to dismiss */}
+      {/* ——— §10: the 64pt bottom tab bar — the phone's real tabs at iPad size ——— */}
+      <div style={{ flex: "none", height: 64, background: "#FFFFFF", borderTop: "1px solid #EDEBEE", display: "flex", alignItems: "stretch", justifyContent: "center", gap: 6, padding: "0 16px", boxSizing: "border-box" }}>
+        {TABS.map((t) => {
+          const on = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              style={{ display: "flex", alignItems: "center", gap: 8, alignSelf: "center", height: 44, padding: "0 22px", borderRadius: 12, border: 0, cursor: "pointer", background: on ? (t.key === "spirit" ? "#F6E3EB" : "#F2F1F2") : "transparent", color: on ? (t.key === "spirit" ? "#8C2F51" : "#232227") : "#96949B" }}
+            >
+              {t.icon}
+              <span style={{ fontFamily: DISPLAY, fontSize: 13, fontWeight: on ? 700 : 600 }}>{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* the compact pane — the phone layout in ~500pt, Done to dismiss */}
       {compact && (
         <>
           <div onClick={() => setCompact(null)} style={{ position: "fixed", inset: 0, background: "rgba(35,34,39,0.18)", zIndex: 70 }} />
@@ -248,7 +298,6 @@ export default function HomePage() {
             </div>
             <iframe src={compact.href} title={compact.title} style={{ flex: 1, border: 0, width: "100%", background: "#F2F1F2" }} />
           </div>
-          <style jsx global>{`@keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }`}</style>
         </>
       )}
     </div>
