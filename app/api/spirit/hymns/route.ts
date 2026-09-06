@@ -29,10 +29,15 @@ export async function GET(request: NextRequest) {
       take: Number(sp.get("take") ?? 200),
       select: { id: true, title: true, body: true, photoData: true, updatedAt: true },
     });
+    // §9 — the library searches every line client-side (accents forgiven) and shows the
+    // matched line in context, so the desk asks for the words too. Light rows stay the
+    // default for offline caching and the phone.
+    const withBody = sp.get("withBody") === "1";
     const hymns = rows.map((h) => ({
       id: h.id,
       title: h.title,
       firstLine: firstLine(h.body),
+      ...(withBody ? { body: h.body } : {}),
       hasPhoto: Boolean(h.photoData),
       updatedAt: h.updatedAt,
     }));

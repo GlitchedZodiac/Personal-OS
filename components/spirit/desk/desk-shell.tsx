@@ -17,6 +17,7 @@ import { NotebookPane } from "./notebook-pane";
 import { TeachingPane } from "./teaching-pane";
 import { SourcePane } from "./source-pane";
 import { SundayPane } from "./sunday-pane";
+import { HymnPane } from "./hymn-pane";
 import { PenPopover } from "./pen-popovers";
 import { Popover, Kicker, DISPLAY } from "./ui";
 import { FlipIcon, PenIcon, GPenIcon, HighlighterIcon, PencilIcon, MarkerIcon, EraserIcon, LassoIcon, MicIcon, PhotoIcon } from "./desk-icons";
@@ -26,7 +27,7 @@ import { haptic } from "@/lib/haptics";
 import { BOOKS, refParts } from "@/lib/bible-refs";
 import { toast } from "sonner";
 
-export type DocKind = "bible" | "reference" | "teaching" | "notebook" | "source" | "sunday";
+export type DocKind = "bible" | "reference" | "teaching" | "notebook" | "source" | "sunday" | "hymn";
 
 export interface DeskShellProps {
   context: DeskContext;
@@ -64,6 +65,8 @@ interface DeskTab extends Layout {
   /** which Bible each pane reads — registry ids; default esv */
   translation?: string;
   refTranslation?: string;
+  /** which hymn the hymn pane was on */
+  hymnId?: string | null;
 }
 const TAB_TEMPLATES: { key: string; label: string; sub: string; make: () => Layout }[] = [
   { key: "notebook", label: "Notebook", sub: "one full page", make: () => ({ preset: "custom", writing: ["notebook"], text: [] }) },
@@ -72,6 +75,8 @@ const TAB_TEMPLATES: { key: string; label: string; sub: string; make: () => Layo
   { key: "nb-bible", label: "Notebook | Bible", sub: "two panes", make: () => ({ preset: "custom", writing: ["notebook"], text: ["bible"] }) },
   { key: "nb-ref", label: "Notebook | Reference", sub: "two panes", make: () => ({ preset: "custom", writing: ["notebook"], text: ["reference"] }) },
   { key: "bible-ref", label: "Bible | Reference", sub: "two texts side by side", make: () => ({ preset: "custom", writing: [], text: ["bible", "reference"], cols: true }) },
+  { key: "bible-hymn", label: "Bible | Hymn", sub: "the Sunday pair — scripture and the himnario", make: () => ({ preset: "custom", writing: [], text: ["bible", "hymn"], cols: true }) },
+  { key: "nb-hymn", label: "Notebook | Hymn", sub: "notes while singing", make: () => ({ preset: "custom", writing: ["notebook"], text: ["hymn"] }) },
   { key: "sermon", label: "Notebook | Bible ⁄ Reference", sub: "the Sunday desk — stacked", make: () => ({ preset: "sermon", writing: ["notebook"], text: ["bible", "reference"] }) },
   { key: "three", label: "Notebook | Bible | Reference", sub: "three columns", make: () => ({ preset: "custom", writing: ["notebook"], text: ["bible", "reference"], cols: true }) },
   { key: "study", label: "Notebook | Teaching", sub: "the study desk", make: () => ({ preset: "study", writing: ["notebook"], text: ["teaching"] }) },
@@ -123,7 +128,7 @@ const PRESETS: Record<"study" | "sermon" | "free" | "source", Layout> = {
   free: { preset: "free", writing: [], text: ["bible"] },
   source: { preset: "source", writing: ["notebook"], text: ["bible", "source"] },
 };
-const DOC_LABEL: Record<DocKind, string> = { bible: "Bible", reference: "Reference Bible", teaching: "Teaching", notebook: "Notebook", source: "Source", sunday: "Sunday" };
+const DOC_LABEL: Record<DocKind, string> = { bible: "Bible", reference: "Reference Bible", teaching: "Teaching", notebook: "Notebook", source: "Source", sunday: "Sunday", hymn: "Hymns" };
 
 export function DeskShell(props: DeskShellProps) {
   const { context, title, chip, free, dayId, pageId, layerContext, onTakeNotes } = props;
@@ -519,13 +524,19 @@ export function DeskShell(props: DeskShellProps) {
         return <SourcePane onKicker={kicker} initialKey={sourceKey} />;
       case "sunday":
         return <SundayPane onKicker={kicker} onTakeNotes={onTakeNotes} />;
+      case "hymn":
+        return <HymnPane onKicker={kicker} hymnId={tab?.hymnId ?? null} onHymnChange={(id) => updateTab(() => ({ hymnId: id }))} />;
+      default:
+        // a DocKind this build doesn't know (a tab saved by a newer version) must
+        // say so instead of rendering a silent blank
+        return <div style={{ padding: 24, fontSize: 12, color: "#96949B" }}>This pane isn&apos;t available in this version.</div>;
     }
   };
   const slotMenuEl = (col: "writing" | "text", index: number) =>
     slotMenu && slotMenu.col === col && slotMenu.index === index ? (
       <Popover width={220} onClose={() => setSlotMenu(null)} style={{ left: 12, top: 44 }}>
         <Kicker>THIS PANE SHOWS</Kicker>
-        {(["bible", "reference", "teaching", "notebook", "source", "sunday"] as DocKind[]).map((k) => (
+        {(["bible", "reference", "teaching", "notebook", "source", "sunday", "hymn"] as DocKind[]).map((k) => (
           <button key={k} type="button" onClick={() => { setLayout((l) => { const next = { ...l, preset: "custom" as const, [col]: l[col].map((d, i) => (i === index ? k : d)) }; return next; }); saveLayout({ preset: "custom" }); setSlotMenu(null); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 4, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#232227", background: layout[col][index] === k ? "#F6E3EB" : "transparent", border: 0, cursor: "pointer" }}>
             {DOC_LABEL[k]}
           </button>
