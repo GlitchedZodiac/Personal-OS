@@ -697,21 +697,43 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
       setTip(null); // the marker toggles its own peek
       return;
     }
-    // V3 §3 — ONE tap opens the peek with the full verse; never "tap again for the verse"
-    const first = ref.replace(/^(See|Cited|Compare)\s+/i, "").split(/[;,]/)[0].trim();
+    // V3 §3 — ONE tap opens the peek with the full verse; never "tap again for the verse".
+    // Notes come as "ver. 29; See Ps. 100:5" — try each segment; "ver. N" means THIS chapter.
+    const here = refParts(v.refInt);
+    const candidates = ref
+      .split(/[;,]/)
+      .map((seg) => seg.replace(/^\s*(See|Cited|Compare)\s+/i, "").trim())
+      .filter(Boolean)
+      .map((seg) => {
+        const vm = /^ver\.?\s*(\d+)/i.exec(seg);
+        if (vm) return `${BOOKS[here.book - 1]} ${here.chapter}:${vm[1]}`;
+        const cm = /^ch\.?\s*(\d+)/i.exec(seg);
+        if (cm) return `${BOOKS[here.book - 1]} ${cm[1]}`;
+        return seg;
+      });
+    const first = candidates[0] ?? ref;
     setTip({ refInt: v.refInt, letter, kind: "cf", text: "…", ref: first });
-    try {
-      const res = await fetch(`/api/spirit/passage?q=${encodeURIComponent(first)}`);
-      const body = res.ok ? await res.json() : null;
-      const t = body?.verses?.[0];
+    let shown = false;
+    for (const cand of candidates.slice(0, 3)) {
+      try {
+        const res = await fetch(`/api/spirit/passage?q=${encodeURIComponent(cand)}`);
+        const body = res.ok ? await res.json() : null;
+        const t = body?.verses?.[0];
+        if (!t) continue;
+        shown = true;
+        setTip((cur2) =>
+          cur2 && cur2.refInt === v.refInt && cur2.letter === letter
+            ? { ...cur2, text: t.lines ? t.lines.join(" ") : t.text, ref: cand }
+            : cur2,
+        );
+        break;
+      } catch {
+        // offline or a parse miss — try the next segment
+      }
+    }
+    if (!shown) {
       setTip((cur2) =>
-        cur2 && cur2.refInt === v.refInt && cur2.letter === letter
-          ? { ...cur2, text: t ? (t.lines ? t.lines.join(" ") : t.text) : "Couldn't fetch the verse." }
-          : cur2,
-      );
-    } catch {
-      setTip((cur2) =>
-        cur2 && cur2.refInt === v.refInt ? { ...cur2, text: "Couldn't fetch the verse." } : cur2,
+        cur2 && cur2.refInt === v.refInt && cur2.letter === letter ? { ...cur2, text: "Couldn't fetch the verse." } : cur2,
       );
     }
   };

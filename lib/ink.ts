@@ -34,6 +34,13 @@ export interface Stroke {
   anchor?: { ref: number; dx: number; dy: number } | null;
   /** overlay: where the stroke lives — the text column or the margin */
   region?: "text" | "margin";
+  /**
+   * V3 §1 — a MARK stroke (circle/underline that owns a comment) anchors to the
+   * WORD, not just the verse: offsets relative to word `wi`'s box in verse `ref`.
+   * Reflow re-draws the mark on its words; a translation without that word index
+   * falls back to the verse anchor above.
+   */
+  anchorW?: { ref: number; wi: number; dx: number; dy: number } | null;
 }
 
 export type PageObjectType = "refcard" | "text" | "image" | "section" | "prompt" | "answer" | "header";

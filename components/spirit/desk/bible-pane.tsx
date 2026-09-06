@@ -26,6 +26,11 @@ import { haptic } from "@/lib/haptics";
 import { toast } from "sonner";
 import { applyOutbox, deleteSeqs, listOutbox, queueDelta } from "@/lib/ink-outbox";
 import { ringBloom } from "./patterns";
+import { CommentBubble, CommentChips, OfferDot, type SpiritCommentRow, type CommentDraft } from "./comments";
+import { detectMark, shouldMerge, mergeHits, MULTILINE_MS, type MarkHit, type WordBox } from "@/lib/mark-detect";
+import { wordBoxesIn, anchorTextOf } from "@/lib/word-boxes";
+import type { CommentEntry } from "@/lib/spirit-comments";
+import { createPortal } from "react-dom";
 import { useReaderPrefs, READER_SIZES } from "@/lib/spirit-theme";
 
 const MARGIN_W = [0, 122, 170] as const; // legacy margin-ink widths (the margin menu is retired)
@@ -86,6 +91,62 @@ interface OverlayPage {
 // the ink layer (canvas + its pointer wrapper) sits over the text: hit-tests look through it
 function isInkLayer(el: Element) {
   return el instanceof HTMLCanvasElement || Boolean((el as HTMLElement).closest?.("[data-ink-canvas]"));
+}
+
+/**
+ * V3 §1 — where the bubble sits. Wide pane: a 340pt side lane hanging over the seam
+ * (the user's own paper), never over scripture. Narrow: full-width under the verse.
+ * Portalled to <body>; Y follows the verse while the reader scrolls. Positioning is
+ * plain style writes in an effect — no transform anywhere near ink.
+ */
+function BubbleFloat({ refStart, paneRef, scrollRef, seamSide, children }: {
+  refStart: number;
+  paneRef: React.RefObject<HTMLDivElement | null>;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  seamSide: "left" | "right";
+  children: (width: number) => React.ReactNode;
+}) {
+  const box = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(340);
+  useEffect(() => {
+    const el = box.current;
+    const pane = paneRef.current;
+    const sc = scrollRef.current;
+    if (!el || !pane) return;
+    const place = () => {
+      const pr = pane.getBoundingClientRect();
+      const v = pane.querySelector<HTMLElement>(`#v-${refStart}`);
+      const vr = v?.getBoundingClientRect();
+      const wide = pr.width >= 620 || pr.left >= 360 || window.innerWidth - pr.right >= 360;
+      const w = wide ? 340 : Math.min(500, Math.max(280, pr.width - 20));
+      setWidth(w);
+      let x: number;
+      let y: number;
+      if (wide) {
+        x = seamSide === "left" ? pr.left - w + 18 : pr.right - 18;
+        y = (vr ? vr.top : pr.top + 80) - 4;
+      } else {
+        x = pr.left + (pr.width - w) / 2;
+        y = (vr ? vr.bottom : pr.top + 120) + 6;
+      }
+      x = Math.max(8, Math.min(x, window.innerWidth - w - 8));
+      y = Math.max(pr.top + 44, Math.min(y, window.innerHeight - 240));
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+    };
+    place();
+    sc?.addEventListener("scroll", place, { passive: true });
+    window.addEventListener("resize", place);
+    return () => {
+      sc?.removeEventListener("scroll", place);
+      window.removeEventListener("resize", place);
+    };
+  }, [refStart, paneRef, scrollRef, seamSide]);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div ref={box} style={{ position: "fixed", zIndex: 95 }}>{children(width)}</div>,
+    document.body,
+  );
 }
 
 function verseElAt(clientX: number, clientY: number): HTMLElement | null {
@@ -261,6 +322,17 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const [unpinned, setUnpinned] = useState(false);
   const [inkChapters, setInkChapters] = useState<Set<number>>(new Set());
   const [drag, setDrag] = useState<{ refStart: number; refEnd: number; label: string; text: string; x: number; y: number; hot: boolean } | null>(null);
+  // ——— V3 §1: comments ———
+  const [comments, setComments] = useState<SpiritCommentRow[]>([]);
+  /** the open bubble: an existing comment (by verse, with an index) or a draft being born */
+  const [bubble, setBubble] = useState<{ refStart: number; index: number; draft: CommentDraft | null } | null>(null);
+  /** the birth offer: the dot at the mark's rim, waiting 4s */
+  const [offer, setOffer] = useState<{ x: number; y: number; hit: MarkHit; verse: number; strokeIds: string[]; box: { minX: number; minY: number; maxX: number; maxY: number } } | null>(null);
+  const offerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dwellTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastMark = useRef<{ hit: MarkHit; verse: number; strokeIds: string[]; at: number; box: { minX: number; minY: number; maxX: number; maxY: number } } | null>(null);
+  const wordBoxCache = useRef(new Map<number, WordBox[]>());
+  const [versePos, setVersePos] = useState<Map<number, number>>(new Map());
   // the overlay's own undo stack — the tool rail belongs to the notebook, so the Bible
   // needs its own way back (two-finger tap, the header ⤺, and clear-the-layer)
   const [inkPast, setInkPast] = useState<Stroke[][]>([]);
@@ -275,7 +347,8 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
   const hasMarginInk = strokes.some((s) => s.region === "margin");
   // V3 §1 — the margin is retired as a writing surface (comments replace it). It opens only
   // for LEGACY margin ink, so nothing he already wrote is ever hidden or sheared.
-  const marginPx = overlayVisibility === "hide" ? 0 : hasMarginInk ? MARGIN_W[Math.max(overlayMargin, 1) as 1 | 2] : 0;
+  const railPx = 32; // §1 — the chip rail that replaced the margin
+  const marginPx = Math.max(overlayVisibility === "hide" ? 0 : hasMarginInk ? MARGIN_W[Math.max(overlayMargin, 1) as 1 | 2] : 0, railPx);
   const marginSide: "left" | "right" = hand === "left" ? "left" : "right";
 
   // ——— stable props for SpiritReader ———
@@ -604,18 +677,152 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
     const r = relRect(el);
     return { ref, dx: pt.x - r.left, dy: pt.y - r.top };
   }, []);
+  /** word boxes for a verse, cached per layout pass (cleared on reflow) */
+  const getWordBoxes = useCallback((refInt: number): WordBox[] => {
+    const cached = wordBoxCache.current.get(refInt);
+    if (cached) return cached;
+    const el = contentRef.current?.querySelector<HTMLElement>(`#v-${refInt}`);
+    if (!el || !contentRef.current) return [];
+    const boxes = wordBoxesIn(el, contentRef.current);
+    wordBoxCache.current.set(refInt, boxes);
+    return boxes;
+  }, []);
+
   const offsetFor = useCallback((s: Stroke) => {
-    if (!s.anchor || !contentRef.current) return null;
+    if (!contentRef.current) return null;
+    const p0 = s.pts[0];
+    // V3 §1 — a mark stroke follows its WORD: reflow re-draws the mark on its words.
+    // A translation whose word index is out of range falls back to the verse anchor.
+    if (s.anchorW) {
+      const boxes = getWordBoxes(s.anchorW.ref);
+      const wbox = boxes.find((b) => b.wi === s.anchorW!.wi);
+      if (wbox) return { x: wbox.left + s.anchorW.dx - p0.x, y: wbox.top + s.anchorW.dy - p0.y };
+    }
+    if (!s.anchor) return null;
     const el = contentRef.current.querySelector<HTMLElement>(`#v-${s.anchor.ref}`);
     if (!el) return null;
     const r = relRect(el);
-    const p0 = s.pts[0];
     return { x: r.left + s.anchor.dx - p0.x, y: r.top + s.anchor.dy - p0.y };
-  }, []);
+  }, [getWordBoxes]);
   const regionFor = useCallback((_pt: { x: number; y: number }, client: { x: number; y: number }) => {
     const els = document.elementsFromPoint(client.x, client.y);
     return els.some((el) => !isInkLayer(el) && (el as HTMLElement).closest?.("[data-text-column]")) ? ("text" as const) : ("margin" as const);
   }, []);
+
+  // ——— comments: load per chapter; measure verse tops for the chip rail ———
+  const loadComments = useCallback(async (ck: number) => {
+    try {
+      const book = Math.floor(ck / 1000);
+      const ch = ck % 1000;
+      const from = book * 1_000_000 + ch * 1000 + 1;
+      const r = await fetch(`/api/spirit/comments?from=${from}&to=${from + 998}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      setComments((d.comments ?? []) as SpiritCommentRow[]);
+    } catch {
+      // offline — the chapter still reads; chips reappear online
+    }
+  }, []);
+  useEffect(() => {
+    setComments([]);
+    setBubble(null);
+    setOffer(null);
+    wordBoxCache.current.clear();
+    if (chapterKey) void loadComments(chapterKey);
+  }, [chapterKey, activeTranslation, loadComments]);
+  useEffect(() => {
+    // verse tops in content coords — chips scroll with the text; re-measure on reflow
+    wordBoxCache.current.clear();
+    const c = contentRef.current;
+    if (!c) return;
+    const next = new Map<number, number>();
+    const want = new Set(comments.map((x) => x.refStart));
+    want.forEach((ref) => {
+      const el = c.querySelector<HTMLElement>(`#v-${ref}`);
+      if (el) next.set(ref, el.getBoundingClientRect().top - c.getBoundingClientRect().top);
+    });
+    setVersePos(next);
+  }, [comments, contentSize.h, contentSize.w, marginPx]);
+
+  const perVerse = useMemo(() => {
+    const m = new Map<number, SpiritCommentRow[]>();
+    for (const cm of comments) {
+      const list = m.get(cm.refStart) ?? [];
+      list.push(cm);
+      m.set(cm.refStart, list);
+    }
+    return m;
+  }, [comments]);
+
+  /** persist a thread — POST on first content (the draft), PATCH after */
+  const saveThread = useCallback(async (entries: CommentEntry[]) => {
+    const b = bubble;
+    if (!b) return;
+    const existing = b.draft ? null : (perVerse.get(b.refStart) ?? [])[b.index];
+    try {
+      if (!existing) {
+        const d = b.draft!;
+        const r = await fetch("/api/spirit/comments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refStart: d.refStart, refEnd: d.refEnd, wordStart: d.wordStart, wordEnd: d.wordEnd, anchorText: d.anchorText, markKind: d.markKind, markStrokeIds: d.markStrokeIds, entries }),
+        });
+        if (!r.ok) throw new Error();
+        const created = (await r.json()).comment as SpiritCommentRow;
+        setComments((cs) => [...cs, { ...created, entries }]);
+        // the draft became real — the open bubble now points at it
+        setBubble((cur) => (cur ? { refStart: cur.refStart, index: (perVerse.get(cur.refStart)?.length ?? 0), draft: null } : cur));
+        haptic("success");
+      } else {
+        setComments((cs) => cs.map((c) => (c.id === existing.id ? { ...c, entries } : c)));
+        const r = await fetch(`/api/spirit/comments/${existing.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entries }),
+        });
+        if (!r.ok) throw new Error();
+      }
+    } catch {
+      toast.error("Couldn't save the comment — it stays open, try DONE again.");
+    }
+  }, [bubble, perVerse]);
+  const deleteThread = useCallback(async () => {
+    const b = bubble;
+    if (!b || b.draft) { setBubble(null); return; }
+    const existing = (perVerse.get(b.refStart) ?? [])[b.index];
+    setBubble(null);
+    if (!existing) return;
+    setComments((cs) => cs.filter((c) => c.id !== existing.id));
+    haptic("warning");
+    try {
+      await fetch(`/api/spirit/comments/${existing.id}`, { method: "DELETE" });
+      toast("Comment deleted — the mark stays as ink.");
+    } catch {
+      toast.error("Couldn't delete it — it will be back on reload.");
+    }
+  }, [bubble, perVerse]);
+
+  /** open the bubble for a mark offer (the dot, tapped) */
+  const takeOffer = useCallback((of: NonNullable<typeof offer>) => {
+    if (offerTimer.current) clearTimeout(offerTimer.current);
+    setOffer(null);
+    lastMark.current = null;
+    const boxes = getWordBoxes(of.verse);
+    setBubble({
+      refStart: of.verse,
+      index: -1,
+      draft: {
+        refStart: of.verse,
+        refEnd: null,
+        wordStart: of.hit.wordStart,
+        wordEnd: of.hit.wordEnd,
+        anchorText: anchorTextOf(boxes, of.hit.wordStart, of.hit.wordEnd) || null,
+        markKind: of.hit.kind,
+        markStrokeIds: of.strokeIds,
+      },
+    });
+    haptic("selection");
+  }, [getWordBoxes]);
 
   const versesAlong = (pts: { x: number; y: number }[]) => {
     const refs = new Set<number>();
@@ -647,8 +854,100 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
         }
       }
     }
+    // ——— V3 §1: the mark grammar. The stroke ALWAYS stays ink; a detected circle or
+    // underline additionally earns the 260ms-dwell dot — the offer, never an interruption.
+    const offerNow = offer;
+    if (offerNow) {
+      // "just start writing beside it → bubble births": handwriting near a live offer becomes
+      // the comment's first ink entry (the stroke moves INTO the bubble, off the page)
+      const b = offerNow.box;
+      const p0 = stroke.pts[0];
+      const near = p0.x > b.minX - 150 && p0.x < b.maxX + 260 && p0.y > b.minY - 90 && p0.y < b.maxY + 200;
+      const isItselfMark = detectForStroke(stroke, info);
+      if (near && !isItselfMark) {
+        if (offerTimer.current) clearTimeout(offerTimer.current);
+        setOffer(null);
+        lastMark.current = null;
+        const boxes = getWordBoxes(offerNow.verse);
+        // normalize the handwriting into bubble space
+        let minX = Infinity, minY = Infinity;
+        for (const pt of stroke.pts) { if (pt.x < minX) minX = pt.x; if (pt.y < minY) minY = pt.y; }
+        const seed: Stroke = { ...stroke, anchor: null, region: undefined, pts: stroke.pts.map((pt) => ({ ...pt, x: pt.x - minX + 12, y: pt.y - minY + 12 })) };
+        setBubble({
+          refStart: offerNow.verse,
+          index: -1,
+          draft: {
+            refStart: offerNow.verse,
+            refEnd: null,
+            wordStart: offerNow.hit.wordStart,
+            wordEnd: offerNow.hit.wordEnd,
+            anchorText: anchorTextOf(boxes, offerNow.hit.wordStart, offerNow.hit.wordEnd) || null,
+            markKind: offerNow.hit.kind,
+            markStrokeIds: offerNow.strokeIds,
+            seedStrokes: [seed],
+          },
+        });
+        haptic("selection");
+        return "discard"; // it lives in the bubble now, not on the page
+      }
+    }
+    const hit = detectForStroke(stroke, info);
+    if (hit) {
+      armOffer(stroke, hit);
+    } else if (lastMark.current && Date.now() - lastMark.current.at > MULTILINE_MS) {
+      // he kept writing elsewhere — the offer dies quietly
+      if (offerTimer.current) clearTimeout(offerTimer.current);
+      if (dwellTimer.current) clearTimeout(dwellTimer.current);
+      setOffer(null);
+      lastMark.current = null;
+    }
     // everything else — loops, underlines, letters — is his ink
     return "keep";
+  };
+  /** classify one stroke against the words of the verse under it */
+  const detectForStroke = (stroke: Stroke, info: StrokeEndInfo): { hit: MarkHit; verse: number } | null => {
+    if (stroke.region !== "text") return null;
+    if (pen.tool === "highlighter" || pen.tool === "eraser" || pen.tool === "lasso") return null;
+    for (const v of versesAlong(info.clientPts)) {
+      const boxes = getWordBoxes(v);
+      if (!boxes.length) continue;
+      const hit = detectMark(stroke.pts, boxes);
+      if (hit) return { hit, verse: v };
+    }
+    return null;
+  };
+  /** the birth sequence: pen lifts → 260ms dwell → the dot blooms; 4s → it decays */
+  const armOffer = (stroke: Stroke, found: { hit: MarkHit; verse: number }) => {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const pt of stroke.pts) {
+      if (pt.x < minX) minX = pt.x; if (pt.y < minY) minY = pt.y;
+      if (pt.x > maxX) maxX = pt.x; if (pt.y > maxY) maxY = pt.y;
+    }
+    // word-anchor the mark stroke itself, so reflow re-draws it on its words
+    const boxes = getWordBoxes(found.verse);
+    const wbox = boxes.find((b) => b.wi === found.hit.wordStart);
+    if (wbox) stroke.anchorW = { ref: found.verse, wi: wbox.wi, dx: stroke.pts[0].x - wbox.left, dy: stroke.pts[0].y - wbox.top };
+    const prev = lastMark.current;
+    const now = Date.now();
+    let hit = found.hit;
+    let strokeIds = [stroke.id];
+    let box = { minX, minY, maxX, maxY };
+    if (prev && prev.verse === found.verse && shouldMerge(prev.hit, found.hit, now - prev.at)) {
+      // §1 multi-line: consecutive-line segments inside 600ms are ONE anchor, one dot
+      hit = mergeHits(prev.hit, found.hit);
+      strokeIds = [...prev.strokeIds, stroke.id];
+      box = { minX: Math.min(box.minX, prev.box.minX), minY: Math.min(box.minY, prev.box.minY), maxX: Math.max(box.maxX, prev.box.maxX), maxY: Math.max(box.maxY, prev.box.maxY) };
+    }
+    lastMark.current = { hit, verse: found.verse, strokeIds, at: now, box };
+    if (dwellTimer.current) clearTimeout(dwellTimer.current);
+    if (offerTimer.current) clearTimeout(offerTimer.current);
+    dwellTimer.current = setTimeout(() => {
+      setOffer({ x: box.maxX + 10, y: box.minY - 2, hit, verse: found.verse, strokeIds, box });
+      offerTimer.current = setTimeout(() => {
+        setOffer(null);
+        lastMark.current = null;
+      }, 4000);
+    }, 260);
   };
   const onHighlighterStroke = (stroke: Stroke, info: StrokeEndInfo): "keep" | "discard" => {
     const vs = versesAlong(info.clientPts);
@@ -1207,6 +1506,13 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
                 onUnmark={unmarkSelection}
                 onHighlight={applyCategory}
                 onDragStart={startDragFromBar}
+                onComment={() => {
+                  const a = sr.start;
+                  const b = sr.end;
+                  readerRef.current?.clearSelection();
+                  setBubble({ refStart: a, index: -1, draft: { refStart: a, refEnd: b !== a ? b : null, wordStart: null, wordEnd: null, anchorText: null, markKind: null, markStrokeIds: [] } });
+                  haptic("selection");
+                }}
                 onSend={() => surfaceAction("send")}
                 onLink={() => surfaceAction("link")}
                 onMem={() => surfaceAction("mem")}
@@ -1249,6 +1555,21 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
               style={{ position: "absolute", left: 0, top: 0, pointerEvents: canvasEnabled ? "auto" : "none", zIndex: 5 }}
             />
           )}
+          {/* V3 §1 — the collapsed comments, chips in the rail that replaced the margin */}
+          {comments.length > 0 && (
+            <CommentChips
+              perVerse={perVerse}
+              positions={versePos}
+              railLeft={marginSide === "right" ? Math.max(0, contentSize.w - 28) : 4}
+              onOpen={(refStart) => {
+                const list = perVerse.get(refStart) ?? [];
+                setBubble({ refStart, index: Math.max(0, list.length - 1), draft: null });
+                haptic("selection");
+              }}
+            />
+          )}
+          {/* the offer — the raspberry dot at the mark's rim; tap it or just write beside it */}
+          {offer && <OfferDot x={offer.x} y={offer.y} onTake={() => takeOffer(offer)} />}
         </div>
       </div>
       {/* V3 §4 — the pane FOOTER: attribution is a term of use, so it is always on screen,
@@ -1274,6 +1595,39 @@ export function BiblePane({ role, query, onQueryChange, pendingJump, onJumpConsu
       )}
       {/* V3 §2 — the selection surface renders INLINE, in the reader's gap under the anchor
           verse; nothing floats over text anymore */}
+      {bubble && (() => {
+        const list = perVerse.get(bubble.refStart) ?? [];
+        const comment = bubble.draft ? null : (list[bubble.index] ?? null);
+        if (!bubble.draft && !comment) return null;
+        const range = comment ?? bubble.draft!;
+        const anchorLabel = range.anchorText
+          ? `${formatRef(bubble.refStart)} · “${range.anchorText.length > 26 ? range.anchorText.slice(0, 26) + "…" : range.anchorText}”`
+          : formatRef(bubble.refStart, range.refEnd ?? bubble.refStart);
+        const switcher = list.length > 1 && !bubble.draft ? (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6 }}>
+            <button type="button" onClick={() => setBubble((b) => (b ? { ...b, index: (b.index - 1 + list.length) % list.length } : b))} style={{ width: 20, height: 20, borderRadius: 99, border: "1px solid #EDEBEE", background: "#FFFFFF", color: "#96949B", fontSize: 10, cursor: "pointer", padding: 0 }}>‹</button>
+            <span style={{ fontSize: 8.5, color: "#A9A7AE", fontWeight: 700 }}>{bubble.index + 1} of {list.length}</span>
+            <button type="button" onClick={() => setBubble((b) => (b ? { ...b, index: (b.index + 1) % list.length } : b))} style={{ width: 20, height: 20, borderRadius: 99, border: "1px solid #EDEBEE", background: "#FFFFFF", color: "#96949B", fontSize: 10, cursor: "pointer", padding: 0 }}>›</button>
+          </span>
+        ) : undefined;
+        return (
+          <BubbleFloat refStart={bubble.refStart} paneRef={paneRef} scrollRef={scrollRef} seamSide={hand === "left" ? "left" : "right"}>
+            {(w) => (
+              <CommentBubble
+                key={`${comment?.id ?? "draft"}-${bubble.index}`}
+                anchorLabel={anchorLabel}
+                comment={comment}
+                draft={bubble.draft}
+                width={w}
+                switcher={switcher}
+                onSave={(entries) => void saveThread(entries)}
+                onDelete={() => void deleteThread()}
+                onClose={() => setBubble(null)}
+              />
+            )}
+          </BubbleFloat>
+        );
+      })()}
       {drag && <RefCardGhost label={drag.label} text={drag.text} x={drag.x} y={drag.y} />}
       <style jsx global>{`
         @keyframes hoverPulse { 0%,100% { opacity:0.3; } 50% { opacity:0.5; } }
