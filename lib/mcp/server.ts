@@ -55,7 +55,10 @@ const INSTRUCTIONS =
   "or a capability Pitaya doesn't have, file it with report_gap. His hymn " +
   "library grows by conversation: save_hymn stores lyrics (plain text, blank " +
   "line between stanzas, a lone 'Coro:' line labels the refrain); get_hymn " +
-  "reads one back in full.";
+  "reads one back in full. Sermon recordings: query_data spirit_recordings "
+  "lists them; transcribe_recording (batch by batch), summarize_recording, "
+  "attach_recording_summary and create_recording_worksheet run the whole "
+  "sermon workflow without opening the app.";
 
 export async function handleMcpMessage(raw: unknown): Promise<McpHttpResponse> {
   // The 2025-06-18 revision dropped JSON-RPC batching — reject arrays.

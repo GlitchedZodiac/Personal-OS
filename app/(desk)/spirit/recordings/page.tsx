@@ -11,10 +11,13 @@ import { DISPLAY, cardShadow } from "@/components/spirit/desk/ui";
 import { ReplayBar, type SegmentMeta, type TranscriptLine } from "@/components/spirit/desk/recording-control";
 import { PlayIcon, RecDot } from "@/components/spirit/desk/desk-icons";
 import { fmtSeconds, drawStrokes, type Stroke } from "@/lib/ink";
-import { askConfirm, askPrompt } from "@/components/spirit/desk/dialog";
+import { askPrompt } from "@/components/spirit/desk/dialog";
+import { ArmTwice } from "@/components/spirit/desk/patterns";
+import { Kicker } from "@/components/spirit/desk/ui";
+import { toast } from "sonner";
 import { useRef } from "react";
 
-interface Row { id: string; title: string; label: string; preacher: string | null; passageRef: string | null; startedAt: string; durationSec: number; status: string; lineCount: number; pageId: string | null; page: { id: string; title: string } | null }
+interface Row { id: string; title: string; label: string; preacher: string | null; passageRef: string | null; startedAt: string; durationSec: number; status: string; lineCount: number; pageId: string | null; summary?: string | null; summaryAt?: string | null; page: { id: string; title: string } | null }
 interface Open { recording: Row & { transcript: TranscriptLine[]; lang: string }; segments: SegmentMeta[]; page: { id: string; title: string; subtitle: string | null; strokes: Stroke[]; objects: unknown[] } | null }
 
 function PageThumb({ strokes }: { strokes: Stroke[] }) {
@@ -51,10 +54,26 @@ export default function RecordingsPage() {
     await openRec(id);
   };
   const del = async (id: string) => {
-    if (!(await askConfirm({ title: "Delete this recording?", body: "The audio AND its transcript go — replay stops working for this sermon. Your page, your ink and its text layer stay.", confirmLabel: "Delete recording", danger: true }))) return;
     await fetch(`/api/spirit/recordings/${id}`, { method: "DELETE" });
     setOpen(null);
     await load();
+    toast("Recording deleted — the page, its ink and its text layer stay.");
+  };
+  const [busy, setBusy] = useState<string | null>(null);
+  const act = async (id: string, what: "summary" | "attach" | "worksheet", force = false) => {
+    setBusy(what);
+    try {
+      const r = await fetch(`/api/spirit/recordings/${id}/${what}${force ? "?force=1" : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { toast.error(d.error ?? "That didn't work."); return; }
+      if (what === "summary") toast.success(d.existed ? "The summary was already made — shown below." : "Summary made.");
+      if (what === "attach") toast.success(`Summary ${d.attached?.replaced ? "updated on" : "placed on"} "${d.attached?.pageTitle}".`);
+      if (what === "worksheet") toast.success(`Worksheet made — ${d.worksheet?.questions} questions.`);
+      await load();
+      await openRec(id);
+    } finally {
+      setBusy(null);
+    }
   };
   const transcribe = async (id: string) => {
     for (let i = 0; i < 40; i++) {
@@ -114,10 +133,58 @@ export default function RecordingsPage() {
                   </div>
                   <button type="button" onClick={async () => { const v = await askPrompt({ title: "Rename the recording", value: open.recording.title }); if (v) void patch(open.recording.id, { title: v }); }} style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>rename</button>
                   <button type="button" onClick={async () => { const v = await askPrompt({ title: "Label", value: open.recording.label, placeholder: "sermon · class · retreat" }); if (v !== null) void patch(open.recording.id, { label: v }); }} style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>label</button>
-                  {open.recording.status !== "ready" && open.recording.status !== "audio_deleted" && <button type="button" onClick={() => void transcribe(open.recording.id)} style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>transcribe</button>}
-                  {open.recording.status !== "audio_deleted" && <button type="button" onClick={async () => { if (await askConfirm({ title: "Delete the audio?", body: "The transcript and the page stay. Replay degrades to the transcript line.", confirmLabel: "Delete audio", danger: true })) void patch(open.recording.id, { deleteAudio: true }); }} style={{ fontSize: 10.5, fontWeight: 600, color: "#B4533F", background: "none", border: 0, cursor: "pointer" }}>delete audio</button>}
-                  <button type="button" onClick={() => void del(open.recording.id)} style={{ fontSize: 10.5, fontWeight: 600, color: "#B4533F", background: "none", border: 0, cursor: "pointer" }}>delete</button>
+                  {open.recording.status !== "audio_deleted" && (
+                    <ArmTwice
+                      onConfirm={() => void patch(open.recording.id, { deleteAudio: true })}
+                      title="Delete the audio — the transcript and the page stay"
+                      armedTitle="tap again"
+                      style={{ height: 24, padding: "0 10px", borderRadius: 99, fontSize: 10, fontWeight: 600, color: "#B4533F", background: "#FFFFFF", border: "1px solid #EDEBEE" }}
+                      armedChildren={<>audio?</>}
+                    >
+                      delete audio
+                    </ArmTwice>
+                  )}
+                  <ArmTwice
+                    onConfirm={() => void del(open.recording.id)}
+                    title="Delete the recording — audio AND transcript; the page stays"
+                    armedTitle="tap again"
+                    style={{ height: 24, padding: "0 10px", borderRadius: 99, fontSize: 10, fontWeight: 600, color: "#B4533F", background: "#FFFFFF", border: "1px solid #EDEBEE" }}
+                    armedChildren={<>delete?</>}
+                  >
+                    delete
+                  </ArmTwice>
                 </div>
+
+                {/* ——— his morning ask: the recording's ACTIONS, on brand — each one metered,
+                    each on a button, nothing automatic ——— */}
+                <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", marginTop: 11, background: "#FAF9FA", border: "1px solid #EDEBEE", borderRadius: 12, padding: "9px 11px" }}>
+                  <Kicker>MAKE FROM THIS RECORDING</Kicker>
+                  <span style={{ flex: 1 }} />
+                  {open.recording.status !== "ready" && open.recording.status !== "audio_deleted" && (
+                    <button type="button" onClick={() => void transcribe(open.recording.id)} style={{ height: 34, padding: "0 14px", borderRadius: 10, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: "#FFFFFF", background: "#A63D63", border: 0, cursor: "pointer" }}>
+                      Transcript →
+                    </button>
+                  )}
+                  <button type="button" disabled={busy !== null} onClick={() => void act(open.recording.id, "summary", Boolean(open.recording.summary))} style={{ height: 34, padding: "0 14px", borderRadius: 10, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: open.recording.summary ? "#454349" : "#FFFFFF", background: open.recording.summary ? "#FFFFFF" : "#A63D63", border: open.recording.summary ? "1px solid #E4E2E6" : 0, cursor: "pointer", opacity: busy && busy !== "summary" ? 0.5 : 1 }}>
+                    {busy === "summary" ? "Summarizing…" : open.recording.summary ? "Redo the summary" : "Summary →"}
+                  </button>
+                  <button type="button" disabled={busy !== null || !open.recording.summary} title={open.recording.summary ? "Place the summary on the linked page" : "Make the summary first"} onClick={() => void act(open.recording.id, "attach")} style={{ height: 34, padding: "0 14px", borderRadius: 10, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: "#454349", background: "#FFFFFF", border: "1px solid #E4E2E6", cursor: open.recording.summary ? "pointer" : "default", opacity: open.recording.summary && (!busy || busy === "attach") ? 1 : 0.5 }}>
+                    {busy === "attach" ? "Placing…" : "Put it on the page"}
+                  </button>
+                  <button type="button" disabled={busy !== null} onClick={() => void act(open.recording.id, "worksheet")} style={{ height: 34, padding: "0 14px", borderRadius: 10, fontFamily: DISPLAY, fontSize: 11.5, fontWeight: 600, color: "#454349", background: "#FFFFFF", border: "1px solid #E4E2E6", cursor: "pointer", opacity: !busy || busy === "worksheet" ? 1 : 0.5 }}>
+                    {busy === "worksheet" ? "Writing questions…" : "Worksheet →"}
+                  </button>
+                </div>
+
+                {open.recording.summary && (
+                  <div style={{ marginTop: 10, background: "#FFFDF9", border: "1px solid #EDE7E0", borderRadius: 12, padding: "11px 14px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Kicker>SUMMARY{open.recording.summaryAt ? ` · ${new Date(open.recording.summaryAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}</Kicker>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#454349", lineHeight: 1.65, whiteSpace: "pre-wrap", marginTop: 6, fontFamily: "var(--font-serif)" }}>{open.recording.summary}</div>
+                  </div>
+                )}
+
                 <div style={{ display: "flex", gap: 12, marginTop: 12, flex: 1, minHeight: 0 }}>
                   <div style={{ flex: 1.2, border: "1px solid #EDEBEE", borderRadius: 11, padding: "10px 12px", overflowY: "auto", maxHeight: 420 }}>
                     <div style={{ fontSize: 8.5, letterSpacing: "0.12em", fontWeight: 700, color: "#96949B" }}>TRANSCRIPT · {open.recording.lang.toUpperCase()}{open.recording.transcript.some((l) => l.gloss) ? " (EN gloss)" : ""}</div>

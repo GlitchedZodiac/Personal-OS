@@ -193,6 +193,10 @@ describe("MCP protocol core", () => {
       "name_trail",
       "save_hymn",
       "get_hymn",
+      "summarize_recording",
+      "attach_recording_summary",
+      "create_recording_worksheet",
+      "transcribe_recording",
       "report_gap",
     ]) {
       expect(names).toContain(expected);

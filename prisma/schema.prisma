@@ -1478,6 +1478,10 @@ model Recording {
   status      String   @default("recording") // recording | uploaded | transcribing | ready | failed | audio_deleted
   lang        String   @default("es")
   transcript  Json     @default("[]") // [{start, end, text, gloss?}]
+  /// the AI summary of the sermon (EN, plain text with · bullets) — made on a button
+  /// or over MCP, never automatically; regenerating replaces it
+  summary     String?
+  summaryAt   DateTime?
   retention   String   @default("forever") // 90d | forever | after_transcript
   mimeType    String   @default("audio/mp4")
   sizeBytes   Int      @default(0)

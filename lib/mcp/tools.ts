@@ -17,6 +17,8 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { summarizeRecording, attachSummaryToPage, createRecordingWorksheet } from "@/lib/spirit-recording-actions";
+import { transcribeRecording } from "@/lib/transcribe-segments";
 import { executeAppData, type AppDataArgs } from "@/lib/ai/data-access";
 import { REGISTRY } from "@/lib/ai/data-registry";
 import { routeDataAllowed } from "@/lib/activities";
@@ -1015,6 +1017,70 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
   },
 
   // ── The gap-finder ────────────────────────────────────────────────────
+  {
+    def: {
+      name: "summarize_recording",
+      description:
+        "Create (and store) the English summary of a sermon recording from its transcript — big idea, main points, scriptures cited, the application. Omit id for the LATEST recording. Returns the summary text; if one already exists it returns that unless force=true. One metered AI call.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "recording id (query_data spirit_recordings lists them); omit = latest" },
+          force: { type: "boolean", description: "regenerate even if a summary exists" },
+        },
+      },
+    },
+    handler: async (args) => summarizeRecording(str(args.id) || undefined, { force: args.force === true }),
+  },
+  {
+    def: {
+      name: "attach_recording_summary",
+      description:
+        "Place a recording's stored summary ON a notebook page as a typed block — the recording's own sermon page by default, or any page by pageId. Re-running replaces the block it made, never stacks duplicates. Make the summary first (summarize_recording).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "recording id; omit = latest" },
+          pageId: { type: "string", description: "target page; omit = the recording's linked page" },
+        },
+      },
+    },
+    handler: async (args) => attachSummaryToPage(str(args.id) || undefined, str(args.pageId) || undefined),
+  },
+  {
+    def: {
+      name: "create_recording_worksheet",
+      description:
+        "AI writes 4-6 reinforcement questions from a sermon recording's transcript (or its summary) and creates a worksheet page in his Worksheets notebook — prompts he answers in ink on the iPad. Returns the new page's id and title. One metered AI call.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "recording id; omit = latest" },
+        },
+      },
+    },
+    handler: async (args) => createRecordingWorksheet(str(args.id) || undefined),
+  },
+  {
+    def: {
+      name: "transcribe_recording",
+      description:
+        "Transcribe the next few audio segments of a recording (about 10 minutes of audio per call). Returns {done, total, finished} — call again until finished:true. Status and existing transcripts are readable via query_data spirit_recordings.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "recording id (required — transcription is heavy; no implicit latest)" },
+        },
+        required: ["id"],
+      },
+    },
+    handler: async (args) => {
+      const id = str(args.id);
+      if (!id) return { error: "id is required" };
+      const r = await transcribeRecording(id, { maxSegments: 5 });
+      return r;
+    },
+  },
   {
     def: {
       name: "report_gap",
