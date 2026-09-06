@@ -92,11 +92,11 @@ export function PromptObject({ o, onChip }: { o: PageObject; onChip?: (ref: stri
   );
 }
 
-export function RefCardObject({ o, fresh, selected }: { o: PageObject; fresh?: boolean; selected?: boolean }) {
+export function RefCardObject({ o, fresh, selected, armedRemove }: { o: PageObject; fresh?: boolean; selected?: boolean; armedRemove?: boolean }) {
   const d = o.data as unknown as RefCardData;
   return (
     <div className={fresh ? "desk-card-drop" : undefined} data-obj={o.id} style={{ position: "absolute", left: o.x, top: o.y, transformOrigin: "left top" }}>
-      <RefCard data={d} width={o.w ?? 196} fresh={fresh} selected={selected} />
+      <RefCard data={d} width={o.w ?? 196} fresh={fresh} selected={selected} armedRemove={armedRemove} />
     </div>
   );
 }
@@ -194,7 +194,7 @@ export function CompareObject({ o }: { o: PageObject }) {
   );
 }
 
-export function PageObjects({ objects, fresh, selectedId, editingId, liftedId }: { objects: PageObject[]; fresh?: Set<string>; selectedId?: string | null; editingId?: string | null; liftedId?: string | null }) {
+export function PageObjects({ objects, fresh, selectedId, editingId, liftedId, armedRemoveId }: { objects: PageObject[]; fresh?: Set<string>; selectedId?: string | null; editingId?: string | null; liftedId?: string | null; armedRemoveId?: string | null }) {
   return (
     <>
       {liftedId && <style>{`[data-obj="${liftedId}"] { filter: drop-shadow(0 12px 22px rgba(35,34,39,0.22)); }`}</style>}
@@ -210,7 +210,7 @@ export function PageObjects({ objects, fresh, selectedId, editingId, liftedId }:
           case "prompt":
             return (o.data as { label?: string }).label === "ESV | BSB" ? <CompareObject key={o.id} o={o} /> : <PromptObject key={o.id} o={o} />;
           case "refcard":
-            return <RefCardObject key={o.id} o={o} fresh={fresh?.has(o.id)} selected={selectedId === o.id} />;
+            return <RefCardObject key={o.id} o={o} fresh={fresh?.has(o.id)} selected={selectedId === o.id} armedRemove={armedRemoveId === o.id} />;
           case "text":
             return <TextObject key={o.id} o={o} editing={editingId === o.id} />;
           case "image":

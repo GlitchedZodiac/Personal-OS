@@ -28,7 +28,7 @@ import { SermonRecorder } from "@/lib/spirit-recording";
 import { fmtSeconds, newId, pageHeightFor, strokeBounds, strokeDistanceTo, type PageObject, type Stroke } from "@/lib/ink";
 import { askConfirm, askPrompt } from "./dialog";
 import { haptic } from "@/lib/haptics";
-import { ringBloom } from "./patterns";
+import { ringBloom, ArmTwice } from "./patterns";
 import { useWakeLock } from "@/lib/wake-lock";
 import { useRouter } from "next/navigation";
 import { getOrCreateMicrophoneStream, deactivateMicrophoneStream } from "@/lib/microphone";
@@ -116,7 +116,7 @@ function resolveOnce(key: string, run: () => Promise<Response>) {
   return p;
 }
 
-export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteConsumed, context, initialPageId, pageKey, dayId, onPageChange }: NotebookPaneProps) {
+export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteConsumed, context, onKicker, initialPageId, pageKey, dayId, onPageChange }: NotebookPaneProps) {
   const desk = useDesk();
   const { pen, setPen, popover, setPopover, prefs, setRecording, recordingSeconds, emit } = desk;
   const canvasRef = useRef<InkCanvasHandle | null>(null);
@@ -260,6 +260,9 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   /** "find the references on this page": recognized handwritten refs, awaiting his keep/skip */
   const [refScan, setRefScan] = useState<{ raw: string; label: string; refStart: number; refEnd: number; bbox?: number[] | null; keep: boolean }[] | null>(null);
   const [refScanBusy, setRefScanBusy] = useState(false);
+  /** §11 tap-twice arm state for a ref card's ✕ */
+  const [armedRemove, setArmedRemove] = useState<string | null>(null);
+  const armedRemoveT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [proposalBusy, setProposalBusy] = useState(false);
   const [recordingRow, setRecordingRow] = useState<RecordingRow | null>(null);
   const [segments, setSegments] = useState<SegmentMeta[]>([]);
@@ -859,7 +862,18 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
       const r = objectRect(o);
       const inRemove = pt.x >= r.x + r.w - 44 && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + 36;
       if (inRemove && !penWriting && !freshCards.has(o.id)) {
-        removeRefCard(o.id, d.label);
+        // V3 §11 — destructive is tap-twice: the first tap arms the ✕ red, the second
+        // (inside 2400ms) removes; it disarms by itself
+        if (armedRemove === o.id) {
+          if (armedRemoveT.current) clearTimeout(armedRemoveT.current);
+          setArmedRemove(null);
+          removeRefCard(o.id, d.label);
+        } else {
+          haptic("light");
+          setArmedRemove(o.id);
+          if (armedRemoveT.current) clearTimeout(armedRemoveT.current);
+          armedRemoveT.current = setTimeout(() => setArmedRemove(null), 2400);
+        }
         return true;
       }
       // ONE tap → the verse pops up beside the card. The old behaviour emitted a jump into
@@ -1326,6 +1340,44 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
   };
 
   // ——— page list (08a) ———
+  /** §5 SWITCH NOTEBOOK — picking swaps the pane straight to that notebook's latest page */
+  const openNotebook = async (n: NotebookRow) => {
+    setNbMenu(false);
+    await flushNow();
+    const r = await fetch(`/api/spirit/notebooks/${n.id}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    const pages = (d.pages ?? []) as { id: string }[];
+    if (pages.length) {
+      await openPage(pages[0].id);
+      setMode("page");
+    } else {
+      await newPage(n);
+    }
+    haptic("selection");
+  };
+  /** §5 THIS PAGE · Duplicate — a copy right after the original, ink and cards included */
+  const duplicatePage = async () => {
+    if (!page) return;
+    setNbMenu(false);
+    await flushNow();
+    const r = await fetch("/api/spirit/ink", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: page.kind, notebookId: page.notebookId, title: `${page.title || "Page"} · copy`, objects }),
+    });
+    if (!r.ok) { toast.error("Couldn't duplicate the page."); return; }
+    const created = (await r.json()).page;
+    if (strokes.length) {
+      await fetch(`/api/spirit/ink/${created.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appendStrokes: strokes }),
+      });
+    }
+    toast.success("Duplicated — you're on the copy.");
+    await openPage(created.id);
+  };
   const openList = async (nb: NotebookRow) => {
     await flushNow();
     const r = await fetch(`/api/spirit/notebooks/${nb.id}`);
@@ -1439,10 +1491,12 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
     <div ref={paneRef} data-notebook-drop="1" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, position: "relative", background: "#FFFFFF" }}>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" style={{ display: "none" }} onChange={(e) => void onPhoto(e.target.files)} />
       <PaneHeader
-        kicker="NOTEBOOK"
-        onKicker={() => setNbMenu((v) => !v)}
+        kicker="PANE · NOTEBOOK"
+        onKicker={onKicker}
         title={mode === "list" ? listNotebook?.title : page?.title || nb?.title || "…"}
-        onTitle={mode === "page" && page ? renamePage : undefined}
+        onTitle={mode === "page" && page ? () => setNbMenu((v) => !v) : undefined}
+        titleGlyph={"\u2304"}
+        titleHint="This notebook, this page"
         meta={mode === "list" ? `${listPages.length} pages` : page ? (pageIndex ? `p. ${pageIndex}` : page.subtitle ?? "") : ""}
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1462,13 +1516,10 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
                   <Popover width={232} onClose={() => setMoreMenu(false)} style={{ right: 0, top: 24 }}>
                     <Kicker>THIS PAGE</Kicker>
                     {[
-                      { label: "New page", run: () => nb && newPage(nb) },
-                      { label: "Rename this page", run: renamePage },
                       { label: "Typed block", run: () => { setPen({ tool: "text" }); addTextBlock("", false, lastTap.current ?? undefined); } },
                       { label: "Find a verse → card", run: () => setFindOpen(true) },
                       ...(strokes.length > 0 ? [{ label: refScanBusy ? "Reading your handwriting…" : "Find references in my handwriting", run: () => void scanForRefs() }] : []),
                       { label: isSermon ? "Close the page — read it" : "Transcribe this page", run: closePage },
-                      { label: "Page list", run: () => nb && openList(nb) },
                       ...(isSermon && recordingRow ? [
                         ...(recordingRow.status !== "ready" && !transcribing && recState !== "recording" && recState !== "paused" ? [{ label: "Transcribe the recording", run: transcribeRecording }] : []),
                         ...(transcribing ? [{ label: "Transcribing…", run: () => {} }] : []),
@@ -1482,7 +1533,6 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
                       { label: zoom === 1 ? "Zoom 150%" : "Zoom 100%", run: () => setZoom((z) => (z === 1 ? 1.5 : 1)) },
                       { label: "Export as PNG", run: () => { const png = canvasRef.current?.renderPng({ scale: 1.5 }); if (png) window.open(png, "_blank"); } },
                       { label: "Clear the ink", run: async () => { if (!strokes.length || !(await askConfirm({ title: "Clear every stroke on this page?", body: "The cards and sections stay. Undo brings the ink back while the page is open.", confirmLabel: "Clear ink", danger: true }))) return; applyStrokes([], { removed: strokes.map((x) => x.id) }); } },
-                      { label: "Delete this page", run: deletePage, danger: true },
                     ].map((m) => (
                       <button key={m.label} type="button" onClick={() => { setMoreMenu(false); void m.run(); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 4, borderRadius: 9, fontSize: 12, fontWeight: 600, color: (m as { danger?: boolean }).danger ? "#B4533F" : "#232227", background: "transparent", border: 0, cursor: "pointer" }}>
                         {m.label}
@@ -1500,17 +1550,42 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
         }
       >
         {nbMenu && (
-          <Popover width={250} onClose={() => setNbMenu(false)} style={{ left: 0, top: 32 }}>
-            <Kicker>NOTEBOOKS · THE SHELF</Kicker>
+          <Popover width={262} onClose={() => setNbMenu(false)} style={{ left: 0, top: 32 }}>
+            {/* §5 — the notebook title menu: New page first, then the doors */}
+            <button type="button" onClick={() => { setNbMenu(false); if (nb) void newPage(nb); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: 38, borderRadius: 10, fontSize: 12, fontWeight: 700, fontFamily: DISPLAY, color: "#FFFFFF", background: "#A63D63", border: 0, cursor: "pointer" }}>
+              New page
+            </button>
+            <button type="button" onClick={() => { if (nb) void openList(nb); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 9px", marginTop: 6, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#232227", background: "transparent", border: 0, cursor: "pointer" }}>
+              Browse pages <span style={{ fontSize: 10, color: "#A9A7AE" }}>· thumbnails, reorder</span>
+            </button>
+            <Kicker style={{ display: "block", marginTop: 10 }}>SWITCH NOTEBOOK</Kicker>
             {notebooks.map((n) => (
-              <button key={n.id} type="button" onClick={() => openList(n)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "8px 10px", borderRadius: 10, border: "1px solid #E4E2E6", borderLeft: `4px solid ${n.accent}`, background: n.id === page?.notebookId ? "#FAF9FA" : "#FFFFFF", cursor: "pointer", textAlign: "left" }}>
+              <button key={n.id} type="button" onClick={() => void openNotebook(n)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "8px 10px", borderRadius: 10, border: "1px solid #E4E2E6", borderLeft: `4px solid ${n.accent}`, background: n.id === page?.notebookId ? "#FAF9FA" : "#FFFFFF", cursor: "pointer", textAlign: "left" }}>
                 <span style={{ fontFamily: DISPLAY, fontSize: 12.5, fontWeight: 600, color: "#232227" }}>{n.title}</span>
                 {n.recordingCount > 0 && <RecDot size={6} live={false} />}
                 <span style={{ flex: 1 }} />
-                <span style={{ fontSize: 10, color: "#96949B" }}>{n.pageCount} pages</span>
+                <span style={{ fontSize: 10, color: "#96949B" }}>{n.pageCount} page{n.pageCount === 1 ? "" : "s"}</span>
               </button>
             ))}
             <button type="button" onClick={async () => { const t = await askPrompt({ title: "Name the notebook", placeholder: "e.g. Term 2 · Romans" }); if (!t) return; const r = await fetch("/api/spirit/notebooks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: t }) }); if (r.ok) { await loadNotebooks(); setNbMenu(false); } }} style={{ marginTop: 8, fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "none", border: 0, cursor: "pointer" }}>+ new notebook</button>
+            {mode === "page" && page && (
+              <>
+                <Kicker style={{ display: "block", marginTop: 10, borderTop: "1px solid #EDEBEE", paddingTop: 9 }}>THIS PAGE</Kicker>
+                <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
+                  <button type="button" onClick={() => { setNbMenu(false); void renamePage(); }} style={{ flex: 1, height: 34, borderRadius: 9, fontSize: 11, fontWeight: 600, color: "#232227", background: "#FAF9FA", border: 0, cursor: "pointer" }}>Rename</button>
+                  <button type="button" onClick={() => void duplicatePage()} style={{ flex: 1, height: 34, borderRadius: 9, fontSize: 11, fontWeight: 600, color: "#232227", background: "#FAF9FA", border: 0, cursor: "pointer" }}>Duplicate</button>
+                  <ArmTwice
+                    onConfirm={() => { setNbMenu(false); void deletePage(); }}
+                    title="Delete this page"
+                    armedTitle="tap again"
+                    style={{ flex: 1, height: 34, borderRadius: 9, fontSize: 11, fontWeight: 600, color: "#B4533F", background: "#FAF9FA" }}
+                    armedChildren={<>Delete?</>}
+                  >
+                    Delete
+                  </ArmTwice>
+                </div>
+              </>
+            )}
           </Popover>
         )}
       </PaneHeader>
@@ -1580,7 +1655,7 @@ export function NotebookPane({ railSide, showRail = true, pendingNote, onNoteCon
                 highlightStrokeId={replayStroke}
                 paper={page.background === "blank" ? "#FFFFFF" : "#FFFDF9"}
               >
-                <PageObjects objects={objects} fresh={freshCards} editingId={editing?.id ?? null} liftedId={moveObj?.id ?? null} />
+                <PageObjects objects={objects} fresh={freshCards} editingId={editing?.id ?? null} liftedId={moveObj?.id ?? null} armedRemoveId={armedRemove} />
               </InkCanvas>
               {/* SPACE growers — V2: sermon sections gain room on demand. A handle above each
                   section head (after the first); drag moves the section and everything below,

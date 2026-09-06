@@ -16,7 +16,7 @@ export interface RefCardData {
   fresh?: boolean;
 }
 
-export function RefCard({ data, width = 196, fresh, selected }: { data: RefCardData; width?: number; fresh?: boolean; selected?: boolean }) {
+export function RefCard({ data, width = 196, fresh, selected, armedRemove }: { data: RefCardData; width?: number; fresh?: boolean; selected?: boolean; armedRemove?: boolean }) {
   return (
     <div
       style={{
@@ -48,7 +48,14 @@ export function RefCard({ data, width = 196, fresh, selected }: { data: RefCardD
               something he needs to be able to undo at a glance. The tap is caught by the ink
               canvas's hit-test (notebook-pane onTap) against this same corner, since page
               objects sit under the canvas and never receive DOM events themselves. */}
-          {!fresh && <span data-ref-remove style={{ fontSize: 12, lineHeight: 1, color: "#C9C7CD", fontWeight: 600 }}>✕</span>}
+          {!fresh && (
+            // §11 tap-twice: armed, the ✕ fills danger-red and asks again
+            <span data-ref-remove style={armedRemove
+              ? { fontSize: 10, lineHeight: 1, color: "#FFFFFF", fontWeight: 700, background: "#C24040", borderRadius: 99, padding: "3px 7px" }
+              : { fontSize: 12, lineHeight: 1, color: "#C9C7CD", fontWeight: 600 }}>
+              {armedRemove ? "✕?" : "✕"}
+            </span>
+          )}
         </span>
       </div>
       <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 11, color: "#66646C", lineHeight: 1.5, marginTop: 4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>
