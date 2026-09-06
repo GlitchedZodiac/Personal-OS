@@ -91,6 +91,8 @@ export interface SpiritReaderProps {
   externalActionBar?: boolean;
   /** the chapter is pinned by overlay ink — type controls lock */
   typeLocked?: boolean;
+  /** V3 §4 — the host pane renders the attribution in its own footer; skip the in-column line */
+  attributionInFooter?: boolean;
   /** the host's way out of the lock — shown inside the Aa sheet, next to the size it locks */
   onUnlockType?: () => void;
   /** which Bible to load — a registry id from /api/spirit/translations; default esv */
@@ -1316,7 +1318,7 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
               the rest of the chapter is here if you want it — it just isn&apos;t assigned
             </p>
           )}
-          {data.attribution && (
+          {data.attribution && !props.attributionInFooter && (
             // for licensed texts (RVR60) this line is a term of use, not decoration
             <p className="border-t px-2.5 pb-0.5 pt-2.5 text-[9.5px] leading-[1.55]" style={{ color: T.faint, borderColor: T.rule, marginTop: 10 }}>
               {data.attribution}

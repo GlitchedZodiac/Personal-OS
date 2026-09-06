@@ -64,6 +64,8 @@ export interface ReaderPrefs {
   size: number; // 0..4 index into READER_SIZES
   serif: boolean;
   justify: boolean;
+  /** V3 §4 — "Lock size against pinch": his explicit lock, alongside the automatic ink-on-screen one */
+  lockSize?: boolean;
 }
 
 const DEFAULT_PREFS: ReaderPrefs = {
@@ -71,32 +73,48 @@ const DEFAULT_PREFS: ReaderPrefs = {
   size: 2,
   serif: true,
   justify: false,
+  lockSize: false,
 };
 
 const KEY = "spirit-reader-prefs";
+
+// Every hook instance shares one set of listeners, so the pane header's aA
+// popover and the reader itself stay in step — before this, each instance read
+// localStorage once and never heard about the other's writes.
+const listeners = new Set<(p: ReaderPrefs) => void>();
+// the last value loaded or broadcast — module state, so update() never reads a ref in render
+let current: ReaderPrefs | null = null;
 
 export function useReaderPrefs() {
   const [prefs, setPrefs] = useState<ReaderPrefs>(DEFAULT_PREFS);
 
   useEffect(() => {
+    let loaded: ReaderPrefs | null = null;
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(raw) });
+      if (raw) loaded = { ...DEFAULT_PREFS, ...JSON.parse(raw) };
     } catch {
       // stay on defaults
     }
+    if (loaded) {
+      current = loaded;
+      setPrefs(loaded);
+    }
+    const listen = (p: ReaderPrefs) => setPrefs(p);
+    listeners.add(listen);
+    return () => { listeners.delete(listen); };
   }, []);
 
   const update = useCallback((patch: Partial<ReaderPrefs>) => {
-    setPrefs((prev) => {
-      const next = { ...prev, ...patch };
-      try {
-        localStorage.setItem(KEY, JSON.stringify(next));
-      } catch {
-        // storage full/blocked — the session still works
-      }
-      return next;
-    });
+    const next = { ...(current ?? DEFAULT_PREFS), ...patch };
+    current = next;
+    try {
+      localStorage.setItem(KEY, JSON.stringify(next));
+    } catch {
+      // storage full/blocked — the session still works
+    }
+    // broadcast (self included) — side effects live here, never inside a state updater
+    for (const l of listeners) l(next);
   }, []);
 
   return {

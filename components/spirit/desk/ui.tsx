@@ -28,6 +28,7 @@ export function PaneHeader({
   onTitle,
   titleGlyph = "\u270E",
   titleHint = "Rename this page",
+  pre,
   children,
 }: {
   kicker: string;
@@ -40,6 +41,8 @@ export function PaneHeader({
   /** the affordance drawn after the title: a pencil to rename, a chevron to open a menu */
   titleGlyph?: string;
   titleHint?: string;
+  /** V3 §4 — rendered between the kicker and the title (the Bible's ‹ stepper) */
+  pre?: ReactNode;
   children?: ReactNode;
 }) {
   return (
@@ -68,8 +71,9 @@ export function PaneHeader({
         style={{ fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 700, color: "#96949B", cursor: onKicker ? "pointer" : "default", background: "none", border: 0, padding: 0 }}
       >
         {kicker}
-        {onKicker ? " ⌄" : ""}
+        {onKicker ? " ⇄" : ""}
       </button>
+      {pre}
       {title !== undefined && (
         <>
           <span style={{ fontSize: 11, color: "#C9C7CD" }}>·</span>
