@@ -397,18 +397,19 @@ export function DeskShell(props: DeskShellProps) {
     haptic("medium");
   };
   const removeTab = (id: string) => {
-    setTabs((ts) => {
-      if (ts.length <= 1) return ts;
-      const closing = ts.find((t) => t.id === id);
-      const next = ts.filter((t) => t.id !== id);
-      if (activeTab === id) setActiveTab(next[Math.max(0, ts.findIndex((t) => t.id === id) - 1)].id);
-      // §7 — closing SAVES the tab's desk; the Layouts sheet can reopen it
-      if (closing) {
-        const stored = [closing, ...((prefs.layouts[context]?.closedTabs ?? []) as DeskTab[])].slice(0, 6);
-        saveLayout({ closedTabs: stored });
-      }
-      return next;
-    });
+    // computed OUTSIDE setTabs — side effects in an updater get double-run and
+    // dropped by React 19 (the bug that ate the colour palette lived this way)
+    const ts = latest.current.tabs;
+    if (ts.length <= 1) return;
+    const closing = ts.find((t) => t.id === id);
+    const next = ts.filter((t) => t.id !== id);
+    if (activeTab === id) setActiveTab(next[Math.max(0, ts.findIndex((t) => t.id === id) - 1)].id);
+    setTabs(next);
+    // §7 — closing SAVES the tab's desk; the Layouts sheet can reopen it
+    if (closing) {
+      const stored = [closing, ...((prefs.layouts[context]?.closedTabs ?? []) as DeskTab[])].slice(0, 6);
+      saveLayout({ closedTabs: stored });
+    }
   };
   /** §7 — the + adds a desk directly: this context's default arrangement, named "Desk N" */
   const addQuickTab = () => {

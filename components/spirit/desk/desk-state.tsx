@@ -100,18 +100,25 @@ export function useDeskEvent(handler: (e: DeskEvent) => void, deps: unknown[] = 
   useEffect(() => subscribe(handler), deps); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+const INITIAL_PEN: PenState = {
+  tool: "fountain",
+  brush: "fountain",
+  color: DEFAULT_DESK_PREFS.pen.color,
+  widthStep: 1,
+  widthMul: 1,
+  opacity: 1,
+  streamline: DEFAULT_DESK_PREFS.pen.streamline,
+  hlCategory: "God",
+};
+
 export function DeskProvider({ children, initialContext = "study" }: { children: ReactNode; initialContext?: DeskContext }) {
   const [prefs, setPrefs] = useState<DeskPrefs>(DEFAULT_DESK_PREFS);
-  const [pen, setPenState] = useState<PenState>({
-    tool: "fountain",
-    brush: "fountain",
-    color: DEFAULT_DESK_PREFS.pen.color,
-    widthStep: 1,
-    widthMul: 1,
-    opacity: 1,
-    streamline: DEFAULT_DESK_PREFS.pen.streamline,
-    hlCategory: "God",
-  });
+  /** the latest prefs, readable from event handlers without waiting a render */
+  const prefsRef = useRef<DeskPrefs>(DEFAULT_DESK_PREFS);
+  useEffect(() => { prefsRef.current = prefs; }, [prefs]);
+  const [pen, setPenState] = useState<PenState>(INITIAL_PEN);
+  const penRef = useRef<PenState>(INITIAL_PEN);
+  useEffect(() => { penRef.current = pen; }, [pen]);
   const [overlayVisibility, setOverlayVisibilityState] = useState<OverlayVisibility>("show");
   const [overlayMargin, setOverlayMarginState] = useState<MarginStep>(1);
   const [context, setContext] = useState<DeskContext>(initialContext);
@@ -191,54 +198,63 @@ export function DeskProvider({ children, initialContext = "study" }: { children:
       });
   }, []);
 
+  /**
+   * PURE setState, side effects OUTSIDE the updater. The old shape ran the local
+   * write and the debounced network save INSIDE setPrefs' updater — React 19
+   * double-invokes updaters and rejects nested updates scheduled from them
+   * ("Cannot update DeskProvider while rendering DeskShell"), which silently ATE
+   * the update that scheduled them. The colour palette was the first control to
+   * hit it reproducibly: the pick's setPen → updatePrefs chain evaporated.
+   * prefsRef mirrors the latest value so back-to-back calls in one tick compose.
+   */
   const updatePrefs = useCallback((patch: Partial<DeskPrefs> | ((p: DeskPrefs) => DeskPrefs)) => {
-    setPrefs((prev) => {
-      const next = mergeDeskPrefs(typeof patch === "function" ? patch(prev) : { ...prev, ...patch });
-      writeLocalDeskPrefs(next);
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => {
-        fetch("/api/spirit/desk-prefs", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(next),
-        }).catch(() => {});
-      }, 900);
-      return next;
-    });
+    const prev = prefsRef.current;
+    const next = mergeDeskPrefs(typeof patch === "function" ? patch(prev) : { ...prev, ...patch });
+    prefsRef.current = next;
+    setPrefs(next);
+    writeLocalDeskPrefs(next);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      fetch("/api/spirit/desk-prefs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      }).catch(() => {});
+    }, 900);
   }, []);
 
   const setPen = useCallback(
     (patch: Partial<PenState>) => {
-      setPenState((cur) => {
-        const next = { ...cur, ...patch };
-        // remember recents + defaults
-        if (patch.color && patch.color !== cur.color) {
-          updatePrefs((p) => ({
-            ...p,
-            pen: {
-              ...p.pen,
-              color: patch.color as string,
-              recents: [patch.color as string, ...p.pen.recents.filter((c) => c !== patch.color)].slice(0, 6),
-            },
-          }));
-        } else if (patch.tool || patch.brush || patch.widthStep !== undefined || patch.widthMul !== undefined || patch.streamline !== undefined || patch.opacity !== undefined) {
-          updatePrefs((p) => ({
-            ...p,
-            pen: {
-              ...p.pen,
-              // "text" and "eraser" are transient modes, never a boot tool — a width nudge
-              // while erasing must not make the eraser what the desk opens with tomorrow
-              tool: (next.tool === "text" || next.tool === "eraser" ? p.pen.tool : next.tool) as DeskPrefs["pen"]["tool"],
-              brush: next.brush,
-              widthStep: next.widthStep,
-              widthMul: next.widthMul,
-              streamline: next.streamline,
-              opacity: next.opacity,
-            },
-          }));
-        }
-        return next;
-      });
+      const cur = penRef.current;
+      const next = { ...cur, ...patch };
+      penRef.current = next;
+      setPenState(next);
+      // remember recents + defaults — OUTSIDE the updater (see updatePrefs' note)
+      if (patch.color && patch.color !== cur.color) {
+        updatePrefs((p) => ({
+          ...p,
+          pen: {
+            ...p.pen,
+            color: patch.color as string,
+            recents: [patch.color as string, ...p.pen.recents.filter((c) => c !== patch.color)].slice(0, 6),
+          },
+        }));
+      } else if (patch.tool || patch.brush || patch.widthStep !== undefined || patch.widthMul !== undefined || patch.streamline !== undefined || patch.opacity !== undefined) {
+        updatePrefs((p) => ({
+          ...p,
+          pen: {
+            ...p.pen,
+            // "text" and "eraser" are transient modes, never a boot tool — a width nudge
+            // while erasing must not make the eraser what the desk opens with tomorrow
+            tool: (next.tool === "text" || next.tool === "eraser" ? p.pen.tool : next.tool) as DeskPrefs["pen"]["tool"],
+            brush: next.brush,
+            widthStep: next.widthStep,
+            widthMul: next.widthMul,
+            streamline: next.streamline,
+            opacity: next.opacity,
+          },
+        }));
+      }
     },
     [updatePrefs],
   );
