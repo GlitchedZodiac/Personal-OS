@@ -1531,6 +1531,33 @@ model Hymn {
   @@map("spirit_hymns")
 }
 
+/// V3 §1 — a comment thread anchored to scripture: to a word-range inside a verse
+/// (circle/underline marks), or to a verse range (born from the selection surface).
+/// entries is the thread — [{id, kind:"ink"|"typed", text?, strokes?, at}] — ink
+/// entries carry their own strokes, drawn inside the bubble at 1:1.
+/// anchorText keeps the marked words themselves so a translation switch can
+/// re-find them; when it can't, the chip falls back to verse-level honestly.
+model SpiritComment {
+  id            String    @id @default(uuid())
+  refStart      Int
+  refEnd        Int?
+  wordStart     Int?
+  wordEnd       Int?
+  anchorText    String?
+  /// "circle" | "underline" — null for verse-level or adopted-later comments
+  markKind      String?
+  /// overlay stroke ids that form the mark; deleting the comment leaves them as plain ink
+  markStrokeIds Json?
+  entries       Json
+  /// soft delete — the InkPage precedent; tap-twice arms it, this makes it reversible
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([refStart])
+  @@map("spirit_comments")
+}
+
 model EsvPassage {
   queryKey     String   @id // normalized query, e.g. "judges 4"
   canonical    String

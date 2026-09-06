@@ -31,6 +31,7 @@ const OFFLINE_READ_APIS = [
   "/api/spirit/prefs",
   "/api/spirit/translations",
   "/api/spirit/hymns",
+  "/api/spirit/comments",
 ];
 
 // Assets to cache on install — every URL must resolve or install fails,
