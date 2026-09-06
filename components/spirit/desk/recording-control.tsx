@@ -7,7 +7,7 @@
 // segment from Postgres; replay degrades to the transcript when audio is
 // gone.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fmtSeconds } from "@/lib/ink";
 import { PauseIcon, PlayIcon, RecDot, VuBars, MicFilledIcon } from "./desk-icons";
 import { DISPLAY } from "./ui";
@@ -103,10 +103,39 @@ export function ReplayBar({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [t, setT] = useState(0);
-  const [segIdx, setSegIdx] = useState<number | null>(null);
+  /**
+   * The segment the <audio> element ACTUALLY holds, updated synchronously in load().
+   * onTick used the state copy — but the element fires events before React commits,
+   * so a cross-segment seek computed time against the OLD segment and snapped every
+   * jump to a 2-minute boundary (transcript-line taps landed up to 2min off).
+   */
+  const segIdxRef = useRef<number | null>(null);
   const pendingSeek = useRef<number | null>(null);
+  /** his morning note: playback speed — persisted per device, applied on every segment load */
+  const [rate, setRate] = useState<number>(() => {
+    if (typeof window === "undefined") return 1;
+    const n = Number(localStorage.getItem("spirit-replay-rate"));
+    return [0.75, 1, 1.25, 1.5, 2].includes(n) ? n : 1;
+  });
+  /**
+   * A REAL drag scrub. The old bar answered pointerdown only — a finger drag did
+   * nothing until you lifted and tapped again, and every tap reloaded audio, so
+   * scrubbing felt like typing. While the finger is down, the playhead, the time
+   * label and the transcript line all follow it locally; the audio seeks ONCE on
+   * release (a plain tap still plays from the spot, like before).
+   */
+  const [scrub, setScrub] = useState<number | null>(null);
+  /** the live scrub value — a whole down-move-up can land inside one frame, before any re-render */
+  const scrubRef = useRef<number | null>(null);
+  const scrubInfo = useRef<{ wasPlaying: boolean; moved: boolean; x0: number } | null>(null);
 
-  const segFor = (sec: number) => segments.find((s) => sec >= s.startSec && sec < s.startSec + s.durationSec + 0.05) ?? segments[segments.length - 1] ?? null;
+  const segFor = (sec: number) =>
+    segments.find((s) => sec >= s.startSec && sec < s.startSec + s.durationSec + 0.05)
+      // an interrupted recording's timeline has holes — land where the audio RESUMES,
+      // not always on the final segment
+      ?? segments.find((s) => s.startSec >= sec)
+      ?? segments[segments.length - 1]
+      ?? null;
 
   const load = (sec: number, autoplay: boolean) => {
     const el = audioRef.current;
@@ -118,8 +147,8 @@ export function ReplayBar({
     const seg = segFor(sec);
     if (!seg) return;
     const within = Math.max(0, sec - seg.startSec);
-    if (segIdx !== seg.index) {
-      setSegIdx(seg.index);
+    if (segIdxRef.current !== seg.index) {
+      segIdxRef.current = seg.index;
       pendingSeek.current = within;
       el.src = `/api/spirit/recordings/${recordingId}/segments/${seg.index}`;
       el.load();
@@ -140,22 +169,41 @@ export function ReplayBar({
 
   const onLoaded = () => {
     const el = audioRef.current;
-    if (el && pendingSeek.current !== null) {
+    if (!el) return;
+    el.playbackRate = rate; // a fresh src forgets the rate
+    if (pendingSeek.current !== null) {
       el.currentTime = pendingSeek.current;
       pendingSeek.current = null;
     }
   };
+  useEffect(() => {
+    const el = audioRef.current;
+    if (el) el.playbackRate = rate;
+    try { localStorage.setItem("spirit-replay-rate", String(rate)); } catch { /* per-device nicety */ }
+  }, [rate]);
+  const cycleRate = () => {
+    const RATES = [1, 1.25, 1.5, 2, 0.75];
+    setRate((r) => RATES[(RATES.indexOf(r) + 1) % RATES.length]);
+  };
+  /** ±30s — clamped; segment switching is load()'s existing job */
+  const skip = (delta: number) => {
+    if (audioGone) return;
+    const target = Math.min(Math.max(0, t + delta), Math.max(duration - 0.2, 0));
+    load(target, playing);
+  };
   const onTick = () => {
     const el = audioRef.current;
-    if (!el || segIdx === null) return;
-    const seg = segments.find((s) => s.index === segIdx);
+    if (!el || segIdxRef.current === null) return;
+    if (pendingSeek.current !== null) return; // the element hasn't taken the seek yet — its tick is noise
+    const seg = segments.find((s) => s.index === segIdxRef.current);
     const sec = (seg?.startSec ?? 0) + el.currentTime;
     setT(sec);
     onTime?.(sec);
   };
   const onEnded = () => {
-    if (segIdx === null) return;
-    const next = segments.find((s) => s.index === segIdx + 1);
+    const cur = segIdxRef.current;
+    if (cur === null) return;
+    const next = segments.find((s) => s.index === cur + 1);
     if (next) load(next.startSec, true);
     else setPlaying(false);
   };
@@ -165,7 +213,7 @@ export function ReplayBar({
     if (playing) {
       el.pause();
       setPlaying(false);
-    } else if (segIdx === null) load(t, true);
+    } else if (segIdxRef.current === null) load(t, true);
     else el.play().then(() => setPlaying(true)).catch(() => {});
   };
   const stop = () => {
@@ -176,18 +224,60 @@ export function ReplayBar({
     onTime?.(0);
   };
 
+  const shown = scrub ?? t; // the finger owns the view while it is down
   const line = useMemo(() => {
     let best: TranscriptLine | null = null;
     for (const l of transcript) {
-      if (l.start <= t + 0.2) best = l;
+      if (l.start <= shown + 0.2) best = l;
       else break;
     }
     return best;
-  }, [transcript, t]);
+  }, [transcript, shown]);
 
   const total = Math.max(duration, 1);
   const bars = 66;
-  const frac = Math.min(1, t / total);
+  const frac = Math.min(1, shown / total);
+  /**
+   * Map a pointer x to seconds against the waveform box, with a forgiving edge:
+   * the first/last 2.5% snap to 0 / end. His note — "deadspace in the beginning
+   * that makes it hard to go all the way back" — the leftmost pixels sat flush
+   * against the play button, so reaching second 0 meant a 4px target. The strip
+   * also grew 8px of real slop each side (negative margin, padding back).
+   */
+  const fracAt = useCallback((clientX: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    const raw = (clientX - r.left - 8) / Math.max(1, r.width - 16);
+    const f = Math.min(1, Math.max(0, raw));
+    if (f < 0.025) return 0;
+    if (f > 0.975) return 1;
+    return f;
+  }, []);
+  const onScrubDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (audioGone) return;
+    e.preventDefault();
+    // capture keeps the drag when the finger wanders off the strip; a pointer that
+    // already lifted (or a synthetic one) throws NotFound — never let that kill the scrub
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* uncaptured is still draggable over the strip */ }
+    scrubInfo.current = { wasPlaying: playing, moved: false, x0: e.clientX };
+    scrubRef.current = fracAt(e.clientX, e.currentTarget) * total;
+    setScrub(scrubRef.current);
+  };
+  const onScrubMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubInfo.current) return;
+    if (Math.abs(e.clientX - scrubInfo.current.x0) > 4) scrubInfo.current.moved = true;
+    scrubRef.current = fracAt(e.clientX, e.currentTarget) * total;
+    setScrub(scrubRef.current);
+  };
+  const onScrubUp = () => {
+    const info = scrubInfo.current;
+    const at = scrubRef.current;
+    scrubInfo.current = null;
+    scrubRef.current = null;
+    setScrub(null);
+    if (info === null || at === null) return;
+    // a plain tap plays from the spot (the old manner); a drag restores what playback was doing
+    load(at, info.moved ? info.wasPlaying : true);
+  };
   return (
     <div style={{ flex: "none", borderTop: "1px solid #EDEBEE", background: "#FCFBFC", padding: "12px 16px 14px" }}>
       <audio ref={audioRef} onLoadedMetadata={onLoaded} onTimeUpdate={onTick} onEnded={onEnded} onPause={() => setPlaying(false)} style={{ display: "none" }} />
@@ -195,24 +285,36 @@ export function ReplayBar({
         <button type="button" onClick={toggle} disabled={audioGone} title={audioGone ? "audio deleted — transcript only" : playing ? "pause" : "play"} className={playing ? "desk-pulse" : undefined} style={{ width: 34, height: 34, flex: "none", borderRadius: "50%", background: audioGone ? "#D9D7DC" : "#A63D63", display: "flex", alignItems: "center", justifyContent: "center", cursor: audioGone ? "default" : "pointer", border: 0 }}>
           {playing ? <PauseIcon /> : <PlayIcon />}
         </button>
+        <button type="button" onClick={() => skip(-30)} disabled={audioGone} title="Back 30 seconds" aria-label="Back 30 seconds" style={{ width: 30, height: 30, flex: "none", borderRadius: "50%", border: "1px solid #E4E2E6", background: "#FFFFFF", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: audioGone ? "default" : "pointer", padding: 0, opacity: audioGone ? 0.5 : 1 }}>
+          <span style={{ fontSize: 10, lineHeight: 1, color: "#454349" }}>↺</span>
+          <span style={{ fontSize: 6.5, fontWeight: 700, color: "#96949B", lineHeight: 1 }}>30</span>
+        </button>
+        <button type="button" onClick={() => skip(30)} disabled={audioGone} title="Forward 30 seconds" aria-label="Forward 30 seconds" style={{ width: 30, height: 30, flex: "none", borderRadius: "50%", border: "1px solid #E4E2E6", background: "#FFFFFF", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: audioGone ? "default" : "pointer", padding: 0, opacity: audioGone ? 0.5 : 1 }}>
+          <span style={{ fontSize: 10, lineHeight: 1, color: "#454349" }}>↻</span>
+          <span style={{ fontSize: 6.5, fontWeight: 700, color: "#96949B", lineHeight: 1 }}>30</span>
+        </button>
         <div
-          style={{ flex: 1, position: "relative", height: 34, cursor: "pointer", touchAction: "none" }}
-          onPointerDown={(e) => {
-            const r = e.currentTarget.getBoundingClientRect();
-            const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-            load(f * total, playing || true);
-          }}
+          style={{ flex: 1, position: "relative", height: 34, margin: "0 -8px", padding: "0 8px", boxSizing: "border-box", cursor: audioGone ? "default" : "pointer", touchAction: "none" }}
+          onPointerDown={onScrubDown}
+          onPointerMove={onScrubMove}
+          onPointerUp={onScrubUp}
+          onPointerCancel={() => { scrubInfo.current = null; setScrub(null); }}
         >
-          <svg width="100%" height="34" viewBox={`0 0 ${bars * 6 + 4} 34`} preserveAspectRatio="none" style={{ position: "absolute", inset: 0 }}>
+          <svg width="100%" height="34" viewBox={`0 0 ${bars * 6 + 4} 34`} preserveAspectRatio="none" style={{ position: "absolute", inset: "0 8px", width: "calc(100% - 16px)" }}>
             {Array.from({ length: bars }).map((_, i) => {
               const h = 7 + ((i * 7919) % 17);
               const played = i / bars < frac;
               return <rect key={i} x={2 + i * 6} y={17 - h / 2} width="3" height={h} rx="1.5" fill={played ? "#A63D63" : "#DDD9DF"} />;
             })}
           </svg>
-          <span style={{ position: "absolute", top: -3, bottom: -3, width: 2, background: "#232227", borderRadius: 2, left: `${frac * 100}%`, transition: "left .2s" }} />
+          {/* no transition while the finger owns it — the 200ms ease is what made
+              scrubbing feel like the playhead was on a rubber band */}
+          <span style={{ position: "absolute", top: -3, bottom: -3, width: 2, background: "#232227", borderRadius: 2, left: `calc(8px + (100% - 16px) * ${frac.toFixed(4)})`, transition: scrub !== null ? "none" : "left .2s" }} />
         </div>
-        <span style={{ flex: "none", fontSize: 11, fontWeight: 600, color: "#454349", fontVariantNumeric: "tabular-nums" }}>{fmtSeconds(t)} / {fmtSeconds(total)}</span>
+        <span style={{ flex: "none", fontSize: 11, fontWeight: 600, color: "#454349", fontVariantNumeric: "tabular-nums" }}>{fmtSeconds(shown)} / {fmtSeconds(total)}</span>
+        <button type="button" onClick={cycleRate} disabled={audioGone} title="Playback speed" aria-label="Playback speed" style={{ flex: "none", height: 24, minWidth: 40, borderRadius: 99, border: "1px solid #E4E2E6", background: rate !== 1 ? "#F6E3EB" : "#FFFFFF", color: rate !== 1 ? "#8C2F51" : "#66646C", fontSize: 10, fontWeight: 700, cursor: audioGone ? "default" : "pointer", padding: "0 8px", fontVariantNumeric: "tabular-nums" }}>
+          {rate}×
+        </button>
         <button type="button" onClick={stop} title="stop" style={{ width: 26, height: 26, flex: "none", borderRadius: "50%", border: "1px solid #E4E2E6", background: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           <span style={{ width: 8, height: 8, background: "#454349", borderRadius: 1.5 }} />
         </button>
