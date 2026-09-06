@@ -5,7 +5,24 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-09-06 (SPIRIT ON IPAD — round 10: THE V3 PORT, overnight on his instruction
+**Last updated:** 2026-09-06 (SPIRIT ON IPAD — round 11, his morning notes: THE RECORDER.
+Scrubbing is a real drag now (pointer captured, playhead/time/transcript-line follow the finger,
+one seek on release), the start's dead zone is gone (8px slop each side, outer 2.5% snaps to
+0/end), ↺30/30↻ skips, a speed pill (persisted, re-applied per segment). Driving it exposed two
+pre-existing seek bugs, both fixed at the root: cross-segment seeks raced React state and snapped
+to ~2-minute boundaries (segment index lives in a ref now; ticks ignored while a seek is
+pending), and an interrupted recording's timeline holes always landed on the LAST segment (now:
+where audio resumes). The recordings library got the on-brand MAKE FROM THIS RECORDING card:
+Transcript → / Summary → (stored, panel, Redo) / Put it on the page (replaces its own block,
+never stacks) / Worksheet → (4-6 AI questions FROM the sermon land as a Worksheets-notebook page
+of ink prompts); deletes are tap-twice. One shared lib powers the routes AND four new MCP tools
+(transcribe_recording, summarize_recording, attach_recording_summary, create_recording_worksheet)
+— his token-saving ask. Driven on the REAL Aug-30 sermon: transcribed (269 lines ES+EN gloss),
+summary's scriptures independently match his handwritten refs from that Sunday, worksheet asks
+about 3 John 4 and the Romans 7 point he inked. summary/summaryAt additive migration applied.
+373 tests.)
+
+**Round 10 (2026-09-06):** (SPIRIT ON IPAD — round 10: THE V3 PORT, overnight on his instruction
 ("run until completion and promote to production/main when done"). The whole reviewed V3 handoff
 spec, built as a port: §1 THE COMMENT MODEL — circle/underline words with the pen (geometry per
 the spec's literal definitions, unit-tested), 260ms dwell births the offer dot, tap it or write
