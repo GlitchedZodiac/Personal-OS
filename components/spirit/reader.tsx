@@ -171,6 +171,10 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
   const [selEnd, setSelEnd] = useState<number | null>(null);
   /** V3 §2 — the FIRST-tapped verse: the surface's gap locks under it and never relocates */
   const [selAnchor, setSelAnchor] = useState<number | null>(null);
+  // V3 §3 — the peek: one tap on a marker opens the FULL verse inline; it never navigates.
+  // "Open in the pane →" is the explicit jump; "Open in Logos" is the external handoff.
+  const [tip, setTip] = useState<{ refInt: number; letter: string; text?: string; kind: "cf" | "fn"; ref?: string } | null>(null);
+
   /**
    * Tapping a verse: first tap selects it, a tap on a DIFFERENT verse extends the range to
    * cover both, and a tap back on the anchor clears. His 2026-08-30 report — "when I select a
@@ -179,6 +183,7 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
    * drag along the gutter and a circling gesture, neither of them obvious.
    */
   const tapVerse = useCallback((refInt: number) => {
+    if (tip) { setTip(null); return; } // §8 — the topmost surface closes; the tap does nothing else
     setAskAnswer(null);
     setBar("act");
     if (sel === null) { setSel(refInt); setSelEnd(null); setSelAnchor(refInt); return; }
@@ -198,7 +203,7 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
     if (refInt < sel) { setSel(refInt); setSelEnd(end); return; }                     // extend upward
     if (refInt > end) { setSelEnd(refInt); return; }                                  // extend downward
     setSel(refInt); setSelEnd(null);                                                  // tap inside → collapse
-  }, [sel, selEnd, selAnchor, props.externalActionBar]);
+  }, [sel, selEnd, selAnchor, props.externalActionBar, tip]);
   const [bar, setBar] = useState<BarMode>("act");
   const [doneMsg, setDoneMsg] = useState("");
   const [legendOpen, setLegendOpen] = useState(false);
@@ -222,8 +227,6 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
   const [marking, setMarking] = useState(false);
   const [memOccasion, setMemOccasion] = useState("Assurance");
   const [memWhy, setMemWhy] = useState("");
-  // two-stage crossref tooltip (footnotes are single-stage): verse+marker+stage
-  const [tip, setTip] = useState<{ refInt: number; letter: string; stage: 1 | 2; text?: string; kind: "cf" | "fn" } | null>(null);
   // audio mini-player
   const [navOpen, setNavOpen] = useState(false);
   const [audOn, setAudOn] = useState(false);
@@ -691,45 +694,51 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
 
   const tapCrossref = async (v: Verse, letter: string, ref: string) => {
     if (tip && tip.refInt === v.refInt && tip.letter === letter) {
-      if (tip.stage === 1) {
-        // stage 2: fetch the target verse text (first ref of the note)
-        const first = ref.replace(/^(See|Cited|Compare)\s+/i, "").split(/[;,]/)[0].trim();
-        setTip({ ...tip, stage: 2, text: "…" });
-        try {
-          const res = await fetch(`/api/spirit/passage?q=${encodeURIComponent(first)}`);
-          const body = res.ok ? await res.json() : null;
-          const t = body?.verses?.[0];
-          setTip((cur2) =>
-            cur2 && cur2.refInt === v.refInt && cur2.letter === letter
-              ? { ...cur2, stage: 2, text: t ? (t.lines ? t.lines.join(" ") : t.text) : "Couldn't fetch the verse." }
-              : cur2,
-          );
-        } catch {
-          setTip((cur2) =>
-            cur2 && cur2.refInt === v.refInt ? { ...cur2, text: "Couldn't fetch the verse." } : cur2,
-          );
-        }
-      } else {
-        const first = ref.replace(/^(See|Cited|Compare)\s+/i, "").split(/[;,]/)[0].trim();
-        if (props.onOpenRef) {
-          props.onOpenRef(first.replace(/:\d+.*$/, ""), first);
-          setTip(null);
-        } else {
-          router.push(`/spirit/read?q=${encodeURIComponent(first.replace(/:\d+.*$/, ""))}`);
-          setTip(null);
-          setQ(first.replace(/:\d+.*$/, ""));
-        }
-      }
-    } else {
-      setTip({ refInt: v.refInt, letter, stage: 1, kind: "cf" });
+      setTip(null); // the marker toggles its own peek
+      return;
     }
+    // V3 §3 — ONE tap opens the peek with the full verse; never "tap again for the verse"
+    const first = ref.replace(/^(See|Cited|Compare)\s+/i, "").split(/[;,]/)[0].trim();
+    setTip({ refInt: v.refInt, letter, kind: "cf", text: "…", ref: first });
+    try {
+      const res = await fetch(`/api/spirit/passage?q=${encodeURIComponent(first)}`);
+      const body = res.ok ? await res.json() : null;
+      const t = body?.verses?.[0];
+      setTip((cur2) =>
+        cur2 && cur2.refInt === v.refInt && cur2.letter === letter
+          ? { ...cur2, text: t ? (t.lines ? t.lines.join(" ") : t.text) : "Couldn't fetch the verse." }
+          : cur2,
+      );
+    } catch {
+      setTip((cur2) =>
+        cur2 && cur2.refInt === v.refInt ? { ...cur2, text: "Couldn't fetch the verse." } : cur2,
+      );
+    }
+  };
+  /** the peek's explicit jump — the only way a marker ever moves a pane */
+  const openPeekRef = () => {
+    const first = tip?.ref;
+    if (!first) return;
+    if (props.onOpenRef) {
+      props.onOpenRef(first.replace(/:\d+.*$/, ""), first);
+      setTip(null);
+    } else {
+      router.push(`/spirit/read?q=${encodeURIComponent(first.replace(/:\d+.*$/, ""))}`);
+      setTip(null);
+      setQ(first.replace(/:\d+.*$/, ""));
+    }
+  };
+  const openPeekLogos = () => {
+    const first = tip?.ref;
+    if (!first) return;
+    window.open(`https://ref.ly/logosref/${encodeURIComponent(first.replace(/\s+/g, "").replace(/:/g, "."))}`, "_blank", "noopener");
   };
 
   const tapFootnote = (v: Verse, marker: string, text: string) => {
     if (tip && tip.refInt === v.refInt && tip.letter === `fn${marker}`) {
       setTip(null);
     } else {
-      setTip({ refInt: v.refInt, letter: `fn${marker}`, stage: 2, text, kind: "fn" });
+      setTip({ refInt: v.refInt, letter: `fn${marker}`, text, kind: "fn" });
     }
   };
 
@@ -1225,13 +1234,11 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
                     </div>
                   )}
                   {tipHere && tipHere.kind === "cf" && (
+                    /* V3 §3 — the peek. One tap opened it WITH the verse; it never navigates.
+                       The jump and the Logos handoff are explicit buttons. */
                     <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const c = v.crossrefs.find((x) => x.letter === tipHere.letter);
-                        if (c) tapCrossref(v, c.letter, c.ref);
-                      }}
-                      className="mt-[7px] max-w-[340px] cursor-pointer rounded-[11px] border px-3 py-[9px]"
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-[7px] max-w-[340px] rounded-[11px] border px-3 py-[9px]"
                       style={{ background: T.chip, borderColor: T.rule }}
                     >
                       <div className="text-[8.5px] font-bold tracking-[0.1em] text-[#8C2F51]">
@@ -1240,26 +1247,39 @@ const SpiritReaderInner = forwardRef<SpiritReaderHandle, SpiritReaderProps>(func
                       <div className="mt-[3px] text-[12px] font-semibold" style={{ color: T.ink }}>
                         {v.crossrefs.find((x) => x.letter === tipHere.letter)?.ref}
                       </div>
-                      {tipHere.stage === 1 ? (
-                        <div className="mt-[3px] text-[10px]" style={{ color: T.faint }}>
-                          tap again for the verse
-                        </div>
-                      ) : (
-                        <>
-                          <div
-                            className="mt-[5px] text-[12.5px] italic leading-[1.65]"
-                            style={{ fontFamily: "var(--font-serif)", color: T.sub }}
-                          >
-                            {tipHere.text}
-                          </div>
-                          <div
-                            className="mt-2 inline-flex rounded-full bg-[#A63D63] px-3 py-1 text-[10.5px] font-semibold text-white"
-                            style={{ fontFamily: "var(--font-display)" }}
-                          >
-                            Open ›
-                          </div>
-                        </>
-                      )}
+                      <div
+                        className="mt-[5px] text-[12.5px] italic leading-[1.65]"
+                        style={{ fontFamily: "var(--font-serif)", color: T.sub }}
+                      >
+                        {tipHere.text}
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openPeekRef(); }}
+                          className="inline-flex rounded-full bg-[#A63D63] px-3 py-[7px] text-[10.5px] font-semibold text-white"
+                          style={{ fontFamily: "var(--font-display)" }}
+                        >
+                          Open in the pane →
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openPeekLogos(); }}
+                          className="inline-flex rounded-full border px-3 py-[7px] text-[10.5px] font-semibold"
+                          style={{ fontFamily: "var(--font-display)", borderColor: T.rule, color: T.sub, background: T.card }}
+                        >
+                          Open in Logos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setTip(null); }}
+                          aria-label="Close"
+                          className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px]"
+                          style={{ color: T.faint }}
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                   )}
                   {cat && (
