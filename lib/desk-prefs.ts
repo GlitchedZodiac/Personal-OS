@@ -63,6 +63,8 @@ export interface DeskLayoutPrefs {
   stackFrac: number;
   tabs?: DeskTab[];
   activeTab?: string;
+  /** V3 §7 — closing a tab SAVES its desk; the Layouts sheet reopens it from here */
+  closedTabs?: DeskTab[];
 }
 
 export const SKETCH_PURPLES: SavedPalette = {

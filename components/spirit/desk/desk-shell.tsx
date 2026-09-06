@@ -115,6 +115,7 @@ function TabThumb({ writing, text, cols, active }: { writing: number; text: numb
   );
 }
 
+const MAX_TABS = 6; // §7 — "six tabs is the honest ceiling"
 const newTabId = () => `t-${Math.random().toString(36).slice(2, 8)}`;
 const PRESETS: Record<"study" | "sermon" | "free" | "source", Layout> = {
   study: { preset: "study", writing: ["notebook"], text: ["teaching"] },
@@ -145,7 +146,9 @@ export function DeskShell(props: DeskShellProps) {
   const setLayout = (next: Layout | ((l: Layout) => Layout)) => {
     updateTab((t) => (typeof next === "function" ? next(t) : next));
   };
-  const [tabMenu, setTabMenu] = useState<string | null>(null);
+  /** §11 tap-twice on a tab's ✕ */
+  const [armedClose, setArmedClose] = useState<string | null>(null);
+  const armedCloseT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tabsLoaded = useRef(false);
   const [nbFrac, setNbFrac] = useState(prefs.layouts[context]?.nbFrac ?? 0.535);
   const [stackFrac, setStackFrac] = useState(prefs.layouts[context]?.stackFrac ?? 0.6);
@@ -365,7 +368,7 @@ export function DeskShell(props: DeskShellProps) {
   }, [layout]);
 
   const saveLayout = useCallback(
-    (next: Partial<{ preset: string; nbFrac: number; stackFrac: number; tabs: DeskTab[]; activeTab: string }>) => {
+    (next: Partial<{ preset: string; nbFrac: number; stackFrac: number; tabs: DeskTab[]; activeTab: string; closedTabs: DeskTab[] }>) => {
       updatePrefs((p) => ({ ...p, layouts: { ...p.layouts, [context]: { ...p.layouts[context], ...next } } }));
     },
     [context, updatePrefs],
@@ -376,6 +379,10 @@ export function DeskShell(props: DeskShellProps) {
     setPopover(null);
   };
   const addTab = (tplKey: string) => {
+    if (tabs.length >= MAX_TABS) {
+      toast("Six tabs is the honest ceiling — close one first.");
+      return;
+    }
     const tpl = TAB_TEMPLATES.find((x) => x.key === tplKey);
     if (!tpl) return;
     const id = newTabId();
@@ -387,17 +394,45 @@ export function DeskShell(props: DeskShellProps) {
   const removeTab = (id: string) => {
     setTabs((ts) => {
       if (ts.length <= 1) return ts;
+      const closing = ts.find((t) => t.id === id);
       const next = ts.filter((t) => t.id !== id);
       if (activeTab === id) setActiveTab(next[Math.max(0, ts.findIndex((t) => t.id === id) - 1)].id);
+      // §7 — closing SAVES the tab's desk; the Layouts sheet can reopen it
+      if (closing) {
+        const stored = [closing, ...((prefs.layouts[context]?.closedTabs ?? []) as DeskTab[])].slice(0, 6);
+        saveLayout({ closedTabs: stored });
+      }
       return next;
     });
-    setTabMenu(null);
+  };
+  /** §7 — the + adds a desk directly: this context's default arrangement, named "Desk N" */
+  const addQuickTab = () => {
+    if (tabs.length >= MAX_TABS) {
+      toast("Six tabs is the honest ceiling — close one first.");
+      return;
+    }
+    const id = newTabId();
+    const base = PRESETS[context === "free" ? "free" : context === "sermon" ? "sermon" : "study"];
+    const n = tabs.length + 1;
+    setTabs((ts) => [...ts, { id, label: `Desk ${n}`, ...base }]);
+    setActiveTab(id);
+    haptic("medium");
+  };
+  const reopenTab = (t: DeskTab) => {
+    if (tabs.length >= MAX_TABS) {
+      toast("Six tabs is the honest ceiling — close one first.");
+      return;
+    }
+    setTabs((ts) => [...ts, t]);
+    setActiveTab(t.id);
+    saveLayout({ closedTabs: ((prefs.layouts[context]?.closedTabs ?? []) as DeskTab[]).filter((x) => x.id !== t.id) });
+    setPopover(null);
+    haptic("medium");
   };
   // V2: renaming happens IN the band — the title slot becomes the field, DONE commits.
   // Reached from the tab menu or by holding a tab pill (the layout menu says so).
   const renameTab = (id: string) => {
     const cur = tabs.find((t) => t.id === id);
-    setTabMenu(null);
     setRenaming(id);
     setRenameVal(cur?.label ?? "");
   };
@@ -608,27 +643,45 @@ export function DeskShell(props: DeskShellProps) {
             <div ref={pillsRef} onPointerDown={onStripDown} onPointerUp={onStripUp} style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, overflowX: "auto", scrollbarWidth: "none", touchAction: "pan-x" }}>
             {tabs.map((t) => {
               const on = t.id === activeTab;
+              const armed = armedClose === t.id;
               return (
-                <div key={t.id} style={{ position: "relative", flex: "none" }}>
+                <div key={t.id} data-tab-active={on ? "1" : undefined} style={{ position: "relative", flex: "none", display: "flex", alignItems: "center", height: 26, boxSizing: "border-box", padding: "0 4px 0 11px", borderRadius: 99, background: on ? "#FFFFFF" : "transparent", boxShadow: on ? "inset 0 0 0 1.5px #A63D63" : "none", whiteSpace: "nowrap" }}>
                   <button
                     type="button"
-                    onClick={() => { if (on) setTabMenu(tabMenu === t.id ? null : t.id); else goToTab(t.id); }}
+                    onClick={() => { if (!on) goToTab(t.id); }}
                     onPointerDown={(e) => { if (e.pointerType === "pen") return; const id = t.id; holdT.current = setTimeout(() => renameTab(id), 480); }}
                     onPointerUp={() => { if (holdT.current) clearTimeout(holdT.current); }}
                     onPointerLeave={() => { if (holdT.current) clearTimeout(holdT.current); }}
-                    data-tab-active={on ? "1" : undefined}
-                    style={{ display: "flex", alignItems: "center", gap: 6, height: 26, boxSizing: "border-box", padding: "0 11px", borderRadius: 99, background: on ? "#FFFFFF" : "transparent", boxShadow: on ? "inset 0 0 0 1.5px #A63D63" : "none", border: 0, cursor: "pointer", whiteSpace: "nowrap" }}
+                    title={on ? "Hold to rename" : t.label}
+                    style={{ display: "flex", alignItems: "center", gap: 6, height: 26, background: "transparent", border: 0, cursor: "pointer", padding: 0 }}
                   >
                     <TabThumb writing={t.writing.length} text={t.text.length} cols={Boolean(t.cols)} active={on} />
                     <span style={{ fontFamily: DISPLAY, fontSize: 11.5, fontWeight: on ? 700 : 600, color: on ? "#8C2F51" : "#66646C" }}>{t.label}</span>
                   </button>
-                  {tabMenu === t.id && (
-                    <Popover width={200} onClose={() => setTabMenu(null)} style={{ left: 0, top: 32 }}>
-                      <Kicker>THIS TAB</Kicker>
-                      <button type="button" onClick={() => renameTab(t.id)} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 6, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#232227", background: "transparent", border: 0, cursor: "pointer" }}>Rename</button>
-                      <button type="button" onClick={() => { setTabs((ts) => { const i = ts.findIndex((x) => x.id === t.id); const copy = { ...t, id: newTabId(), label: `${t.label} 2` }; const next = ts.slice(); next.splice(i + 1, 0, copy); return next; }); setTabMenu(null); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 2, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#232227", background: "transparent", border: 0, cursor: "pointer" }}>Duplicate</button>
-                      {tabs.length > 1 && <button type="button" onClick={() => removeTab(t.id)} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 9px", marginTop: 2, borderRadius: 9, fontSize: 12, fontWeight: 600, color: "#B4533F", background: "transparent", border: 0, cursor: "pointer" }}>Close tab</button>}
-                    </Popover>
+                  {tabs.length > 1 && (
+                    /* §7/§11 — ✕ arms red, auto-disarms 2400ms; the second tap closes.
+                       Closing saves the desk — Layouts reopens it. */
+                    <button
+                      type="button"
+                      aria-label={armed ? "Tap again to close" : `Close ${t.label}`}
+                      title={armed ? "tap again — closing saves this desk" : "Close (saved to Layouts)"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (armed) {
+                          if (armedCloseT.current) clearTimeout(armedCloseT.current);
+                          setArmedClose(null);
+                          removeTab(t.id);
+                          haptic("warning");
+                        } else {
+                          setArmedClose(t.id);
+                          if (armedCloseT.current) clearTimeout(armedCloseT.current);
+                          armedCloseT.current = setTimeout(() => setArmedClose(null), 2400);
+                        }
+                      }}
+                      style={{ marginLeft: 4, width: 18, height: 18, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 99, border: 0, cursor: "pointer", fontSize: 9.5, fontWeight: 700, background: armed ? "#C24040" : "transparent", color: armed ? "#FFFFFF" : on ? "#C98BA8" : "#A9A7AE", padding: 0 }}
+                    >
+                      ✕
+                    </button>
                   )}
                 </div>
               );
@@ -636,7 +689,7 @@ export function DeskShell(props: DeskShellProps) {
             </div>
             {/* the + lives OUTSIDE the scroller — however many tabs there are, it is always
                 reachable. His report: the row cut off and "there's no way to add plus". */}
-            <button type="button" title="New arrangement — hold a tab to rename" onClick={() => setPopover(popover === "layout" ? null : "layout")} style={{ flex: "none", width: 28, height: 28, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#96949B", background: "transparent", border: 0 }}>
+            <button type="button" title={tabs.length >= MAX_TABS ? "Six tabs is the honest ceiling" : "New desk — hold a tab to rename"} onClick={addQuickTab} style={{ flex: "none", width: 28, height: 28, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: tabs.length >= MAX_TABS ? "#D9D7DC" : "#96949B", background: "transparent", border: 0 }}>
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 1.5v9M1.5 6h9" /></svg>
             </button>
           </div>
@@ -683,6 +736,19 @@ export function DeskShell(props: DeskShellProps) {
                   );
                 })}
               </div>
+              {(prefs.layouts[context]?.closedTabs?.length ?? 0) > 0 && (
+                <>
+                  <Kicker style={{ display: "block", marginTop: 10, borderTop: "1px solid #EDEBEE", paddingTop: 9 }}>REOPEN A CLOSED TAB</Kicker>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 7 }}>
+                    {(prefs.layouts[context]?.closedTabs ?? []).map((t) => (
+                      <button key={t.id} type="button" onClick={() => reopenTab(t as DeskTab)} style={{ display: "flex", alignItems: "center", gap: 6, height: 26, padding: "0 10px", borderRadius: 99, border: "1px solid #E4E2E6", background: "#FFFFFF", cursor: "pointer", fontSize: 10.5, fontWeight: 600, color: "#454349" }}>
+                        <TabThumb writing={t.writing.length} text={t.text.length} cols={Boolean(t.cols)} active={false} />
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
               <div style={{ display: "flex", gap: 6, marginTop: 10, borderTop: "1px solid #EDEBEE", paddingTop: 9 }}>
                 <button type="button" onClick={() => pickPreset(context === "free" ? "free" : context === "sermon" ? "sermon" : "study")} style={{ fontSize: 10.5, fontWeight: 600, color: "#8C2F51", background: "#F6E3EB", border: 0, borderRadius: 99, padding: "5px 11px", cursor: "pointer" }}>Reset this tab to the {context} desk</button>
               </div>
