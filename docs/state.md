@@ -5,7 +5,36 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-09-05 (SPIRIT ON IPAD — round 9: THE FIELD-TEST ROUND. First: the seven
+**Last updated:** 2026-09-06 (SPIRIT ON IPAD — round 10: THE V3 PORT, overnight on his instruction
+("run until completion and promote to production/main when done"). The whole reviewed V3 handoff
+spec, built as a port: §1 THE COMMENT MODEL — circle/underline words with the pen (geometry per
+the spec's literal definitions, unit-tested), 260ms dwell births the offer dot, tap it or write
+beside it and a bubble opens (ink + typed in one thread, ≥140pt big-ink box with grow grip,
+edit-in-place, tap-twice deletes); chips stack in the 32pt rail that replaced the margin (the
+margin is retired as a writing surface — legacy margin ink keeps its room); word-anchored mark
+strokes re-draw on their words across reflow; spirit_comments additive migration applied; nothing
+persists until content exists. §2 the selection surface — inline in a gap LOCKED under the first-
+tapped verse, anchor-fixed grow/shrink, six NAMED categories inline, ≥40pt targets, drag/send/
+link/memorize/ask/Logos/✕; ActionBarA deleted. §3 markers peek (full verse on ONE tap, never
+navigate; Open in the pane → / Open in Logos; "ver. N" notes resolve). §4 the Bible header at
+nine controls: PANE · BIBLE ⇄ everywhere, ‹ title ⌄ › (steppers walk the verse when one is
+selected), Back, always-visible translation pill, eye = global show/hide with the footer badge,
+aA popover (sizes + pinch lock + clear-ink), footer attribution designed in; ⋯/margin/MY LAYER/
+DIM/SELECTED retired. §5 the notebook title menu (New page · Browse · SWITCH NOTEBOOK · THIS
+PAGE Rename/Duplicate/Delete tap-twice) and the pane-swap kicker finally wired; card ✕ arms red.
+§6 the colour dot opens the 8-ink palette + conic wheel, custom picks join recents. §7 tabs wear
+name ✕ (tap-twice; closing SAVES the desk, Layouts reopens it), + adds "Desk N", six is the
+ceiling. §8 ring-bloom acknowledgment on every outside tap, menus clip+fade, the no-transform law
+enforced. §9 the himnario: library page with accent-forgiven line search and the honest camera
+confirm (partial flags, Replace/Append/Skip), the Literata reader (CORO card, lines shrink never
+fold, pliego overlay), PANE · HYMN with TONIGHT'S SET ‹ ›. §10 Home rebuilt: 64pt Today · Chat ·
+Food · Spirit bar, Journal removed, HIMNARIO card, compact-pane tiles. Root-caused along the way:
+desk-state ran side effects inside state updaters — React 19 ate the scheduling update (the
+colour pick's state change vanished while its prefs write survived); setPen/updatePrefs/removeTab
+are pure now. 369 tests. DEVIATION SURFACED: the six highlight-category NAMES stay the app's own
+fixed study taxonomy, not the demo boards' labels — his call to migrate or keep.)
+
+**Round 9 (2026-09-05):** (SPIRIT ON IPAD — round 9: THE FIELD-TEST ROUND. First: the seven
 stale commits deployed — he had field-tested two-round-old code twice; prod + the iPad shell are
 now current, and deploy-per-round is the standing pattern. Then his 8-item church list, each fixed
 at the traced mechanism: one tap on a reference card opens the verse (the dead RefPopover rewired,
