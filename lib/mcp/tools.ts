@@ -41,10 +41,31 @@ import { getDateStringInTimeZone } from "@/lib/timezone";
 
 type Json = Record<string, unknown>;
 
+/// MCP tool annotations (spec 2025-06-18 §Tools). Clients read these to
+/// decide how loudly to gate a call — which tools may run without a
+/// per-call approval prompt, and which must be spelled out first.
+/// The spec's DEFAULTS for an unannotated tool are the most alarming
+/// reading possible: readOnlyHint=false, destructiveHint=true,
+/// idempotentHint=false, openWorldHint=true. So shipping no annotations
+/// (as this server did until 2026-09-08) tells every client that
+/// query_data is as dangerous as delete_entry. They are hints, not
+/// enforcement — the handlers remain the only real boundary.
+export interface McpToolAnnotations {
+  title: string;
+  readOnlyHint: boolean;
+  /// Only meaningful when readOnlyHint is false. True = may overwrite or
+  /// remove something that already exists; false = purely additive.
+  destructiveHint: boolean;
+  /// Calling twice with the same arguments lands the same state.
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+}
+
 export interface McpToolDef {
   name: string;
   description: string;
   inputSchema: Json;
+  annotations?: McpToolAnnotations;
 }
 
 type Handler = (args: Json) => Promise<unknown>;
@@ -969,7 +990,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     def: {
       name: "save_hymn",
       description:
-        "Save a hymn to his hymn library (or update the one with the same title, case-insensitively). Body is plain text: blank line between stanzas; a lone 'Coro:' / 'Chorus:' / 'Estribillo:' line labels the refrain stanza that follows. Text only — photos of hymn sheets go through the app, never through MCP.",
+        "Save a hymn to his hymn library (or update the one with the same title, case-insensitively). Body is plain text: blank line between stanzas; a lone 'Coro:' / 'Chorus:' / 'Estribillo:' line labels the refrain stanza that follows. This field takes text: paste it, type it, or read it back from the library. A PHOTO of a hymn sheet is better imported in the app — the Himnario's 'Photograph the pliego' — which OCRs the sheet and shows a confirm screen with per-line flags and Replace/Append/Skip — accuracy this tool cannot match. That is a preference, not a prohibition.",
       inputSchema: {
         type: "object",
         properties: {
@@ -1132,7 +1153,78 @@ async function findRecipe(args: Json) {
   return match ? prisma.favoriteFoods.findUnique({ where: { id: match.id } }) : null;
 }
 
-export const MCP_TOOL_DEFS: McpToolDef[] = MCP_TOOLS.map((t) => t.def);
+// ── The trust surface, in one table ──────────────────────────────────────
+// Every tool's gating hints live here rather than scattered through 26 defs,
+// so the whole "what can this connector do to my data" question is one
+// screenful. openWorldHint is false throughout: every tool's blast radius is
+// Michael's own Pitaya database, never an open world of external entities.
+// (Some tools spend a metered AI call on the way — the descriptions say so —
+// but the thing they CHANGE is still only his data.)
+const CLOSED = { openWorldHint: false } as const;
+const READ = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, ...CLOSED } as const;
+/// Adds a new row; never touches an existing one.
+const ADDS = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, ...CLOSED } as const;
+/// Overwrites or removes something that already exists. Re-running converges.
+const OVERWRITES = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, ...CLOSED } as const;
+
+const TOOL_ANNOTATIONS: Record<string, McpToolAnnotations> = {
+  // Reads
+  query_data: { title: "Read Pitaya data", ...READ },
+  list_recipes: { title: "List saved recipes", ...READ },
+  get_hymn: { title: "Read a hymn's words", ...READ },
+  get_training_week: { title: "Read the planned training week", ...READ },
+
+  // Additive writes — a new row each time
+  log_food: { title: "Log food", ...ADDS },
+  log_recipe: { title: "Log a saved recipe as eaten", ...ADDS },
+  log_workout: { title: "Log a workout", ...ADDS },
+  log_measurement: { title: "Log a body measurement", ...ADDS },
+  log_water: { title: "Log water", ...ADDS },
+  set_reminder: { title: "Set a reminder", ...ADDS },
+  create_routine: { title: "Create a training routine", ...ADDS },
+  name_trail: { title: "Name a trail", ...ADDS },
+  report_gap: { title: "File a product gap", ...ADDS },
+  create_recording_worksheet: { title: "Create a sermon worksheet", ...ADDS },
+  // Advances transcription batch by batch — additive, but each call moves on.
+  transcribe_recording: { title: "Transcribe sermon audio", ...ADDS },
+  // Stores a summary; returns the existing one unless force=true.
+  summarize_recording: { title: "Summarize a sermon", ...ADDS, idempotentHint: true },
+  // Replaces only the block it made itself, so it converges without stacking.
+  attach_recording_summary: { title: "Put a sermon summary on a page", ...ADDS, idempotentHint: true },
+
+  // Updates — these can replace values he already has
+  save_recipe: { title: "Save or update a recipe", ...OVERWRITES },
+  rename_recipe: { title: "Rename a recipe", ...OVERWRITES },
+  edit_food: { title: "Edit a food log", ...OVERWRITES },
+  // Entry edits are positional, so a repeat is not guaranteed to land twice
+  // the same way — the conservative hint is the honest one.
+  edit_workout: { title: "Edit a workout", ...OVERWRITES, idempotentHint: false },
+  update_routine: { title: "Update a routine", ...OVERWRITES },
+  // Same title = the stored lyrics are replaced.
+  save_hymn: { title: "Save or update a hymn", ...OVERWRITES },
+  // replaceWeek clears the touched weeks first.
+  plan_training: { title: "Plan training days", ...OVERWRITES },
+
+  // Deletes
+  delete_entry: { title: "Delete a logged entry", ...OVERWRITES },
+  delete_recipe: { title: "Delete a saved recipe", ...OVERWRITES },
+};
+
+/// A tool with no entry above falls back to the spec's own defaults — the
+/// most cautious reading — so a new tool is over-gated, never under-gated.
+/// `mcp-server.test.ts` fails if the table drifts out of sync with MCP_TOOLS.
+const fallbackAnnotations = (name: string): McpToolAnnotations => ({
+  title: name,
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: false,
+});
+
+export const MCP_TOOL_DEFS: McpToolDef[] = MCP_TOOLS.map((t) => ({
+  ...t.def,
+  annotations: TOOL_ANNOTATIONS[t.def.name] ?? fallbackAnnotations(t.def.name),
+}));
 const HANDLERS = new Map(MCP_TOOLS.map((t) => [t.def.name, t.handler]));
 
 export async function callMcpTool(name: string, args: Json): Promise<unknown> {

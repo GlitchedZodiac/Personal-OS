@@ -208,6 +208,107 @@ describe("MCP protocol core", () => {
   });
 });
 
+describe("the connector's own briefing", () => {
+  // 2026-09-08 regression: INSTRUCTIONS was built by + -concatenation and one
+  // + went missing before "lists them; …". Adjacent string literals on
+  // separate lines are not a syntax error — ASI ends the statement and the
+  // remaining lines become dead expression statements — so the build stayed
+  // green while the connector silently shipped a briefing that stopped
+  // mid-sentence at "query_data spirit_recordings ". Every conversation since
+  // lost the sermon-recording workflow.
+  const instructions = async () => {
+    const res = await handleMcpMessage(rpc("initialize", { protocolVersion: "2025-06-18" }));
+    return (res.body as { result: { instructions: string } }).result.instructions;
+  };
+
+  it("arrives whole — a finished sentence, not a truncated one", async () => {
+    const text = await instructions();
+    expect(text.endsWith("sermon workflow without opening the app.")).toBe(true);
+    // The tell for the ASI bug: the briefing stopped at this exact phrase.
+    expect(text).not.toMatch(/spirit_recordings\s*$/);
+  });
+
+  it("names every tool it promises", async () => {
+    const text = await instructions();
+    for (const tool of [
+      "query_data",
+      "log_recipe",
+      "save_recipe",
+      "log_food",
+      "report_gap",
+      "save_hymn",
+      "get_hymn",
+      "transcribe_recording",
+      "summarize_recording",
+      "attach_recording_summary",
+      "create_recording_worksheet",
+    ]) {
+      expect(text).toContain(tool);
+    }
+  });
+
+  it("mentions no tool that does not exist", async () => {
+    const text = await instructions();
+    const names = new Set(MCP_TOOL_DEFS.map((t) => t.name));
+    for (const word of text.match(/[a-z]+_[a-z_]+/g) ?? []) {
+      // Dataset keys (spirit_recordings) share the shape; only judge words
+      // that look like a tool by living in the tool table's namespace.
+      if (word.startsWith("spirit_")) continue;
+      expect(names.has(word), `instructions name an unknown tool: ${word}`).toBe(true);
+    }
+  });
+});
+
+describe("tool annotations — how clients gate each call", () => {
+  // Shipped unannotated until 2026-09-08. Per the MCP spec an unannotated
+  // tool defaults to readOnlyHint=false / destructiveHint=true /
+  // openWorldHint=true, i.e. every client had to treat query_data as though
+  // it were delete_entry.
+  it("every tool declares them, and none claims an open world", () => {
+    for (const t of MCP_TOOL_DEFS) {
+      expect(t.annotations, `${t.name} has no annotations`).toBeDefined();
+      expect(t.annotations!.openWorldHint).toBe(false);
+      // fallbackAnnotations() sets title = name; a human title proves the
+      // policy table still covers this tool.
+      expect(t.annotations!.title, `${t.name} fell back to the default hints`).not.toBe(t.name);
+    }
+  });
+
+  it("reads are marked read-only; writes are not", () => {
+    const readOnly = MCP_TOOL_DEFS.filter((t) => t.annotations!.readOnlyHint).map((t) => t.name);
+    expect(readOnly.sort()).toEqual(
+      ["get_hymn", "get_training_week", "list_recipes", "query_data"].sort()
+    );
+    for (const t of MCP_TOOL_DEFS) {
+      // The spec only reads destructiveHint when readOnlyHint is false; a
+      // read that also claims to destroy is a contradiction.
+      if (t.annotations!.readOnlyHint) expect(t.annotations!.destructiveHint).toBe(false);
+    }
+  });
+
+  it("anything that can overwrite or remove his data says so", () => {
+    const destructive = new Set(
+      MCP_TOOL_DEFS.filter((t) => t.annotations!.destructiveHint).map((t) => t.name)
+    );
+    for (const name of [
+      "delete_entry",
+      "delete_recipe",
+      "edit_food",
+      "edit_workout",
+      "save_hymn", // same title replaces the stored lyrics
+      "save_recipe",
+      "rename_recipe",
+      "update_routine",
+      "plan_training", // replaceWeek clears the touched weeks
+    ]) {
+      expect(destructive.has(name), `${name} should be flagged destructive`).toBe(true);
+    }
+    for (const name of ["log_food", "log_workout", "log_water", "log_measurement", "report_gap"]) {
+      expect(destructive.has(name), `${name} only adds rows`).toBe(false);
+    }
+  });
+});
+
 describe("MCP tool handlers", () => {
   it("query_data rides the registry executor", async () => {
     const { parsed, isError } = await callTool("query_data", { dataset: "recent_workouts" });

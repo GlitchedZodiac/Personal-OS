@@ -5,7 +5,36 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-09-06 (SPIRIT ON IPAD — round 11, his morning notes: THE RECORDER.
+**Last updated:** 2026-09-08 (THE CONNECTOR ROUND — three defects in the MCP surface
+he uses every day, found by tracing his two complaints ("no approval received" on every
+write; save_hymn reading as a prohibition) instead of the symptom. **(1) The connector's
+briefing has been truncated mid-sentence since round 11.** `INSTRUCTIONS` is built by
+`+`-concatenation and one `+` went missing before "lists them; …". Adjacent string
+literals on separate lines are NOT a syntax error — ASI ends the statement and the
+remaining lines become dead expression statements — so the build stayed green while every
+conversation since round 11 received a briefing that stopped at "…query_data
+spirit_recordings " and never learned the sermon-recording workflow exists. Confirmed
+against the live connector: the truncation is visible verbatim in a running session's
+system prompt. **(2) All 26 tools shipped with zero `annotations`.** Per the MCP spec an
+unannotated tool defaults to readOnlyHint=false / destructiveHint=true /
+openWorldHint=true — the most alarming reading available — so every client had to gate
+`query_data` exactly as hard as `delete_entry`. The trust surface now lives in one table
+(`TOOL_ANNOTATIONS` in lib/mcp/tools.ts): 4 reads marked read-only, 13 additive writes,
+9 destructive, openWorldHint false throughout. A new tool with no entry falls back to the
+spec defaults — over-gated, never under-gated — and a test fails on the drift. **(3)
+save_hymn's description said "photos of hymn sheets go through the app, never through
+MCP"**, which reads as a ban on photo-derived text rather than the routing preference he
+meant; reworded to state the app's OCR-confirm path as the better route and say plainly
+that it is a preference, not a prohibition. Plus: `@typescript-eslint/no-unused-expressions`
+— the rule that flags exactly defect (1) — was already enabled but buried under 1831
+warnings from vendored bundles (maplibre worker chunks, .bench); ignoring those drops the
+repo from 1853 lint problems to 51 and makes the rule legible again. 379 tests (6 new,
+each proven to fail against the unfixed code). **Not fixed, and not fixable here: the
+"no approval received" error itself is claude.ai's client-side message — that string
+appears nowhere in this repo.** Annotations are the only server-side lever on approval
+gating and they were missing; whether that clears his write failures is his to observe.)
+
+**Round 11 (2026-09-06):** (SPIRIT ON IPAD — round 11, his morning notes: THE RECORDER.
 Scrubbing is a real drag now (pointer captured, playhead/time/transcript-line follow the finger,
 one seek on release), the start's dead zone is gone (8px slop each side, outer 2.5% snaps to
 0/end), ↺30/30↻ skips, a speed pill (persisted, re-applied per segment). Driving it exposed two
