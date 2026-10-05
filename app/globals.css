@@ -745,6 +745,22 @@ html[data-keyboard="open"] .keyboard-hides {
   transform: scale(0.92);
 }
 
+/* The photo tray inside the composer opens by growing a grid row from 0fr
+   to 1fr — real height animation with nothing measured in script. */
+.tray-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.26s cubic-bezier(0.3, 0.9, 0.3, 1),
+    opacity 0.2s ease;
+}
+
+.tray-reveal[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
 /* The ✓ on a card he just confirmed. */
 @keyframes check-pop {
   0% {

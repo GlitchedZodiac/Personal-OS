@@ -28,8 +28,6 @@ export interface ViewportMetrics {
   offsetTop: number;
   /** visualViewport.scale — 1 unless the page is pinch-zoomed */
   scale: number;
-  /** is a text field (input / textarea / contenteditable) focused? */
-  editableFocused: boolean;
 }
 
 export interface ViewportState {
@@ -58,7 +56,16 @@ export function computeViewportState(m: ViewportMetrics): ViewportState {
 
   const height = Math.min(layout || m.visualHeight, m.visualHeight);
   const covered = Math.max(0, layout - m.visualHeight);
-  const keyboardOpen = m.editableFocused && covered >= KEYBOARD_MIN_PX;
+  // GEOMETRY ONLY — deliberately not "and a text field is focused".
+  //
+  // An earlier cut required focus, and that broke Send: tapping a button
+  // blurs the field on touch-down, focus-based state flipped to "closed" in
+  // that same instant, the composer re-flowed (tab-bar padding back, hint
+  // text back) and by the time the finger lifted the button was no longer
+  // under it. The click landed on nothing; the keyboard closed and nothing
+  // was sent. Geometry cannot do that: the viewport only reports the
+  // keyboard gone once it IS gone, long after the click has been delivered.
+  const keyboardOpen = covered >= KEYBOARD_MIN_PX;
 
   return {
     height: Math.round(height),
@@ -72,18 +79,4 @@ export function computeViewportState(m: ViewportMetrics): ViewportState {
     keyboardHeight: keyboardOpen ? Math.round(covered) : 0,
     keyboardOpen,
   };
-}
-
-export function isEditable(el: Element | null): boolean {
-  if (!el) return false;
-  const tag = el.tagName;
-  if (tag === "TEXTAREA") return true;
-  if (tag === "INPUT") {
-    const type = (el as HTMLInputElement).type;
-    // these never raise a keyboard
-    return !["button", "checkbox", "radio", "file", "range", "submit", "color", "hidden"].includes(
-      type
-    );
-  }
-  return (el as HTMLElement).isContentEditable === true;
 }

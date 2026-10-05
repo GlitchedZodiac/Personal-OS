@@ -12,7 +12,6 @@ describe("computeViewportState", () => {
         visualHeight: 796,
         offsetTop: 0,
         scale: 1,
-        editableFocused: false,
       })
     ).toEqual({ height: 796, top: 0, keyboardHeight: 0, keyboardOpen: false });
   });
@@ -24,7 +23,6 @@ describe("computeViewportState", () => {
       visualHeight: 449,
       offsetTop: 347,
       scale: 1,
-      editableFocused: true,
     });
     expect(state.height).toBe(449);
     expect(state.top).toBe(347);
@@ -39,7 +37,6 @@ describe("computeViewportState", () => {
       visualHeight: 713,
       offsetTop: 82,
       scale: 1,
-      editableFocused: true,
     });
     expect(state.top).toBe(82);
     expect(state.height).toBe(713);
@@ -53,23 +50,17 @@ describe("computeViewportState", () => {
       visualHeight: 836 - (KEYBOARD_MIN_PX - 30),
       offsetTop: 0,
       scale: 1,
-      editableFocused: true,
     });
     expect(state.keyboardOpen).toBe(false);
   });
 
-  it("needs a focused field as well as a short viewport", () => {
-    const state = computeViewportState({
-      layoutHeight: 796,
-      visualHeight: 449,
-      offsetTop: 347,
-      scale: 1,
-      editableFocused: false,
-    });
-    // the geometry still tracks what is visible…
-    expect(state.height).toBe(449);
-    // …but nothing is declared "typing".
-    expect(state.keyboardOpen).toBe(false);
+  it("depends on geometry alone — a blur must not move the layout mid-tap", () => {
+    // Send is tapped: the field blurs on touch-down, but the keyboard is
+    // still on screen and the viewport still says so. Same metrics in, same
+    // state out — there is no focus input for a blur to flip.
+    const metrics = { layoutHeight: 796, visualHeight: 449, offsetTop: 347, scale: 1 };
+    expect(computeViewportState(metrics).keyboardOpen).toBe(true);
+    expect(computeViewportState({ ...metrics })).toEqual(computeViewportState(metrics));
   });
 
   it("ignores a pinch-zoomed page entirely", () => {
@@ -79,7 +70,6 @@ describe("computeViewportState", () => {
         visualHeight: 398,
         offsetTop: 120,
         scale: 2,
-        editableFocused: true,
       })
     ).toEqual({ height: 796, top: 0, keyboardHeight: 0, keyboardOpen: false });
   });
@@ -90,7 +80,6 @@ describe("computeViewportState", () => {
       visualHeight: 796,
       offsetTop: -14,
       scale: 1,
-      editableFocused: false,
     });
     expect(state.top).toBe(0);
   });

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChatHistoryDrawer } from "@/components/chat-history-drawer";
-import { JournalIcon, MicIcon } from "@/components/pitaya-icons";
+import { PhotoTray } from "@/components/photo-tray";
+import { CameraIcon, JournalIcon, MicIcon } from "@/components/pitaya-icons";
 import { HANDOFF_EVENT, takeChatHandOff, type ChatHandOff } from "@/lib/chat-handoff";
 import { isStale, normalizeGapHours, type ConversationSummary } from "@/lib/chat-history";
 import { haptic } from "@/lib/haptics";
@@ -13,6 +14,13 @@ import {
   getOrCreateMicrophoneStream,
   deactivateMicrophoneStream,
 } from "@/lib/microphone";
+import {
+  MAX_SHOTS,
+  filesToShots,
+  fitPayloadBudget,
+  roomFor,
+  type Shot,
+} from "@/lib/photo-capture";
 import { useStickToBottom } from "@/lib/use-stick-to-bottom";
 
 // Pitaya Chat — "the notebook that talks back" (docs/design/
@@ -41,6 +49,15 @@ import { useStickToBottom } from "@/lib/use-stick-to-bottom";
 // is not continued — the next message starts a new chat by itself. Nothing
 // is created until he actually says something. Surfaced deviation: the ☰,
 // the "New" pill and the chat's title line are not in the design.
+//
+// PHOTOS (2026-10-04). The composer has its own camera now. It used to have
+// none: the dock is hidden on this screen, so the only way to send a photo
+// from the chat was to leave it. Photos collect in a tray above the input —
+// each with its ✕, then "Add another" (straight back into the camera) and
+// "Library" — and go out as ONE message with whatever he typed or said.
+// Tray, compression and the six-frame cap are shared with the dock's sheet
+// (components/photo-tray.tsx, lib/photo-capture.ts). Surfaced deviation: the
+// design's composer is text + mic only.
 
 interface FoodItem {
   mealType?: string;
@@ -237,6 +254,22 @@ export default function ChatPage() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // ——— photos waiting to be sent with the next message ———
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [readingShots, setReadingShots] = useState(false);
+  // Three inputs, three behaviours: the composer's button gets the system's
+  // own menu (Photo Library / Take Photo); the tray's tiles go straight to
+  // the camera or straight to a multi-select library.
+  const anySourceRef = useRef<HTMLInputElement | null>(null);
+  const cameraRef = useRef<HTMLInputElement | null>(null);
+  const libraryRef = useRef<HTMLInputElement | null>(null);
+  // What is in the composer right now, readable from callbacks that outlive
+  // the render they were created in (the recorder's onstop).
+  const composing = useRef({ draft: "", shots: 0 });
+  useEffect(() => {
+    composing.current = { draft, shots: shots.length };
+  }, [draft, shots.length]);
+
   // Messages that ARRIVED in this session animate in; a thread loaded from
   // history, and a streamed reply settling into its final bubble, do not —
   // otherwise opening the chat is sixty bubbles fading up at once, and every
@@ -247,7 +280,7 @@ export default function ChatPage() {
   // (rules + the bug they replace: lib/chat-scroll.ts). `watch` is everything
   // that makes the thread taller from React's side.
   const { scrollerRef, contentRef, pinned, unseen, pinNow, jumpToLatest } = useStickToBottom({
-    watch: `${messages.length}:${streamText.length}:${busy}:${toolLine}:${filter}:${editingCard}`,
+    watch: `${messages.length}:${streamText.length}:${busy}:${toolLine}:${filter}:${editingCard}:${shots.length}:${readingShots}`,
   });
 
   // ——— which chat is on screen ———
@@ -680,14 +713,17 @@ export default function ChatPage() {
           const body = await res.json().catch(() => ({}));
           if (res.ok && body.text?.trim()) {
             // Mid-draft dictation APPENDS instead of sending — his "split"
-            // ask: keep talking or typing, then hit send deliberately.
+            // ask: keep talking or typing, then hit send deliberately. With
+            // photos in the tray the same holds: what he says is their
+            // caption, and sending it alone would leave the photos behind.
             const spoken = body.text.trim();
-            setDraft((prev) => {
-              if (prev.trim()) return `${prev.trim()} ${spoken}`;
-              // empty draft → the classic flow: speak and it sends
+            const { draft: typed, shots: waiting } = composing.current;
+            if (typed.trim() || waiting > 0) {
+              setDraft((prev) => (prev.trim() ? `${prev.trim()} ${spoken}` : spoken));
+            } else {
+              // empty composer → the classic flow: speak and it sends
               sendRef.current?.(spoken, "voice");
-              return prev;
-            });
+            }
           } else {
             toast.error("Couldn't hear that — try again.");
           }
@@ -701,6 +737,45 @@ export default function ChatPage() {
     } catch {
       toast.error("Could not access microphone.");
     }
+  };
+
+  // ——— photos ———
+  const onPhotosPicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ""; // let the same photo be picked again
+    if (files.length === 0) return;
+    const { accept, dropped } = roomFor(composing.current.shots, files.length);
+    if (dropped > 0) {
+      toast.error(`Up to ${MAX_SHOTS} photos per message — kept the first ${accept}.`);
+    }
+    if (accept === 0) return;
+    setReadingShots(true);
+    try {
+      const next = await filesToShots(files.slice(0, accept));
+      setShots((prev) => [...prev, ...next].slice(0, MAX_SHOTS));
+      haptic("light");
+    } catch {
+      toast.error("Couldn't read that photo.");
+    } finally {
+      setReadingShots(false);
+    }
+  };
+
+  /** Send what is in the composer: the words, and every photo in the tray. */
+  const sendComposer = async () => {
+    if (busy || readingShots) return;
+    if (shots.length === 0) {
+      send(draft, "text");
+      return;
+    }
+    const fitted = await fitPayloadBudget(shots).catch(() => shots);
+    // Hand over first, clear after: the tray only empties once the message
+    // has actually been taken.
+    send(draft, "photo", {
+      images: fitted.map((shot) => shot.full),
+      thumbs: fitted.map((shot) => shot.thumb),
+    });
+    setShots([]);
   };
 
   // ——— proposal actions ———
@@ -1428,7 +1503,9 @@ export default function ChatPage() {
     );
   };
 
-  const hasDraft = draft.trim().length > 0;
+  const hasPhotos = shots.length > 0;
+  // photos alone are a message — the words are optional
+  const canSend = draft.trim().length > 0 || hasPhotos;
   const showLive = busy && (filter === "all" || filter === "chat");
 
   return (
@@ -1771,13 +1848,77 @@ export default function ChatPage() {
           </div>
         )}
 
+        {/* Hidden pickers. No `capture` on the first: iOS then offers its own
+            Photo Library / Take Photo menu, which is the fastest honest way
+            to give both from one button. */}
+        <input
+          ref={anySourceRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={onPhotosPicked}
+        />
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={onPhotosPicked}
+        />
+        <input
+          ref={libraryRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={onPhotosPicked}
+        />
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            send(draft, "text");
+            sendComposer();
           }}
-          className="composer flex items-end gap-2 rounded-[26px] border border-border bg-card py-2 pl-[18px] pr-2 shadow-[0_6px_20px_rgba(35,34,39,0.08)]"
+          className="composer rounded-[26px] border border-border bg-card py-2 pl-2 pr-2 shadow-[0_6px_20px_rgba(35,34,39,0.08)]"
         >
+          {/* The tray opens INSIDE the composer, above the input, so the
+              photos, the words and Send read as one message being built.
+              grid 0fr→1fr: the height animates without anyone measuring it. */}
+          <div
+            className="tray-reveal"
+            data-open={hasPhotos || readingShots ? "true" : "false"}
+            aria-hidden={!(hasPhotos || readingShots)}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div className="px-1.5 pb-2">
+                <PhotoTray
+                  shots={shots}
+                  busy={readingShots}
+                  size={60}
+                  layout="row"
+                  onRemove={(id) => setShots((prev) => prev.filter((shot) => shot.id !== id))}
+                  onAddCamera={() => cameraRef.current?.click()}
+                  onAddLibrary={() => libraryRef.current?.click()}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              anySourceRef.current?.click();
+            }}
+            disabled={busy || readingShots || shots.length >= MAX_SHOTS}
+            aria-label={hasPhotos ? "Add a photo" : "Attach a photo"}
+            className="tap-scale flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#8C2F51] transition-colors active:bg-accent disabled:opacity-40"
+          >
+            <CameraIcon size={19} />
+          </button>
           <textarea
             ref={draftRef}
             value={draft}
@@ -1787,11 +1928,17 @@ export default function ChatPage() {
               // Return sends; Shift+Return is a new line.
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                send(draft, "text");
+                sendComposer();
               }
             }}
             enterKeyHint="send"
-            placeholder={transcribing ? "Transcribing…" : "Type, or tap the mic…"}
+            placeholder={
+              transcribing
+                ? "Transcribing…"
+                : hasPhotos
+                  ? "Add a note, or just send…"
+                  : "Type, or tap the mic…"
+            }
             disabled={busy}
             className="min-w-0 flex-1 resize-none self-center bg-transparent py-[7px] leading-[1.4] text-foreground outline-none placeholder:text-muted-foreground"
             style={{ fontSize: "13.5px", maxHeight: 132 }}
@@ -1839,12 +1986,12 @@ export default function ChatPage() {
               popping the row wider the moment there is a first letter. */}
           <button
             type="submit"
-            disabled={busy || !hasDraft}
-            aria-label="Send"
-            aria-hidden={!hasDraft}
-            tabIndex={hasDraft ? 0 : -1}
+            disabled={busy || readingShots || !canSend}
+            aria-label={hasPhotos ? `Send ${shots.length} photo${shots.length === 1 ? "" : "s"}` : "Send"}
+            aria-hidden={!canSend}
+            tabIndex={canSend ? 0 : -1}
             className={`send-button flex h-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary ${
-              hasDraft ? "send-button-on" : ""
+              canSend ? "send-button-on" : ""
             }`}
           >
             <svg
@@ -1861,6 +2008,7 @@ export default function ChatPage() {
               <path d="M22 2 15 22l-4-9-9-4Z" />
             </svg>
           </button>
+          </div>
         </form>
       </div>
 
