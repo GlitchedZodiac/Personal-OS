@@ -21,7 +21,12 @@ written by a merging route so a stale device cannot erase other settings. MCP ga
 `log_milestone`. 509 tests (72 new), build green, driven in the browser at 375px in both
 themes: map toggle and muscle tap, metric drill-in, keypad save (throwaway row, deleted),
 targets (restored). **Not exercised: the microphone** — the pane blocks capture; the parser
-is unit-tested and the no-mic fallback was seen. **NOT deployed.**
+is unit-tested and the no-mic fallback was seen. **DEPLOYED to prod 2026-10-05 on his go**
+("pushed to the app so I can view?"), merged second after the chat/notifications round
+(PR #25; docs kept both, and the RENPHO alert and weigh-in notice now go through
+`lib/notify.ts`). Verified on prod without a loop: the new artwork is served byte-identical,
+the main stylesheet carries the Body tokens and map rules, `/api/health/body/summary` is
+401 without a session and returns his real series with one. 594 tests on the merged tree.
 
 **PENDING STAGES — the sanctioned gaps between this design and the app (PORT GATE §5):**
 1. **Body map back view** — `body-back.svg` does not exist; the Front/Back toggle is hidden.
@@ -111,7 +116,7 @@ logins against a nonexistent account; push delivery to the phone NOT exercised. 
 in prod already** (shared database): the Body screen's fat/muscle/BMR drill-ins now show the
 September and October RENPHO weeks — including a 20.7% → 14.5% body-fat step that is the
 device change, not his body. Phase 3 visuals wait on Claude Design. 437 tests (58 new),
-build green. NOT deployed: prod still runs the old code, so the MCP changes are not live.)
+build green. Deployed 2026-10-05 with the Body round, so the MCP changes are live.)
 
 **Previous:** 2026-09-08 (THE CONNECTOR ROUND — three defects in the MCP surface
 he uses every day, found by tracing his two complaints ("no approval received" on every
