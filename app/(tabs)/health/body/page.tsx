@@ -8,6 +8,7 @@ import { BodyTypeMatrix } from "@/components/body/body-type-matrix";
 import { GoalSheet } from "@/components/body/goal-sheet";
 import { PaceChart } from "@/components/body/pace-chart";
 import { RangeBar } from "@/components/body/range-bar";
+import { ReportSheet } from "@/components/body/report-sheet";
 import { TapeSheet, type TapeSheetRequest } from "@/components/body/tape-sheet";
 import {
   Card,
@@ -110,10 +111,11 @@ export default function BodyPage() {
   const [trDelta, setTrDelta] = useState("");
   const [tapeRequest, setTapeRequest] = useState<TapeSheetRequest | null>(null);
   const [goalOpen, setGoalOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [flash, setFlash] = useState<TapeSite[]>([]);
   const requestId = useRef(0);
   const rootRef = useRef<HTMLDivElement>(null);
-  const sheetOpen = tapeRequest !== null || goalOpen;
+  const sheetOpen = tapeRequest !== null || goalOpen || reportOpen;
 
   const load = useCallback(async (): Promise<BodySummary | null> => {
     try {
@@ -463,6 +465,26 @@ export default function BodyPage() {
             </div>
           )}
         </div>
+        {/* Not in the design: the weight arrives on its own, the composition
+            does not (see report-sheet.tsx). When this weigh-in has none, say
+            so and offer the way to add it. */}
+        {(!view.fatNow || view.fatNow.day !== latest.day) && (
+          <div
+            role="button"
+            onClick={() => setReportOpen(true)}
+            style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 14,
+              background: "var(--b-card2)", borderRadius: 12, padding: "10px 12px", cursor: "pointer",
+            }}
+          >
+            <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "var(--b-sub)" }}>
+              This weigh-in has weight only. Add its RENPHO report for the rest.
+            </span>
+            <span style={{ ...DISPLAY, flex: "none", fontSize: 11.5, fontWeight: 600, color: "var(--b-deep)", background: "var(--b-wash)", borderRadius: 8, padding: "6px 11px" }}>
+              Add report
+            </span>
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.3fr", gap: 12, marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--b-rule)" }}>
           <div>
             <div style={LABEL}>VS LAST</div>
@@ -561,7 +583,15 @@ export default function BodyPage() {
       <Card delay={0.12} padding="18px 20px 10px">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={KICKER}>COMPOSITION · SMART SCALE</div>
-          <SortChip label={COMP_SORTS[compSort]} onTap={() => setCompSort((n) => (n + 1) % 3)} />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              onClick={() => setReportOpen(true)}
+              style={{ ...DISPLAY, fontSize: 11.5, fontWeight: 600, color: "var(--b-deep)", background: "var(--b-wash)", border: "none", borderRadius: 8, padding: "6px 11px", cursor: "pointer" }}
+            >
+              Add report
+            </button>
+            <SortChip label={COMP_SORTS[compSort]} onTap={() => setCompSort((n) => (n + 1) % 3)} />
+          </div>
         </div>
         <div style={{ marginTop: 6 }}>
           {sortCompRows(view.compRows, compSort).map((r) => (
@@ -858,6 +888,12 @@ export default function BodyPage() {
         tape={data.tape}
         onSave={saveTape}
         onClose={() => setTapeRequest(null)}
+      />
+      <ReportSheet
+        open={reportOpen}
+        theme={theme}
+        onClose={() => setReportOpen(false)}
+        onSaved={() => void load()}
       />
       <GoalSheet
         open={goalOpen}
