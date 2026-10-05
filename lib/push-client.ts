@@ -7,6 +7,8 @@
 export type PushState =
   | "unsupported"
   | "needs-install"
+  /** inside the TestFlight/companion app: a WKWebView has no Push API */
+  | "native-shell"
   | "unconfigured"
   | "denied"
   | "off"
@@ -37,6 +39,20 @@ function isIos(): boolean {
   return /iPad|iPhone|iPod/.test(navigator.userAgent);
 }
 
+/**
+ * The iPhone/iPad companion app. It is a WKWebView around this same web app,
+ * and WKWebView has no service-worker push at all — so there is nothing to
+ * "install" and no Share button to do it with. It used to be reported as
+ * needs-install, which told him to do something the app cannot do. Reaching
+ * the companion means APNs (docs/push-notifications.md).
+ */
+function inNativeShell(): boolean {
+  return Boolean(
+    (window as unknown as { webkit?: { messageHandlers?: { haptic?: unknown } } }).webkit
+      ?.messageHandlers?.haptic
+  );
+}
+
 async function existingSubscription(): Promise<PushSubscription | null> {
   if (!("serviceWorker" in navigator)) return null;
   const reg = await navigator.serviceWorker.ready;
@@ -45,6 +61,9 @@ async function existingSubscription(): Promise<PushSubscription | null> {
 
 export async function pushStatus(): Promise<Status> {
   if (typeof window === "undefined") return { state: "unsupported", installs: 0 };
+  if (inNativeShell() && !("PushManager" in window)) {
+    return { state: "native-shell", installs: 0 };
+  }
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     // Safari on iOS only exposes PushManager to an installed PWA.
     return { state: isIos() && !isStandalone() ? "needs-install" : "unsupported", installs: 0 };
@@ -64,20 +83,45 @@ export async function pushStatus(): Promise<Status> {
   };
 }
 
-/** Must be called from a click handler. */
+/**
+ * Must be called from a click handler.
+ *
+ * The permission prompt is requested FIRST, before any network call. iOS
+ * only shows it inside the user's tap, and this function used to await a
+ * fetch (pushStatus) ahead of it — which can use the tap up, so the prompt
+ * silently never appears. Everything that can be known without the network
+ * (is there a Push API here at all, is this an installed app) is checked
+ * synchronously; the server is consulted only once permission is in hand.
+ */
 export async function enablePush(): Promise<{ ok: boolean; message: string }> {
-  const status = await pushStatus();
-  if (status.state === "needs-install") {
+  if (typeof window === "undefined") {
+    return { ok: false, message: "This browser can't do push notifications." };
+  }
+  if (inNativeShell() && !("PushManager" in window)) {
+    return {
+      ok: false,
+      message: "The iPhone app can't receive notifications yet — that needs a native update.",
+    };
+  }
+  const needsInstall = isIos() && !isStandalone();
+  if (
+    !("serviceWorker" in navigator) ||
+    !("PushManager" in window) ||
+    !("Notification" in window)
+  ) {
+    return needsInstall
+      ? {
+          ok: false,
+          message:
+            "Add Pitaya to your home screen first — iOS only delivers push to installed apps.",
+        }
+      : { ok: false, message: "This browser can't do push notifications." };
+  }
+  if (needsInstall) {
     return {
       ok: false,
       message: "Add Pitaya to your home screen first — iOS only delivers push to installed apps.",
     };
-  }
-  if (status.state === "unsupported") {
-    return { ok: false, message: "This browser can't do push notifications." };
-  }
-  if (status.state === "unconfigured") {
-    return { ok: false, message: "Push keys aren't set on the server yet." };
   }
 
   const permission = await Notification.requestPermission();
@@ -86,7 +130,7 @@ export async function enablePush(): Promise<{ ok: boolean; message: string }> {
   }
 
   const keyRes = await fetch("/api/push/subscribe");
-  const { publicKey } = (await keyRes.json()) as { publicKey?: string };
+  const { publicKey } = (await keyRes.json().catch(() => ({}))) as { publicKey?: string };
   if (!publicKey) return { ok: false, message: "Push keys aren't set on the server yet." };
 
   const reg = await navigator.serviceWorker.ready;
@@ -108,7 +152,7 @@ export async function enablePush(): Promise<{ ok: boolean; message: string }> {
     }),
   });
   if (!res.ok) return { ok: false, message: "Couldn't register with the server." };
-  return { ok: true, message: "Reminders are on for this device." };
+  return { ok: true, message: "Notifications are on for this device." };
 }
 
 export async function disablePush(): Promise<void> {

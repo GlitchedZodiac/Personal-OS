@@ -1,4 +1,5 @@
 import { after, NextRequest } from "next/server";
+import { sweepSoon } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 import { createOpaqueToken, hashOpaqueToken } from "@/lib/security";
 
@@ -110,6 +111,10 @@ export async function requireMobileSession(request: NextRequest) {
       .update({ where: { id: session.id }, data: { lastSeenAt: new Date() } })
       .catch(() => {})
   );
+  // The watch and the phone companion check in around the clock; each
+  // check-in is a free chance to deliver a due reminder (at most one sweep a
+  // minute per instance — lib/notify.ts).
+  after(() => sweepSoon());
 
   return session;
 }

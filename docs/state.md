@@ -54,6 +54,32 @@ is unit-tested and the no-mic fallback was seen. **NOT deployed.**
   live at `/health/progress` and volume/kcal at `/health/body/metric?m=volume|kcal`, but
   nothing links to them now — filed.)
 
+**Chat and notifications round (2026-10-05):** (THE CHAT + PUSH ROUND — his `pitaya-prompt-1` list: two chat
+bugs, chat history, multi-photo, push, plus a motion pass. Branch
+`claude/pitaya-bugs-motion-ux-5caf0c`, **deployed to prod 2026-10-05 on his go ("push so I can see
+in my app on my phone") — PR #23.** Full write-up,
+his four up-front answers, both bug repros, the open decisions and his checklist:
+[`docs/chat-push-round.md`](chat-push-round.md); push specifics:
+[`docs/push-notifications.md`](push-notifications.md). **Both bugs were somewhere other than the
+brief guessed.** Bug 1 was not a `100vh` problem: the photo sheet was rendered INSIDE the dock's
+hide-on-scroll wrapper, so the keyboard's own page-scroll hid the sheet he was typing into. Bug 2:
+"scroll to bottom" stopped 326px short of the real end and then asked whether it was within 140px —
+the thread un-pinned itself with its own scroll. The chat screen is now a column laid out against
+the VISUAL viewport (`lib/visual-viewport.ts`, `.vv-frame`) with the thread as its own scroller and
+the pin rules as pure tested functions (`lib/chat-scroll.ts`). **Chat is conversations now**:
+`ChatConversation` + nullable `ChatMessage.conversationId`; the day-split is an idempotent adoption
+that runs on every history read (dev and prod share the DB, so the old deploy keeps writing unfiled
+rows until this ships) — run on the real thread: 248 messages byte-identical before/after, 30 chats.
+A new chat keeps full data access (proven live) and only loses the transcript. **Push**: everything
+goes through `notify()` (`lib/notify.ts`) — category → dedupe → quiet hours → deliver → log; due
+reminders WAIT when no device exists instead of being marked fired; the sweep is hourly (24
+once-a-day crons, the Hobby maximum) plus every open app and every watch/phone check-in.
+**The finding that matters most: his iPhone runs the TestFlight shell, a WKWebView, which has no
+Push API — web push cannot reach it. That needs APNs and the iOS lane.** 464 tests (85 new), build
+green. **Verified on an iPhone 17 Pro Max SIMULATOR (real WebKit, real keyboard) — not on his
+phone and not inside the shell; that is the top of his checklist.** Two additive migrations are
+already applied to the shared database; prod is unaffected by them.)
+
 **Body composition data (2026-10-04):** (BODY COMPOSITION + RENPHO — Phase 0 report, Phase 1 data
 model + backfill, and the sync engine built but SWITCHED OFF. He has a new RENPHO
 8-electrode scale (account created 2026-09-12); the Etekcity/VeSync rows stay as the
@@ -87,7 +113,7 @@ September and October RENPHO weeks — including a 20.7% → 14.5% body-fat step
 device change, not his body. Phase 3 visuals wait on Claude Design. 437 tests (58 new),
 build green. NOT deployed: prod still runs the old code, so the MCP changes are not live.)
 
-**Connector round (2026-09-08):** (THE CONNECTOR ROUND — three defects in the MCP surface
+**Previous:** 2026-09-08 (THE CONNECTOR ROUND — three defects in the MCP surface
 he uses every day, found by tracing his two complaints ("no approval received" on every
 write; save_hymn reading as a prohibition) instead of the symptom. **(1) The connector's
 briefing has been truncated mid-sentence since round 11.** `INSTRUCTIONS` is built by
@@ -184,6 +210,39 @@ the V3 design per his call. V3 design prompt written (bubbles, selection surface
 census, hymns screens) — HIS STEP: paste into Claude Design. 357 tests, driven verification.)
 
 **Previous:** 2026-08-30 (SPIRIT ON IPAD — round 8: DURABILITY. He lost a paragraph of handwriting; root cause was that unsaved work lived only in a `useRef`, requeued on failure with no retry and no durable copy. `lib/ink-outbox.ts` is now an IndexedDB write-ahead log written BEFORE the network, replayed at boot/online/heartbeat, and folded back into the page so recovered ink is visible. All ten queue sites now go through one `enqueue()` door — the first cut covered only two. Offline reading added to the service worker (scripture cached forever + neighbour warming; his read APIs network-first/cache-fallback). The PIN gate can now open offline on a device that authenticated within 30 days. Plus his church report: the Bible's duplicate in-column navigator is gone — navigation is the frozen pane header.)
+
+---
+
+## 2026-10-05 · Chat + push round — what a later session needs to know
+
+The header blurb and `docs/chat-push-round.md` are the record. The load-bearing facts:
+
+- **Keyboard-aware layout has one mechanism.** `<ViewportVars />` (mounted in the tabs layout)
+  publishes `--vv-height` / `--vv-top` / `--kb-height` and `<html data-keyboard>`; `.vv-frame` is a
+  fixed box covering exactly what is visible. Put a surface in a frame and anchor to its bottom —
+  do not reach for `100dvh`, `bottom: 0` or a scroll-into-view. Keyboard state is GEOMETRY ONLY, on
+  purpose: tying it to focus made the layout jump between a tap's touch-down and its click, and
+  Send landed on nothing. `?vvdebug=1` shows the live numbers and the last touches on screen.
+- **`useScrollLock` freezes the body** (position: fixed), because `overflow: hidden` does not stop
+  iOS scrolling the document to chase a focused field. It emits `pitaya:scroll-restored` so
+  scroll-delta readers (the dock) do not mistake the restore for a swipe.
+- **Chat = one conversation on screen.** `GET /api/ai/chat/messages?gap=<h>` returns the current
+  chat or `null` (stale → new chat on next send); the stream route takes `conversationId` and emits
+  `conversation`, then `done`, then (new chats) `title`. `done` is what frees the composer.
+- **Never call `sendPush()` directly.** Use `notify()`. New weigh-in sources call
+  `announceWeighIn()`; every sync attempt calls `recordSync()`.
+- **`PUT /api/settings` preserves server-owned keys** (`notificationPrefs`). Add to
+  `SERVER_OWNED_KEYS` if another server-written key ever joins the settings blob.
+- **Simulator recipe** used for all of this is in memory (`ios-simulator-web-smoke`): real iOS
+  Safari against `npm run dev`, a local cookie-adding proxy, the on-screen keyboard forced on.
+- **Undesigned surfaces shipped this round** (PORT GATE — each assembled from the design's own
+  parts and flagged in-file; a design slice would supersede them): the chat history drawer, the ☰ /
+  "+ New" / title line in the chat header, the composer's camera + photo tray, the "Latest" pill,
+  the notification card in chat, and the additions to Settings → Notifications.
+
+**Waits on Michael:** a real-iPhone pass (checklist in the round doc, item 1 in
+the TestFlight app specifically) · exact-minute reminders: Vercel Pro vs a Supabase per-minute job
+vs neither · an APNs key + a native round if notifications should reach the TestFlight app.
 
 ---
 

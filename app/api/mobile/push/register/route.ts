@@ -18,7 +18,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const token = typeof body.token === "string" ? body.token.trim() : "";
+    // The companion has posted `deviceToken` since it was written
+    // (ios/iOSApp/CompanionModel.swift); this route only ever read `token`,
+    // so every registration would have been a 400. Nothing has hit it yet —
+    // the app has no push entitlement — but the contract is fixed here, on
+    // the side that owns it, before the native lane switches push on.
+    const raw = typeof body.token === "string" ? body.token : body.deviceToken;
+    const token = typeof raw === "string" ? raw.trim() : "";
     if (!/^[a-fA-F0-9]{32,200}$/.test(token)) {
       return NextResponse.json(
         { error: "token must be the hex APNs device token" },

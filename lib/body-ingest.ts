@@ -54,6 +54,13 @@ export interface IngestBodyResult {
   merged: number;
   skipped: number;
   invalid: number;
+  /** the rows this call created — what lib/weigh-in-notice.ts announces */
+  created: Array<{
+    id: string;
+    measuredAt: Date;
+    weightKg: number | null;
+    bodyFatPct: number | null;
+  }>;
 }
 
 export async function ingestBodySamples(
@@ -66,6 +73,7 @@ export async function ingestBodySamples(
     merged: 0,
     skipped: 0,
     invalid: 0,
+    created: [],
   };
 
   const samples = [];
@@ -172,6 +180,12 @@ export async function ingestBodySamples(
       ),
     });
     result.imported++;
+    result.created.push({
+      id: created.id,
+      measuredAt: created.measuredAt,
+      weightKg: created.weightKg,
+      bodyFatPct: created.bodyFatPct,
+    });
   }
 
   return result;

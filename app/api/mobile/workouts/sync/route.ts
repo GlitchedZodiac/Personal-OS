@@ -4,7 +4,7 @@ import { routeDataAllowed } from "@/lib/activities";
 import { requireMobileSession } from "@/lib/mobile-session";
 import { getNotificationPrefs } from "@/lib/notification-prefs";
 import { markPlannedDone } from "@/lib/planner";
-import { sendPush } from "@/lib/push";
+import { notify } from "@/lib/notify";
 import {
   analyzeRoute,
   type RouteAnalytics,
@@ -323,7 +323,8 @@ export async function POST(request: NextRequest) {
           const prefs = await getNotificationPrefs();
           if (prefs.prCelebration) {
             const unit = firstPR.unit === "kg-reps" ? "kg total" : firstPR.unit;
-            await sendPush({
+            await notify({
+              category: "prCelebration",
               title: `PR · ${firstPR.exerciseName}`,
               body: `${firstPR.value} ${unit}${
                 firstPR.previousValue != null ? ` — was ${firstPR.previousValue}` : ""

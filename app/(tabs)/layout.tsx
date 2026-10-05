@@ -4,7 +4,9 @@ import { DemoBanner } from "@/components/demo-banner";
 import { DemoWalkthrough } from "@/components/demo-walkthrough";
 import { GlobalDock } from "@/components/global-dock";
 import { NavStackTracker } from "@/components/nav-stack-tracker";
+import { NotificationHeartbeat } from "@/components/notification-heartbeat";
 import { PinGate } from "@/components/pin-gate";
+import { ViewportVars } from "@/components/viewport-vars";
 
 export default function TabsLayout({
   children,
@@ -14,6 +16,8 @@ export default function TabsLayout({
   return (
     <PinGate>
       <NavStackTracker />
+      <ViewportVars />
+      <NotificationHeartbeat />
       <div className="min-h-screen bg-background lg:flex">
         <AppSidebar />
         <div className="flex-1 min-w-0">

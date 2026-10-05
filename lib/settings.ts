@@ -1,3 +1,4 @@
+import { DEFAULT_NEW_CHAT_GAP_HOURS } from "@/lib/chat-history";
 import { DEFAULT_TIME_ZONE } from "@/lib/timezone";
 import { demoSpanishEnabled } from "@/lib/demo-client";
 
@@ -69,6 +70,9 @@ export interface AppSettings {
   /// stored timeInZones results were computed under the bands active at
   /// sync time — changing these does not recompute history (filed).
   hrZoneTops: [number, number, number, number];
+  /// Hours of quiet after which the next message starts a NEW chat instead
+  /// of continuing the last one. 0 = never. Why 6: lib/chat-history.ts.
+  chatNewChatGapHours: number;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -103,6 +107,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   timeZone: DEFAULT_TIME_ZONE,
   hrZoneTops: [122, 152, 167, 182],
+  chatNewChatGapHours: DEFAULT_NEW_CHAT_GAP_HOURS,
   finance: {
     defaultCurrency: "COP",
     syncIntervalMinutes: 15,

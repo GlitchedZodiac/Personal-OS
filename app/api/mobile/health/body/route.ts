@@ -1,5 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { ingestBodySamples } from "@/lib/body-ingest";
+import { announceWeighIn } from "@/lib/weigh-in-notice";
 import type { IncomingBodySample } from "@/lib/body-measurements";
 import { requireMobileSession } from "@/lib/mobile-session";
 import { renphoSyncEnabled, runRenphoSync } from "@/lib/renpho-sync";
@@ -46,6 +47,10 @@ export async function POST(request: NextRequest) {
         : "apple_health";
 
     const result = await ingestBodySamples(samples, { source });
+    // Mostly history (it is the backfill route), and announceWeighIn only
+    // speaks for a weigh-in from the last 36 hours — but a page that does
+    // carry today's reading should not be silent about it.
+    after(() => announceWeighIn(result.created));
 
     console.log(
       `[health/body] backfill: ${result.imported} new, ${result.merged} merged, ${result.skipped} duplicate, ${result.invalid} invalid (of ${samples.length} sent)`

@@ -18,13 +18,20 @@ import {
   Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CaptureSheet } from "@/components/capture-sheet";
 import { CameraIcon, ChatBubbleIcon, MicIcon } from "@/components/pitaya-icons";
 import { toast } from "sonner";
-import { getSettings } from "@/lib/settings";
+import { HANDOFF_EVENT, stashChatHandOff } from "@/lib/chat-handoff";
+import { haptic } from "@/lib/haptics";
 import { deactivateMicrophoneStream, getOrCreateMicrophoneStream } from "@/lib/microphone";
-
-// One capture = up to this many photos (plate + label + receipt…).
-const MAX_SHOTS = 6;
+import { SCROLL_RESTORED_EVENT } from "@/lib/use-presence";
+import {
+  MAX_SHOTS,
+  filesToShots,
+  fitPayloadBudget,
+  roomFor,
+  type Shot,
+} from "@/lib/photo-capture";
 
 interface VoiceInputProps {
   onDataLogged?: () => void;
@@ -116,9 +123,9 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
     ) => {
       const detail = { text, source, ...(photos ? { photos } : {}) };
       if (onChatScreen) {
-        window.dispatchEvent(new CustomEvent("pitaya:chat-send", { detail }));
+        window.dispatchEvent(new CustomEvent(HANDOFF_EVENT, { detail }));
       } else {
-        sessionStorage.setItem("pitaya:pending-chat", JSON.stringify(detail));
+        stashChatHandOff(detail);
         router.push("/chat");
       }
     },
@@ -153,8 +160,17 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
         ticking = false;
       });
     };
+    // A sheet freezes the page and puts it back afterwards; that restore is
+    // not him scrolling, so it must not read as a swipe that hides the dock.
+    const onRestored = () => {
+      lastY = window.scrollY;
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener(SCROLL_RESTORED_EVENT, onRestored);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener(SCROLL_RESTORED_EVENT, onRestored);
+    };
   }, []);
   const [aiResponse, setAiResponse] = useState<AIResponse | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -164,7 +180,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   const [audioLevel, setAudioLevel] = useState(0);
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
-  const [captureShots, setCaptureShots] = useState<{ full: string; thumb: string }[]>([]);
+  const [captureShots, setCaptureShots] = useState<Shot[]>([]);
   const [captureNote, setCaptureNote] = useState("");
   const libraryInputRef = useRef<HTMLInputElement>(null);
   // While the capture sheet is open, dictation fills its note instead of
@@ -336,61 +352,30 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   // thread via handOffToChat.
 
   // ── Photo handling ──────────────────────────────────────────────────
-  const compressImage = useCallback(
-    (file: File, maxWidth = 1024, quality = 0.8): Promise<string> =>
-      new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const img = new Image();
-          img.onload = () => {
-            const canvas = document.createElement("canvas");
-            let w = img.width;
-            let h = img.height;
-            if (w > maxWidth) {
-              h = Math.round((h * maxWidth) / w);
-              w = maxWidth;
-            }
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) return reject(new Error("Canvas not supported"));
-            ctx.drawImage(img, 0, 0, w, h);
-            resolve(canvas.toDataURL("image/jpeg", quality));
-          };
-          img.onerror = () => reject(new Error("Failed to load image"));
-          img.src = reader.result as string;
-        };
-        reader.onerror = () => reject(new Error("Failed to read file"));
-        reader.readAsDataURL(file);
-      }),
-    []
-  );
-
   // Capture sheet (2026-08-12): photos — camera OR library, several at a
   // time — plus typed/spoken context, handed to the chat thread as ONE
   // message so the AI can propose every action it implies (log the meal,
-  // save the product, …), each confirmed on its own card. Replaces the
-  // legacy photo→analyze→dock-card path.
+  // save the product, …), each confirmed on its own card. Compression and
+  // the six-frame cap live in lib/photo-capture.ts, shared with the chat
+  // composer's own tray.
   const handleShotsSelected = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files ?? []);
       e.target.value = ""; // let the same file be picked again
       if (files.length === 0) return;
 
+      const { accept, dropped } = roomFor(captureShots.length, files.length);
+      if (dropped > 0) {
+        toast.error(`Up to ${MAX_SHOTS} photos per send — kept the first ${accept}.`);
+      }
+      if (accept === 0) return;
+
+      setCaptureOpen(true);
       setIsAnalyzingPhoto(true);
       try {
-        const room = MAX_SHOTS - captureShots.length;
-        if (files.length > room) {
-          toast.error(`Up to ${MAX_SHOTS} photos per capture.`);
-        }
-        const shots = await Promise.all(
-          files.slice(0, Math.max(0, room)).map(async (file) => ({
-            full: await compressImage(file, 1024, 0.8),
-            thumb: await compressImage(file, 220, 0.5),
-          }))
-        );
-        setCaptureShots((prev) => [...prev, ...shots]);
-        setCaptureOpen(true);
+        const shots = await filesToShots(files.slice(0, accept));
+        setCaptureShots((prev) => [...prev, ...shots].slice(0, MAX_SHOTS));
+        haptic("light");
       } catch (error) {
         console.error("Photo read failed:", error);
         toast.error("Couldn't read that photo.");
@@ -398,20 +383,22 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
         setIsAnalyzingPhoto(false);
       }
     },
-    [compressImage, captureShots.length]
+    [captureShots.length]
   );
 
-  const sendCapture = useCallback(() => {
+  const sendCapture = useCallback(async () => {
     if (captureShots.length === 0) return;
-    const payload = {
-      images: captureShots.map((s) => s.full),
-      thumbs: captureShots.map((s) => s.thumb),
-    };
-    const note = captureNote.trim();
+    // Hand off FIRST, clear after: if anything here throws, the tray still
+    // holds his photos instead of having already emptied itself.
+    const shots = await fitPayloadBudget(captureShots).catch(() => captureShots);
+    handOffToChat(captureNote.trim(), "photo", {
+      images: shots.map((s) => s.full),
+      thumbs: shots.map((s) => s.thumb),
+    });
+    haptic("medium");
     setCaptureOpen(false);
     setCaptureShots([]);
     setCaptureNote("");
-    handOffToChat(note, "photo", payload);
   }, [captureShots, captureNote, handOffToChat]);
 
   const handleEditItem = (index: number) => {
@@ -876,6 +863,7 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
   // recording or a mid-transcription state would read as data loss.
   const dockHidden =
     scrolledAway &&
+    !captureOpen &&
     !isRecording &&
     !isTranscribing &&
     !isProcessing &&
@@ -953,146 +941,29 @@ export function VoiceInput({ onDataLogged }: VoiceInputProps) {
           </Card>
         )}
 
-        {/* ——— Capture sheet: photos + context → one chat message ——— */}
-        {captureOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
-              onClick={() => setCaptureOpen(false)}
-            />
-            <div className="fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-10 pt-6 sheet-up">
-              <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
-              <p
-                className="text-xl font-bold text-foreground"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                Add photos
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                A plate, a label, a receipt — several at once. Say or type what
-                they are and the chat proposes each action.
-              </p>
-
-              {captureShots.length > 0 && (
-                <div className="mt-3.5 flex flex-wrap gap-2">
-                  {captureShots.map((shot, i) => (
-                    <div key={i} className="relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={shot.thumb}
-                        alt=""
-                        className="h-[70px] w-[70px] rounded-[12px] border border-[#E9CFDC] object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCaptureShots((prev) => prev.filter((_, j) => j !== i))
-                        }
-                        aria-label="Remove photo"
-                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#232227] text-[11px] leading-none text-white"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-3.5 flex gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={captureShots.length >= MAX_SHOTS || isAnalyzingPhoto}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-[12px] border border-[#D9D7DC] py-3 text-[13px] font-semibold text-foreground disabled:opacity-50"
-                  style={{ fontFamily: "var(--font-display)" }}
-                >
-                  <CameraIcon size={17} /> Take photo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => libraryInputRef.current?.click()}
-                  disabled={captureShots.length >= MAX_SHOTS || isAnalyzingPhoto}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-[12px] border border-[#D9D7DC] py-3 text-[13px] font-semibold text-foreground disabled:opacity-50"
-                  style={{ fontFamily: "var(--font-display)" }}
-                >
-                  {/* No library glyph exists in the design — plain stroke
-                      shape in the icon set's style (undesigned element). */}
-                  <svg
-                    width="17"
-                    height="17"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.9"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="3" y="5" width="18" height="14" rx="3" />
-                    <path d="M3 16l4.5-4.5 4 4 3-3L21 17" />
-                    <circle cx="9" cy="9.5" r="1.3" />
-                  </svg>
-                  Library
-                </button>
-              </div>
-
-              <div className="mt-3 flex items-end gap-2">
-                <textarea
-                  value={captureNote}
-                  onChange={(e) => setCaptureNote(e.target.value)}
-                  rows={2}
-                  placeholder={
-                    isTranscribing
-                      ? "Transcribing…"
-                      : "e.g. I had 2.5 servings of this — save it as a usual"
-                  }
-                  className="min-h-[52px] flex-1 resize-none rounded-[12px] border border-border bg-background px-3 py-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
-                />
-                <button
-                  type="button"
-                  onClick={isRecording ? stopRecording : startRecording}
-                  disabled={isTranscribing}
-                  aria-label="Dictate a note"
-                  className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full transition-colors"
-                  style={{ background: isRecording ? "#A63D63" : "#F6E3EB" }}
-                >
-                  {isTranscribing ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-[#8C2F51]" />
-                  ) : (
-                    <MicIcon size={20} />
-                  )}
-                </button>
-              </div>
-
-              <div className="mt-4 flex gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCaptureOpen(false);
-                    setCaptureShots([]);
-                    setCaptureNote("");
-                  }}
-                  className="flex-1 rounded-[12px] border border-[#D9D7DC] py-3 text-[13.5px] font-semibold text-foreground"
-                  style={{ fontFamily: "var(--font-display)" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={sendCapture}
-                  disabled={captureShots.length === 0 || isAnalyzingPhoto}
-                  className="flex-[1.5] rounded-[12px] bg-primary py-3 text-[13.5px] font-semibold text-white disabled:opacity-50"
-                  style={{ fontFamily: "var(--font-display)" }}
-                >
-                  {isAnalyzingPhoto
-                    ? "Reading…"
-                    : captureShots.length > 0
-                      ? `Send ${captureShots.length} photo${captureShots.length === 1 ? "" : "s"}`
-                      : "Send"}
-                </button>
-              </div>
-            </div>
-          </>
-        )}
+        {/* ——— Capture sheet: photos + context → one chat message ———
+            Portaled to <body> (components/capture-sheet.tsx) so the dock's
+            own hide-on-scroll can never carry it off again. */}
+        <CaptureSheet
+          open={captureOpen}
+          shots={captureShots}
+          note={captureNote}
+          reading={isAnalyzingPhoto}
+          recording={isRecording}
+          transcribing={isTranscribing}
+          onNoteChange={setCaptureNote}
+          onAddCamera={() => fileInputRef.current?.click()}
+          onAddLibrary={() => libraryInputRef.current?.click()}
+          onRemove={(id) => setCaptureShots((prev) => prev.filter((shot) => shot.id !== id))}
+          onToggleDictation={isRecording ? stopRecording : startRecording}
+          onDismiss={() => setCaptureOpen(false)}
+          onCancel={() => {
+            setCaptureOpen(false);
+            setCaptureShots([]);
+            setCaptureNote("");
+          }}
+          onSend={sendCapture}
+        />
 
         {/* Hidden inputs: camera (take one) and library (pick many) */}
         <input

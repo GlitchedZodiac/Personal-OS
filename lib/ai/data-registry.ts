@@ -532,7 +532,7 @@ export function buildCatalog(): string {
 export const EXCLUDED_MODELS = [
   "financeVaultSecret", "integrationSecret", "stravaToken", "authCredential",
   "deviceSession", "pushSubscription", "pushDevice", "googleMailboxConnection",
-  "recordingSegment", "esvPassage", "chatMessage", "aIConversation",
+  "recordingSegment", "esvPassage", "chatMessage", "chatConversation", "aIConversation",
   "aIInsightCache", "aIUsageEvent", "financeSignal", "financeRule",
   "financeLearningEvent", "transactionChangeLog", "financeReviewItem",
   "financeSource", "financePrioritySource", "financeDocument",
