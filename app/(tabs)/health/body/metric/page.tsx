@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { MetricDetail } from "@/components/body/metric-detail";
+import { type MetricKey, SER } from "@/lib/body-view";
 
 // Body → metric drill-in — port of the design's "Body composition detail"
 // push-in (2026-08-11e rev): 4/8/12-wk chips, scrubable weekly chart,
@@ -95,7 +97,24 @@ function weekLabel(weekStart: string): string {
   });
 }
 
+// 2026-10-05: the Body redesign (docs/design/pitaya-body/, spec §9) brings a
+// new push-in for the scale metrics and waist. Those keys render the new
+// screen; `volume`, `kcal` and the old `muscle` key keep the page below, which
+// the new Body screen no longer links to but old deep links still reach.
 export default function BodyMetricPage() {
+  return (
+    <Suspense fallback={null}>
+      <MetricSwitch />
+    </Suspense>
+  );
+}
+
+function MetricSwitch() {
+  const m = useSearchParams().get("m");
+  return m && m in SER ? <MetricDetail metric={m as MetricKey} /> : <LegacyMetricPage />;
+}
+
+function LegacyMetricPage() {
   const router = useRouter();
   const [metric, setMetric] = useState("fat");
   const [weeksSel, setWeeksSel] = useState(12);

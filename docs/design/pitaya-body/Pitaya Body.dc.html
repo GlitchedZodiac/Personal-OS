@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#232226; -webkit-font-smoothing:antialiased; }
+    a { color:#DC74A0; text-decoration:none; } a:hover { color:#E795B4; }
+    @keyframes rise { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+    @keyframes vu { 0%,100% { transform:scaleY(0.25); } 50% { transform:scaleY(1); } }
+    @keyframes ring { 0% { transform:scale(1); opacity:.6; } 100% { transform:scale(2.4); opacity:0; } }
+    @keyframes draw { to { stroke-dashoffset:0; } }
+    @keyframes popIn { 0% { transform:scale(.6); opacity:0; } 60% { transform:scale(1.08); opacity:1; } 100% { transform:scale(1); } }
+    @keyframes spin { to { transform:rotate(360deg); } }
+  </style>
+</helmet>
+<div style="min-height:100vh; padding:36px 40px 64px; box-sizing:border-box; font-family:'Instrument Sans',sans-serif; color:#F2F1F2;">
+  <div style="max-width:980px;">
+    <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:#96949B;">PITAYA · BODY · ROUND 1</div>
+    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:28px; font-weight:700; letter-spacing:-0.02em; margin-top:4px;">Body composition &amp; measurements</div>
+    <div style="font-size:13px; line-height:1.6; color:#B9B7BE; margin-top:10px; max-width:760px;">Replaces the Body page under Today. Light is the current Pitaya paper; the dark phone is the same screen on dark tokens. Both phones share one state — scrub, toggle or save on either and both follow. Numbers are seeded sample data shaped to your real scale readings (Oct 4) and your start (117.3 kg, Dec 15).</div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:12px; font-size:12px; color:#96949B;">
+      <span><span style="color:#DC74A0;">Try</span> · pull the page down to sync from the scale</span>
+      <span>· drag across any chart (haptic ticks on device)</span>
+      <span>· Muscle ↔ Fat on the body map</span>
+      <span>· tap a composition row to push in</span>
+      <span>· + Tape → say “waist 86.5”</span>
+      <span>· scroll to the matrix and milestones</span>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:48px; align-items:flex-start; flex-wrap:wrap; margin-top:30px;">
+    <sc-for list="{{ themes }}" as="T" hint-placeholder-count="2">
+      <div style="display:flex; flex-direction:column; gap:12px; flex:none;">
+        <div style="font-size:11px; letter-spacing:0.16em; font-weight:600; color:#96949B;">{{ T.label }}</div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="440px" height="956px" dark="{{ T.isDark }}" hint-size="440px,956px">
+          <div style="height:956px; position:relative; background:{{ T.bg }}; overflow:hidden; font-family:'Instrument Sans',sans-serif;">
+
+            <!-- MAIN SCROLL -->
+            <div onScroll="{{ onScroll }}" onPointerDown="{{ pullDown }}" onPointerMove="{{ pullMove }}" onPointerUp="{{ pullUp }}" onPointerCancel="{{ pullUp }}" style="position:absolute; inset:0; overflow-y:auto; padding:62px 22px 210px; box-sizing:border-box; scrollbar-width:none;">
+              <div style="height:{{ pullH }}; transition:{{ pullTr }}; overflow:hidden; display:flex; align-items:flex-end; justify-content:center;">
+                <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:600; color:{{ T.deep }}; padding-bottom:10px;">
+                  <span style="width:14px; height:14px; border-radius:99px; border:2px solid {{ T.edge }}; border-top-color:{{ T.rasp }}; animation:{{ pullSpin }};"></span>{{ pullTxt }}
+                </div>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; align-items:flex-end; animation:rise .5s ease both;">
+                <div>
+                  <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:{{ T.faint }}">TODAY · BODY</div>
+                  <div style="font-family:'Familjen Grotesk',sans-serif; font-size:30px; font-weight:700; color:{{ T.ink }}; letter-spacing:-0.02em; margin-top:2px;">Body</div>
+                </div>
+                <div style="font-size:12px; font-weight:600; color:{{ T.deep }}; background:{{ T.wash }}; padding:6px 12px; border-radius:99px; font-variant-numeric:tabular-nums;">{{ sinceStart }}</div>
+              </div>
+
+              <!-- TODAY'S WEIGH-IN -->
+              <div style="background:{{ T.card }}; border-radius:22px; padding:20px; margin-top:16px; box-shadow:{{ T.shadow }}; animation:rise .5s ease both .04s;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:{{ T.faint }};">TODAY'S WEIGH-IN · 7:02 AM</div>
+                  <div onClick="{{ syncTap }}" style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:500; color:{{ T.faint }}; cursor:pointer;">
+                    <sc-if value="{{ syncIdle }}" hint-placeholder-val="{{ true }}"><span style="width:6px; height:6px; border-radius:99px; background:{{ T.ghost }};"></span></sc-if>
+                    <sc-if value="{{ syncLive }}" hint-placeholder-val="{{ false }}"><span style="width:6px; height:6px; border-radius:99px; background:{{ T.rasp }}; animation:pulse .9s ease-in-out infinite;"></span></sc-if>
+                    <sc-if value="{{ syncDone }}" hint-placeholder-val="{{ false }}"><span style="width:6px; height:6px; border-radius:99px; background:{{ T.green }};"></span></sc-if>
+                    {{ syncTxt }}
+                  </div>
+                </div>
+                <div style="display:flex; align-items:flex-end; gap:24px; margin-top:12px;">
+                  <div style="display:flex; align-items:baseline; gap:5px;">
+                    <span style="font-family:'Familjen Grotesk',sans-serif; font-size:54px; font-weight:700; color:{{ T.ink }}; letter-spacing:-0.03em; line-height:1; font-variant-numeric:tabular-nums;">{{ wNow }}</span>
+                    <span style="font-size:15px; font-weight:600; color:{{ T.faint }};">kg</span>
+                  </div>
+                  <div style="padding-bottom:5px;">
+                    <div style="font-size:10px; letter-spacing:0.14em; font-weight:600; color:{{ T.faint }}; display:flex; align-items:center; gap:5px;">BODY FAT <span style="font-size:8.5px; letter-spacing:.06em; border:1px solid {{ T.rule2 }}; border-radius:4px; padding:0 3px; color:{{ T.ghost }};">EST</span></div>
+                    <div style="display:flex; align-items:baseline; gap:3px; margin-top:3px;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:{{ T.ink }}; line-height:1; font-variant-numeric:tabular-nums;">{{ fNow }}</span><span style="font-size:12px; font-weight:600; color:{{ T.faint }};">%</span></div>
+                  </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1.3fr; gap:12px; margin-top:18px; padding-top:14px; border-top:1px solid {{ T.rule }};">
+                  <div>
+                    <div style="font-size:10px; letter-spacing:0.14em; font-weight:600; color:{{ T.faint }};">VS LAST</div>
+                    <sc-if value="{{ wDLastGood }}" hint-placeholder-val="{{ true }}"><div style="font-size:14px; font-weight:600; color:{{ T.green }}; margin-top:4px; font-variant-numeric:tabular-nums;">{{ wDLast }}</div></sc-if>
+                    <sc-if value="{{ wDLastFlat }}" hint-placeholder-val="{{ false }}"><div style="font-size:14px; font-weight:600; color:{{ T.sub }}; margin-top:4px; font-variant-numeric:tabular-nums;">{{ wDLast }}</div></sc-if>
+                    <div style="font-size:11px; color:{{ T.faint }}; margin-top:2px;">{{ wPrevLab }}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:10px; letter-spacing:0.14em; font-weight:600; color:{{ T.faint }};">VS 30 DAYS</div>
+                    <div style="font-size:14px; font-weight:600; color:{{ T.green }}; margin-top:4px; font-variant-numeric:tabular-nums;">{{ wD30 }}</div>
+                    <div style="font-size:11px; color:{{ T.faint }}; margin-top:2px;">fat {{ fD30 }}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:10px; letter-spacing:0.14em; font-weight:600; color:{{ T.faint }};">SOURCE</div>
+                    <div style="font-size:12.5px; font-weight:600; color:{{ T.ink }}; margin-top:4px;">RENPHO scale</div>
+                    <div style="font-size:11px; color:{{ T.faint }}; margin-top:2px;">via Apple Health</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- TARGET & FORECAST -->
+              <div style="background:{{ T.card }}; border-radius:22px; padding:20px; margin-top:12px; box-shadow:{{ T.shadow }}; animation:rise .5s ease both .08s;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:{{ T.faint }};">TARGET · {{ gDateUp }}</div>
+                  <button onClick="{{ goalOpen }}" style="font-family:'Familjen Grotesk',sans-serif; font-size:11.5px; font-weight:600; color:{{ T.deep }}; background:{{ T.wash }}; border:none; border-radius:8px; padding:6px 11px; cursor:pointer;">Edit targets</button>
+                </div>
+                <div style="display:flex; align-items:baseline; gap:10px; margin-top:10px;">
+                  <span style="font-family:'Familjen Grotesk',sans-serif; font-size:22px; font-weight:700; color:{{ T.ink }}; font-variant-numeric:tabular-nums;">{{ gTitle }}</span>
+                  <span style="font-size:12px; color:{{ T.sub }};">{{ gToGo }}</span>
+                </div>
+                <div style="position:relative; height:22px; margin-top:12px;">
+                  <div style="position:absolute; left:0; right:0; top:9px; height:4px; border-radius:99px; background:{{ T.trackBg }};"></div>
+                  <div style="position:absolute; left:0; top:9px; height:4px; border-radius:99px; background:{{ T.rasp }}; opacity:.35; width:{{ gProg }}; transition:width 1s cubic-bezier(.22,.9,.3,1);"></div>
+                  <div style="position:absolute; top:7px; left:-1px; width:6px; height:6px; border-radius:99px; border:1.5px solid {{ T.faint }}; background:{{ T.card }};"></div>
+                  <div style="position:absolute; top:7px; right:0; width:7px; height:7px; background:{{ T.ink }}; transform:rotate(45deg);"></div>
+                  <div style="position:absolute; top:6px; width:10px; height:10px; border-radius:99px; background:{{ T.rasp }}; box-shadow:0 0 0 2px {{ T.card }}; left:calc({{ gProg }} - 5px); transition:left 1s cubic-bezier(.22,.9,.3,1);"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:10.5px; color:{{ T.faint }}; letter-spacing:.06em; margin-top:-2px;"><span>117.3 · DEC</span><span style="color:{{ T.deep }}; font-weight:600;">{{ gProgLab }}</span><span>{{ gWTxt }}</span></div>
+
+                <div style="margin-top:16px; padding-top:14px; border-top:1px solid {{ T.rule }};">
+                  <div style="display:flex; justify-content:space-between; font-size:10.5px; letter-spacing:0.12em; font-weight:600; color:{{ T.faint }};"><span>PACE NEEDED VS PACE YOU'RE ON</span><span>KG / WK</span></div>
+                  <div style="position:relative; margin-top:6px;">
+                    <svg viewBox="0 0 320 100" width="100%" height="100" preserveAspectRatio="none" style="display:block; overflow:visible;">
+                      <line x1="16" x2="304" y1="74" y2="74" stroke="{{ T.rule }}" stroke-width="1"></line>
+                      <line x1="{{ pGoalX }}" x2="{{ pGoalX }}" y1="8" y2="80" stroke="{{ T.rule2 }}" stroke-width="1" stroke-dasharray="2 3"></line>
+                      <path d="{{ pNeedD }}" fill="none" stroke="{{ T.ghost }}" stroke-width="1.5" stroke-dasharray="4 4"></path>
+                      <path d="{{ pOnD }}" fill="none" stroke="{{ T.rasp }}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                      <circle cx="16" cy="14" r="4" fill="{{ T.rasp }}" stroke="{{ T.card }}" stroke-width="2"></circle>
+                      <circle cx="{{ pArrX }}" cy="{{ pArrY }}" r="4.5" fill="{{ T.rasp }}" stroke="{{ T.card }}" stroke-width="2"></circle>
+                      <text x="16" y="94" font-size="9.5" letter-spacing="0.8" fill="{{ T.faint }}" font-family="Instrument Sans, sans-serif" font-weight="600">TODAY</text>
+                    </svg>
+                    <div style="position:absolute; top:86px; left:{{ pGoalL }}; transform:translateX(-50%); font-size:9.5px; letter-spacing:.08em; font-weight:600; color:{{ T.faint }}; white-space:nowrap; pointer-events:none;">{{ gDateUp }}</div>
+                    <div style="position:absolute; top:52px; left:{{ pArrL }}; transform:translateX(-50%); font-size:10.5px; font-weight:600; color:{{ T.deep }}; white-space:nowrap; pointer-events:none; opacity:{{ pArrO }};">{{ pArrLab }}</div>
+                    <div style="position:absolute; top:60px; left:calc(16 / 320 * 100%); font-size:9.5px; font-weight:600; color:{{ T.faint }}; white-space:nowrap; pointer-events:none; font-variant-numeric:tabular-nums;">{{ gWTxt }}</div>
+                  </div>
+                  <div style="display:flex; gap:14px; margin-top:8px;">
+                    <div style="flex:1; background:{{ T.card2 }}; border-radius:12px; padding:10px 12px;">
+                      <div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:{{ T.faint }};">NEEDED</div>
+                      <div style="font-family:'Familjen Grotesk',sans-serif; font-size:18px; font-weight:700; color:{{ T.ink }}; margin-top:2px; font-variant-numeric:tabular-nums;">{{ gNeed }}</div>
+                    </div>
+                    <div style="flex:1; background:{{ T.wash }}; border-radius:12px; padding:10px 12px;">
+                      <div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:{{ T.deep }};">YOU'RE ON</div>
+                      <div style="font-family:'Familjen Grotesk',sans-serif; font-size:18px; font-weight:700; color:{{ T.deep }}; margin-top:2px; font-variant-numeric:tabular-nums;">{{ gOn }}</div>
+                    </div>
+                  </div>
+                  <div style="font-size:13px; line-height:1.55; color:{{ T.ink }}; margin-top:12px;">{{ gLine }}</div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:10px; border-top:1px solid {{ T.rule }};">
+                    <div style="font-size:12.5px; color:{{ T.sub }};">Body fat target</div>
+                    <div style="font-size:12.5px; font-weight:600; color:{{ T.ink }}; font-variant-numeric:tabular-nums;">{{ fatGoalTxt }}</div>
+                  </div>
+                  <div style="font-size:11.5px; line-height:1.5; color:{{ T.faint }}; margin-top:8px;">{{ gNote }}</div>
+                </div>
+              </div>
+
+              <!-- COMPOSITION OVERVIEW -->
+              <div style="background:{{ T.card }}; border-radius:22px; padding:18px 20px 10px; margin-top:12px; box-shadow:{{ T.shadow }}; animation:rise .5s ease both .12s;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:{{ T.faint }};">COMPOSITION · SMART SCALE</div>
+                  <div onClick="{{ compSortTap }}" style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:{{ T.sub }}; background:{{ T.card2 }}; border:1px solid {{ T.rule2 }}; border-radius:99px; padding:4px 10px; cursor:pointer;"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 1v8M1 3l2-2 2 2M7 9V1M5 7l2 2 2-2"></path></svg>{{ compSortLab }}</div>
+                </div>
+                <div style="margin-top:6px;">
+                  <sc-for list="{{ compRows }}" as="r" hint-placeholder-count="9">
+                    <div onClick="{{ r.tap }}" style="display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid {{ T.rule }}; cursor:pointer;" style-hover="opacity:.85;">
+                      <div style="width:108px; flex:none;">
+                        <div style="font-size:13px; font-weight:600; color:{{ T.ink }}; display:flex; align-items:center; gap:5px; white-space:nowrap;">{{ r.lab }}<sc-if value="{{ r.est }}" hint-placeholder-val="{{ false }}"><span style="font-size:8.5px; letter-spacing:.06em; font-weight:600; color:{{ T.ghost }}; border:1px solid {{ T.rule2 }}; border-radius:4px; padding:0 3px;">EST</span></sc-if></div>
+                        <sc-if value="{{ r.good }}" hint-placeholder-val="{{ true }}"><div style="font-size:10.5px; color:{{ T.green }}; margin-top:2px; font-variant-numeric:tabular-nums;">{{ r.d30 }} · 30d</div></sc-if>
+                        <sc-if value="{{ r.notGood }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:{{ T.faint }}; margin-top:2px; font-variant-numeric:tabular-nums;">{{ r.d30 }} · 30d</div></sc-if>
+                      </div>
+                      <div style="flex:1; position:relative; height:22px;">
+                        <div style="position:absolute; left:0; right:0; top:9px; height:4px; border-radius:99px; background:{{ T.trackBg }};"></div>
+                        <div style="position:absolute; top:7px; height:8px; border-radius:99px; background:{{ T.band }}; left:{{ r.bandL }}; width:{{ r.bandW }};"></div>
+                        <div style="position:absolute; top:10px; height:2px; background:{{ T.rasp }}; opacity:.35; left:{{ r.histL }}; width:{{ r.histW }};"></div>
+                        <div style="position:absolute; top:7px; width:6px; height:6px; border-radius:99px; border:1.5px solid {{ T.faint }}; background:{{ T.card }}; left:calc({{ r.startX }} - 4px);"></div>
+                        <sc-if value="{{ r.hasTgt }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; top:7px; width:7px; height:7px; background:{{ T.ink }}; transform:rotate(45deg); left:calc({{ r.tgtX }} - 3.5px);"></div></sc-if>
+                        <div style="position:absolute; top:6px; width:10px; height:10px; border-radius:99px; background:{{ T.rasp }}; box-shadow:0 0 0 2px {{ T.card }}; left:calc({{ r.nowX }} - 5px); transition:left .8s cubic-bezier(.22,.9,.3,1);"></div>
+                      </div>
+                      <div style="width:72px; flex:none; text-align:right; font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:700; color:{{ T.ink }}; font-variant-numeric:tabular-nums;">{{ r.val }}<span style="font-size:10.5px; font-weight:600; color:{{ T.faint }}; margin-left:2px;">{{ r.unit }}</span></div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px 14px; font-size:10.5px; color:{{ T.faint }}; padding:10px 0 6px; line-height:1.5;">
+                  <span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:14px; height:6px; border-radius:99px; background:{{ T.band }};"></span>reference band · 32 y · 178 cm</span>
+                  <span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:6px; height:6px; border-radius:99px; border:1.5px solid {{ T.faint }};"></span>Dec start</span>
+                  <span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:8px; height:8px; border-radius:99px; background:{{ T.rasp }};"></span>now</span>
+                  <span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:6px; height:6px; background:{{ T.ink }}; transform:rotate(45deg);"></span>target</span>
+                  <span>EST = bioimpedance estimate</span>
+                </div>
+              </div>
+
+              <!-- BODY MAP -->
+              <div style="background:{{ T.card }}; border-radius:22px; padding:18px 20px 20px; margin-top:12px; box-shadow:{{ T.shadow }}; animation:rise .5s ease both .16s;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:{{ T.faint }};">BODY MAP · SEGMENTAL</div>
+                  <div style="display:flex; background:{{ T.card2 }}; border:1px solid {{ T.rule2 }}; border-radius:99px; padding:2px;">
+                    <sc-for list="{{ T.mapChips }}" as="c" hint-placeholder-count="2"><div onClick="{{ c.tap }}" style="padding:5px 12px; border-radius:99px; font-size:11.5px; font-weight:600; background:{{ c.bg }}; color:{{ c.col }}; cursor:pointer; transition:background .3s, color .3s;">{{ c.lab }}</div></sc-for>
+                  </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 150px 1fr; gap:6px; align-items:center; margin-top:8px;">
+                  <div style="display:flex; flex-direction:column; justify-content:space-between; height:280px; padding:22px 0 18px; text-align:right;">
+                    <div>
+                      <div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:{{ T.faint }};">RIGHT ARM</div>
+                      <div style="font-family:'Familjen Grotesk',sans-serif; font-size:16px; font-weight:700; color:{{ T.ink }}; margin-top:2px; font-variant-numeric:tabular-nums;">{{ mRAv }}</div>
+                      <div style="font-size:10.5px; color:{{ T.sub }};">{{ mRAp }}</div>
+                    </div>
+                    <div>
+                      <div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:{{ T.faint }};">RIGHT LEG</div>
+                      <div style="font-family:'Familjen Grotesk',sans-serif; font-size:16px; font-weight:700; color:{{ T.ink }}; margin-top:2px; font-variant-numeric:tabular-nums;">{{ mRLv }}</div>
+                      <div style="font-size:10.5px; color:{{ T.sub }};">{{ mRLp }}</div>
+                    </div>
+                  </div>
+                  <svg viewBox="0 0 120 250" width="150" height="312" style="display:block; margin:0 auto;">
+<ellipse cx="60" cy="15" rx="10" ry="12.5" fill="{{ T.band }}"></ellipse>
+<path d="M55,25 L65,25 L66,34 L54,34 Z" fill="{{ T.band }}"></path>
+<path d="M60,33 L66,33 Q78,35 86,42 Q94,46 96,56 L98,82 Q99,90 98,98 L99,116 Q100,124 97,132 Q93,136 91,130 L89,118 L86,100 Q84,92 85,84 L83,66 Q82,60 83,56 Q80,78 79,100 Q79,110 80,118 Q80,126 76,134 Q82,150 80,172 Q80,182 79,190 Q82,206 78,222 L78,230 Q84,236 80,241 L62,241 Q61,232 63,224 Q60,206 62,190 Q63,180 62,172 Q62,150 61,134 L60,128 Z" fill="{{ T.band }}"></path>
+<g transform="matrix(-1 0 0 1 120 0)"><path d="M60,33 L66,33 Q78,35 86,42 Q94,46 96,56 L98,82 Q99,90 98,98 L99,116 Q100,124 97,132 Q93,136 91,130 L89,118 L86,100 Q84,92 85,84 L83,66 Q82,60 83,56 Q80,78 79,100 Q79,110 80,118 Q80,126 76,134 Q82,150 80,172 Q80,182 79,190 Q82,206 78,222 L78,230 Q84,236 80,241 L62,241 Q61,232 63,224 Q60,206 62,190 Q63,180 62,172 Q62,150 61,134 L60,128 Z" fill="{{ T.band }}"></path></g>
+<g style="opacity:{{ oTR }}; transition:opacity .55s ease .1s, fill .55s ease;">
+<path d="M60,34 L66,34 Q76,36 84,41 Q80,44 76,43 Q68,39 60,39 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M61,41 Q74,40 80,46 Q84,56 76,63 Q68,66 61,63 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<rect x="61" y="66" width="7.5" height="9" rx="2.6" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></rect>
+<rect x="61" y="77" width="7.5" height="9" rx="2.6" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></rect>
+<rect x="61" y="88" width="7.5" height="9" rx="2.6" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></rect>
+<path d="M61,99 L68.5,99 Q68,110 61,113 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M70,65 L77,66 Q80,80 78,98 Q73,102 72,100 Q74,82 70,65 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<g transform="matrix(-1 0 0 1 120 0)"><path d="M60,34 L66,34 Q76,36 84,41 Q80,44 76,43 Q68,39 60,39 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M61,41 Q74,40 80,46 Q84,56 76,63 Q68,66 61,63 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<rect x="61" y="66" width="7.5" height="9" rx="2.6" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></rect>
+<rect x="61" y="77" width="7.5" height="9" rx="2.6" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></rect>
+<rect x="61" y="88" width="7.5" height="9" rx="2.6" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></rect>
+<path d="M61,99 L68.5,99 Q68,110 61,113 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M70,65 L77,66 Q80,80 78,98 Q73,102 72,100 Q74,82 70,65 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path></g>
+</g>
+<g style="opacity:{{ oLA }}; transition:opacity .55s ease .05s, fill .55s ease;">
+<path d="M83,45 Q92,42 96,52 Q96,58 92,60 Q86,58 83,52 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M85,60 Q92,58 93,70 Q93,82 88,86 Q84,80 85,60 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M93.5,60 Q97,64 97,76 Q96,84 93,86 Q95,74 93.5,60 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M86,90 Q93,86 95,98 Q97,110 93,118 Q89,114 87,104 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M95.5,92 Q98.5,100 98,112 Q96,116 95,112 Q96,102 95.5,92 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+</g>
+<g style="opacity:{{ oRA }}; transition:opacity .55s ease, fill .55s ease;">
+<g transform="matrix(-1 0 0 1 120 0)"><path d="M83,45 Q92,42 96,52 Q96,58 92,60 Q86,58 83,52 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M85,60 Q92,58 93,70 Q93,82 88,86 Q84,80 85,60 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M93.5,60 Q97,64 97,76 Q96,84 93,86 Q95,74 93.5,60 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M86,90 Q93,86 95,98 Q97,110 93,118 Q89,114 87,104 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M95.5,92 Q98.5,100 98,112 Q96,116 95,112 Q96,102 95.5,92 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path></g>
+</g>
+<g style="opacity:{{ oLL }}; transition:opacity .55s ease .2s, fill .55s ease;">
+<path d="M73,130 Q79,138 78,156 Q77,170 74,172 Q71,160 71,144 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M64,124 Q72,122 72,142 Q72,160 69,174 Q65,172 64,156 Q63,140 64,124 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M62,156 Q67,156 68,168 Q68,178 64,178 Q61,172 62,156 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M72,184 Q78,186 77,202 Q76,214 72,216 Q70,204 72,184 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M64,186 Q70,184 70,200 Q70,214 66,218 Q63,206 64,186 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+</g>
+<g style="opacity:{{ oRL }}; transition:opacity .55s ease .15s, fill .55s ease;">
+<g transform="matrix(-1 0 0 1 120 0)"><path d="M73,130 Q79,138 78,156 Q77,170 74,172 Q71,160 71,144 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M64,124 Q72,122 72,142 Q72,160 69,174 Q65,172 64,156 Q63,140 64,124 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M62,156 Q67,156 68,168 Q68,178 64,178 Q61,172 62,156 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M72,184 Q78,186 77,202 Q76,214 72,216 Q70,204 72,184 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path>
+<path d="M64,186 Q70,184 70,200 Q70,214 66,218 Q63,206 64,186 Z" fill="{{ T.segCol }}" stroke="{{ T.card }}" stroke-width="0.8" stroke-linejoin="round"></path></g>
+</g>
+</svg>
+                  <div style="display:flex; flex-direction:column; justify-content:space-between; height:280px; padding:22px 0 18px;">
+                    <div>
+                      <div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:{{ T.faint }};">LEFT ARM</div>
+                      <div style="font-family:'Familjen Grotesk',sans-serif; font-size:16px; font-weight:700; color:{{ T.ink }}; margin-top:2px; font-variant-numeric:tabular-nums;">{{ mLAv }}</div>
+                      <div style="font-size:10.5px; color:{{ T.sub }};">{{ mLAp }}</div>
+                    </div>
+                    <div>
+                      <div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:{{ T.faint }};">LEFT LEG</div>
+                      <div style="font-family:'Familjen Grotesk',sans-serif; font-size:16px; font-weight:700; color:{{ T.ink }}; margin-top:2px; font-variant-numeric:tabular-nums;">{{ mLLv }}</div>
+                      <div style="font-size:10.5px; color:{{ T.sub }};">{{ mLLp }}</div>
+                    </div>
+                  </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; margin-top:-6px;">
+                  <div style="flex:none; white-space:nowrap;">
+                    <div style="font-size:10px; letter-spacing:0.12em; font-weight:600; color:{{ T.faint }};">TRUNK</div>
+                    <div style="display:flex; align-items:baseline; gap:6px; white-space:nowrap;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:16px; font-weight:700; color:{{ T.ink }}; font-variant-numeric:tabular-nums;">{{ mTRv }}</span><span style="font-size:10.5px; color:{{ T.sub }};">{{ mTRp }}</span></div>
+                  </div>
+                  <div style="flex:1; min-width:0; max-width:200px; font-size:11px; color:{{ T.faint }}; text-align:right; line-height:1.4;">{{ mapCaption }}</div>
+                </div>
+                <div style="margin-top:14px; padding-top:12px; border-top:1px solid {{ T.rule }};">
+                  <div style="display:flex; justify-content:space-between; font-size:10.5px; letter-spacing:0.12em; font-weight:600; color:{{ T.faint }};"><span>LEFT · RIGHT BALANCE</span><span style="color:{{ T.green }};">{{ balVerdict }}</span></div>
+                  <div style="display:grid; grid-template-columns:52px 1fr 92px; gap:12px; align-items:center; margin-top:10px;">
+                    <div style="font-size:12px; font-weight:600; color:{{ T.ink }};">Arms</div>
+                    <div style="position:relative; height:14px;">
+                      <div style="position:absolute; left:0; right:0; top:6px; height:2px; background:{{ T.rule2 }};"></div>
+                      <div style="position:absolute; left:50%; top:2px; width:1px; height:10px; background:{{ T.ghost }};"></div>
+                      <div style="position:absolute; top:3px; width:8px; height:8px; border-radius:99px; background:{{ T.rasp }}; left:calc(50% + {{ balArmX }} - 4px); transition:left .6s cubic-bezier(.22,.9,.3,1);"></div>
+                    </div>
+                    <div style="font-size:11.5px; color:{{ T.sub }}; text-align:right; font-variant-numeric:tabular-nums;">{{ balArmTxt }}</div>
+                    <div style="font-size:12px; font-weight:600; color:{{ T.ink }};">Legs</div>
+                    <div style="position:relative; height:14px;">
+                      <div style="position:absolute; left:0; right:0; top:6px; height:2px; background:{{ T.rule2 }};"></div>
+                      <div style="position:absolute; left:50%; top:2px; width:1px; height:10px; background:{{ T.ghost }};"></div>
+                      <div style="position:absolute; top:3px; width:8px; height:8px; border-radius:99px; background:{{ T.rasp }}; left:calc(50% + {{ balLegX }} - 4px); transition:left .6s cubic-bezier(.22,.9,.3,1);"></div>
+                    </div>
+                    <div style="font-size:11.5px; color:{{ T.sub }}; text-align:right; font-variant-numeric:tabular-nums;">{{ balLegTxt }}</div>
+                  </div>
+                  <div style="display:flex; justify-content:space-between; font-size:10px; color:{{ T.ghost }}; letter-spacing:.08em; margin-top:6px; padding-left:64px; padding-right:104px;"><span>RIGHT</span><span>LEFT</span></div>
+                </div>
+              </div>
+
+              <!-- BODY-TYPE MATRIX -->
+              <div data-mx="1" style="background:{{ T.card }}; border-radius:22px; padding:18px 20px 16px; margin-top:12px; box-shadow:{{ T.shadow }}; animation:rise .5s ease both .2s;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:{{ T.faint }};">BODY TYPE · BMI × BODY FAT</div>
+                  <div style="font-size:11px; color:{{ T.faint }};">trail · monthly</div>
+                </div>
+                <div style="position:relative; margin-top:10px;">
+                <svg viewBox="0 0 320 236" width="100%" style="display:block; overflow:visible;">
+                  <rect x="36" y="10" width="274" height="190" fill="{{ T.card2 }}" rx="10"></rect>
+                  <rect x="{{ mxCellX }}" y="{{ mxCellY }}" width="{{ mxCellW }}" height="{{ mxCellH }}" fill="{{ T.wash }}" rx="6"></rect>
+                  <line x1="90.8" x2="90.8" y1="10" y2="200" stroke="{{ T.rule2 }}" stroke-width="1"></line>
+                  <line x1="153.4" x2="153.4" y1="10" y2="200" stroke="{{ T.rule2 }}" stroke-width="1"></line>
+                  <line x1="36" x2="310" y1="96.4" y2="96.4" stroke="{{ T.rule2 }}" stroke-width="1"></line>
+                  <line x1="36" x2="310" y1="139.5" y2="139.5" stroke="{{ T.rule2 }}" stroke-width="1"></line>
+                  <text x="85.8" y="21" text-anchor="end" font-size="8.5" fill="{{ T.faint }}" font-family="Instrument Sans, sans-serif" font-weight="600">SOLID</text>
+                  <text x="148.4" y="21" text-anchor="end" font-size="8.5" fill="{{ T.faint }}" font-family="Instrument Sans, sans-serif" font-weight="600">BUILT</text>
+                  <text x="305" y="21" text-anchor="end" font-size="8.5" fill="{{ T.faint }}" font-family="Instrument Sans, sans-serif" font-weight="600">CARRYING FAT</text>
+                  <text x="85.8" y="107.4" text-anchor="end" font-size="8.5" fill="{{ T.faint }}" font-family="Instrument Sans, sans-serif" font-weight="600">DENSE</text>
+                  <text x="148.4" y="107.4" text-anchor="end" font-size="8.5" fill="{{ T.deep }}" font-family="Instrument Sans, sans-serif" font-weight="700">ATHLETIC</text>
+                  <text x="305" y="107.4" text-anchor="end" font-size="8.5" fill="{{ T.faint }}" font-family="Instrument Sans, sans-serif" font-weight="600">OVER-FAT</text>
+                  <text x="85.8" y="150.5" text-anchor="end" font-size="8.5" fill="{{ T.faint }}" font-family="Instrument Sans, sans-serif" font-weight="600">VERY LEAN</text>
+                  <text x="148.4" y="150.5" text-anchor="end" font-size="8.5" fill="{{ T.faint }}" font-family="Instrument Sans, sans-serif" font-weight="600">FIT</text>
+                  <text x="305" y="150.5" text-anchor="end" font-size="8.5" fill="{{ T.faint }}" font-family="Instrument Sans, sans-serif" font-weight="600">LIGHT · SOFT</text>
+                  <text x="30" y="99" font-size="9.5" fill="{{ T.faint }}" text-anchor="end" font-family="Instrument Sans, sans-serif">30</text>
+                  <text x="30" y="142" font-size="9.5" fill="{{ T.faint }}" text-anchor="end" font-family="Instrument Sans, sans-serif">25</text>
+                  <text x="30" y="200" font-size="9.5" fill="{{ T.faint }}" text-anchor="end" font-family="Instrument Sans, sans-serif">18.5</text>
+                  <text x="30" y="16" font-size="9" fill="{{ T.ghost }}" text-anchor="end" font-family="Instrument Sans, sans-serif" letter-spacing="0.8">BMI</text>
+                  <text x="90.8" y="214" font-size="9.5" fill="{{ T.faint }}" text-anchor="middle" font-family="Instrument Sans, sans-serif">12</text>
+                  <text x="153.4" y="214" font-size="9.5" fill="{{ T.faint }}" text-anchor="middle" font-family="Instrument Sans, sans-serif">20</text>
+                  <text x="310" y="214" font-size="9.5" fill="{{ T.faint }}" text-anchor="end" font-family="Instrument Sans, sans-serif">40</text>
+                  <text x="36" y="230" font-size="9" fill="{{ T.ghost }}" font-family="Instrument Sans, sans-serif" letter-spacing="0.8">BODY FAT %</text>
+                  <polyline points="{{ mxPts }}" fill="none" stroke="{{ T.rasp }}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity=".5" stroke-dasharray="{{ mxLen }}" style="stroke-dashoffset:{{ mxOff }}; transition:stroke-dashoffset 1.8s cubic-bezier(.4,0,.2,1);"></polyline>
+                  <sc-for list="{{ mxDots }}" as="p" hint-placeholder-count="6"><circle cx="{{ p.x }}" cy="{{ p.y }}" r="3.5" fill="{{ T.card }}" stroke="{{ T.rasp }}" stroke-width="1.5" opacity="{{ p.o }}"></circle></sc-for>
+                  <sc-if value="{{ mxOn }}" hint-placeholder-val="{{ false }}"><circle cx="{{ mxX }}" cy="{{ mxY }}" r="6" fill="{{ T.rasp }}" opacity=".5" style="transform-origin:{{ mxX }}px {{ mxY }}px; animation:ring 1.8s ease-out infinite;"></circle></sc-if>
+                  <circle cx="{{ mxX }}" cy="{{ mxY }}" r="6" fill="{{ T.rasp }}" stroke="{{ T.card }}" stroke-width="2.5"></circle>
+                </svg>
+                <sc-for list="{{ mxDots }}" as="p" hint-placeholder-count="6"><div style="position:absolute; left:{{ p.lx }}; top:{{ p.lt }}; transform:translate(-50%,-100%); font-size:8.5px; font-weight:600; color:{{ T.faint }}; opacity:{{ p.o }}; transition:opacity .6s ease; white-space:nowrap; pointer-events:none;">{{ p.lab }}</div></sc-for>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:6px;">
+                  <div style="font-size:13px; color:{{ T.ink }};">Now <strong style="font-weight:700;">Athletic</strong> · BMI 26.1 · 13.2% fat</div>
+                  <div style="font-size:11px; color:{{ T.faint }};">Dec: BMI 37 · 34%</div>
+                </div>
+              </div>
+
+              <!-- TRENDS -->
+              <div style="background:{{ T.card }}; border-radius:22px; padding:18px 20px 16px; margin-top:12px; box-shadow:{{ T.shadow }}; animation:rise .5s ease both .24s;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:{{ T.faint }};">TRENDS</div>
+                  <div style="font-size:12px; font-weight:600; color:{{ T.deep }}; background:{{ T.wash }}; padding:4px 10px; border-radius:99px; font-variant-numeric:tabular-nums;">{{ trDelta }}</div>
+                </div>
+                <div style="display:flex; gap:6px; margin-top:12px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px;">
+                  <sc-for list="{{ T.trChips }}" as="c" hint-placeholder-count="6"><div onClick="{{ c.tap }}" style="padding:7px 12px; border-radius:99px; font-size:12px; font-weight:600; background:{{ c.bg }}; color:{{ c.col }}; border:1px solid {{ c.bd }}; white-space:nowrap; cursor:pointer; flex:none; transition:background .25s, color .25s;">{{ c.lab }}</div></sc-for>
+                </div>
+                <div style="display:flex; gap:6px; margin-top:8px; overflow-x:auto; scrollbar-width:none;">
+                  <sc-for list="{{ T.rangeChips }}" as="c" hint-placeholder-count="6"><div onClick="{{ c.tap }}" style="padding:5px 10px; border-radius:8px; font-size:11px; font-weight:600; background:{{ c.bg }}; color:{{ c.col }}; border:1px solid {{ c.bd }}; white-space:nowrap; cursor:pointer; flex:none; transition:background .25s, color .25s;">{{ c.lab }}</div></sc-for>
+                </div>
+                <sc-if value="{{ customOn }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12px; color:{{ T.sub }};"><span style="padding:5px 10px; border:1px dashed {{ T.rule2 }}; border-radius:8px; font-weight:600; color:{{ T.ink }};">Jun 6</span>→<span style="padding:5px 10px; border:1px dashed {{ T.rule2 }}; border-radius:8px; font-weight:600; color:{{ T.ink }};">Oct 4</span><span style="color:{{ T.faint }};">tap a date to change</span></div>
+                </sc-if>
+                <div onPointerDown="{{ trDown }}" onPointerMove="{{ trMove }}" onPointerUp="{{ trUp }}" style="position:relative; margin-top:14px; touch-action:none; cursor:crosshair; user-select:none;">
+                  <svg viewBox="0 0 360 160" width="100%" height="160" preserveAspectRatio="none" style="display:block;">
+                    <line x1="6" x2="354" y1="14" y2="14" stroke="{{ T.rule }}" stroke-width="1"></line>
+                    <line x1="6" x2="354" y1="80" y2="80" stroke="{{ T.rule }}" stroke-width="1"></line>
+                    <line x1="6" x2="354" y1="146" y2="146" stroke="{{ T.rule }}" stroke-width="1"></line>
+                    <path d="{{ tr.area }}" fill="{{ T.rasp }}" opacity="0.10"></path>
+                    <sc-for list="{{ tr.raw }}" as="p" hint-placeholder-count="0"><circle cx="{{ p.x }}" cy="{{ p.y }}" r="{{ tr.dotR }}" fill="{{ T.rasp }}" opacity="{{ tr.dotO }}"></circle></sc-for>
+                    <path d="{{ tr.line }}" fill="none" stroke="{{ T.rasp }}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <line x1="{{ tr.ttX }}" x2="{{ tr.ttX }}" y1="14" y2="146" stroke="{{ T.ink }}" stroke-width="1" opacity="0.22"></line>
+                    <circle cx="{{ tr.ttX }}" cy="{{ tr.ttY }}" r="5" fill="{{ T.rasp }}" stroke="{{ T.card }}" stroke-width="2"></circle>
+                  </svg>
+                  <div style="position:absolute; left:{{ tr.ttL }}; top:{{ tr.ttT }}; background:{{ T.tip }}; color:{{ T.tipInk }}; font-size:11.5px; font-weight:600; padding:5px 9px; border-radius:8px; white-space:nowrap; pointer-events:none; font-variant-numeric:tabular-nums;">{{ tr.ttTxt }}</div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:10.5px; color:{{ T.faint }}; letter-spacing:.06em; margin-top:6px;"><span>{{ tr.x0 }}</span><span>{{ tr.smTxt }} · touch &amp; drag</span><span>{{ tr.x1 }}</span></div>
+              </div>
+
+              <!-- TAPE -->
+              <div style="background:{{ T.card }}; border-radius:22px; padding:18px 20px 12px; margin-top:12px; box-shadow:{{ T.shadow }}; animation:rise .5s ease both .28s;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:{{ T.faint }};">TAPE · {{ tapeHead }}</div>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div onClick="{{ tapeSortTap }}" style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:{{ T.sub }}; background:{{ T.card2 }}; border:1px solid {{ T.rule2 }}; border-radius:99px; padding:4px 10px; cursor:pointer;"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 1v8M1 3l2-2 2 2M7 9V1M5 7l2 2 2-2"></path></svg>{{ tapeSortLab }}</div>
+                    <button onClick="{{ tapeOpen }}" style="display:flex; align-items:center; gap:6px; font-family:'Familjen Grotesk',sans-serif; font-size:12px; font-weight:600; color:#FFFFFF; background:{{ T.rasp }}; border:none; border-radius:8px; padding:7px 12px; cursor:pointer;"><svg width="11" height="11" viewBox="0 0 20 20"><rect x="7" y="2" width="6" height="11" rx="3" fill="#FFFFFF"></rect><path d="M4 9 a6 6 0 0 0 12 0 M10 15 v3" stroke="#FFFFFF" stroke-width="1.8" fill="none" stroke-linecap="round"></path></svg>Tape</button>
+                  </div>
+                </div>
+                <div style="margin-top:6px;">
+                  <sc-for list="{{ T.tapeRows }}" as="r" hint-placeholder-count="9">
+                    <div onClick="{{ r.tap }}" style="display:grid; grid-template-columns:92px 1fr 64px 76px; gap:10px; align-items:center; padding:10px 6px; margin:0 -6px; border-radius:10px; border-bottom:1px solid {{ T.rule }}; background:{{ r.bg }}; transition:background .9s ease; cursor:pointer;">
+                      <div>
+                        <div style="font-size:13px; font-weight:600; color:{{ T.ink }};">{{ r.lab }}</div>
+                        <div style="font-size:10.5px; color:{{ T.faint }}; margin-top:1px;">{{ r.when }}</div>
+                      </div>
+                      <svg viewBox="0 0 60 20" width="100%" height="20" preserveAspectRatio="none" style="display:block;"><polyline points="{{ r.spark }}" fill="none" stroke="{{ T.rasp }}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity=".7"></polyline><circle cx="{{ r.spx }}" cy="{{ r.spy }}" r="2" fill="{{ T.rasp }}"></circle></svg>
+                      <sc-if value="{{ r.good }}" hint-placeholder-val="{{ true }}"><div style="font-size:11.5px; font-weight:600; color:{{ T.green }}; text-align:right; font-variant-numeric:tabular-nums;">{{ r.d }}</div></sc-if>
+                      <sc-if value="{{ r.notGood }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px; font-weight:600; color:{{ T.sub }}; text-align:right; font-variant-numeric:tabular-nums;">{{ r.d }}</div></sc-if>
+                      <div style="text-align:right; font-family:'Familjen Grotesk',sans-serif; font-size:16px; font-weight:700; color:{{ T.ink }}; font-variant-numeric:tabular-nums;">{{ r.val }}<span style="font-size:10.5px; font-weight:600; color:{{ T.faint }}; margin-left:2px;">cm</span></div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="font-size:11px; color:{{ T.faint }}; padding:10px 0 4px;">Change is since your first tape in Dec. Tap a site to type one number; the mic takes a whole sentence.</div>
+              </div>
+
+              <!-- MILESTONES -->
+              <div data-ms="1" style="background:{{ T.card }}; border-radius:22px; padding:18px 20px 16px; margin-top:12px; box-shadow:{{ T.shadow }}; animation:rise .5s ease both .32s;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:{{ T.faint }};">MILESTONES · FROM 117.3</div>
+                  <div style="font-size:11px; color:{{ T.faint }};">42 weeks</div>
+                </div>
+                <div style="position:relative; margin-top:14px; padding-left:18px;">
+                  <div style="position:absolute; left:4px; top:6px; bottom:6px; width:1px; background:{{ T.rule2 }};"></div>
+                  <div style="position:absolute; left:4px; top:6px; width:1px; background:{{ T.rasp }}; height:{{ msLineH }}; transition:height 2.2s cubic-bezier(.4,0,.2,1);"></div>
+                  <sc-for list="{{ msRows }}" as="m" hint-placeholder-count="11">
+                    <div style="position:relative; display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:7px 0; opacity:{{ m.o }}; transform:translateY({{ m.y }}); transition:opacity .5s ease {{ m.dl }}, transform .5s cubic-bezier(.22,.9,.3,1) {{ m.dl }};">
+                      <div style="position:absolute; left:-17.5px; top:12px; width:6px; height:6px; border-radius:99px; background:{{ T.rasp }}; box-shadow:0 0 0 2px {{ T.card }};"></div>
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:13.5px; font-weight:600; color:{{ T.ink }}; line-height:1.35;">{{ m.title }}</div>
+                        <div style="font-size:11px; color:{{ T.faint }}; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ m.date }}<sc-if value="{{ m.hasSub }}" hint-placeholder-val="{{ false }}"> · {{ m.sub }}</sc-if></div>
+                      </div>
+                      <div style="flex:none; font-size:12.5px; font-weight:600; color:{{ T.sub }}; white-space:nowrap; font-variant-numeric:tabular-nums;">{{ m.w }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+
+            <!-- METRIC DETAIL (push-in) -->
+            <div style="position:absolute; inset:0; background:{{ T.bg }}; transform:translateX({{ detX }}); transition:transform .42s cubic-bezier(.32,.86,.3,1); overflow-y:auto; padding:62px 22px 210px; box-sizing:border-box; box-shadow:-16px 0 40px rgba(0,0,0,.18); z-index:5; scrollbar-width:none;">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <div onClick="{{ detClose }}" style="width:36px; height:36px; border-radius:99px; background:{{ T.card }}; box-shadow:{{ T.shadow }}; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;"><svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="{{ T.ink }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2 2 8l6 6"></path></svg></div>
+                <div style="flex:1;">
+                  <div style="font-size:11px; letter-spacing:0.18em; font-weight:600; color:{{ T.faint }};">BODY · SMART SCALE</div>
+                  <div style="font-family:'Familjen Grotesk',sans-serif; font-size:26px; font-weight:700; color:{{ T.ink }}; letter-spacing:-0.02em;">{{ dLab }}</div>
+                </div>
+                <div style="font-size:12px; font-weight:600; color:{{ T.deep }}; background:{{ T.wash }}; padding:5px 11px; border-radius:99px; font-variant-numeric:tabular-nums;">{{ dc.delta }}</div>
+              </div>
+              <div style="background:{{ T.card }}; border-radius:22px; padding:20px; margin-top:16px; box-shadow:{{ T.shadow }};">
+                <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                  <div style="display:flex; align-items:baseline; gap:5px;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:46px; font-weight:700; color:{{ T.ink }}; letter-spacing:-0.03em; line-height:1; font-variant-numeric:tabular-nums;">{{ dVal }}</span><span style="font-size:14px; font-weight:600; color:{{ T.faint }};">{{ dUnit }}</span></div>
+                  <div style="font-size:12px; color:{{ T.sub }}; font-variant-numeric:tabular-nums;">{{ dc.lo }} – {{ dc.hi }}</div>
+                </div>
+                <div style="display:flex; gap:6px; margin-top:14px; overflow-x:auto; scrollbar-width:none;">
+                  <sc-for list="{{ T.dRangeChips }}" as="c" hint-placeholder-count="6"><div onClick="{{ c.tap }}" style="padding:5px 10px; border-radius:8px; font-size:11px; font-weight:600; background:{{ c.bg }}; color:{{ c.col }}; border:1px solid {{ c.bd }}; white-space:nowrap; cursor:pointer; flex:none; transition:background .25s, color .25s;">{{ c.lab }}</div></sc-for>
+                </div>
+                <div onPointerDown="{{ dcDown }}" onPointerMove="{{ dcMove }}" onPointerUp="{{ dcUp }}" style="position:relative; margin-top:14px; touch-action:none; cursor:crosshair; user-select:none;">
+                  <svg viewBox="0 0 360 160" width="100%" height="160" preserveAspectRatio="none" style="display:block;">
+                    <line x1="6" x2="354" y1="14" y2="14" stroke="{{ T.rule }}" stroke-width="1"></line>
+                    <line x1="6" x2="354" y1="80" y2="80" stroke="{{ T.rule }}" stroke-width="1"></line>
+                    <line x1="6" x2="354" y1="146" y2="146" stroke="{{ T.rule }}" stroke-width="1"></line>
+                    <path d="{{ dc.area }}" fill="{{ T.rasp }}" opacity="0.10"></path>
+                    <sc-for list="{{ dc.raw }}" as="p" hint-placeholder-count="0"><circle cx="{{ p.x }}" cy="{{ p.y }}" r="{{ dc.dotR }}" fill="{{ T.rasp }}" opacity="{{ dc.dotO }}"></circle></sc-for>
+                    <path d="{{ dc.line }}" fill="none" stroke="{{ T.rasp }}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <line x1="{{ dc.ttX }}" x2="{{ dc.ttX }}" y1="14" y2="146" stroke="{{ T.ink }}" stroke-width="1" opacity="0.22"></line>
+                    <circle cx="{{ dc.ttX }}" cy="{{ dc.ttY }}" r="5" fill="{{ T.rasp }}" stroke="{{ T.card }}" stroke-width="2"></circle>
+                  </svg>
+                  <div style="position:absolute; left:{{ dc.ttL }}; top:{{ dc.ttT }}; background:{{ T.tip }}; color:{{ T.tipInk }}; font-size:11.5px; font-weight:600; padding:5px 9px; border-radius:8px; white-space:nowrap; pointer-events:none; font-variant-numeric:tabular-nums;">{{ dc.ttTxt }}</div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:10.5px; color:{{ T.faint }}; letter-spacing:.06em; margin-top:6px;"><span>{{ dc.x0 }}</span><span>{{ dc.smTxt }} · touch &amp; drag</span><span>{{ dc.x1 }}</span></div>
+              </div>
+
+              <div style="background:{{ T.card }}; border-radius:22px; padding:16px 20px; margin-top:12px; box-shadow:{{ T.shadow }};">
+                <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:{{ T.faint }};">AGAINST THE BAND</div>
+                <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+                  <div style="flex:1; position:relative; height:22px;">
+                    <div style="position:absolute; left:0; right:0; top:9px; height:4px; border-radius:99px; background:{{ T.trackBg }};"></div>
+                    <div style="position:absolute; top:7px; height:8px; border-radius:99px; background:{{ T.band }}; left:{{ dRow.bandL }}; width:{{ dRow.bandW }};"></div>
+                    <div style="position:absolute; top:10px; height:2px; background:{{ T.rasp }}; opacity:.35; left:{{ dRow.histL }}; width:{{ dRow.histW }};"></div>
+                    <div style="position:absolute; top:7px; width:6px; height:6px; border-radius:99px; border:1.5px solid {{ T.faint }}; background:{{ T.card }}; left:calc({{ dRow.startX }} - 4px);"></div>
+                    <sc-if value="{{ dRow.hasTgt }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; top:7px; width:7px; height:7px; background:{{ T.ink }}; transform:rotate(45deg); left:calc({{ dRow.tgtX }} - 3.5px);"></div></sc-if>
+                    <div style="position:absolute; top:6px; width:10px; height:10px; border-radius:99px; background:{{ T.rasp }}; box-shadow:0 0 0 2px {{ T.card }}; left:calc({{ dRow.nowX }} - 5px);"></div>
+                  </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:10.5px; color:{{ T.faint }}; margin-top:2px; font-variant-numeric:tabular-nums;"><span>{{ dRow.axisLo }}</span><span>band {{ dRow.bandTxt }}</span><span>{{ dRow.axisHi }}</span></div>
+                <div style="font-size:12.5px; line-height:1.5; color:{{ T.sub }}; margin-top:8px;">{{ dRow.bandNote }}</div>
+              </div>
+
+              <div style="background:{{ T.card }}; border-radius:22px; padding:16px 20px 6px; margin-top:12px; box-shadow:{{ T.shadow }};">
+                <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:600; color:{{ T.faint }};">{{ dListKick }}</div>
+                <sc-for list="{{ dRows }}" as="x" hint-placeholder-count="6">
+                  <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid {{ T.rule }};">
+                    <div style="font-size:13.5px; font-weight:600; color:{{ T.ink }};">{{ x.date }}</div>
+                    <div style="display:flex; gap:18px; align-items:baseline;">
+                      <span style="font-family:'Familjen Grotesk',sans-serif; font-size:15px; font-weight:700; color:{{ T.ink }}; font-variant-numeric:tabular-nums;">{{ x.val }}</span>
+                      <sc-if value="{{ x.good }}" hint-placeholder-val="{{ true }}"><span style="font-size:12px; font-weight:600; color:{{ T.green }}; width:44px; text-align:right; font-variant-numeric:tabular-nums;">{{ x.d }}</span></sc-if>
+                      <sc-if value="{{ x.notGood }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px; font-weight:600; color:{{ T.faint }}; width:44px; text-align:right; font-variant-numeric:tabular-nums;">{{ x.d }}</span></sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="background:{{ T.wash }}; border-radius:18px; padding:18px; margin-top:12px;">
+                <div style="display:flex; align-items:center; gap:8px; font-size:10.5px; letter-spacing:0.18em; font-weight:700; color:{{ T.deep }};"><svg width="10" height="10" viewBox="0 0 10 10"><rect x="5" y="0" width="7" height="7" transform="rotate(45 5 1.5)" fill="{{ T.rasp }}"></rect></svg>WHAT IT MEANS</div>
+                <div style="font-size:13.5px; color:{{ T.ink }}; line-height:1.65; margin-top:10px;">{{ dNote }}</div>
+              </div>
+            </div>
+
+            <!-- DOCK + TAB BAR -->
+            <div style="position:absolute; left:50%; transform:translateX(-50%); bottom:106px; background:{{ T.dock }}; border-radius:99px; padding:8px 18px; display:flex; gap:26px; align-items:center; box-shadow:0 8px 28px rgba(0,0,0,.16); z-index:6;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{ T.deep }}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.2L4 21l1.8-4.6A8 8 0 1 1 21 12Z"></path></svg>
+              <div onClick="{{ tapeOpen }}" style="width:52px; height:52px; border-radius:99px; background:{{ T.rasp }}; display:flex; align-items:center; justify-content:center; cursor:pointer;"><svg width="20" height="20" viewBox="0 0 20 20"><rect x="7" y="2" width="6" height="11" rx="3" fill="#FFFFFF"></rect><path d="M4 9 a6 6 0 0 0 12 0 M10 15 v3" stroke="#FFFFFF" stroke-width="1.8" fill="none" stroke-linecap="round"></path></svg></div>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{ T.deep }}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
+            </div>
+            <div style="position:absolute; left:0; right:0; bottom:0; height:94px; background:{{ T.card }}; border-top:1px solid {{ T.rule }}; display:flex; justify-content:space-around; padding:12px 10px 0; box-sizing:border-box; z-index:6;">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:60px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{ T.faint }}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14v16H5z"></path><path d="M12 8v6M9 11h6"></path></svg><span style="font-size:10.5px; font-weight:600; color:{{ T.faint }};">Spirit</span></div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:60px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{ T.faint }}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16a8 8 0 0 1-16 0Z"></path><path d="M9 8V6M12 8V5M15 8V6"></path></svg><span style="font-size:10.5px; font-weight:600; color:{{ T.faint }};">Food</span></div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:60px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{ T.rasp }}" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="2.2" fill="{{ T.rasp }}"></circle></svg><span style="font-size:10.5px; font-weight:600; color:{{ T.rasp }};">Today</span></div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:60px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{ T.faint }}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l5 5L8 21H3v-5z"></path><path d="M13 6l5 5"></path></svg><span style="font-size:10.5px; font-weight:600; color:{{ T.faint }};">Journal</span></div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:60px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{ T.faint }}" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"></path></svg><span style="font-size:10.5px; font-weight:600; color:{{ T.faint }};">Settings</span></div>
+            </div>
+
+            <!-- SCRIM -->
+            <div onClick="{{ sheetClose }}" style="position:absolute; inset:0; background:{{ T.scrim }}; opacity:{{ scrimO }}; pointer-events:{{ scrimPE }}; transition:opacity .35s; z-index:8;"></div>
+
+            <!-- TAPE SHEET -->
+            <div style="position:absolute; left:0; right:0; bottom:0; background:{{ T.card }}; border-radius:28px 28px 0 0; padding:12px 22px 40px; transform:translateY({{ tapeY }}); transition:transform .42s cubic-bezier(.32,.86,.3,1); z-index:9; box-shadow:0 -12px 40px rgba(0,0,0,.18);">
+              <div style="width:40px; height:4px; border-radius:99px; background:{{ T.rule2 }}; margin:0 auto;"></div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:{{ T.ink }};">{{ tapeTitle }}</div>
+                <div onClick="{{ sheetClose }}" style="width:30px; height:30px; border-radius:99px; background:{{ T.card2 }}; display:flex; align-items:center; justify-content:center; font-size:14px; color:{{ T.sub }}; cursor:pointer;">✕</div>
+              </div>
+
+              <sc-if value="{{ tpMic }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; flex-direction:column; align-items:center; padding:26px 0 10px;">
+                  <div style="position:relative; width:96px; height:96px; display:flex; align-items:center; justify-content:center;">
+                    <div style="position:absolute; inset:0; border-radius:99px; background:{{ T.rasp }}; opacity:.5; animation:ring 1.6s ease-out infinite;"></div>
+                    <div style="position:absolute; inset:0; border-radius:99px; background:{{ T.rasp }}; opacity:.5; animation:ring 1.6s ease-out infinite .5s;"></div>
+                    <div style="position:relative; width:96px; height:96px; border-radius:99px; background:{{ T.rasp }}; display:flex; align-items:center; justify-content:center;"><svg width="34" height="34" viewBox="0 0 20 20"><rect x="7" y="2" width="6" height="11" rx="3" fill="#FFFFFF"></rect><path d="M4 9 a6 6 0 0 0 12 0 M10 15 v3" stroke="#FFFFFF" stroke-width="1.8" fill="none" stroke-linecap="round"></path></svg></div>
+                  </div>
+                  <div style="display:flex; align-items:flex-end; gap:3px; height:22px; margin-top:22px;">
+                    <span style="width:4px; background:{{ T.rasp }}; border-radius:2px; height:100%; transform-origin:bottom; animation:vu .7s ease-in-out infinite;"></span>
+                    <span style="width:4px; background:{{ T.rasp }}; border-radius:2px; height:100%; transform-origin:bottom; animation:vu .7s ease-in-out infinite .1s;"></span>
+                    <span style="width:4px; background:{{ T.rasp }}; border-radius:2px; height:100%; transform-origin:bottom; animation:vu .7s ease-in-out infinite .2s;"></span>
+                    <span style="width:4px; background:{{ T.rasp }}; border-radius:2px; height:100%; transform-origin:bottom; animation:vu .7s ease-in-out infinite .3s;"></span>
+                    <span style="width:4px; background:{{ T.rasp }}; border-radius:2px; height:100%; transform-origin:bottom; animation:vu .7s ease-in-out infinite .4s;"></span>
+                    <span style="width:4px; background:{{ T.rasp }}; border-radius:2px; height:100%; transform-origin:bottom; animation:vu .7s ease-in-out infinite .5s;"></span>
+                  </div>
+                  <div style="font-size:15px; font-weight:600; color:{{ T.ink }}; margin-top:16px;">Listening…</div>
+                  <div style="font-size:12.5px; color:{{ T.faint }}; margin-top:4px; text-align:center; line-height:1.5;">Say it like <span style="color:{{ T.deep }}; font-weight:600;">“waist 86.5”</span> — one site or the whole round.</div>
+                  <button onClick="{{ tapePad }}" style="margin-top:22px; font-family:'Familjen Grotesk',sans-serif; font-size:13px; font-weight:600; color:{{ T.sub }}; background:{{ T.card2 }}; border:1px solid {{ T.rule2 }}; border-radius:10px; padding:10px 18px; cursor:pointer;">Type instead</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ tpParsed }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:13px; color:{{ T.faint }}; margin-top:14px;">Heard <span style="color:{{ T.ink }}; font-style:italic;">“{{ heard }}”</span></div>
+                <div style="background:{{ T.wash }}; border-radius:18px; padding:18px; margin-top:12px; animation:popIn .4s cubic-bezier(.22,.9,.3,1) both;">
+                  <div style="font-size:10.5px; letter-spacing:0.16em; font-weight:700; color:{{ T.deep }};">{{ parsedLab }}</div>
+                  <div style="display:flex; align-items:baseline; gap:5px; margin-top:6px;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:44px; font-weight:700; color:{{ T.ink }}; letter-spacing:-0.03em; line-height:1; font-variant-numeric:tabular-nums;">{{ parsedVal }}</span><span style="font-size:15px; font-weight:600; color:{{ T.faint }};">cm</span></div>
+                  <div style="display:flex; gap:16px; margin-top:12px; font-size:12.5px; color:{{ T.sub }};"><span>was <strong style="color:{{ T.ink }}; font-weight:600;">{{ parsedWas }}</strong> · {{ parsedWhen }}</span><span style="color:{{ T.green }}; font-weight:600;">{{ parsedD }}</span></div>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:16px;">
+                  <button onClick="{{ tapeMic }}" style="flex:1; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:{{ T.sub }}; background:{{ T.card2 }}; border:1px solid {{ T.rule2 }}; border-radius:12px; padding:14px; cursor:pointer;">Again</button>
+                  <button onClick="{{ tapeEdit }}" style="flex:1; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:{{ T.sub }}; background:{{ T.card2 }}; border:1px solid {{ T.rule2 }}; border-radius:12px; padding:14px; cursor:pointer;">Edit</button>
+                  <button onClick="{{ tapeSaveParsed }}" style="flex:2; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#FFFFFF; background:{{ T.rasp }}; border:none; border-radius:12px; padding:14px; cursor:pointer;">Save</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ tpPad }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; gap:6px; margin-top:14px; overflow-x:auto; scrollbar-width:none;">
+                  <sc-for list="{{ T.padSites }}" as="c" hint-placeholder-count="9"><div onClick="{{ c.tap }}" style="padding:7px 12px; border-radius:99px; font-size:12px; font-weight:600; background:{{ c.bg }}; color:{{ c.col }}; border:1px solid {{ c.bd }}; white-space:nowrap; cursor:pointer; flex:none; transition:background .25s, color .25s;">{{ c.lab }}</div></sc-for>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:16px; padding:0 4px;">
+                  <div style="display:flex; align-items:baseline; gap:5px;"><span style="font-family:'Familjen Grotesk',sans-serif; font-size:48px; font-weight:700; color:{{ padCol }}; letter-spacing:-0.03em; line-height:1; font-variant-numeric:tabular-nums; min-width:60px;">{{ padShow }}</span><span style="font-size:15px; font-weight:600; color:{{ T.faint }};">cm</span></div>
+                  <div style="font-size:12px; color:{{ T.faint }}; text-align:right; line-height:1.5;">last <strong style="color:{{ T.ink }}; font-weight:600;">{{ padLast }}</strong><br>{{ padWhen }}</div>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:16px;">
+                  <sc-for list="{{ padKeys }}" as="k" hint-placeholder-count="12"><div onClick="{{ k.tap }}" style="height:50px; border-radius:12px; background:{{ T.card2 }}; display:flex; align-items:center; justify-content:center; font-family:'Familjen Grotesk',sans-serif; font-size:22px; font-weight:600; color:{{ T.ink }}; cursor:pointer; user-select:none;" style-active="background:{{ T.wash }};">{{ k.lab }}</div></sc-for>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:12px;">
+                  <button onClick="{{ tapeMic }}" style="width:54px; font-family:'Familjen Grotesk',sans-serif; color:{{ T.deep }}; background:{{ T.wash }}; border:none; border-radius:12px; padding:14px; cursor:pointer; display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 20 20"><rect x="7" y="2" width="6" height="11" rx="3" fill="{{ T.deep }}"></rect><path d="M4 9 a6 6 0 0 0 12 0 M10 15 v3" stroke="{{ T.deep }}" stroke-width="1.8" fill="none" stroke-linecap="round"></path></svg></button>
+                  <button onClick="{{ tapeSavePad }}" style="flex:1; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#FFFFFF; background:{{ padBtnBg }}; border:none; border-radius:12px; padding:14px; cursor:pointer; transition:background .25s;">{{ padBtnTxt }}</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ tpSaved }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; flex-direction:column; align-items:center; padding:30px 0 16px;">
+                  <svg width="84" height="84" viewBox="0 0 84 84">
+                    <circle cx="42" cy="42" r="38" fill="none" stroke="{{ T.rasp }}" stroke-width="3" stroke-dasharray="239" stroke-dashoffset="239" style="animation:draw .6s cubic-bezier(.4,0,.2,1) forwards;" transform="rotate(-90 42 42)"></circle>
+                    <path d="M26 43l11 11 21-23" fill="none" stroke="{{ T.rasp }}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="50" stroke-dashoffset="50" style="animation:draw .4s cubic-bezier(.4,0,.2,1) .45s forwards;"></path>
+                  </svg>
+                  <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:{{ T.ink }}; margin-top:18px; animation:rise .4s ease both .5s;">{{ savedTitle }}</div>
+                  <div style="font-size:12.5px; color:{{ T.sub }}; margin-top:4px; animation:rise .4s ease both .6s;">{{ savedSub }}</div>
+                </div>
+              </sc-if>
+            </div>
+
+            <!-- GOAL SHEET -->
+            <div style="position:absolute; left:0; right:0; bottom:0; background:{{ T.card }}; border-radius:28px 28px 0 0; padding:12px 22px 40px; transform:translateY({{ goalY }}); transition:transform .42s cubic-bezier(.32,.86,.3,1); z-index:9; box-shadow:0 -12px 40px rgba(0,0,0,.18);">
+              <div style="width:40px; height:4px; border-radius:99px; background:{{ T.rule2 }}; margin:0 auto;"></div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+                <div style="font-family:'Familjen Grotesk',sans-serif; font-size:20px; font-weight:700; color:{{ T.ink }};">Targets</div>
+                <div onClick="{{ sheetClose }}" style="width:30px; height:30px; border-radius:99px; background:{{ T.card2 }}; display:flex; align-items:center; justify-content:center; font-size:14px; color:{{ T.sub }}; cursor:pointer;">✕</div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px;">
+                <div style="background:{{ T.card2 }}; border-radius:16px; padding:14px;">
+                  <div style="font-size:10.5px; letter-spacing:0.14em; font-weight:600; color:{{ T.faint }};">WEIGHT</div>
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
+                    <div onClick="{{ gwDec }}" style="width:36px; height:36px; border-radius:99px; background:{{ T.card }}; display:flex; align-items:center; justify-content:center; font-size:20px; color:{{ T.ink }}; cursor:pointer; user-select:none;">−</div>
+                    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:{{ T.ink }}; font-variant-numeric:tabular-nums;">{{ gwShow }}<span style="font-size:12px; color:{{ T.faint }}; margin-left:2px;">kg</span></div>
+                    <div onClick="{{ gwInc }}" style="width:36px; height:36px; border-radius:99px; background:{{ T.card }}; display:flex; align-items:center; justify-content:center; font-size:20px; color:{{ T.ink }}; cursor:pointer; user-select:none;">+</div>
+                  </div>
+                </div>
+                <div style="background:{{ T.card2 }}; border-radius:16px; padding:14px;">
+                  <div style="font-size:10.5px; letter-spacing:0.14em; font-weight:600; color:{{ T.faint }};">BODY FAT</div>
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
+                    <div onClick="{{ gfDec }}" style="width:36px; height:36px; border-radius:99px; background:{{ T.card }}; display:flex; align-items:center; justify-content:center; font-size:20px; color:{{ T.ink }}; cursor:pointer; user-select:none;">−</div>
+                    <div style="font-family:'Familjen Grotesk',sans-serif; font-size:24px; font-weight:700; color:{{ T.ink }}; font-variant-numeric:tabular-nums;">{{ gfShow }}<span style="font-size:12px; color:{{ T.faint }}; margin-left:2px;">%</span></div>
+                    <div onClick="{{ gfInc }}" style="width:36px; height:36px; border-radius:99px; background:{{ T.card }}; display:flex; align-items:center; justify-content:center; font-size:20px; color:{{ T.ink }}; cursor:pointer; user-select:none;">+</div>
+                  </div>
+                </div>
+              </div>
+              <div style="font-size:10.5px; letter-spacing:0.14em; font-weight:600; color:{{ T.faint }}; margin-top:18px;">BY</div>
+              <div style="display:flex; gap:6px; margin-top:8px;">
+                <sc-for list="{{ T.goalDates }}" as="c" hint-placeholder-count="4"><div onClick="{{ c.tap }}" style="flex:1; text-align:center; padding:9px 0; border-radius:10px; font-size:12px; font-weight:600; background:{{ c.bg }}; color:{{ c.col }}; border:1px solid {{ c.bd }}; cursor:pointer; transition:background .25s, color .25s;">{{ c.lab }}</div></sc-for>
+              </div>
+              <div style="font-size:12.5px; line-height:1.55; color:{{ T.sub }}; margin-top:16px; background:{{ T.wash }}; border-radius:12px; padding:12px 14px;">{{ gLine }}</div>
+              <button onClick="{{ sheetClose }}" style="width:100%; margin-top:16px; font-family:'Familjen Grotesk',sans-serif; font-size:14px; font-weight:600; color:#FFFFFF; background:{{ T.rasp }}; border:none; border-radius:12px; padding:14px; cursor:pointer;">Done</button>
+            </div>
+
+          </div>
+        </x-import>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1060,&quot;height&quot;:1180}}">
+const N = 294, TODAY = N - 1;
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const dateOf = i => new Date(2025, 11, 15 + i);
+const lab = i => { const d = dateOf(i); return MON[d.getMonth()] + ' ' + d.getDate(); };
+const UP = s => s.toUpperCase();
+const SER = {
+  weight:{lab:'Weight',unit:'kg',dec:1,down:true}, fat:{lab:'Body fat',unit:'%',dec:1,down:true}, fatMass:{lab:'Fat mass',unit:'kg',dec:1,down:true},
+  skm:{lab:'Skeletal muscle',unit:'kg',dec:1,down:false}, ffm:{lab:'Fat-free mass',unit:'kg',dec:1,down:false}, water:{lab:'Water',unit:'kg',dec:1,down:false},
+  visceral:{lab:'Visceral fat',unit:'',dec:0,down:true}, bmr:{lab:'BMR',unit:'kcal',dec:0,down:false}, metAge:{lab:'Metabolic age',unit:'yr',dec:0,down:true},
+  waist:{lab:'Waist',unit:'cm',dec:1,down:true}
+};
+const COMP = [
+  ['weight',59.2,80.2,55,120,77,false,true], ['fatMass',8.4,16.8,4,45,null,true,true], ['fat',10,20,4,40,13,true,true], ['skm',29.9,36.5,25,46,null,true,true],
+  ['ffm',56,74,50,85,null,true,true], ['water',37.3,46.4,30,60,null,true,true], ['visceral',1,9,0,20,null,true,true], ['bmr',1650,1950,1500,2400,null,true,true],
+  ['metAge',20,32,18,60,null,true,true], ['waist',70,94,60,130,null,false,false]
+];
+const BANDNOTE = {
+  weight:'Above the population band for 178 cm, and that is expected at 41 kg of skeletal muscle. The band is context; the trail from 117.3 is the measure.',
+  fatMass:'Inside the band. Fat mass inherits the scale\u2019s wobble twice (weight \u00d7 fat %), so read it monthly.',
+  fat:'Inside the band and 0.2 from your target. Single readings swing a point either way; the slope is what counts.',
+  skm:'Above the band \u2014 more skeletal muscle than the reference, which is the point of eating protein in a deficit.',
+  ffm:'Everything that isn\u2019t fat: muscle, bone, water, organs. Holding this while the scale drops means the loss is fat.',
+  water:'Above the band because lean mass carries water. Swings with salt, carbs and training \u2014 context, not a target.',
+  visceral:'Well inside the band. Under 10 is the healthy range; at 2 there is nothing here to chase.',
+  bmr:'Inside the band. Katch-McArdle from your lean mass, so it moves with muscle, not with the scale.',
+  metAge:'Three years under your actual age. A scale summary score, not a clinical one \u2014 the gap widening is the trend.',
+  waist:'Inside the band (under 94 cm). Pants at 32 and no distance left to the hip bone \u2014 this one has arrived.'
+};
+const NOTE = {
+  weight:'The weekly wobble is water and glycogen; the slope is the truth. Around 0.25\u20130.5 kg a week is the band where fat goes and strength stays. Weigh in every morning and let the average do the judging.',
+  fat:'Estimated by bioimpedance, so single readings wobble \u2014 the trend is what counts. Morning weigh-ins, after the bathroom and before coffee, keep the readings comparable. Judge the slope over weeks, never one number.',
+  fatMass:'Weight \u00d7 body fat %, so it inherits the scale\u2019s wobble twice over. Watch it monthly. 10.9 kg today against 39.9 at the start is the whole story of the year in one number.',
+  skm:'Holding or gaining muscle while the scale drops is the whole point of eating protein in a deficit. Flat or dipping weeks after hard sessions are usually water shifts, not lost muscle \u2014 judge it month to month.',
+  ffm:'Everything that isn\u2019t fat. If this holds while weight falls, the loss is fat. If it slides for weeks, that is the cue to check protein and training volume before anything else.',
+  water:'Body water swings with salt, carbs, heat and training. Read it as context for the other estimates, not as a target \u2014 a high reading after a big session is normal.',
+  visceral:'The fat around the organs, scored 1\u201359 by the scale. Under 10 is the healthy band. Yours fell from 14 to 2 with the weight; there is nothing left to chase here.',
+  bmr:'Your resting burn, recalculated from lean mass each weigh-in. Losing weight without BMR falling is the game: it means the loss is fat, not the engine.',
+  metAge:'A scale\u2019s summary of the other estimates, not a clinical age. Below your actual age is the point; the gap widening is the trend worth noticing.',
+  waist:'Tape at the navel, relaxed, after breathing out. The pants know first \u2014 the tape is confirmation, and the only measurement the scale cannot estimate.'
+};
+const TAPE = [['waist','Waist'],['hips','Hips'],['chest','Chest'],['neck','Neck'],['arms','Arms'],['forearms','Forearms'],['legs','Legs'],['calves','Calves'],['shoulders','Shoulders']];
+const CANNED = { waist:86.5, hips:96.0, chest:101.0, neck:39.0, arms:38.9, forearms:30.4, legs:60.0, calves:39.0, shoulders:121.0 };
+const RANGES = [['7d','7d'],['30d','30d'],['90d','90d'],['6mo','6mo'],['all','Since start'],['custom','Custom']];
+const DAYS = { '7d':7, '30d':30, '90d':90, '6mo':183, all:N, custom:120 };
+const TRK = ['weight','fat','skm','water','bmr','waist'];
+const GD = { 'Dec 31':88, 'Jan 31':119, 'Feb 28':147, 'Mar 31':178 };
+const MS = [
+  ['Dec 15','Started','117.3 kg','Size 38\u201340 pants'], ['Feb 20','First 10 kg gone','107.1 kg',''], ['Apr 3','Under 100','99.6 kg',''], ['Apr 18','Into size 36','97.8 kg',''],
+  ['Jun 11','BMI under 30','94.9 kg',''], ['Jul 19','Swing PR \u00b7 32 kg \u00d7 10','88.6 kg','Heavier than anything at 117'], ['Aug 9','30 kg gone','87.3 kg',''],
+  ['Aug 23','A climb without stopping for breath','85.6 kg',''], ['Sep 12','Into size 32','84.1 kg',''], ['Sep 28','Body fat under 15%','83.3 kg',''], ['Oct 4','Today','82.8 kg','\u221234.5 kg \u00b7 42 weeks']
+];
+const LIGHT = { key:'light', isDark:false, label:'LIGHT \u00b7 CURRENT PITAYA PAPER', bg:'#F2F1F2', card:'#FFFFFF', card2:'#F6F5F7', ink:'#232227', sub:'#66646C', faint:'#96949B', ghost:'#B4B2B8', rule:'#EDEBEE', rule2:'#E4E2E6', rasp:'#A63D63', deep:'#8C2F51', wash:'#F6E3EB', edge:'#E9CFDC', green:'#5E9B72', slate:'#5E7FA6', shadow:'0 2px 12px rgba(35,34,39,0.06)', chipBg:'#FFFFFF', band:'#E2E0E5', trackBg:'#F2F1F2', tip:'#232227', tipInk:'#FFFFFF', dock:'#FFFFFF', scrim:'rgba(35,34,39,0.38)' };
+const DARK = { key:'dark', isDark:true, label:'DARK VARIANT \u00b7 SAME SCREEN, DARK TOKENS', bg:'#131217', card:'#1E1D23', card2:'#27262C', ink:'#F2F1F2', sub:'#B9B7BE', faint:'#85838B', ghost:'#5F5D65', rule:'#2B2A30', rule2:'#37363C', rasp:'#D0628C', deep:'#E795B4', wash:'#3A2331', edge:'#4C2C3E', green:'#7FB893', slate:'#86A3C8', shadow:'0 2px 12px rgba(0,0,0,0.32)', chipBg:'#27262C', band:'#38373E', trackBg:'#27262C', tip:'#F2F1F2', tipInk:'#232227', dock:'#2A292F', scrim:'rgba(0,0,0,0.6)' };
+function rng32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const fmtV = (k, v) => SER[k].dec ? v.toFixed(SER[k].dec) : Math.round(v).toLocaleString('en-US');
+const sgn = (d, s) => (d > 0 ? '+' : '\u2212') + s;
+
+class Component extends DCLogic {
+  state = {
+    scr:'main', detail:'fat', sheet:null, tapeStep:'mic', mapMode:'muscle', trMetric:'weight', trRange:'90d', scrubI:null, dRange:'90d', dScrubI:null,
+    sync:0, syncAgo:12, pull:0, pulling:false, msOn:false, mxOn:false, compSort:0, tapeSort:0, padSite:'waist', padVal:'', flash:null,
+    goalW:77, goalF:13, goalDate:'Feb 28', parsedSite:'waist',
+    tape:{ neck:[[0,41.5],[90,40.3],[182,39.6],[265,39.3]], shoulders:[[0,128],[90,124.5],[182,122],[265,121]], chest:[[0,112],[90,107],[182,104.5],[265,101.5]], arms:[[0,40.5],[90,38.5],[182,38.4],[265,38.8]], forearms:[[0,31.5],[90,30.5],[182,30.2],[265,30.3]], waist:[[0,118],[90,106],[182,94],[265,88.0]], hips:[[0,121],[90,110],[182,102],[265,97.0]], legs:[[0,70],[90,66],[182,62.5],[265,60.5]], calves:[[0,42.5],[90,40.5],[182,39.5],[265,39.0]] }
+  };
+  constructor(p) {
+    super(p);
+    const r = rng32(11), W = [], F = [], S = [];
+    for (let t = 0; t < N; t++) {
+      W.push(75 + 42.3 * Math.exp(-t / 175) + (r() - 0.5) * 0.7 + 0.25 * Math.sin(t / 3.2));
+      F.push(10.5 + 23.5 * Math.exp(-t / 135) + (r() - 0.5) * 1.0);
+      S.push(38 + 3.3 * (t / 293) + (r() - 0.5) * 0.5);
+    }
+    W[TODAY] = 82.8; W[TODAY - 1] = 83.1; F[TODAY] = 13.2; S[TODAY] = 41.3;
+    const FM = W.map((w, i) => w * F[i] / 100), FFM = W.map((w, i) => w - FM[i]);
+    this.D = { weight:W, fat:F, skm:S, fatMass:FM, ffm:FFM, water:FFM.map(x => x * 0.733), bmr:FFM.map(x => 370 + 21.6 * x),
+      visceral:F.map(f => Math.max(1, Math.round(2 + 12 * (f - 13.2) / 20.8))), metAge:F.map(f => Math.round(29 + 22 * (f - 13.2) / 20.8)) };
+  }
+  _waistDaily() {
+    const pts = this.state.tape.waist, out = [];
+    for (let i = 0; i < N; i++) {
+      let a = pts[0], b = pts[pts.length - 1];
+      for (let j = 0; j < pts.length - 1; j++) if (i >= pts[j][0] && i <= pts[j + 1][0]) { a = pts[j]; b = pts[j + 1]; break; }
+      out.push(i <= pts[0][0] ? pts[0][1] : i >= b[0] ? b[1] : a[1] + (b[1] - a[1]) * (i - a[0]) / (b[0] - a[0]));
+    }
+    return out;
+  }
+  _pts(key, range) {
+    const days = DAYS[range];
+    if (key === 'waist') { let p = this.state.tape.waist.filter(x => x[0] >= TODAY - days); if (p.length < 2) p = this.state.tape.waist.slice(-2); return p.map(x => ({ d:x[0], v:x[1] })); }
+    const s = this.D[key], from = Math.max(0, N - days), out = [];
+    for (let i = from; i < N; i++) out.push({ d:i, v:s[i] });
+    return out;
+  }
+  _chart(key, range, scrubI) {
+    const pts = this._pts(key, range), n = pts.length, m = SER[key];
+    const sm = n >= 12 ? pts.map((p, i) => { const a = Math.max(0, i - 3), b = Math.min(n - 1, i + 3); let s = 0; for (let j = a; j <= b; j++) s += pts[j].v; return s / (b - a + 1); }) : pts.map(p => p.v);
+    const vals = pts.map(p => p.v), mn = Math.min(...vals), mx = Math.max(...vals), sp = (mx - mn) || 1;
+    const X = i => 6 + i * (348 / Math.max(1, n - 1)), Y = v => 14 + (1 - (v - mn) / sp) * 132;
+    const si = scrubI == null ? n - 1 : Math.max(0, Math.min(n - 1, scrubI));
+    const line = sm.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(v).toFixed(1)).join(' ');
+    const d = sm[n - 1] - sm[0];
+    return {
+      n, raw: pts.map((p, i) => ({ x:+X(i).toFixed(1), y:+Y(p.v).toFixed(1) })), line, area: line + ' L' + X(n - 1).toFixed(1) + ',146 L6,146 Z',
+      dotR: n > 60 ? 1.4 : n > 20 ? 2.2 : 3.2, dotO: n > 60 ? 0.28 : 0.45,
+      ttX: X(si).toFixed(1), ttY: Y(pts[si].v).toFixed(1), ttTxt: fmtV(key, pts[si].v) + (m.unit ? ' ' + m.unit : '') + ' \u00b7 ' + UP(lab(pts[si].d)),
+      ttL: Math.max(0, Math.min(228, X(si) - 66)) + 'px', ttT: Math.max(0, Y(pts[si].v) - 40) + 'px',
+      x0: UP(lab(pts[0].d)), x1: UP(lab(pts[n - 1].d)), lo: fmtV(key, mn), hi: fmtV(key, mx),
+      smTxt: n >= 12 ? '7-day trend over daily points' : 'tape points',
+      delta: (Math.abs(d) < (m.dec ? 0.05 : 0.5) ? '\u00b10' : sgn(d, fmtV(key, Math.abs(d)))) + (m.unit ? ' ' + m.unit : '') + ' \u00b7 ' + RANGES.find(r => r[0] === range)[1].toLowerCase()
+    };
+  }
+  _scrub(e, n, key) {
+    const r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * 360;
+    const i = Math.max(0, Math.min(n - 1, Math.round((x - 6) / (348 / Math.max(1, n - 1)))));
+    if (this.state[key] !== i) { if (navigator.vibrate) { try { navigator.vibrate(3); } catch (x) {} } this.setState({ [key]: i }); }
+  }
+  _compRows() {
+    const s = this.state, D = Object.assign({}, this.D, { waist: this._waistDaily() });
+    return COMP.map(([k, lo, hi, a0, a1, tgt, est, main]) => {
+      const ser = D[k], v = ser[TODAY], v30 = ser[TODAY - 30], v0 = ser[0], m = SER[k];
+      const P = x => Math.max(0, Math.min(1, (x - a0) / (a1 - a0))) * 100, d = v - v30, flat = Math.abs(d) < (m.dec ? 0.05 : 0.5), good = !flat && (m.down ? d < 0 : d > 0);
+      return { key:k, lab:m.lab, unit:m.unit, est, main, val:fmtV(k, v), d30: flat ? '\u00b10' : sgn(d, fmtV(k, Math.abs(d))), good, notGood:!good,
+        bandL:P(lo).toFixed(1) + '%', bandW:(P(hi) - P(lo)).toFixed(1) + '%', histL:Math.min(P(v0), P(v)).toFixed(1) + '%', histW:Math.abs(P(v0) - P(v)).toFixed(1) + '%',
+        startX:P(v0).toFixed(1) + '%', nowX:P(v).toFixed(1) + '%', hasTgt:tgt != null, tgtX:P(tgt || 0).toFixed(1) + '%', inBand: v >= lo && v <= hi, chg: Math.abs(d) / (a1 - a0),
+        axisLo: fmtV(k, a0), axisHi: fmtV(k, a1), bandTxt: fmtV(k, lo) + '\u2013' + fmtV(k, hi) + (m.unit ? ' ' + m.unit : ''), bandNote: BANDNOTE[k],
+        tap: () => this.setState({ scr:'metric', detail:k, dScrubI:null }) };
+    });
+  }
+  _tapeRows() {
+    const s = this.state;
+    const rows = TAPE.map(([key, lb]) => {
+      const pts = s.tape[key], last = pts[pts.length - 1], first = pts[0], vals = pts.map(p => p[1]), mn = Math.min(...vals), mx = Math.max(...vals), sp = (mx - mn) || 1;
+      const px = i => (2 + i * (56 / Math.max(1, pts.length - 1))).toFixed(1), py = v => (3 + (1 - (v - mn) / sp) * 14).toFixed(1);
+      const d = last[1] - first[1], good = d < 0 && (key === 'waist' || key === 'hips' || key === 'neck');
+      return { key, lab:lb, val:last[1].toFixed(1), d: sgn(d, Math.abs(d).toFixed(1)), good, notGood:!good, absd: Math.abs(d), lastD: last[0],
+        spark: pts.map((p, i) => px(i) + ',' + py(p[1])).join(' '), spx: px(pts.length - 1), spy: py(last[1]), when: last[0] === TODAY ? 'today' : lab(last[0]),
+        tap: () => this.setState({ sheet:'tape', tapeStep:'pad', padSite:key, padVal:'' }) };
+    });
+    if (s.tapeSort === 1) rows.sort((a, b) => b.absd - a.absd); else if (s.tapeSort === 2) rows.sort((a, b) => a.lastD - b.lastD);
+    return rows;
+  }
+  _themed(T) {
+    const s = this.state, ch = (lb, on, tap) => ({ lab:lb, tap, bg: on ? T.rasp : T.chipBg, col: on ? '#FFFFFF' : T.sub, bd: on ? T.rasp : T.rule2 });
+    return {
+      trChips: TRK.map(k => ch(SER[k].lab, s.trMetric === k, () => this.setState({ trMetric:k, scrubI:null }))),
+      rangeChips: RANGES.map(r => ch(r[1], s.trRange === r[0], () => this.setState({ trRange:r[0], scrubI:null }))),
+      dRangeChips: RANGES.map(r => ch(r[1], s.dRange === r[0], () => this.setState({ dRange:r[0], dScrubI:null }))),
+      mapChips: [['muscle','Muscle'],['fat','Fat']].map(m => ch(m[1], s.mapMode === m[0], () => this.setState({ mapMode:m[0] }))),
+      segCol: s.mapMode === 'muscle' ? T.rasp : T.slate,
+      padSites: TAPE.map(t => ch(t[1], s.padSite === t[0], () => this.setState({ padSite:t[0], padVal:'' }))),
+      goalDates: Object.keys(GD).map(d => ch(d, s.goalDate === d, () => this.setState({ goalDate:d }))),
+      tapeRows: this._tapeRows().map(r => Object.assign({}, r, { bg: s.flash === r.key ? T.wash : 'transparent' }))
+    };
+  }
+  _doSync() {
+    if (this.state.sync === 1) return;
+    this.setState({ sync:1 });
+    setTimeout(() => this.setState({ sync:2, syncAgo:0 }), 1500);
+    setTimeout(() => this.setState({ sync:0 }), 5000);
+  }
+  _saveTape(site, v) {
+    this.setState(st => {
+      const pts = st.tape[site].filter(p => p[0] !== TODAY).concat([[TODAY, v]]);
+      return { tape: Object.assign({}, st.tape, { [site]: pts }), tapeStep:'saved', savedSite:site, savedVal:v };
+    });
+    setTimeout(() => this.setState({ sheet:null, flash:site }), 1300);
+    setTimeout(() => this.setState({ flash:null, tapeStep:'mic' }), 2600);
+  }
+  renderVals() {
+    const s = this.state, W = this.D.weight, F = this.D.fat;
+    const themes = [LIGHT, DARK].map(t => Object.assign({}, t, this._themed(t)));
+    const allRows = this._compRows(), compRows = allRows.filter(r => r.main);
+    if (s.compSort === 1) compRows.sort((a, b) => b.chg - a.chg); else if (s.compSort === 2) compRows.sort((a, b) => (a.inBand ? 1 : 0) - (b.inBand ? 1 : 0));
+    const tr = this._chart(s.trMetric, s.trRange, s.scrubI), dc = this._chart(s.detail, s.dRange, s.dScrubI);
+    this._n = tr.n; this._dn = dc.n;
+    const dRow = allRows.find(r => r.key === s.detail), dSer = s.detail === 'waist' ? this._waistDaily() : this.D[s.detail];
+    const dRows = s.detail === 'waist'
+      ? s.tape.waist.slice().reverse().map((p, i, arr) => { const prev = arr[i + 1]; const d = prev ? p[1] - prev[1] : 0; return { date: lab(p[0]), val: p[1].toFixed(1), d: prev ? sgn(d, Math.abs(d).toFixed(1)) : '\u2014', good: prev && d < 0, notGood: !(prev && d < 0) }; })
+      : [0,1,2,3,4,5].map(j => { const i = TODAY - j * 7, d = dSer[i] - dSer[i - 7], m = SER[s.detail], good = m.down ? d < 0 : d > 0; return { date: lab(i), val: fmtV(s.detail, dSer[i]), d: sgn(d, fmtV(s.detail, Math.abs(d))), good, notGood: !good }; });
+    // weigh-in
+    const dLast = W[TODAY] - W[TODAY - 1], d30 = W[TODAY] - W[TODAY - 30], fd30 = F[TODAY] - F[TODAY - 30];
+    // forecast
+    const sm = i => { let a = 0; for (let j = i - 3; j <= i + 3; j++) a += W[Math.max(0, Math.min(TODAY, j))]; return a / 7; };
+    const rate = (sm(TODAY - 33) - sm(TODAY - 3)) / 30 * 7, toGo = W[TODAY] - s.goalW, daysTo = GD[s.goalDate], need = toGo / (daysTo / 7);
+    const arr = rate > 0.02 && toGo > 0 ? toGo / (rate / 7) : Infinity, span = Math.max(daysTo, Math.min(isFinite(arr) ? arr : daysTo, daysTo * 1.6)) * 1.06;
+    const PX = d => 16 + Math.min(1, d / span) * 288, PY = w => 14 + Math.max(0, Math.min(1, (W[TODAY] - w) / (toGo || 1))) * 60;
+    const arrIn = isFinite(arr) && arr <= span, arrX = arrIn ? PX(arr) : 304, endW = W[TODAY] - rate * span / 7, arrY = arrIn ? 74 : PY(endW);
+    const arrDate = isFinite(arr) ? dateOf(TODAY + Math.round(arr)) : null, arrLab = arrDate ? MON[arrDate.getMonth()] + ' ' + arrDate.getDate() : '';
+    const early = daysTo - Math.round(isFinite(arr) ? arr : 0);
+    const gLine = toGo <= 0 ? 'You\u2019re already at or under ' + s.goalW + ' kg. Hold it, or set a new line.'
+      : !isFinite(arr) ? 'Weight isn\u2019t moving at the moment, so there is no arrival date yet. The target needs ' + need.toFixed(2) + ' kg a week from here.'
+      : 'You need ' + need.toFixed(2) + ' kg a week to make ' + s.goalW + ' kg by ' + s.goalDate + '. On your 30-day pace of ' + rate.toFixed(2) + ' you arrive around ' + arrLab + ' \u2014 ' + Math.abs(early) + ' days ' + (early >= 0 ? 'early' : 'late') + '.';
+    const bfAtGoal = (s.goalW - this.D.ffm[TODAY]) / s.goalW * 100;
+    const fatToGo = F[TODAY] - s.goalF;
+    // body map
+    const SEG = { muscle:{ la:[4.19,121.8], ra:[4.16,120.9], tr:[31.33,113.7], ll:[11.86,123.2], rl:[11.85,123.1] }, fat:{ la:[0.43,63.2], ra:[0.44,64.7], tr:[5.49,122.8], ll:[1.78,101.1], rl:[1.77,100.6] } }[s.mapMode];
+    const op = p => s.mapMode === 'muscle' ? Math.max(0.4, Math.min(0.95, 0.5 + (p - 100) / 45)) : Math.max(0.3, Math.min(0.95, 0.32 + (p - 50) / 100));
+    const segV = k => SEG[k][0].toFixed(2) + ' kg', segP = k => SEG[k][1].toFixed(0) + '% of std';
+    const bal = (l, r) => { const sh = l / (l + r); return { x: ((sh - 0.5) * 100 * 12).toFixed(1) + 'px', txt: 'L ' + (sh * 100).toFixed(1) + ' \u00b7 R ' + ((1 - sh) * 100).toFixed(1) }; };
+    const bA = bal(SEG.la[0], SEG.ra[0]), bL = bal(SEG.ll[0], SEG.rl[0]);
+    // matrix
+    const MX = [[37.0,34.0,''],[33.8,30.1,'FEB'],[31.0,25.8,'APR'],[28.7,21.6,'JUN'],[27.2,17.0,''],[26.6,14.6,'SEP'],[26.1,13.2,'NOW']];
+    const mX = bf => 36 + (bf - 5) / 35 * 274, mY = bmi => 200 - (bmi - 18.5) / 21.5 * 190;
+    const mxPtsArr = MX.map(p => [mX(p[1]), mY(p[0])]);
+    let mxLen = 0; for (let i = 1; i < mxPtsArr.length; i++) mxLen += Math.hypot(mxPtsArr[i][0] - mxPtsArr[i-1][0], mxPtsArr[i][1] - mxPtsArr[i-1][1]);
+    const padN = parseFloat(s.padVal), padOk = isFinite(padN) && padN > 10 && padN < 200;
+    const padPts = s.tape[s.padSite], padLastP = padPts[padPts.length - 1];
+    const parsedPts = s.tape[s.parsedSite], parsedLast = parsedPts[parsedPts.length - 1], parsedV = CANNED[s.parsedSite];
+    const keys = ['1','2','3','4','5','6','7','8','9','.','0','\u232b'];
+    const pullH = s.sync === 1 ? 44 : s.pull;
+    return {
+      themes, compRows, tr, dc, dRow, dRows,
+      sinceStart: '\u221234.5 kg \u00b7 since Dec',
+      wNow: W[TODAY].toFixed(1), fNow: F[TODAY].toFixed(1),
+      wDLast: sgn(dLast, Math.abs(dLast).toFixed(1) + ' kg'), wDLastGood: dLast < 0, wDLastFlat: dLast >= 0, wPrevLab: lab(TODAY - 1) + ' \u00b7 ' + W[TODAY - 1].toFixed(1),
+      wD30: sgn(d30, Math.abs(d30).toFixed(1) + ' kg'), fD30: sgn(fd30, Math.abs(fd30).toFixed(1) + ' pt'),
+      syncIdle: s.sync === 0, syncLive: s.sync === 1, syncDone: s.sync === 2,
+      syncTxt: s.sync === 1 ? 'Syncing from scale\u2026' : s.sync === 2 ? 'Synced just now' : 'Synced ' + s.syncAgo + ' min ago',
+      syncTap: () => this._doSync(),
+      pullH: pullH + 'px', pullTr: s.pulling ? 'none' : 'height .35s cubic-bezier(.22,.9,.3,1)', pullSpin: s.sync === 1 ? 'spin .8s linear infinite' : 'none',
+      pullTxt: s.sync === 1 ? 'Syncing from scale\u2026' : s.pull > 56 ? 'Release to sync' : 'Pull to sync from scale',
+      pullDown: (e) => { const el = e.currentTarget; if (el.scrollTop <= 0 && s.sheet == null && s.scr === 'main') { this._py = e.clientY; } else this._py = null; },
+      pullMove: (e) => { if (this._py == null || e.buttons === 0) return; const el = e.currentTarget; if (el.scrollTop > 0) return; const dy = (e.clientY - this._py) * 0.55; if (dy > 4) { e.preventDefault(); this.setState({ pull: Math.min(90, dy), pulling: true }); } },
+      pullUp: () => { if (this._py == null) return; this._py = null; const go = s.pull > 56; this.setState({ pull:0, pulling:false }); if (go) this._doSync(); },
+      onScroll: (e) => { const el = e.currentTarget, b = el.getBoundingClientRect().bottom - 140, up = {}; const mx = el.querySelector('[data-mx]'), ms = el.querySelector('[data-ms]'); if (!s.mxOn && mx && mx.getBoundingClientRect().top < b) up.mxOn = true; if (!s.msOn && ms && ms.getBoundingClientRect().top < b) up.msOn = true; if (up.mxOn || up.msOn) this.setState(up); },
+      goalOpen: () => this.setState({ sheet:'goal' }),
+      gDateUp: UP(s.goalDate), gTitle: s.goalW + ' kg \u00b7 ' + s.goalF + '%', gToGo: toGo > 0 ? toGo.toFixed(1) + ' kg to go' : 'arrived',
+      gProg: Math.max(0, Math.min(100, (117.3 - W[TODAY]) / (117.3 - s.goalW) * 100)).toFixed(1) + '%', gProgLab: Math.max(0, Math.min(100, (117.3 - W[TODAY]) / (117.3 - s.goalW) * 100)).toFixed(0) + '% of the way',
+      gWTxt: s.goalW + ' kg', gNeed: need.toFixed(2), gOn: rate.toFixed(2), gLine,
+      pNeedD: 'M16,14 L' + PX(daysTo).toFixed(1) + ',74', pOnD: arrIn ? 'M16,14 L' + arrX.toFixed(1) + ',74 L304,74' : 'M16,14 L304,' + arrY.toFixed(1),
+      pGoalX: PX(daysTo).toFixed(1), pArrX: arrX.toFixed(1), pArrY: arrY.toFixed(1), pArrLab: arrIn ? UP(arrLab) : '',
+      pGoalL: (PX(daysTo) / 320 * 100).toFixed(2) + '%', pArrL: (arrX / 320 * 100).toFixed(2) + '%', pArrO: arrIn ? '1' : '0',
+      fatGoalTxt: fatToGo <= 0 ? s.goalF + '% \u00b7 arrived (' + F[TODAY].toFixed(1) + ')' : s.goalF + '% \u00b7 ' + fatToGo.toFixed(1) + ' pt to go (' + F[TODAY].toFixed(1) + ')',
+      gNote: bfAtGoal < s.goalF - 1 ? 'At ' + s.goalW + ' kg with today\u2019s lean mass you\u2019d read about ' + bfAtGoal.toFixed(0) + '% fat. The two targets meet somewhere between; Pitaya will say which arrives first.' : 'The two targets agree at today\u2019s lean mass.',
+      compSortLab: ['Default','Most changed','Outside band'][s.compSort], compSortTap: () => this.setState(st => ({ compSort: (st.compSort + 1) % 3 })),
+      mRAv: segV('ra'), mRAp: segP('ra'), mLAv: segV('la'), mLAp: segP('la'), mTRv: segV('tr'), mTRp: segP('tr'), mLLv: segV('ll'), mLLp: segP('ll'), mRLv: segV('rl'), mRLp: segP('rl'),
+      oRA: op(SEG.ra[1]), oLA: op(SEG.la[1]), oTR: op(SEG.tr[1]), oLL: op(SEG.ll[1]), oRL: op(SEG.rl[1]),
+      mapCaption: s.mapMode === 'muscle' ? 'Deeper = more muscle than standard.\nEvery segment above 110%.' : 'Deeper = more fat than standard.\nArms lean; trunk carries what\u2019s left.',
+      balVerdict: 'Balanced \u00b7 within 1%', balArmX: bA.x, balArmTxt: bA.txt, balLegX: bL.x, balLegTxt: bL.txt,
+      mxPts: mxPtsArr.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' '), mxLen: mxLen.toFixed(0), mxOff: s.mxOn ? '0' : mxLen.toFixed(0), mxOn: s.mxOn,
+      mxDots: MX.slice(0, -1).map((p, i) => ({ x: mxPtsArr[i][0].toFixed(1), y: mxPtsArr[i][1].toFixed(1), lx: (mxPtsArr[i][0] / 320 * 100).toFixed(2) + '%', lt: ((mxPtsArr[i][1] - 6) / 236 * 100).toFixed(2) + '%', lab: p[2], o: s.mxOn ? (0.35 + i * 0.1).toFixed(2) : '0' })),
+      mxX: mxPtsArr[6][0].toFixed(1), mxY: mxPtsArr[6][1].toFixed(1), mxCellX: '90.8', mxCellY: '96.4', mxCellW: '62.6', mxCellH: '43.1',
+      trDelta: tr.delta, customOn: s.trRange === 'custom',
+      trDown: (e) => { e.stopPropagation(); if (e.currentTarget.setPointerCapture) { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) {} } this._scrub(e, this._n, 'scrubI'); },
+      trMove: (e) => { if (e.buttons > 0) this._scrub(e, this._n, 'scrubI'); }, trUp: (e) => { e.stopPropagation(); },
+      dcDown: (e) => { if (e.currentTarget.setPointerCapture) { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) {} } this._scrub(e, this._dn, 'dScrubI'); },
+      dcMove: (e) => { if (e.buttons > 0) this._scrub(e, this._dn, 'dScrubI'); }, dcUp: () => {},
+      tapeHead: 'TAPED ' + UP(lab(Math.max(...TAPE.map(t => s.tape[t[0]][s.tape[t[0]].length - 1][0])))),
+      tapeSortLab: ['Site order','Most changed','Oldest tape'][s.tapeSort], tapeSortTap: () => this.setState(st => ({ tapeSort: (st.tapeSort + 1) % 3 })),
+      tapeOpen: () => { const site = TAPE.map(t => t[0]).find(k => s.tape[k][s.tape[k].length - 1][0] !== TODAY) || 'waist'; this.setState({ sheet:'tape', tapeStep:'mic', parsedSite:site }); clearTimeout(this._mt); this._mt = setTimeout(() => { if (this.state.sheet === 'tape' && this.state.tapeStep === 'mic') this.setState({ tapeStep:'parsed' }); }, 1900); },
+      tapeMic: () => { this.setState({ tapeStep:'mic' }); clearTimeout(this._mt); this._mt = setTimeout(() => { if (this.state.sheet === 'tape' && this.state.tapeStep === 'mic') this.setState({ tapeStep:'parsed' }); }, 1900); },
+      tapePad: () => { clearTimeout(this._mt); this.setState({ tapeStep:'pad', padVal:'' }); },
+      tapeEdit: () => this.setState({ tapeStep:'pad', padSite:s.parsedSite, padVal: String(parsedV) }),
+      sheetClose: () => { clearTimeout(this._mt); this.setState({ sheet:null }); setTimeout(() => this.setState({ tapeStep:'mic', padVal:'' }), 450); },
+      tapeY: s.sheet === 'tape' ? '0%' : '110%', goalY: s.sheet === 'goal' ? '0%' : '110%', scrimO: s.sheet ? '1' : '0', scrimPE: s.sheet ? 'auto' : 'none',
+      tapeTitle: s.tapeStep === 'pad' ? 'Type a tape' : s.tapeStep === 'saved' ? 'Taped' : 'New tape',
+      tpMic: s.tapeStep === 'mic', tpParsed: s.tapeStep === 'parsed', tpPad: s.tapeStep === 'pad', tpSaved: s.tapeStep === 'saved',
+      heard: s.parsedSite + ' ' + parsedV.toFixed(1), parsedLab: UP(TAPE.find(t => t[0] === s.parsedSite)[1]) + ' \u00b7 ' + UP(lab(TODAY)), parsedVal: parsedV.toFixed(1),
+      parsedWas: parsedLast[1].toFixed(1), parsedWhen: lab(parsedLast[0]), parsedD: sgn(parsedV - parsedLast[1], Math.abs(parsedV - parsedLast[1]).toFixed(1) + ' cm'),
+      tapeSaveParsed: () => this._saveTape(s.parsedSite, parsedV),
+      padShow: s.padVal || '\u2013', padCol: s.padVal ? (LIGHT.ink) : LIGHT.ghost, padLast: padLastP[1].toFixed(1) + ' cm', padWhen: lab(padLastP[0]),
+      padKeys: keys.map(k => ({ lab:k, tap: () => this.setState(st => { let v = st.padVal; if (k === '\u232b') v = v.slice(0, -1); else if (k === '.') { if (!v.includes('.') && v.length) v += '.'; } else if (v.length < 5 && !(v.includes('.') && v.split('.')[1].length >= 1)) v += k; return { padVal:v }; }) })),
+      padBtnBg: padOk ? LIGHT.rasp : LIGHT.ghost, padBtnTxt: padOk ? 'Save ' + TAPE.find(t => t[0] === s.padSite)[1].toLowerCase() : 'Enter a number',
+      tapeSavePad: () => { if (padOk) this._saveTape(s.padSite, padN); },
+      savedTitle: s.savedSite ? TAPE.find(t => t[0] === s.savedSite)[1] + ' \u00b7 ' + (s.savedVal || 0).toFixed(1) + ' cm' : '', savedSub: 'Row updated \u00b7 trend extended',
+      gwShow: s.goalW.toFixed(1), gfShow: s.goalF.toFixed(1),
+      gwDec: () => this.setState(st => ({ goalW: Math.max(60, +(st.goalW - 0.5).toFixed(1)) })), gwInc: () => this.setState(st => ({ goalW: Math.min(120, +(st.goalW + 0.5).toFixed(1)) })),
+      gfDec: () => this.setState(st => ({ goalF: Math.max(5, +(st.goalF - 0.5).toFixed(1)) })), gfInc: () => this.setState(st => ({ goalF: Math.min(40, +(st.goalF + 0.5).toFixed(1)) })),
+      detX: s.scr === 'metric' ? '0%' : '100%', detClose: () => this.setState({ scr:'main' }),
+      dLab: SER[s.detail].lab, dVal: fmtV(s.detail, dSer[TODAY]), dUnit: SER[s.detail].unit, dListKick: s.detail === 'waist' ? 'TAPES' : 'WEEKLY READINGS', dNote: NOTE[s.detail],
+      msLineH: s.msOn ? '100%' : '0%',
+      msRows: MS.map((m, i) => ({ date:m[0], title:m[1], w:m[2], sub:m[3], hasSub:!!m[3], o: s.msOn ? '1' : '0', y: s.msOn ? '0' : '14px', dl: (i * 0.09).toFixed(2) + 's' }))
+    };
+  }
+}
+</script>
+</body>
+</html>

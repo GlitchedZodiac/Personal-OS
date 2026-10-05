@@ -5,6 +5,7 @@ import { announceWeighIn } from "@/lib/weigh-in-notice";
 import { prisma } from "@/lib/prisma";
 import type { IncomingBodySample } from "@/lib/body-measurements";
 import { ingestBodySamples } from "@/lib/body-ingest";
+import { renphoSyncEnabled, runRenphoSync } from "@/lib/renpho-sync";
 
 // POST — the companion's daily HealthKit push (steps, resting HR, active
 // energy, distance, sleep, HRV) plus optional bodyMass samples.
@@ -128,6 +129,12 @@ export async function POST(request: NextRequest) {
     // weigh-in is announced.
     after(async () => {
       await recordSync("apple_health", { ok: true, label: "Apple Health", heartbeat: true });
+      // With the RENPHO sync on, pull first and let that run announce the
+      // weigh-in with its body fat — see /api/mobile/health/body.
+      if (weights.imported > 0 && renphoSyncEnabled()) {
+        const pulled = await runRenphoSync("apple_health");
+        if (pulled.announced) return;
+      }
       await announceWeighIn(weights.created);
     });
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { INT_FIELDS, MEASURED_FIELDS, stampSources } from "@/lib/body-measurements";
 import { prisma } from "@/lib/prisma";
 
 // GET - List body measurements
@@ -7,6 +8,9 @@ export async function GET() {
     const entries = await prisma.bodyMeasurement.findMany({
       orderBy: { measuredAt: "desc" },
       take: 100,
+      // The untouched source record is an archive, not screen data — a
+      // hundred of them would be most of this response.
+      omit: { rawPayload: true },
     });
 
     return NextResponse.json(entries);
@@ -24,22 +28,25 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    // Every measured column, from the shared vocabulary. This route used to
+    // list eleven by hand, silently dropping any scale value it was sent, and
+    // left `source` null — a row of unknown origin.
+    const fields: Record<string, number> = {};
+    for (const field of MEASURED_FIELDS) {
+      const value = Number(body[field]);
+      if (body[field] != null && Number.isFinite(value) && value > 0) {
+        fields[field] = INT_FIELDS.has(field) ? Math.round(value) : value;
+      }
+    }
+
     const entry = await prisma.bodyMeasurement.create({
       data: {
         measuredAt: body.measuredAt ? new Date(body.measuredAt) : undefined,
-        weightKg: body.weightKg || null,
-        bodyFatPct: body.bodyFatPct || null,
-        waistCm: body.waistCm || null,
-        chestCm: body.chestCm || null,
-        armsCm: body.armsCm || null,
-        legsCm: body.legsCm || null,
-        hipsCm: body.hipsCm || null,
-        shouldersCm: body.shouldersCm || null,
-        neckCm: body.neckCm || null,
-        forearmsCm: body.forearmsCm || null,
-        calvesCm: body.calvesCm || null,
+        ...fields,
         skinfoldData: body.skinfoldData || null,
         notes: body.notes || null,
+        source: "manual",
+        fieldSources: stampSources(fields, "manual"),
       },
     });
 

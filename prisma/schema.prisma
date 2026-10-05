@@ -54,13 +54,87 @@ model BodyMeasurement {
   bmrKcal            Int?
   metabolicAge       Int?
   heartRateBpm       Int?
-  source             String? // "manual", "vesync", "import"
+  source             String? // who CREATED the row: manual, mcp, vesync, apple_health, renpho_api, import
+
+  // Whole-body composition the 8-electrode RENPHO adds (2026-10-04). The kg
+  // values are stored, not re-derived at read time, so a row keeps what the
+  // scale reported even if a later weight edit would change the arithmetic.
+  fatMassKg        Float?
+  muscleMassPct    Float?
+  skeletalMuscleKg Float?
+  smi              Float? // skeletal muscle index, kg/m²
+  bodyWaterKg      Float?
+  proteinKg        Float?
+  whrEstimate      Float? // the SCALE's waist-to-hip guess — real WHR comes from tape
+
+  // Segmental lean and fat mass, kg. Columns rather than a blob because each
+  // one is charted and compared left to right.
+  muscleLeftArmKg  Float?
+  muscleRightArmKg Float?
+  muscleTrunkKg    Float?
+  muscleLeftLegKg  Float?
+  muscleRightLegKg Float?
+  fatLeftArmKg     Float?
+  fatRightArmKg    Float?
+  fatTrunkKg       Float?
+  fatLeftLegKg     Float?
+  fatRightLegKg    Float?
+
+  // { z20: { rightArm, leftArm, trunk, rightLeg, leftLeg }, z100: {…} } in ohms.
+  impedance       Json?
+  // The source's own reference ranges for this reading, keyed by column name:
+  // { bodyFatPct: { min, max, std }, … }. They are population norms for his
+  // height/age/sex — context for a range bar, never a verdict.
+  referenceRanges Json?
+  // Per-field provenance, { bodyFatPct: "renpho_api", waistCm: "manual", … }.
+  // `source` says who created the row; a merged row needs this to stay honest.
+  fieldSources    Json?
+  // Idempotency key for cloud imports, namespaced: "renpho:<record id>".
+  externalId      String? @unique
+  // The untouched source record. Parsers break; the reading should not be lost.
+  rawPayload      Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([measuredAt])
   @@map("body_measurements")
+}
+
+// Milestones he logs himself — pant sizes, a climb, a swing PR. The automatic
+// ones (first 10 kg, under 100, BMI lines) are derived from the readings at
+// read time and never stored. `day` is his local calendar day.
+model BodyMilestone {
+  id        String   @id @default(uuid())
+  day       String // "2026-07-19"
+  title     String
+  note      String?
+  weightKg  Float?
+  createdAt DateTime @default(now())
+
+  @@index([day])
+  @@map("body_milestones")
+}
+
+// One row per scale-cloud pull, success or failure. The health check reads the
+// tail of this table to decide whether to raise an alert.
+model BodySyncRun {
+  id         String    @id @default(uuid())
+  provider   String // "renpho"
+  trigger    String // cron | manual | apple_health | backfill
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  ok         Boolean   @default(false)
+  fetched    Int       @default(0)
+  created    Int       @default(0)
+  merged     Int       @default(0)
+  unchanged  Int       @default(0)
+  skipped    Int       @default(0)
+  error      String?
+  alerted    Boolean   @default(false)
+
+  @@index([provider, startedAt])
+  @@map("body_sync_runs")
 }
 
 model WorkoutLog {

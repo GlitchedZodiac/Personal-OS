@@ -5,7 +5,56 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-10-05 (THE CHAT + PUSH ROUND — his `pitaya-prompt-1` list: two chat
+**Last updated:** 2026-10-05 (PITAYA BODY — ROUND 1 PORT. The Body screen is rebuilt to
+the Claude Design handoff in `docs/design/pitaya-body/` (spec, the interactive DC, the build
+prompt, the front figure). `app/(tabs)/health/body/page.tsx` is replaced; the metric page
+renders a new push-in for the scale metrics and waist. All arithmetic is pure and tested in
+`lib/body-view.ts` (range bars, pace and forecast, trend geometry, the matrix, tape rows, the
+voice parser, milestones); `lib/body-summary.ts` shapes one payload from the rows and
+`GET /api/health/body/summary` serves it. Eight cards on real data: today's weigh-in,
+target & forecast, composition against reference bands, body map, body-type matrix, trends
+with scrub + haptic ticks, tape (voice or keypad, confirm before save), milestones. Light
+and dark on the spec's tokens; dark follows the system and, while it is up, tints the tab
+bar and dock too (`html[data-body-theme]`), then releases them. Additive migration
+`20261005160000_body_milestones` applied; targets live in `user_settings.data.healthGoals`,
+written by a merging route so a stale device cannot erase other settings. MCP gained
+`log_milestone`. 509 tests (72 new), build green, driven in the browser at 375px in both
+themes: map toggle and muscle tap, metric drill-in, keypad save (throwaway row, deleted),
+targets (restored). **Not exercised: the microphone** — the pane blocks capture; the parser
+is unit-tested and the no-mic fallback was seen. **NOT deployed.**
+
+**PENDING STAGES — the sanctioned gaps between this design and the app (PORT GATE §5):**
+1. **Body map back view** — `body-back.svg` does not exist; the Front/Back toggle is hidden.
+2. **Body map shading / the anatomical look** — the art is the handoff's interim flat figure.
+   The shaded vector pack has different proportions and no named regions, so it is not used.
+3. **Body map training mode** — described in the prompt, absent from the DC and the spec,
+   and most of his kettlebell volume lands on muscles the front figure does not have.
+4. **Pull-to-sync from the scale** — refreshes from Pitaya only; the RENPHO pull is still
+   switched off (a login with his account signs his phone out). Needs the second account.
+5. **Dock mic → tape** — the dock stays the app-wide voice input; the Tape button is the way in.
+6. **Add-a-milestone on screen** — not designed; logged milestones come through MCP.
+
+**DEVIATIONS SURFACED (his call to keep or change):**
+- **Start point.** Weight starts at his declared 117.3 kg on 2025-12-15; no scale reading
+  exists for that day (the first is 113.55 on Dec 24). Composition starts at its first reading.
+- **Copy computed, not quoted.** The DC's band notes and two "what it means" notes cite one
+  morning's numbers; they are generated from the data so they cannot go stale.
+- **The change of scale gets a sentence.** No marker was designed, so wherever an estimate
+  is drawn across 2026-09-11 a plain line says the step is the scales disagreeing; the
+  weekly list shows no delta across it, and the "body fat under 15%" milestone says it is
+  the new scale's first reading. Deltas "vs 30 days" use a real reading, never a line
+  drawn across a gap.
+- **Matrix corner reads SOLID** (the DC), not "HEAVY · LEAN" (the spec's prose): the longer
+  caption does not fit its column and runs into the BMI axis label.
+- **Spec's forecast example** says 0.31 kg/wk → Feb 9; the DC's own formula on the DC's own
+  series gives 0.30 → Feb 17. The implementation matches the DC and a test pins it.
+- **Tape deltas** show a dash across a change of measuring method (shoulders 118.5 → 50.9).
+- **Gone from the Body screen**, because the design has no place for them: the
+  progress-photo compare, the recovery stub, and the volume/calories chart. Photos still
+  live at `/health/progress` and volume/kcal at `/health/body/metric?m=volume|kcal`, but
+  nothing links to them now — filed.)
+
+**Chat and notifications round (2026-10-05):** (THE CHAT + PUSH ROUND — his `pitaya-prompt-1` list: two chat
 bugs, chat history, multi-photo, push, plus a motion pass. Branch
 `claude/pitaya-bugs-motion-ux-5caf0c`, **deployed to prod 2026-10-05 on his go ("push so I can see
 in my app on my phone") — PR #23.** Full write-up,
@@ -30,6 +79,39 @@ Push API — web push cannot reach it. That needs APNs and the iOS lane.** 464 t
 green. **Verified on an iPhone 17 Pro Max SIMULATOR (real WebKit, real keyboard) — not on his
 phone and not inside the shell; that is the top of his checklist.** Two additive migrations are
 already applied to the shared database; prod is unaffected by them.)
+
+**Body composition data (2026-10-04):** (BODY COMPOSITION + RENPHO — Phase 0 report, Phase 1 data
+model + backfill, and the sync engine built but SWITCHED OFF. He has a new RENPHO
+8-electrode scale (account created 2026-09-12); the Etekcity/VeSync rows stay as the
+pre-September record. Docs: `docs/renpho-gap-report.md` (research),
+`docs/body-composition-changelog.md` (what changed).
+**Phase 0:** pulled his RENPHO cloud history read-only with a Node port of `renpho-py`
+1.2.0. The API returns everything on the PDF report — segmental muscle/fat, impedance at
+20/100 kHz, SMI, RENPHO's reference ranges — and matched his hand-typed 10-04 row to the
+digit. **Phase 1 (his go, same night):** additive migration `20261004230000` applied to the
+shared database — 17 measured columns, `impedance` / `referenceRanges` / `fieldSources` /
+`rawPayload` JSON, unique `externalId`, and a `body_sync_runs` log. New merge rule in
+`lib/body-ingest.ts`: RENPHO upserts by `externalId` and WINS on every field it carries;
+Apple Health and hand entry still only fill blanks. Backfill: 5 scale readings merged into
+the 5 rows that already existed (4 Apple Health, 1 MCP), setup entry skipped, **424 rows
+before and after, 0 duplicates, second pass a no-op.** MCP `log_measurement` takes every
+measured column + impedance and joins an existing weigh-in instead of duplicating it;
+`query_data` returns the new columns and per-field sources. `POST /api/health/body` no
+longer drops scale columns or leaves `source` null. **Self-smoke caught/fixed:** (1) RENPHO
+ids are 19-digit integers and `JSON.parse` rounded them, so the first pull silently
+returned zero rows; (2) Postgres JSONB reorders keys, so the idempotency check called every
+re-import a change. **THE BLOCKER, found by him:** every API login with his account signs
+his phone's Renpho Health app out, and a signed-out phone cannot carry a weigh-in to the
+cloud. A scheduled pull as him would break what it reads, so the engine
+(`lib/renpho-client.ts`, `lib/renpho-sync.ts`, `/api/cron/renpho-sync`,
+`/api/health/body/sync`, the Apple-Health-arrival trigger) is a no-op unless
+`RENPHO_SYNC_ENABLED=1`, and nothing schedules it. Waiting on him: a second RENPHO
+account to log in as (deferred-items, top). Alert rule proven with three deliberate failed
+logins against a nonexistent account; push delivery to the phone NOT exercised. **Visible
+in prod already** (shared database): the Body screen's fat/muscle/BMR drill-ins now show the
+September and October RENPHO weeks — including a 20.7% → 14.5% body-fat step that is the
+device change, not his body. Phase 3 visuals wait on Claude Design. 437 tests (58 new),
+build green. NOT deployed: prod still runs the old code, so the MCP changes are not live.)
 
 **Previous:** 2026-09-08 (THE CONNECTOR ROUND — three defects in the MCP surface
 he uses every day, found by tracing his two complaints ("no approval received" on every

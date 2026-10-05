@@ -24,6 +24,20 @@ export interface BodyGoals {
   goalWaistCm: number | null;
 }
 
+/** The Body screen's target (Pitaya Body spec §2). `byDate` is a local day. */
+export interface HealthGoals {
+  weightKg: number;
+  bodyFatPct: number;
+  byDate: string;
+}
+
+/** His stated target when the screen was designed: 77 kg · 13% · by Feb 28. */
+export const DEFAULT_HEALTH_GOALS: HealthGoals = {
+  weightKg: 77,
+  bodyFatPct: 13,
+  byDate: "2027-02-28",
+};
+
 export type AILanguage = "english" | "spanish" | "portuguese" | "french";
 
 export interface FinanceSettings {
@@ -46,6 +60,7 @@ export interface AppSettings {
   birthYear: number | null;
   aiLanguage: AILanguage;
   bodyGoals: BodyGoals;
+  healthGoals: HealthGoals;
   aiInstructions: AIInstructions;
   workoutGoals: WorkoutGoals;
   timeZone: string;
@@ -70,6 +85,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   gender: "",
   birthYear: null,
   aiLanguage: demoSpanishEnabled ? "spanish" : "english",
+  healthGoals: DEFAULT_HEALTH_GOALS,
   bodyGoals: {
     goalWeightKg: null,
     goalWaistCm: null,

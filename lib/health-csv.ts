@@ -1,5 +1,9 @@
 import { type CsvOptions, type CsvValue, toCsv } from "@/lib/csv";
-import { COMPOSITION_FIELDS, TAPE_FIELDS } from "@/lib/body-measurements";
+import {
+  COMPOSITION_FIELDS,
+  SEGMENTAL_FIELDS,
+  TAPE_FIELDS,
+} from "@/lib/body-measurements";
 import { addDaysToDateString, getDateStringInTimeZone } from "@/lib/timezone";
 import type { HealthExportPayload } from "@/lib/health-export";
 
@@ -57,10 +61,14 @@ export const MEASUREMENT_CSV_HEADERS = [
   "id", "date", "time", "measuredAtUtc", "timeZone",
   "weightKg", "bodyFatPct",
   ...COMPOSITION_FIELDS,
+  ...SEGMENTAL_FIELDS,
   ...TAPE_FIELDS,
   ...SKINFOLD_KEYS.map((k) => `skinfold${k[0].toUpperCase()}${k.slice(1)}Mm`),
   "skinfoldDataJson",
-  "source", "notes", "createdAtUtc", "updatedAtUtc",
+  // JSON cells, verbatim — a spreadsheet cannot chart them, but an export
+  // that dropped them would not be a full export.
+  "impedance", "referenceRanges", "fieldSources", "rawPayload",
+  "source", "externalId", "notes", "createdAtUtc", "updatedAtUtc",
 ] as const;
 
 function measurementRows(payload: HealthExportPayload): CsvValue[][] {
@@ -72,11 +80,15 @@ function measurementRows(payload: HealthExportPayload): CsvValue[][] {
       str(row.id), date, time, str(row.measuredAt), timeZone,
       num(row.weightKg), num(row.bodyFatPct),
       ...COMPOSITION_FIELDS.map((f) => num(row[f])),
+      ...SEGMENTAL_FIELDS.map((f) => num(row[f])),
       ...TAPE_FIELDS.map((f) => num(row[f])),
       ...SKINFOLD_KEYS.map((k) => num(skinfold?.[k])),
       // Raw passthrough so a future skinfold key is never silently dropped.
       skinfold ? JSON.stringify(skinfold) : null,
-      str(row.source), str(row.notes),
+      ...(["impedance", "referenceRanges", "fieldSources", "rawPayload"] as const).map(
+        (f) => (row[f] != null ? JSON.stringify(row[f]) : null)
+      ),
+      str(row.source), str(row.externalId), str(row.notes),
       str(row.createdAt), str(row.updatedAt),
     ];
   });
