@@ -171,13 +171,16 @@ export function ChatBubbleIcon(props: IconProps) {
   );
 }
 
-export function MicIcon({ size = 22 }: { size?: number }) {
+// The design draws this one glyph in two inks: white on the raspberry dock
+// button, #8C2F51 on the pale-pink composer/sheet button. Same paths; the
+// colour is the only parameter.
+export function MicIcon({ size = 22, color = "#FFFFFF" }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20">
-      <rect x="7" y="2" width="6" height="11" rx="3" fill="#FFFFFF" />
+      <rect x="7" y="2" width="6" height="11" rx="3" fill={color} />
       <path
         d="M4 9 a6 6 0 0 0 12 0 M10 15 v3"
-        stroke="#FFFFFF"
+        stroke={color}
         strokeWidth="1.8"
         fill="none"
         strokeLinecap="round"

@@ -26,7 +26,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-xl safe-area-bottom lg:hidden">
+    <nav className="keyboard-hides fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-xl safe-area-bottom lg:hidden">
       <div className="grid h-16 max-w-3xl mx-auto px-2 grid-cols-5 items-center">
         {tabs.map(({ label, href, Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");

@@ -513,6 +513,251 @@ main {
   animation: mic-halo 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* ————— The visible rectangle (2026-10-04) —————
+   A fixed box that covers exactly what the user can see: it shrinks when the
+   keyboard rises and follows WebKit when it pans the page to reveal a field.
+   The variables come from <ViewportVars /> (lib/visual-viewport.ts explains
+   why 100dvh and `bottom: 0` cannot do this on iOS). Until the script runs
+   the fallbacks describe the plain full screen. */
+@utility vv-frame {
+  /* a Tailwind utility, so `max-lg:vv-frame` works: the chat screen is this
+     frame on a phone and an ordinary column on the desktop */
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--vv-height, 100dvh);
+  transform: translate3d(0, var(--vv-top, 0px), 0);
+}
+
+/* The chat fills the frame itself; the tab content's own slide-in would put
+   a transform on <main> for its first 350 ms, and a transformed ancestor
+   re-anchors `position: fixed` — the frame would start in the wrong box. */
+main:has([data-chat-frame]) {
+  animation: none;
+}
+
+/* While he is typing, the tab bar has no job — and on iOS it floats above
+   the keyboard, taking 64px out of the little room that is left. */
+html[data-keyboard="open"] .keyboard-hides {
+  transform: translateY(110%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.keyboard-hides {
+  transition:
+    transform 0.22s cubic-bezier(0.3, 0.9, 0.3, 1),
+    opacity 0.18s ease;
+}
+
+@keyframes sheetDown {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scrim-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.scrim-in {
+  animation: scrim-in 0.24s ease both;
+}
+
+.scrim-out {
+  animation: scrim-out 0.2s ease both;
+}
+
+.sheet-down {
+  animation: sheetDown 0.24s cubic-bezier(0.5, 0, 0.8, 0.4) both;
+}
+
+/* ————— Chat, in motion (2026-10-04) —————
+   One vocabulary, taken from the design's own curves (sheetUp/pushIn use
+   cubic-bezier(.3,.9,.3,1); fadeUp is `ease`): things arrive FROM where they
+   were made, settle without bouncing, and leave faster than they came. */
+
+/* His message rises out of the composer, bottom-right; a reply and its
+   cards come in from the left. */
+@keyframes msg-in-right {
+  from {
+    opacity: 0;
+    transform: translate3d(8px, 14px, 0) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.msg-in-right {
+  transform-origin: 100% 100%;
+  animation: msg-in-right 0.32s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+
+@keyframes msg-in-left {
+  from {
+    opacity: 0;
+    transform: translate3d(-6px, 10px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.msg-in-left {
+  transform-origin: 0 100%;
+  animation: msg-in-left 0.3s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+
+/* Messages slide under the header rather than being cut by it. */
+.chat-scroller {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+}
+
+/* "Latest" — only there while he is reading history. */
+.jump-latest {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  transition:
+    transform 0.26s cubic-bezier(0.3, 0.9, 0.3, 1),
+    opacity 0.2s ease;
+}
+
+.jump-latest:active {
+  transform: translate(-50%, 0) scale(0.96);
+}
+
+.jump-latest-hidden {
+  transform: translate(-50%, 12px) scale(0.92);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.unseen-dot {
+  animation: soft-pulse 1.4s ease-in-out infinite;
+}
+
+/* The composer lights up when it has the keyboard. */
+.composer {
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.25s ease;
+}
+
+.composer:focus-within {
+  border-color: #e9cfdc;
+  box-shadow: 0 8px 26px rgba(166, 61, 99, 0.14);
+}
+
+/* Send grows in beside the mic with the first character, and back out.
+   The negative margin swallows the flex gap while it is collapsed. */
+.send-button {
+  width: 0;
+  margin-left: -8px;
+  opacity: 0;
+  transform: scale(0.5);
+  pointer-events: none;
+  transition:
+    width 0.2s cubic-bezier(0.3, 0.9, 0.3, 1),
+    margin-left 0.2s cubic-bezier(0.3, 0.9, 0.3, 1),
+    opacity 0.16s ease,
+    transform 0.24s cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+
+.send-button-on {
+  width: 36px;
+  margin-left: 0;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.send-button-on:active {
+  transform: scale(0.92);
+}
+
+/* The ✓ on a card he just confirmed. */
+@keyframes check-pop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.saved-check {
+  display: inline-block;
+  animation: check-pop 0.42s cubic-bezier(0.3, 0.9, 0.3, 1) 0.12s both;
+}
+
+/* Photo tray: a frame pops in where it lands, and closes up when removed
+   so its neighbours slide over instead of jumping. */
+@keyframes shot-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.shot-in {
+  animation: shot-in 0.28s cubic-bezier(0.3, 0.9, 0.3, 1) both;
+}
+
+@keyframes shot-out {
+  from {
+    opacity: 1;
+    transform: none;
+    width: var(--shot-size, 70px);
+    margin-right: 0;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.6);
+    width: 0;
+    margin-right: -8px;
+  }
+}
+
+.shot-out {
+  animation: shot-out 0.18s ease-in both;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

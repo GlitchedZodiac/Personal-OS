@@ -1,12 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { MicIcon } from "@/components/pitaya-icons";
+import { HANDOFF_EVENT, takeChatHandOff, type ChatHandOff } from "@/lib/chat-handoff";
+import { haptic } from "@/lib/haptics";
 import { formatStepPrescription } from "@/lib/sequences";
 import {
   getOrCreateMicrophoneStream,
   deactivateMicrophoneStream,
 } from "@/lib/microphone";
+import { useStickToBottom } from "@/lib/use-stick-to-bottom";
 
 // Pitaya Chat — "the notebook that talks back" (docs/design/
 // pitaya-app.dc.html, screen 1). Streams from the Responses-API loop at
@@ -15,6 +19,17 @@ import {
 // deviations: the empty-thread hint uses honest copy (the design's
 // references demo state), and a small "checking your data" line shows
 // while the model reads real logs (no spec in the design for it).
+//
+// LAYOUT (2026-10-04). The screen is a column that fills exactly what is
+// visible — header, the thread (its own scroller), composer — instead of a
+// tall page scrolled by the window with a sticky composer laid over it.
+// Two bugs lived in the old shape: the newest message parked underneath the
+// composer and the thread un-pinned itself (lib/chat-scroll.ts), and the
+// keyboard covered whatever was pinned to "the bottom" (lib/visual-viewport
+// .ts). Surfaced deviations from the design: the composer is fixed at the
+// foot rather than flowing after the last message, and a "Latest" pill
+// appears while he reads history (neither exists in the design's static
+// frame).
 
 interface FoodItem {
   mealType?: string;
@@ -185,21 +200,6 @@ function fmtWhen(iso?: unknown) {
   return `${when.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${time}`;
 }
 
-function MicGlyph({ size = 16, color = "#8C2F51" }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20">
-      <rect x="7" y="2" width="6" height="11" rx="3" fill={color} />
-      <path
-        d="M4 9 a6 6 0 0 0 12 0 M10 15 v3"
-        stroke={color}
-        strokeWidth="1.8"
-        fill="none"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [draft, setDraft] = useState("");
@@ -221,54 +221,44 @@ export default function ChatPage() {
     toolLineRef.current = toolLine;
   }, [toolLine]);
 
-  const bottomRef = useRef<HTMLDivElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const draftRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Streaming used to call scrollIntoView({behavior:"smooth"}) once PER TOKEN,
-  // so every delta re-targeted an in-flight smooth scroll — the single biggest
-  // source of the "clunky" feel. Now: smooth for a new message, instant while
-  // tokens land, and nothing at all if he has scrolled up to read history.
-  const pinnedRef = useRef(true);
+  // Messages that ARRIVED in this session animate in; a thread loaded from
+  // history, and a streamed reply settling into its final bubble, do not —
+  // otherwise opening the chat is sixty bubbles fading up at once, and every
+  // finished reply blinks as its live bubble is swapped for the stored one.
+  const fresh = useRef(new Set<string>());
 
-  const isNearBottom = useCallback(() => {
-    const doc = document.documentElement;
-    return doc.scrollHeight - (window.scrollY + window.innerHeight) < 140;
-  }, []);
+  // The thread follows the newest message unless he has scrolled up to read
+  // (rules + the bug they replace: lib/chat-scroll.ts). `watch` is everything
+  // that makes the thread taller from React's side.
+  const { scrollerRef, contentRef, pinned, unseen, pinNow, jumpToLatest } = useStickToBottom({
+    watch: `${messages.length}:${streamText.length}:${busy}:${toolLine}:${filter}:${editingCard}`,
+  });
 
-  useEffect(() => {
-    const onScroll = () => {
-      pinnedRef.current = isNearBottom();
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [isNearBottom]);
-
-  const scrollDown = useCallback((behavior: ScrollBehavior = "smooth") => {
-    requestAnimationFrame(() =>
-      bottomRef.current?.scrollIntoView({ behavior, block: "end" })
-    );
-  }, []);
-
+  // Until the thread has answered, "you haven't said anything yet" is not
+  // known to be true — and showing it for the half-second of the fetch made
+  // every visit open on an empty-state card that then vanished.
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     fetch("/api/ai/chat/messages")
       .then((r) => (r.ok ? r.json() : { messages: [] }))
-      .then((d) => {
-        setMessages(d.messages ?? []);
-        scrollDown("auto");
-      })
-      .catch(() => {});
-  }, [scrollDown]);
+      .then((d) => setMessages(d.messages ?? []))
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
 
-  // New bubbles get the smooth ride; streaming tokens get an instant nudge.
-  useEffect(() => {
-    if (pinnedRef.current) scrollDown("smooth");
-  }, [messages, scrollDown]);
-
-  useEffect(() => {
-    if (streamText && pinnedRef.current) scrollDown("auto");
-  }, [streamText, scrollDown]);
+  // The composer grows with what he has written (dictation appends whole
+  // sentences) up to a few lines, then scrolls inside itself.
+  useLayoutEffect(() => {
+    const el = draftRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 132)}px`;
+  }, [draft]);
 
   // Dock hand-off: voice/text spoken anywhere in the app arrives here —
   // as a pending payload when the dock navigated, or live via event when
@@ -289,10 +279,16 @@ export default function ChatPage() {
       setDraft("");
       setStreamText("");
       setToolLine("");
+      haptic("light");
+      // His own message always pulls the thread to the end — even if he was
+      // reading history a moment ago.
+      pinNow();
+      const localId = `local-${Date.now()}`;
+      fresh.current.add(localId);
       setMessages((prev) => [
         ...prev,
         {
-          id: `local-${Date.now()}`,
+          id: localId,
           role: "user",
           content: clean || `(${images.length} photo${images.length === 1 ? "" : "s"})`,
           meta: { source, ...(photos?.thumbs?.length ? { thumbs: photos.thumbs } : {}) },
@@ -379,6 +375,7 @@ export default function ChatPage() {
                 assistantText = "";
                 setStreamText("");
               }
+              fresh.current.add(event.id);
               setMessages((prev) => [
                 ...prev,
                 {
@@ -410,19 +407,15 @@ export default function ChatPage() {
         setBusy(false);
       }
     },
-    [busy]
+    [busy, pinNow]
   );
   sendRef.current = send;
 
   useEffect(() => {
-    // One shape for both hand-off paths (navigated → sessionStorage, or
-    // live → event): text, source, and optionally a photo capture.
-    type HandOff = {
-      text?: string;
-      source?: string;
-      photos?: { images: string[]; thumbs: string[] };
-    };
-    const dispatch = (payload: HandOff) => {
+    // One shape for both hand-off paths (navigated → the stash in
+    // lib/chat-handoff.ts, or live → event): text, source, and optionally a
+    // photo capture.
+    const dispatch = (payload: ChatHandOff) => {
       const text = payload.text ?? "";
       const photos = payload.photos;
       if (!text && !photos?.images?.length) return;
@@ -434,21 +427,15 @@ export default function ChatPage() {
       sendRef.current?.(text, source, photos);
     };
 
-    const pending = sessionStorage.getItem("pitaya:pending-chat");
-    if (pending) {
-      sessionStorage.removeItem("pitaya:pending-chat");
-      try {
-        dispatch(JSON.parse(pending) as HandOff);
-      } catch {
-        // malformed handoff — ignore
-      }
-    }
+    const pending = takeChatHandOff();
+    if (pending) dispatch(pending);
+
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as HandOff | undefined;
+      const detail = (e as CustomEvent).detail as ChatHandOff | undefined;
       if (detail) dispatch(detail);
     };
-    window.addEventListener("pitaya:chat-send", handler);
-    return () => window.removeEventListener("pitaya:chat-send", handler);
+    window.addEventListener(HANDOFF_EVENT, handler);
+    return () => window.removeEventListener(HANDOFF_EVENT, handler);
   }, []);
 
   // ——— voice (tap to talk, tap to stop) ———
@@ -530,7 +517,10 @@ export default function ChatPage() {
   };
 
   // ——— proposal actions ———
+  const resolvedNow = useRef(new Set<string>());
   const resolveCard = async (id: string, status: "saved" | "rejected") => {
+    resolvedNow.current.add(id);
+    if (status === "rejected") haptic("soft");
     setMessages((prev) =>
       prev.map((m) =>
         m.id === id ? { ...m, meta: { ...m.meta, status } } : m
@@ -771,10 +761,13 @@ export default function ChatPage() {
 
       await resolveCard(msg.id, "saved");
       setEditingCard(null);
+      haptic("success");
       if (followUp) {
+        const followId = `f-${Date.now()}`;
+        fresh.current.add(followId);
         setMessages((prev) => [
           ...prev,
-          { id: `f-${Date.now()}`, role: "assistant", content: followUp },
+          { id: followId, role: "assistant", content: followUp },
         ]);
       }
     } catch (err) {
@@ -809,7 +802,7 @@ export default function ChatPage() {
       <div
         key={msg.id}
         className="overflow-hidden rounded-[16px] border-[1.5px] border-[#E9CFDC] bg-card"
-        style={{ animation: "fadeUp .45s ease both" }}
+        style={fresh.current.has(msg.id) ? { animation: "fadeUp .45s ease both" } : undefined}
       >
         <div className="flex items-center justify-between bg-accent px-3.5 py-2.5">
           <span className="text-[10.5px] font-bold tracking-[0.14em] text-[#8C2F51]">
@@ -1164,7 +1157,7 @@ export default function ChatPage() {
             <button
               onClick={() => confirmProposal(msg)}
               disabled={confirmBusy === msg.id}
-              className="flex-[1.4] rounded-[10px] bg-primary py-[11px] text-[13px] font-semibold text-white disabled:opacity-60"
+              className="tap-scale flex-[1.4] rounded-[10px] bg-primary py-[11px] text-[13px] font-semibold text-white transition-opacity disabled:opacity-60"
               style={{ fontFamily: "var(--font-display)" }}
             >
               {confirmBusy === msg.id
@@ -1176,7 +1169,7 @@ export default function ChatPage() {
             {kind === "food" && (
               <button
                 onClick={() => setEditingCard(editing ? null : msg.id)}
-                className="flex-1 rounded-[10px] border border-[#D9D7DC] py-[11px] text-[13px] font-semibold text-foreground"
+                className="tap-scale flex-1 rounded-[10px] border border-[#D9D7DC] py-[11px] text-[13px] font-semibold text-foreground"
                 style={{ fontFamily: "var(--font-display)" }}
               >
                 {editing ? "Done" : "Edit"}
@@ -1218,20 +1211,29 @@ export default function ChatPage() {
               })()}
             <button
               onClick={() => resolveCard(msg.id, "rejected")}
-              className="flex-1 rounded-[10px] border border-border py-[11px] text-[13px] font-semibold text-muted-foreground"
+              className="tap-scale flex-1 rounded-[10px] border border-border py-[11px] text-[13px] font-semibold text-muted-foreground"
               style={{ fontFamily: "var(--font-display)" }}
             >
               Reject
             </button>
           </div>
         )}
+        {/* design: the verdict strip arrives with fadeUp .35s — but only
+            when HE just decided it, not for every old card in the thread */}
         {status === "saved" && (
-          <div className="bg-[#EAF3ED] px-3.5 py-3 text-[13px] font-semibold text-[#3E7A54]">
-            ✓ Saved · {fmtTime(msg.createdAt)}
+          <div
+            className="bg-[#EAF3ED] px-3.5 py-3 text-[13px] font-semibold text-[#3E7A54]"
+            style={resolvedNow.current.has(msg.id) ? { animation: "fadeUp .35s ease both" } : undefined}
+          >
+            <span className={resolvedNow.current.has(msg.id) ? "saved-check" : undefined}>✓</span>{" "}
+            Saved · {fmtTime(msg.createdAt)}
           </div>
         )}
         {status === "rejected" && (
-          <div className="bg-background px-3.5 py-3 text-[13px] font-semibold text-muted-foreground">
+          <div
+            className="bg-background px-3.5 py-3 text-[13px] font-semibold text-muted-foreground"
+            style={resolvedNow.current.has(msg.id) ? { animation: "fadeUp .35s ease both" } : undefined}
+          >
             Discarded. Nothing saved.
           </div>
         )}
@@ -1239,228 +1241,314 @@ export default function ChatPage() {
     );
   };
 
+  const hasDraft = draft.trim().length > 0;
+  const showLive = busy && (filter === "all" || filter === "chat");
+
   return (
-    <div className="flex min-h-dvh flex-col px-4 pb-44 pt-12 lg:px-0 lg:pt-8 max-w-lg lg:max-w-2xl">
-      <p className="micro-label">The notebook that talks back</p>
-      <h1
-        className="mt-0.5 text-3xl font-bold tracking-[-0.02em]"
-        style={{ fontFamily: "var(--font-display)" }}
-      >
-        Chat
-      </h1>
+    <div
+      data-chat-frame
+      className="max-lg:vv-frame flex flex-col bg-background lg:h-[calc(100dvh-2rem)] lg:max-w-2xl"
+    >
+      <header className="shrink-0 px-4 pt-[calc(env(safe-area-inset-top,0px)+14px)] lg:px-0 lg:pt-8">
+        {/* While he types there is half a screen left; the label and the
+            lenses step aside for the thread and come back with the keyboard. */}
+        <p className="micro-label [html[data-keyboard=open]_&]:hidden">
+          The notebook that talks back
+        </p>
+        <h1
+          className="mt-0.5 text-3xl font-bold tracking-[-0.02em]"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          Chat
+        </h1>
 
-      {/* Quick filters — read the thread as a food log, a usuals shelf, a
-          weight history, or just the conversation. */}
-      <div className="mt-3.5 -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 lg:mx-0 lg:px-0">
-        {FILTERS.map((f) => {
-          const active = filter === f.key;
-          const count =
-            f.key === "all"
-              ? messages.length
-              : messages.filter((m) => matchesFilter(m, f.key)).length;
-          return (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`shrink-0 rounded-full px-3 py-[6px] text-[12px] font-semibold transition-colors ${
-                active
-                  ? "bg-primary text-white"
-                  : "border border-border bg-card text-secondary-foreground"
-              }`}
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              {f.label}
-              {count > 0 && (
-                <span
-                  className={`ml-1.5 tabular-nums ${
-                    active ? "text-white/70" : "text-muted-foreground"
-                  }`}
-                >
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mt-[14px] flex flex-1 flex-col gap-3">
-        {filter !== "all" && visibleMessages.length === 0 && (
-          <div className="rounded-[14px] border-[1.5px] border-dashed border-[#D9D7DC] p-3.5 text-center text-[12.5px] text-muted-foreground">
-            Nothing filed under{" "}
-            <span className="font-semibold">
-              {FILTERS.find((f) => f.key === filter)?.label}
-            </span>{" "}
-            yet.
-          </div>
-        )}
-        {messages.length === 0 && !busy && (
-          <div className="rounded-[14px] border-[1.5px] border-dashed border-[#D9D7DC] p-3.5 text-center text-[12.5px] leading-relaxed text-muted-foreground">
-            Say it or type it — &ldquo;log lunch&rdquo;, &ldquo;what&apos;s my
-            swing PR?&rdquo;, &ldquo;change the rice to 2 cups&rdquo;. Tap the{" "}
-            <span className="font-semibold text-[#8C2F51]">mic</span> and just
-            talk.
-          </div>
-        )}
-
-        {visibleMessages.map((msg) => {
-          if (msg.role === "proposal") return renderProposal(msg);
-          if (msg.role === "user") {
-            const thumbs = msg.meta?.thumbs ?? [];
+        {/* Quick filters — read the thread as a food log, a usuals shelf, a
+            weight history, or just the conversation. */}
+        <div className="-mx-4 mt-3.5 flex gap-1.5 overflow-x-auto px-4 pb-1 lg:mx-0 lg:px-0 [html[data-keyboard=open]_&]:hidden">
+          {FILTERS.map((f) => {
+            const active = filter === f.key;
+            const count =
+              f.key === "all"
+                ? messages.length
+                : messages.filter((m) => matchesFilter(m, f.key)).length;
             return (
-              <div key={msg.id} className="msg-in max-w-[300px] self-end">
-                {thumbs.length > 0 && (
-                  <div className="mb-1.5 flex flex-wrap justify-end gap-1.5">
-                    {thumbs.map((src, i) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={i}
-                        src={src}
-                        alt=""
-                        className="h-[74px] w-[74px] rounded-[12px] border border-[#E9CFDC] object-cover"
-                      />
-                    ))}
-                  </div>
+              <button
+                key={f.key}
+                onClick={() => {
+                  haptic("selection");
+                  setFilter(f.key);
+                }}
+                className={`tap-scale shrink-0 rounded-full px-3 py-[6px] text-[12px] font-semibold transition-colors duration-200 ${
+                  active
+                    ? "bg-primary text-white"
+                    : "border border-border bg-card text-secondary-foreground"
+                }`}
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {f.label}
+                {count > 0 && (
+                  <span
+                    className={`ml-1.5 tabular-nums ${
+                      active ? "text-white/70" : "text-muted-foreground"
+                    }`}
+                  >
+                    {count}
+                  </span>
                 )}
-                <div className="rounded-[18px] rounded-br-[5px] bg-primary px-3.5 py-[11px] text-sm leading-relaxed text-white">
-                  {msg.content}
-                </div>
-                {(msg.meta?.source === "voice" || msg.meta?.source === "photo") && (
-                  <p className="mt-1 text-right text-[10.5px] text-muted-foreground">
-                    {msg.meta.source === "photo" ? "via photo" : "via voice"}
-                  </p>
-                )}
-              </div>
+              </button>
             );
-          }
-          return (
-            <div
-              key={msg.id}
-              className="msg-in max-w-[310px] self-start whitespace-pre-wrap rounded-[18px] rounded-bl-[5px] border border-border bg-card px-3.5 py-[11px] text-sm leading-relaxed text-foreground"
-            >
-              {msg.content}
-            </div>
-          );
-        })}
+          })}
+        </div>
+      </header>
 
-        {/* Live turn — hidden under a filter that this reply won't match, so
-            the lens stays honest while it's still being written. */}
-        {(filter === "all" || filter === "chat") && (
-          <>
-            {streamText && (
-              <div className="msg-in max-w-[310px] self-start whitespace-pre-wrap rounded-[18px] rounded-bl-[5px] border border-border bg-card px-3.5 py-[11px] text-sm leading-relaxed text-foreground">
-                {streamText}
-                <span className="stream-caret ml-[2px] inline-block h-[13px] w-[2px] translate-y-[2px] rounded-full bg-[#A63D63]" />
+      {/* The thread — its own scroller, so "the bottom" is simply its end. */}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollerRef}
+          className="chat-scroller absolute inset-0 overflow-y-auto overscroll-contain px-4 lg:px-0"
+        >
+          <div ref={contentRef} className="flex flex-col gap-3 pb-3 pt-3.5">
+            {filter !== "all" && visibleMessages.length === 0 && (
+              <div className="rounded-[14px] border-[1.5px] border-dashed border-[#D9D7DC] p-3.5 text-center text-[12.5px] text-muted-foreground">
+                Nothing filed under{" "}
+                <span className="font-semibold">
+                  {FILTERS.find((f) => f.key === filter)?.label}
+                </span>{" "}
+                yet.
               </div>
             )}
-            {busy && !streamText && (
-              <div className="msg-in flex max-w-[310px] items-center gap-2 self-start rounded-[18px] rounded-bl-[5px] border border-border bg-card px-3.5 py-[13px]">
-                <TypingDots />
-                {toolLine && (
-                  <span className="text-[11.5px] text-muted-foreground">
-                    {toolLine}
+            {loaded && messages.length === 0 && !busy && (
+              <div className="rounded-[14px] border-[1.5px] border-dashed border-[#D9D7DC] p-3.5 text-center text-[12.5px] leading-relaxed text-muted-foreground">
+                Say it or type it — &ldquo;log lunch&rdquo;, &ldquo;what&apos;s my
+                swing PR?&rdquo;, &ldquo;change the rice to 2 cups&rdquo;. Tap the{" "}
+                <span className="font-semibold text-[#8C2F51]">mic</span> and just
+                talk.
+              </div>
+            )}
+
+            {visibleMessages.map((msg) => {
+              if (msg.role === "proposal") return renderProposal(msg);
+              const arrived = fresh.current.has(msg.id);
+              if (msg.role === "user") {
+                const thumbs = msg.meta?.thumbs ?? [];
+                return (
+                  <div
+                    key={msg.id}
+                    className={`max-w-[300px] self-end ${arrived ? "msg-in-right" : ""}`}
+                  >
+                    {thumbs.length > 0 && (
+                      <div className="mb-1.5 flex flex-wrap justify-end gap-1.5">
+                        {thumbs.map((src, i) => (
+                          // Fixed 74×74 boxes: a photo that decodes late can
+                          // change nothing about the thread's height.
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={i}
+                            src={src}
+                            alt=""
+                            width={74}
+                            height={74}
+                            className="h-[74px] w-[74px] rounded-[12px] border border-[#E9CFDC] object-cover"
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <div className="rounded-[18px] rounded-br-[5px] bg-primary px-3.5 py-[11px] text-sm leading-relaxed text-white">
+                      {msg.content}
+                    </div>
+                    {(msg.meta?.source === "voice" || msg.meta?.source === "photo") && (
+                      <p className="mt-1 text-right text-[10.5px] text-muted-foreground">
+                        {msg.meta.source === "photo" ? "via photo" : "via voice"}
+                      </p>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <div
+                  key={msg.id}
+                  className={`max-w-[310px] self-start whitespace-pre-wrap rounded-[18px] rounded-bl-[5px] border border-border bg-card px-3.5 py-[11px] text-sm leading-relaxed text-foreground ${
+                    arrived ? "msg-in-left" : ""
+                  }`}
+                >
+                  {msg.content}
+                </div>
+              );
+            })}
+
+            {/* Live turn — ONE bubble from first dot to last word. It used to
+                be two elements (dots, then text) that each replayed their
+                entrance, so every reply began with a blink. Hidden under a
+                filter this reply won't match, so the lens stays honest. */}
+            {showLive && (
+              <div
+                key="live"
+                className="msg-in-left max-w-[310px] self-start whitespace-pre-wrap rounded-[18px] rounded-bl-[5px] border border-border bg-card px-3.5 py-[11px] text-sm leading-relaxed text-foreground"
+              >
+                {streamText ? (
+                  <>
+                    {streamText}
+                    <span className="stream-caret ml-[2px] inline-block h-[13px] w-[2px] translate-y-[2px] rounded-full bg-[#A63D63]" />
+                  </>
+                ) : (
+                  <span className="flex items-center gap-2 py-[2px]">
+                    <TypingDots />
+                    {toolLine && (
+                      <span className="fade-up text-[11.5px] text-muted-foreground">
+                        {toolLine}
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
             )}
-          </>
-        )}
-        <div ref={bottomRef} />
+          </div>
+        </div>
+
+        {/* He scrolled up to read: nothing yanks him back. This is the way
+            down, and it says so when something new has arrived. */}
+        <button
+          type="button"
+          onClick={() => {
+            haptic("selection");
+            jumpToLatest();
+          }}
+          aria-label={unseen ? "New messages — jump to latest" : "Jump to latest"}
+          aria-hidden={pinned}
+          tabIndex={pinned ? -1 : 0}
+          className={`jump-latest absolute bottom-2.5 left-1/2 flex items-center gap-1.5 rounded-full border border-border bg-card py-[7px] pl-3 pr-3.5 text-[11.5px] font-semibold text-[#8C2F51] shadow-[0_6px_18px_rgba(35,34,39,0.14)] ${
+            pinned ? "jump-latest-hidden" : ""
+          }`}
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M12 5v14M6 13l6 6 6-6" />
+          </svg>
+          {unseen ? "New below" : "Latest"}
+          {unseen && <span className="unseen-dot h-[6px] w-[6px] rounded-full bg-primary" />}
+        </button>
       </div>
 
-      {/* Listening strip — sits directly above the composer so the state is
-          readable without hunting for a colour change on the button. The
-          bars ride the real input level: silence = flat, speech = moving. */}
-      {(recording || transcribing) && (
-        <div
-          className="msg-in sticky z-10 mx-auto -mb-1 flex items-center gap-2 rounded-full bg-[#A63D63] px-3.5 py-1.5 text-[11.5px] font-semibold text-white shadow-[0_4px_14px_rgba(166,61,99,0.35)]"
-          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 9.2rem)" }}
-        >
-          {recording ? (
-            <>
-              <span className="flex items-end gap-[2px]" aria-hidden>
-                {[0.55, 1, 0.75].map((scale, i) => (
-                  <span
-                    key={i}
-                    className="w-[2.5px] rounded-full bg-white"
-                    style={{
-                      height: `${4 + micLevel * 11 * scale}px`,
-                      transition: "height 80ms linear",
-                    }}
-                  />
-                ))}
-              </span>
-              Listening — tap the mic to stop
-            </>
-          ) : (
-            <>
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              Writing that down…
-            </>
-          )}
-        </div>
-      )}
+      {/* Composer zone — clears the tab bar when the keyboard is down, sits
+          directly on the keys when it is up (the tab bar hides itself). */}
+      <div className="shrink-0 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] pt-1.5 lg:px-0 lg:pb-4 [html[data-keyboard=open]_&]:pb-2">
+        {/* Listening strip — the state is readable without hunting for a
+            colour change on the button. The bars ride the real input level:
+            silence = flat, speech = moving. */}
+        {(recording || transcribing) && (
+          <div className="mb-2 flex justify-center">
+            <div className="fade-up flex items-center gap-2 rounded-full bg-[#A63D63] px-3.5 py-1.5 text-[11.5px] font-semibold text-white shadow-[0_4px_14px_rgba(166,61,99,0.35)]">
+              {recording ? (
+                <>
+                  <span className="flex items-end gap-[2px]" aria-hidden>
+                    {[0.55, 1, 0.75].map((scale, i) => (
+                      <span
+                        key={i}
+                        className="w-[2.5px] rounded-full bg-white"
+                        style={{
+                          height: `${4 + micLevel * 11 * scale}px`,
+                          transition: "height 80ms linear",
+                        }}
+                      />
+                    ))}
+                  </span>
+                  Listening — tap the mic to stop
+                </>
+              ) : (
+                <>
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Writing that down…
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
-      {/* Composer */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          send(draft, "text");
-        }}
-        className="sticky mt-4 flex items-center gap-2.5 rounded-full border border-border bg-card py-2 pl-[18px] pr-2 shadow-[0_6px_20px_rgba(35,34,39,0.08)]"
-        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.5rem)" }}
-      >
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={
-            transcribing ? "Transcribing…" : "Type, or tap the mic…"
-          }
-          disabled={busy}
-          className="min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground"
-        />
-        {/* Mic is always available (mid-draft dictation appends); the send
-            arrow joins it whenever there's text — his "split" ask.
-            Listening state: breathing halo + a ring that rides the real
-            input level, so a live mic is unmistakable from a dead one. */}
-        <div className="relative flex shrink-0 items-center justify-center">
-          {recording && (
-            <span
-              aria-hidden
-              className="pointer-events-none absolute rounded-full bg-[#A63D63]/25"
-              style={{
-                width: `${36 + micLevel * 26}px`,
-                height: `${36 + micLevel * 26}px`,
-                opacity: 0.35 + micLevel * 0.5,
-                transition: "width 90ms linear, height 90ms linear",
-              }}
-            />
-          )}
-          <button
-            type="button"
-            onClick={() =>
-              recording ? recorderRef.current?.stop() : startVoice()
-            }
-            disabled={busy || transcribing}
-            aria-label={recording ? "Stop recording" : "Start voice input"}
-            aria-pressed={recording}
-            className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
-              recording ? "mic-halo" : ""
-            }`}
-            style={{ background: recording ? "#A63D63" : "#F6E3EB" }}
-          >
-            {transcribing ? (
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#8C2F51] border-t-transparent" />
-            ) : (
-              <MicGlyph color={recording ? "#FFFFFF" : "#8C2F51"} />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            send(draft, "text");
+          }}
+          className="composer flex items-end gap-2 rounded-[26px] border border-border bg-card py-2 pl-[18px] pr-2 shadow-[0_6px_20px_rgba(35,34,39,0.08)]"
+        >
+          <textarea
+            ref={draftRef}
+            value={draft}
+            rows={1}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              // Return sends; Shift+Return is a new line.
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                send(draft, "text");
+              }
+            }}
+            enterKeyHint="send"
+            placeholder={transcribing ? "Transcribing…" : "Type, or tap the mic…"}
+            disabled={busy}
+            className="min-w-0 flex-1 resize-none self-center bg-transparent py-[7px] leading-[1.4] text-foreground outline-none placeholder:text-muted-foreground"
+            style={{ fontSize: "13.5px", maxHeight: 132 }}
+          />
+          {/* Mic is always available (mid-draft dictation appends); the send
+              arrow joins it whenever there's text — his "split" ask.
+              Listening state: breathing halo + a ring that rides the real
+              input level, so a live mic is unmistakable from a dead one. */}
+          <div className="relative flex shrink-0 items-center justify-center">
+            {recording && (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute rounded-full bg-[#A63D63]/25"
+                style={{
+                  width: `${36 + micLevel * 26}px`,
+                  height: `${36 + micLevel * 26}px`,
+                  opacity: 0.35 + micLevel * 0.5,
+                  transition: "width 90ms linear, height 90ms linear",
+                }}
+              />
             )}
-          </button>
-        </div>
-        {draft.trim() && (
+            <button
+              type="button"
+              onClick={() => {
+                haptic(recording ? "light" : "medium");
+                if (recording) recorderRef.current?.stop();
+                else startVoice();
+              }}
+              disabled={busy || transcribing}
+              aria-label={recording ? "Stop recording" : "Start voice input"}
+              aria-pressed={recording}
+              className={`tap-scale relative z-10 flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+                recording ? "mic-halo" : ""
+              }`}
+              style={{ background: recording ? "#A63D63" : "#F6E3EB" }}
+            >
+              {transcribing ? (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#8C2F51] border-t-transparent" />
+              ) : (
+                <MicIcon size={16} color={recording ? "#FFFFFF" : "#8C2F51"} />
+              )}
+            </button>
+          </div>
+          {/* Always mounted: it grows in and out beside the mic instead of
+              popping the row wider the moment there is a first letter. */}
           <button
             type="submit"
-            disabled={busy}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary"
+            disabled={busy || !hasDraft}
+            aria-label="Send"
+            aria-hidden={!hasDraft}
+            tabIndex={hasDraft ? 0 : -1}
+            className={`send-button flex h-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary ${
+              hasDraft ? "send-button-on" : ""
+            }`}
           >
             <svg
               width="16"
@@ -1476,8 +1564,8 @@ export default function ChatPage() {
               <path d="M22 2 15 22l-4-9-9-4Z" />
             </svg>
           </button>
-        )}
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
