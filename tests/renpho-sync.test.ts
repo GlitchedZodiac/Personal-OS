@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
-vi.mock("@/lib/push", () => ({ sendPush: vi.fn() }));
+vi.mock("@/lib/notify", () => ({ notify: vi.fn() }));
+vi.mock("@/lib/weigh-in-notice", () => ({ announceWeighIn: vi.fn() }));
 
 import { encryptBody } from "@/lib/renpho";
 import { RenphoError, fetchRenphoRecords } from "@/lib/renpho-client";

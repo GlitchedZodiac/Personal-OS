@@ -50,18 +50,22 @@ export async function POST(request: NextRequest) {
     // Mostly history (it is the backfill route), and announceWeighIn only
     // speaks for a weigh-in from the last 36 hours — but a page that does
     // carry today's reading should not be silent about it.
-    after(() => announceWeighIn(result.created));
+    //
+    // A new weigh-in reaching Apple Health means the scale's cloud has the
+    // full record too (or will within a minute or two). When the RENPHO sync
+    // is on, fetch it first and let THAT run announce the weigh-in, so the
+    // line carries body fat; otherwise announce the weight straight away.
+    after(async () => {
+      if (result.imported > 0 && renphoSyncEnabled()) {
+        const pulled = await runRenphoSync("apple_health");
+        if (pulled.announced) return;
+      }
+      await announceWeighIn(result.created);
+    });
 
     console.log(
       `[health/body] backfill: ${result.imported} new, ${result.merged} merged, ${result.skipped} duplicate, ${result.invalid} invalid (of ${samples.length} sent)`
     );
-
-    // A new weigh-in reaching Apple Health means the scale's cloud has the
-    // full record too (or will within a minute or two). Fetch it once the
-    // companion has its answer. No-op while the RENPHO sync is switched off.
-    if (result.imported > 0 && renphoSyncEnabled()) {
-      after(() => runRenphoSync("apple_health"));
-    }
 
     return NextResponse.json({
       received: samples.length,

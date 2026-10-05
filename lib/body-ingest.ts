@@ -205,6 +205,9 @@ export interface IngestRenphoResult {
   unchanged: number;
   /** Not a scale reading (a weight typed into the app) or unmappable. */
   skipped: number;
+  /** Rows this pull created or adopted — what the weigh-in notice announces.
+   *  A refresh of a row already imported is not news. */
+  touched: Array<{ id: string; measuredAt: Date; weightKg: number | null; bodyFatPct: number | null }>;
 }
 
 type FullRow = Awaited<ReturnType<typeof prisma.bodyMeasurement.findMany>>[number];
@@ -231,7 +234,15 @@ export async function ingestRenphoRecords(
     merged: 0,
     unchanged: 0,
     skipped: 0,
+    touched: [],
   };
+  const news = (row: FullRow) =>
+    result.touched.push({
+      id: row.id,
+      measuredAt: row.measuredAt,
+      weightKg: row.weightKg,
+      bodyFatPct: row.bodyFatPct,
+    });
 
   const mapped = [];
   for (const record of records) {
@@ -291,6 +302,7 @@ export async function ingestRenphoRecords(
         full.set(created.id, created);
         candidates.push(toCandidate(created));
         result.created++;
+        news(created);
       } catch (error) {
         // Two pulls racing: the unique index on externalId lets exactly one
         // insert through, and the loser has nothing left to do.
@@ -315,6 +327,7 @@ export async function ingestRenphoRecords(
     full.set(updated.id, updated);
     candidates[candidates.findIndex((c) => c.id === updated.id)] = toCandidate(updated);
     result.merged++;
+    if (plan.action === "link") news(updated);
   }
 
   return result;

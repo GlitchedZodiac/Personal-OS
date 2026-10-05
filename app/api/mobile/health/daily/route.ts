@@ -113,10 +113,6 @@ export async function POST(request: NextRequest) {
     // query, intra-batch collapse, and unparseable timestamps rejected rather
     // than stamped `now`. See lib/body-ingest.ts for why each of those matters.
     const weights = await ingestBodySamples(samples, { source: "apple_health" });
-    // Same trigger as /api/mobile/health/body — see the note there.
-    if (weights.imported > 0 && renphoSyncEnabled()) {
-      after(() => runRenphoSync("apple_health"));
-    }
 
     // These counts used to be returned and then thrown away by the client
     // (`struct AnyResponse: Decodable {}`), so nobody could tell whether a
@@ -133,6 +129,12 @@ export async function POST(request: NextRequest) {
     // weigh-in is announced.
     after(async () => {
       await recordSync("apple_health", { ok: true, label: "Apple Health", heartbeat: true });
+      // With the RENPHO sync on, pull first and let that run announce the
+      // weigh-in with its body fat — see /api/mobile/health/body.
+      if (weights.imported > 0 && renphoSyncEnabled()) {
+        const pulled = await runRenphoSync("apple_health");
+        if (pulled.announced) return;
+      }
       await announceWeighIn(weights.created);
     });
 

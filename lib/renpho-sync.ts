@@ -1,7 +1,8 @@
 import { ingestRenphoRecords } from "@/lib/body-ingest";
+import { notify } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
-import { sendPush } from "@/lib/push";
 import { RenphoError, fetchRenphoRecords } from "@/lib/renpho-client";
+import { announceWeighIn } from "@/lib/weigh-in-notice";
 
 // The RENPHO pull as a job: fetch → ingest → log the run → raise an alert if
 // the pull has gone quiet. Deterministic backend work — no model is involved.
@@ -95,6 +96,8 @@ export interface SyncOutcome {
   skipped?: number;
   error?: string;
   alert?: string | null;
+  /** True when this run announced a weigh-in itself, so the caller need not. */
+  announced?: boolean;
 }
 
 export async function runRenphoSync(
@@ -119,12 +122,16 @@ export async function runRenphoSync(
       },
       { maxPages: options.maxPages }
     );
-    const result = await ingestRenphoRecords(records);
+    const { touched, ...counts } = await ingestRenphoRecords(records);
     await prisma.bodySyncRun.update({
       where: { id: run.id },
-      data: { ok: true, finishedAt: new Date(), ...result },
+      data: { ok: true, finishedAt: new Date(), ...counts },
     });
-    outcome = { ran: true, ok: true, ...result };
+    // Announced here, after the merge, so the line carries body fat. The
+    // Apple Health post that usually triggers this run holds its own
+    // weight-only announcement back and lets this one speak.
+    await announceWeighIn(touched);
+    outcome = { ran: true, ok: true, ...counts, announced: touched.length > 0 };
   } catch (error) {
     const message = describe(error);
     console.error(`[renpho-sync] ${trigger} run failed: ${message}`);
@@ -173,9 +180,12 @@ async function raiseAlertIfNeeded(runId: string): Promise<string | null> {
   });
   if (!message) return null;
 
-  // Claim first, so two overlapping runs cannot both send.
+  // Claim first, so two overlapping runs cannot both send. Delivery goes
+  // through the one notification door: logged, held during quiet hours, and
+  // governed by the System alerts switch.
   await prisma.bodySyncRun.update({ where: { id: runId }, data: { alerted: true } });
-  await sendPush({
+  await notify({
+    category: "systemAlerts",
     title: "Scale sync needs a look",
     body: message,
     url: "/health/body",
