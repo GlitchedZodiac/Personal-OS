@@ -161,6 +161,48 @@ export function WalkIcon(props: IconProps) {
   );
 }
 
+/* ── Utility glyphs (verbatim) ────────────────────────────────────────
+   Calendar: the range pill on Food → History and Activities.
+   Search: the magnifier in the Spirit search field. Both are drawn by the
+   design at stroke-width 2 with round caps and no joins; that is their
+   default here. */
+
+export function CalendarIcon({ size = 12, className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      className={className}
+    >
+      <rect x="3" y="5" width="18" height="16" rx="3" />
+      <path d="M8 3v4M16 3v4M3 10h18" />
+    </svg>
+  );
+}
+
+export function SearchIcon({ size = 14, className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      className={className}
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.8-3.8" />
+    </svg>
+  );
+}
+
 /* ── Dock icons (chat · mic · camera, verbatim) ─────────────────────── */
 
 export function ChatBubbleIcon(props: IconProps) {
@@ -171,13 +213,16 @@ export function ChatBubbleIcon(props: IconProps) {
   );
 }
 
-export function MicIcon({ size = 22 }: { size?: number }) {
+// The design draws this one glyph in two inks: white on the raspberry dock
+// button, #8C2F51 on the pale-pink composer/sheet button. Same paths; the
+// colour is the only parameter.
+export function MicIcon({ size = 22, color = "#FFFFFF" }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20">
-      <rect x="7" y="2" width="6" height="11" rx="3" fill="#FFFFFF" />
+      <rect x="7" y="2" width="6" height="11" rx="3" fill={color} />
       <path
         d="M4 9 a6 6 0 0 0 12 0 M10 15 v3"
-        stroke="#FFFFFF"
+        stroke={color}
         strokeWidth="1.8"
         fill="none"
         strokeLinecap="round"

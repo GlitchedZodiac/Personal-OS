@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { publicKey, pushConfigured, sendPush } from "@/lib/push";
+import { notify } from "@/lib/notify";
+import { publicKey, pushConfigured } from "@/lib/push";
 
 // The PWA's push registration.
 //
@@ -28,10 +29,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     if (request.nextUrl.searchParams.get("test") === "1") {
-      const result = await sendPush({
+      const result = await notify({
+        category: "test",
         title: "Pitaya · notifications are on",
         body: "This is the only kind of thing you'll get: a reminder of something you chose.",
-        url: "/spirit",
+        url: "/settings/notifications",
         tag: "pitaya-test",
       });
       return NextResponse.json(result);

@@ -1,16 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  adoptUnfiledMessages,
+  getConversation,
+  getConversationMessages,
+  latestConversation,
+} from "@/lib/chat-conversations";
+import { isStale, normalizeGapHours } from "@/lib/chat-history";
 import { prisma } from "@/lib/prisma";
 
-// The rolling chat thread. GET loads it, PATCH resolves a proposal card
-// (saved/rejected after the user acts), DELETE clears the thread.
+// One chat's messages. GET loads them; PATCH resolves a proposal card
+// (saved/rejected after the user acts). DELETE predates conversations and
+// wipes EVERY message in EVERY chat — no screen calls it; left as found and
+// filed in docs/deferred-items.md rather than changed in passing.
+//
+//   GET ?conversationId=<id>   that chat
+//   GET ?gap=<hours>           the CURRENT chat: the most recent one, unless
+//                              it has been quiet longer than the gap — then
+//                              `conversation` is null and the screen opens on
+//                              a fresh, empty chat (nothing is created until
+//                              he actually says something). `latest` still
+//                              names the chat that was passed over.
+//   GET                        the most recent chat, whatever its age
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const rows = await prisma.chatMessage.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 60,
-    });
-    return NextResponse.json({ messages: rows.reverse() });
+    const params = request.nextUrl.searchParams;
+    await adoptUnfiledMessages();
+
+    const requested = params.get("conversationId");
+    if (requested) {
+      const conversation = await getConversation(requested);
+      if (!conversation) {
+        return NextResponse.json({ error: "Chat not found" }, { status: 404 });
+      }
+      const messages = await getConversationMessages(conversation.id);
+      return NextResponse.json({ conversation, messages });
+    }
+
+    const latest = await latestConversation();
+    if (!latest) return NextResponse.json({ conversation: null, latest: null, messages: [] });
+
+    const gap = params.get("gap");
+    if (gap !== null && isStale(latest.lastMessageAt, new Date(), normalizeGapHours(gap))) {
+      return NextResponse.json({ conversation: null, latest, messages: [] });
+    }
+
+    const messages = await getConversationMessages(latest.id);
+    return NextResponse.json({ conversation: latest, latest, messages });
   } catch (error) {
     console.error("Chat messages fetch error:", error);
     return NextResponse.json({ error: "Failed to load chat" }, { status: 500 });

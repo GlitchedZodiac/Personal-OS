@@ -4,9 +4,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getNotificationPrefs } from "@/lib/notification-prefs";
+import { notify } from "@/lib/notify";
 import { getTrainingWeek } from "@/lib/planner";
 import { prisma } from "@/lib/prisma";
-import { pushConfigured, sendPush } from "@/lib/push";
+import { pushConfigured } from "@/lib/push";
 import { getUserTimeZone } from "@/lib/server-timezone";
 import {
   getDateStringInTimeZone,
@@ -54,11 +55,16 @@ export async function GET(request: NextRequest) {
     })
     .join(" — ");
 
-  const result = await sendPush({
+  // Through the one door (lib/notify.ts): logged, quiet-hours aware — in a
+  // timezone where this cron lands before quiet hours end, it is held and
+  // goes out when they do — and at most once per local day.
+  const result = await notify({
+    category: "training",
     title: "Training today",
     body,
     url: "/health/workouts",
     tag: "training-nudge",
+    dedupeKey: `training:${today}`,
   });
 
   return NextResponse.json({ ...result, planned: todays.length });

@@ -25,14 +25,21 @@ export async function GET(request: NextRequest) {
     let pushed = 0;
     try {
       const { getNotificationPrefs } = await import("@/lib/notification-prefs");
-      const { pushConfigured, sendPush } = await import("@/lib/push");
+      const { pushConfigured } = await import("@/lib/push");
+      const { notify } = await import("@/lib/notify");
       const prefs = await getNotificationPrefs();
       if (prefs.weeklyReport && pushConfigured()) {
-        const result = await sendPush({
+        // This cron is listed twice in vercel.json; the dedupe key makes the
+        // second run a no-op instead of a second notification. It runs at
+        // 11 pm Bogotá — inside quiet hours — so the notice is held and
+        // arrives with the morning.
+        const result = await notify({
+          category: "weeklyReport",
           title: "Weekly report ready",
           body: report.headline || `Week of ${report.weekStart} is written up.`,
           url: "/health/report",
           tag: `weekly-report-${report.weekStart}`,
+          dedupeKey: `weekly-report:${report.weekStart}`,
         });
         pushed = result.sent;
       }
