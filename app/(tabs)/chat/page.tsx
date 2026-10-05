@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { toast } from "sonner";
 import { ChatHistoryDrawer } from "@/components/chat-history-drawer";
 import { PhotoTray } from "@/components/photo-tray";
+import { PushNudge } from "@/components/push-nudge";
 import { CameraIcon, JournalIcon, MicIcon } from "@/components/pitaya-icons";
 import { HANDOFF_EVENT, takeChatHandOff, type ChatHandOff } from "@/lib/chat-handoff";
 import { isStale, normalizeGapHours, type ConversationSummary } from "@/lib/chat-history";
@@ -241,6 +242,9 @@ export default function ChatPage() {
   const [itemScales, setItemScales] = useState<Record<string, number[]>>({});
   const [filter, setFilter] = useState<FilterKey>("all");
   const [micLevel, setMicLevel] = useState(0);
+  // He just set a reminder: the one moment a notification prompt explains
+  // itself (components/push-nudge.tsx decides whether there is anything to ask).
+  const [nudgePush, setNudgePush] = useState(false);
 
   // Mirror of toolLine so the hot delta path can check it without closing
   // over changing state (and without a set-state per token).
@@ -280,7 +284,7 @@ export default function ChatPage() {
   // (rules + the bug they replace: lib/chat-scroll.ts). `watch` is everything
   // that makes the thread taller from React's side.
   const { scrollerRef, contentRef, pinned, unseen, pinNow, jumpToLatest } = useStickToBottom({
-    watch: `${messages.length}:${streamText.length}:${busy}:${toolLine}:${filter}:${editingCard}:${shots.length}:${readingShots}`,
+    watch: `${messages.length}:${streamText.length}:${busy}:${toolLine}:${filter}:${editingCard}:${shots.length}:${readingShots}:${nudgePush}`,
   });
 
   // ——— which chat is on screen ———
@@ -528,11 +532,6 @@ export default function ChatPage() {
             applyConversation({ ...current, lastMessageAt: new Date().toISOString() });
           }
         };
-        const paintNow = () => {
-          if (pendingPaint) cancelAnimationFrame(pendingPaint);
-          pendingPaint = 0;
-          setStreamText(assistantText);
-        };
 
         for (;;) {
           const { done, value } = await reader.read();
@@ -569,13 +568,20 @@ export default function ChatPage() {
               setToolLine("checking your data…");
             } else if (event.type === "proposal" && event.id) {
               if (assistantText) {
-                paintNow();
+                // Captured NOW. The updater below runs later, during React's
+                // render — by which time the line after it has already
+                // emptied assistantText, so reading the variable from inside
+                // the updater (as this did) produced an empty bubble above
+                // every card that came with a spoken line.
+                const spoken = assistantText;
+                assistantText = "";
+                if (pendingPaint) cancelAnimationFrame(pendingPaint);
+                pendingPaint = 0;
+                setStreamText("");
                 setMessages((prev) => [
                   ...prev,
-                  { id: `a-${Date.now()}`, role: "assistant", content: assistantText },
+                  { id: `a-${Date.now()}`, role: "assistant", content: spoken },
                 ]);
-                assistantText = "";
-                setStreamText("");
               }
               fresh.current.add(event.id);
               setMessages((prev) => [
@@ -989,6 +995,7 @@ export default function ChatPage() {
         followUp = `${created} day${created === 1 ? "" : "s"} planned${
           reminders ? ` · ${reminders} reminder${reminders === 1 ? "" : "s"} set` : ""
         } — the week strip on Train has it, and the 7am nudge knows.`;
+        if (reminders > 0) setNudgePush(true);
       } else if (kind === "reminder") {
         const res = await fetch("/api/reminders", {
           method: "POST",
@@ -1006,6 +1013,7 @@ export default function ChatPage() {
           hour: "numeric",
           minute: "2-digit",
         })}.`;
+        setNudgePush(true);
       } else if (kind === "delete") {
         const entity = String(data.entity ?? "food");
         const endpoint =
@@ -1748,6 +1756,8 @@ export default function ChatPage() {
                 </div>
               );
             })}
+
+            {nudgePush && <PushNudge onSettled={() => setNudgePush(false)} />}
 
             {/* Live turn — ONE bubble from first dot to last word. It used to
                 be two elements (dots, then text) that each replayed their

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { carriedHomework } from "@/lib/spirit-homework";
-import { pushConfigured, sendPush } from "@/lib/push";
+import { notify } from "@/lib/notify";
+import { pushConfigured } from "@/lib/push";
 
 // The one notification this app sends: the homework he is carrying,
 // named once in the evening. Scheduled at 00:00 UTC = 7pm in Bogotá.
@@ -31,11 +32,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ sent: 0, skipped: "nothing carried" });
   }
 
-  const result = await sendPush({
+  const result = await notify({
+    category: "spiritHomework",
     title: `Carrying · ${carrying.label}`,
     body: carrying.text,
     url: "/spirit",
     tag: "spirit-homework",
+    // once per evening, even if the cron is retried
+    dedupeKey: `spirit:${carrying.dayId}:${new Date().toISOString().slice(0, 10)}`,
   });
 
   return NextResponse.json({ ...result, dayId: carrying.dayId });

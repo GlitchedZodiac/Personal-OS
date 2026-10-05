@@ -1,5 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { requireMobileSession } from "@/lib/mobile-session";
+import { recordSync } from "@/lib/notify";
+import { announceWeighIn } from "@/lib/weigh-in-notice";
 import { prisma } from "@/lib/prisma";
 import type { IncomingBodySample } from "@/lib/body-measurements";
 import { ingestBodySamples } from "@/lib/body-ingest";
@@ -119,6 +121,15 @@ export async function POST(request: NextRequest) {
         `[health/daily] weigh-ins: ${weights.imported} new, ${weights.merged} merged, ${weights.skipped} duplicate, ${weights.invalid} invalid`
       );
     }
+
+    // After the response: this post IS the Apple Health pipeline's heartbeat
+    // (it arrives whether or not he weighed in — so its silence, not a
+    // missing weigh-in, is what the system alert watches), and a fresh
+    // weigh-in is announced.
+    after(async () => {
+      await recordSync("apple_health", { ok: true, label: "Apple Health", heartbeat: true });
+      await announceWeighIn(weights.created);
+    });
 
     return NextResponse.json({
       ...snapshot,

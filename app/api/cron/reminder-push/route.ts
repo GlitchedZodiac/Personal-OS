@@ -1,22 +1,22 @@
-// Due reminders as real pushes (2026-08-28). Until now a Reminder only
-// reached him if a tab was open in the foreground (the 30 s poll in
-// sw-register) — this cron delivers the rest. Claim-first: the fired flag
-// flips atomically before the send, so the poll and the cron never
-// double-deliver, and a re-run never repeats. Every row here is something he
-// (or an automation he configured) asked to be reminded of — the lib/push.ts
-// rule holds.
+// The notification sweep (2026-08-28 as "due reminders as real pushes";
+// 2026-10-04 everything time-driven): due reminders, notifications whose
+// quiet hours have ended, and the pipeline-health check behind system
+// alerts. All of it lives in lib/notify.ts; this route is only the clock.
 //
-// CADENCE (2026-08-28): scheduled */15 originally — Vercel rejected the
-// whole deployment in 5 seconds (Hobby crons are daily-precision; the plan's
-// own fallback applied). Now a daily 11:00 UTC (6am Bogotá) sweep; the
-// foreground poll stays the same-moment path while a tab is open. Restoring
-// 15-min delivery = Vercel Pro, or a free GitHub-Actions pinger hitting this
-// route with CRON_SECRET — Michael's call, filed in deferred-items.
+// CADENCE. Vercel Hobby runs each cron once a day, ±59 minutes — a `*/15`
+// here once made Vercel reject the whole production deployment. Hobby does
+// allow 100 cron jobs, though, so vercel.json lists this route 24 times, one
+// per hour: an hourly floor, at no cost and with no new infrastructure.
+// Between those, anything that already talks to the server triggers the
+// same sweep (an open app every minute; the watch and the phone companion
+// whenever they check in), so in practice a timed reminder lands within
+// minutes. EXACT-minute delivery is not possible on this plan — see
+// docs/push-notifications.md for the two ways to get it.
 
 import { NextRequest, NextResponse } from "next/server";
-import { getNotificationPrefs } from "@/lib/notification-prefs";
-import { prisma } from "@/lib/prisma";
-import { pushConfigured, sendPush } from "@/lib/push";
+import { runNotificationSweep } from "@/lib/notify";
+
+export const maxDuration = 30;
 
 export async function GET(request: NextRequest) {
   const auth = request.headers.get("authorization");
@@ -24,46 +24,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!pushConfigured()) {
-    return NextResponse.json({ sent: 0, skipped: "push not configured" });
-  }
-  const prefs = await getNotificationPrefs();
-  if (!prefs.dueReminders) {
-    return NextResponse.json({ sent: 0, skipped: "dueReminders pref off" });
-  }
-
-  const due = await prisma.reminder.findMany({
-    where: { fired: false, remindAt: { lte: new Date() } },
-    orderBy: { remindAt: "asc" },
-    take: 10,
-  });
-
-  // A reminder more than 48h past due is a backlog artifact, not a moment —
-  // the prod table carried months of pre-push "Weekly Report" rows, and
-  // blasting them at the first subscribed device would be the worst possible
-  // first impression. They still get claimed, just silently.
-  const freshnessCutoff = Date.now() - 48 * 3600 * 1000;
-
-  let sent = 0;
-  let expired = 0;
-  for (const reminder of due) {
-    const claimed = await prisma.reminder.updateMany({
-      where: { id: reminder.id, fired: false },
-      data: { fired: true },
+  try {
+    const result = await runNotificationSweep({ full: true });
+    return NextResponse.json({
+      due: result.reminders.due,
+      sent: result.reminders.delivered,
+      waiting: result.reminders.waiting,
+      expired: result.reminders.expired,
+      flushed: result.flushed,
+      alerts: result.alerts,
     });
-    if (claimed.count === 0) continue; // the foreground poll got there first
-    if (reminder.remindAt.getTime() < freshnessCutoff) {
-      expired++;
-      continue;
-    }
-    const result = await sendPush({
-      title: reminder.title,
-      body: reminder.body ?? reminder.title,
-      url: reminder.url || "/todos",
-      tag: `reminder-${reminder.id}`,
-    });
-    if (result.sent > 0) sent++;
+  } catch (error) {
+    console.error("Notification sweep error:", error);
+    return NextResponse.json({ error: "Sweep failed" }, { status: 500 });
   }
-
-  return NextResponse.json({ due: due.length, sent, expired });
 }

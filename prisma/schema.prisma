@@ -364,6 +364,54 @@ model PushDevice {
   @@map("push_devices")
 }
 
+// Every notification the app tried to send (2026-10-04): what, when, and
+// what became of it. One row per notification, whatever the transport.
+//
+//   sent        at least one device accepted it
+//   failed      there were devices and none accepted it
+//   no_devices  nothing is subscribed — nowhere to send it
+//   local       shown by the open app itself (no push subscription there)
+//   held        inside quiet hours; `deliverAfter` is when they end
+//   expired     held or due too long ago to still be worth an interruption
+//   muted       its category was switched off while it was being held
+model NotificationLog {
+  id           String    @id @default(uuid())
+  category     String // reminders | training | weighIn | systemAlerts | prCelebration | weeklyReport | spiritHomework | test
+  title        String
+  body         String
+  url          String?
+  tag          String?
+  status       String
+  detail       Json? // { sent, failed, pruned, error }
+  // Set when one real-world event must produce at most one notification
+  // (a reminder, a weigh-in, a day's alert). Unique = the guarantee.
+  dedupeKey    String?   @unique
+  deliverAfter DateTime?
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([status, deliverAfter])
+  @@map("notification_log")
+}
+
+// Is each data pipeline still alive? One row per source, written by the
+// pipeline itself on every attempt, read by the system-alert check. A
+// `heartbeat` source is one that should report regularly on its own (the
+// companion's Apple Health push) — silence from it is itself the failure.
+model SyncStatus {
+  source        String    @id // "apple_health" | "renpho" | …
+  label         String // how an alert names it
+  heartbeat     Boolean   @default(false)
+  lastAttemptAt DateTime?
+  lastSuccessAt DateTime?
+  lastError     String?
+  failingSince  DateTime? // first failure since the last success
+  updatedAt     DateTime  @updatedAt
+
+  @@map("sync_status")
+}
+
 model Reminder {
   id        String   @id @default(uuid())
   title     String

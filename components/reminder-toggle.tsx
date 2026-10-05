@@ -28,6 +28,10 @@ const COPY: Record<PushState, { label: string; note: string }> = {
     label: "Add Pitaya to your home screen",
     note: "iOS only delivers notifications to an installed app. Share → Add to Home Screen, then come back here.",
   },
+  "native-shell": {
+    label: "Not available in the iPhone app yet",
+    note: "The app from TestFlight can't receive notifications until it gets a native update. Pitaya installed from Safari (Share → Add to Home Screen) or open on your Mac can, today.",
+  },
   unsupported: {
     label: "Not available in this browser",
     note: "Push needs a browser with service-worker notifications.",
