@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { ingestBodySamples } from "@/lib/body-ingest";
 import type { IncomingBodySample } from "@/lib/body-measurements";
 import { requireMobileSession } from "@/lib/mobile-session";
+import { renphoSyncEnabled, runRenphoSync } from "@/lib/renpho-sync";
 
 // POST — weigh-ins only, at any date. This is the historical backfill path.
 //
@@ -49,6 +50,13 @@ export async function POST(request: NextRequest) {
     console.log(
       `[health/body] backfill: ${result.imported} new, ${result.merged} merged, ${result.skipped} duplicate, ${result.invalid} invalid (of ${samples.length} sent)`
     );
+
+    // A new weigh-in reaching Apple Health means the scale's cloud has the
+    // full record too (or will within a minute or two). Fetch it once the
+    // companion has its answer. No-op while the RENPHO sync is switched off.
+    if (result.imported > 0 && renphoSyncEnabled()) {
+      after(() => runRenphoSync("apple_health"));
+    }
 
     return NextResponse.json({
       received: samples.length,

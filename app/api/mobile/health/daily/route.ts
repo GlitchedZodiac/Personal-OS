@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { requireMobileSession } from "@/lib/mobile-session";
 import { prisma } from "@/lib/prisma";
 import type { IncomingBodySample } from "@/lib/body-measurements";
 import { ingestBodySamples } from "@/lib/body-ingest";
+import { renphoSyncEnabled, runRenphoSync } from "@/lib/renpho-sync";
 
 // POST — the companion's daily HealthKit push (steps, resting HR, active
 // energy, distance, sleep, HRV) plus optional bodyMass samples.
@@ -110,6 +111,10 @@ export async function POST(request: NextRequest) {
     // query, intra-batch collapse, and unparseable timestamps rejected rather
     // than stamped `now`. See lib/body-ingest.ts for why each of those matters.
     const weights = await ingestBodySamples(samples, { source: "apple_health" });
+    // Same trigger as /api/mobile/health/body — see the note there.
+    if (weights.imported > 0 && renphoSyncEnabled()) {
+      after(() => runRenphoSync("apple_health"));
+    }
 
     // These counts used to be returned and then thrown away by the client
     // (`struct AnyResponse: Decodable {}`), so nobody could tell whether a
