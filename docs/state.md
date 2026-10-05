@@ -5,7 +5,40 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-09-08 (THE CONNECTOR ROUND — three defects in the MCP surface
+**Last updated:** 2026-10-04 (BODY COMPOSITION + RENPHO — Phase 0 report, Phase 1 data
+model + backfill, and the sync engine built but SWITCHED OFF. He has a new RENPHO
+8-electrode scale (account created 2026-09-12); the Etekcity/VeSync rows stay as the
+pre-September record. Docs: `docs/renpho-gap-report.md` (research),
+`docs/body-composition-changelog.md` (what changed).
+**Phase 0:** pulled his RENPHO cloud history read-only with a Node port of `renpho-py`
+1.2.0. The API returns everything on the PDF report — segmental muscle/fat, impedance at
+20/100 kHz, SMI, RENPHO's reference ranges — and matched his hand-typed 10-04 row to the
+digit. **Phase 1 (his go, same night):** additive migration `20261004230000` applied to the
+shared database — 17 measured columns, `impedance` / `referenceRanges` / `fieldSources` /
+`rawPayload` JSON, unique `externalId`, and a `body_sync_runs` log. New merge rule in
+`lib/body-ingest.ts`: RENPHO upserts by `externalId` and WINS on every field it carries;
+Apple Health and hand entry still only fill blanks. Backfill: 5 scale readings merged into
+the 5 rows that already existed (4 Apple Health, 1 MCP), setup entry skipped, **424 rows
+before and after, 0 duplicates, second pass a no-op.** MCP `log_measurement` takes every
+measured column + impedance and joins an existing weigh-in instead of duplicating it;
+`query_data` returns the new columns and per-field sources. `POST /api/health/body` no
+longer drops scale columns or leaves `source` null. **Self-smoke caught/fixed:** (1) RENPHO
+ids are 19-digit integers and `JSON.parse` rounded them, so the first pull silently
+returned zero rows; (2) Postgres JSONB reorders keys, so the idempotency check called every
+re-import a change. **THE BLOCKER, found by him:** every API login with his account signs
+his phone's Renpho Health app out, and a signed-out phone cannot carry a weigh-in to the
+cloud. A scheduled pull as him would break what it reads, so the engine
+(`lib/renpho-client.ts`, `lib/renpho-sync.ts`, `/api/cron/renpho-sync`,
+`/api/health/body/sync`, the Apple-Health-arrival trigger) is a no-op unless
+`RENPHO_SYNC_ENABLED=1`, and nothing schedules it. Waiting on him: a second RENPHO
+account to log in as (deferred-items, top). Alert rule proven with three deliberate failed
+logins against a nonexistent account; push delivery to the phone NOT exercised. **Visible
+in prod already** (shared database): the Body screen's fat/muscle/BMR drill-ins now show the
+September and October RENPHO weeks — including a 20.7% → 14.5% body-fat step that is the
+device change, not his body. Phase 3 visuals wait on Claude Design. 437 tests (58 new),
+build green. NOT deployed: prod still runs the old code, so the MCP changes are not live.)
+
+**Connector round (2026-09-08):** (THE CONNECTOR ROUND — three defects in the MCP surface
 he uses every day, found by tracing his two complaints ("no approval received" on every
 write; save_hymn reading as a prohibition) instead of the symptom. **(1) The connector's
 briefing has been truncated mid-sentence since round 11.** `INSTRUCTIONS` is built by
