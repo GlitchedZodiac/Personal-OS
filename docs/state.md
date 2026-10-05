@@ -30,7 +30,10 @@ every ohm, says when a read came from a picture, and the client never shrinks a 
 below 2400px. Save path proven on a throwaway 2001 weigh-in (join 29 added, repeat 0,
 create), rows 425 → 425. Driven in the app end to end. **Not yet read: his real PDF file**
 — he sent the report as a picture in chat, which never reached disk; his first upload is
-that test. 620 tests. The RENPHO cloud pull stays built and OFF.)
+that test. 620 tests. The RENPHO cloud pull stays built and OFF. **Deployed 2026-10-05**
+(PR #27), and checked on prod with single requests: the route answers 401 without a session,
+and with one it read the stand-in PDF live — 40 readings, dated 4 Oct 09:58, joined to the
+82.75 kg weigh-in, nothing new to add.)
 
 **Body screen round (2026-10-05):** (PITAYA BODY — ROUND 1 PORT. The Body screen is rebuilt to
 the Claude Design handoff in `docs/design/pitaya-body/` (spec, the interactive DC, the build
