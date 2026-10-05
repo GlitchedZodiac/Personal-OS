@@ -206,6 +206,7 @@ describe("MCP protocol core", () => {
       "edit_workout",
       "delete_entry",
       "log_measurement",
+      "log_milestone",
       "log_water",
       "set_reminder",
       "create_routine",
@@ -327,7 +328,7 @@ describe("tool annotations — how clients gate each call", () => {
     ]) {
       expect(destructive.has(name), `${name} should be flagged destructive`).toBe(true);
     }
-    for (const name of ["log_food", "log_workout", "log_water", "log_measurement", "report_gap"]) {
+    for (const name of ["log_food", "log_workout", "log_water", "log_measurement", "log_milestone", "report_gap"]) {
       expect(destructive.has(name), `${name} only adds rows`).toBe(false);
     }
   });

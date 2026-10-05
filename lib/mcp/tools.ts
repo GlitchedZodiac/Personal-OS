@@ -791,6 +791,40 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
   },
   {
     def: {
+      name: "log_milestone",
+      description:
+        "Add a milestone to the Body screen's timeline — a pant size, a climb, a lift PR, anything he wants remembered on the way down from 117.3 kg. The weight-based ones (first 10 kg, under 100, BMI lines) appear on their own; log only what the scale cannot know. `day` is his local date.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Short and plain, e.g. \"Into size 32\"" },
+          day: { type: "string", description: "YYYY-MM-DD; default today" },
+          note: { type: "string", description: "Optional one-liner under the title" },
+          weightKg: { type: "number", description: "His weight that day, if known" },
+        },
+        required: ["title"],
+      },
+    },
+    handler: async (args) => {
+      const title = str(args.title);
+      if (!title) return { error: "A title is required" };
+      const { todayStr } = await appDataCtx();
+      const given = str(args.day);
+      if (given && !/^\d{4}-\d{2}-\d{2}$/.test(given)) return { error: "day must be YYYY-MM-DD" };
+      return {
+        milestone: await prisma.bodyMilestone.create({
+          data: {
+            day: given || todayStr,
+            title: title.slice(0, 120),
+            note: str(args.note).slice(0, 200) || null,
+            weightKg: posNum(args.weightKg),
+          },
+        }),
+      };
+    },
+  },
+  {
+    def: {
       name: "log_water",
       description: "Log drinking water: glasses (default 1) at amountMl each (default 250).",
       inputSchema: {
@@ -1243,6 +1277,7 @@ const TOOL_ANNOTATIONS: Record<string, McpToolAnnotations> = {
   log_recipe: { title: "Log a saved recipe as eaten", ...ADDS },
   log_workout: { title: "Log a workout", ...ADDS },
   log_measurement: { title: "Log a body measurement", ...ADDS },
+  log_milestone: { title: "Log a body milestone", ...ADDS },
   log_water: { title: "Log water", ...ADDS },
   set_reminder: { title: "Set a reminder", ...ADDS },
   create_routine: { title: "Create a training routine", ...ADDS },

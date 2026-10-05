@@ -101,6 +101,21 @@ model BodyMeasurement {
   @@map("body_measurements")
 }
 
+// Milestones he logs himself — pant sizes, a climb, a swing PR. The automatic
+// ones (first 10 kg, under 100, BMI lines) are derived from the readings at
+// read time and never stored. `day` is his local calendar day.
+model BodyMilestone {
+  id        String   @id @default(uuid())
+  day       String // "2026-07-19"
+  title     String
+  note      String?
+  weightKg  Float?
+  createdAt DateTime @default(now())
+
+  @@index([day])
+  @@map("body_milestones")
+}
+
 // One row per scale-cloud pull, success or failure. The health check reads the
 // tail of this table to decide whether to raise an alert.
 model BodySyncRun {
