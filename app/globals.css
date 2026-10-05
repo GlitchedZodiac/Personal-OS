@@ -590,6 +590,54 @@ html[data-keyboard="open"] .keyboard-hides {
   animation: sheetDown 0.24s cubic-bezier(0.5, 0, 0.8, 0.4) both;
 }
 
+/* The history drawer: the design's pushIn, mirrored — it comes from the
+   left because it sits BEHIND the chat, not after it. `backwards`, not
+   `both`: a finished animation that keeps its last frame would out-rank the
+   inline transform the drag-to-close writes, and the drawer would refuse to
+   follow his finger. The exit starts from wherever the drag left it. */
+@keyframes drawer-in {
+  from {
+    transform: translate3d(-100%, 0, 0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes drawer-out {
+  from {
+    transform: translate3d(var(--drag-x, 0px), 0, 0);
+  }
+  to {
+    transform: translate3d(-104%, 0, 0);
+  }
+}
+
+.drawer-in {
+  animation: drawer-in 0.34s cubic-bezier(0.3, 0.9, 0.3, 1) backwards;
+}
+
+.drawer-out {
+  animation: drawer-out 0.22s cubic-bezier(0.5, 0, 0.8, 0.4) both;
+}
+
+/* Switching chats: the new thread settles in rather than swapping. Opacity
+   only would do, but 6px of rise reads as "a page turned". */
+@keyframes thread-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.thread-in {
+  animation: thread-in 0.24s ease-out backwards;
+}
+
 /* ————— Chat, in motion (2026-10-04) —————
    One vocabulary, taken from the design's own curves (sheetUp/pushIn use
    cubic-bezier(.3,.9,.3,1); fadeUp is `ease`): things arrive FROM where they

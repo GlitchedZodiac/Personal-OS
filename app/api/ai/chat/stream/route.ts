@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getUserTimeZone } from "@/lib/server-timezone";
 import { getDateStringInTimeZone, getZonedDateParts } from "@/lib/timezone";
 import { CHAT_SYSTEM_PROMPT, CHAT_RESPONSES_TOOLS } from "@/lib/ai-prompts";
+import { createConversation, touchConversation, writeAiTitle } from "@/lib/chat-conversations";
+import { buildChatUserContent, photoPlaceholder, sanitizeImages } from "@/lib/chat-photos";
 import { proposalKindFor, sanitizeProposalArgs } from "@/lib/chat-tools";
 import { type AppDataArgs, executeAppData } from "@/lib/ai/data-access";
 import { normalizeFoodItemsWithTiming } from "@/lib/food-timing";
@@ -16,6 +18,14 @@ import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 // server-side and feed back; logging/edit/delete tools are PROPOSALS —
 // streamed to the client as cards, saved only after the user confirms
 // (the confirmation-dock shape, kept per CLAUDE.md).
+//
+// CONVERSATIONS (2026-10-04). A turn belongs to one chat. The transcript the
+// model is shown is THAT chat only — so "New chat" really is a clean slate —
+// but nothing about its access to his data lives in the transcript: the
+// instructions, the date context and the get_app_data tool are attached to
+// every turn regardless. A brand-new chat can read his logs, measurements,
+// workouts and plans exactly as a long one can; it simply has no earlier
+// small talk to lean on, and is told so.
 
 export const maxDuration = 60;
 
@@ -32,7 +42,15 @@ const SOFT_DEADLINE_MS = 42_000;
 // the replayed history was a big slice of it — a food log doesn't need last
 // week's conversation. Proposals are already compressed to one line each.
 const HISTORY_LIMIT = 12;
-const MAX_IMAGES = 6; // one capture's worth — plate, label, receipt…
+
+// The first turn of a chat: the model can no longer see yesterday's
+// conversation, and must not paper over that by guessing or by asking him to
+// repeat what his own log already holds.
+const NEW_CHAT_NOTE =
+  "\n\n[This is the first message of a NEW chat. Earlier chats are not in view. " +
+  "Everything he has logged is — food, measurements, workouts, routines, plans. " +
+  "If the message leans on something from before (\"same as yesterday\", \"that " +
+  "trail run\"), read it with get_app_data rather than assuming or asking him to say it again.]";
 
 interface FunctionCallItem {
   type: "function_call";
@@ -64,33 +82,24 @@ export async function POST(request: NextRequest) {
   let requestedTimeZone: string | null = null;
   let images: string[] = [];
   let thumbs: string[] = [];
+  let requestedConversationId: string | null = null;
   try {
     const body = await request.json();
     message = typeof body.message === "string" ? body.message.trim() : "";
     source = body.source === "voice" ? "voice" : body.source === "photo" ? "photo" : "text";
     requestedTimeZone = typeof body.timeZone === "string" ? body.timeZone : null;
-    // Photo captures: up to MAX_IMAGES data URLs go to the model; the tiny
-    // thumbs are what the transcript keeps (full frames would bloat the row).
-    if (Array.isArray(body.images)) {
-      images = body.images
-        .filter((v: unknown): v is string => typeof v === "string" && v.startsWith("data:image/"))
-        .slice(0, MAX_IMAGES);
-    }
-    if (Array.isArray(body.thumbs)) {
-      thumbs = body.thumbs
-        .filter((v: unknown): v is string => typeof v === "string" && v.startsWith("data:image/"))
-        .slice(0, MAX_IMAGES);
-    }
+    requestedConversationId =
+      typeof body.conversationId === "string" && body.conversationId ? body.conversationId : null;
+    // Photo captures: one capture's worth of data URLs go to the model; the
+    // tiny thumbs are what the transcript keeps (full frames would bloat the
+    // row). Limits and shape: lib/chat-photos.ts.
+    images = sanitizeImages(body.images);
+    thumbs = sanitizeImages(body.thumbs);
   } catch {
     // fall through to the empty-message check
   }
   // A capture with no words is still a message — the photos are the content.
-  if (!message && images.length > 0) {
-    message =
-      images.length === 1
-        ? "(photo — log what you see)"
-        : `(${images.length} photos — log what you see)`;
-  }
+  if (!message && images.length > 0) message = photoPlaceholder(images.length);
   if (!message) {
     return new Response(JSON.stringify({ error: "No message provided" }), {
       status: 400,
@@ -108,21 +117,42 @@ export async function POST(request: NextRequest) {
   // they go together; the user-message insert doesn't gate the model at all,
   // so it starts here and is only awaited before the assistant row is
   // written (which is seconds later, so createdAt ordering still holds).
-  const [settingsRow, historyRows] = await Promise.all([
+  const [settingsRow, existingConversation, priorRows] = await Promise.all([
     prisma.userSettings
       .findUnique({ where: { id: "default" }, select: { data: true } })
       .catch(() => null),
-    prisma.chatMessage.findMany({
-      orderBy: { createdAt: "desc" },
-      take: HISTORY_LIMIT,
-    }),
+    requestedConversationId
+      ? prisma.chatConversation
+          .findUnique({
+            where: { id: requestedConversationId },
+            select: { id: true, title: true, titleSource: true },
+          })
+          .catch(() => null)
+      : Promise.resolve(null),
+    // History is THIS chat's, never the whole table's.
+    requestedConversationId
+      ? prisma.chatMessage.findMany({
+          where: { conversationId: requestedConversationId },
+          orderBy: { createdAt: "desc" },
+          take: HISTORY_LIMIT,
+        })
+      : Promise.resolve([]),
   ]);
+
+  // A known chat continues. No id (he tapped "New chat", or the quiet-gap
+  // rule on the client started one) or an id that is gone → a new chat,
+  // named from these first words until the first exchange can name it better.
+  const startedNew = !existingConversation;
+  const conversation =
+    existingConversation ?? (await createConversation({ firstUserText: message, at: now, timeZone }));
+  const historyRows = startedNew ? [] : priorRows;
 
   const userRowWrite = prisma.chatMessage
     .create({
       data: {
         role: "user",
         content: message,
+        conversationId: conversation.id,
         meta: { source, ...(thumbs.length > 0 ? { thumbs } : {}) },
       },
     })
@@ -140,7 +170,8 @@ export async function POST(request: NextRequest) {
 
   const instructions =
     CHAT_SYSTEM_PROMPT.replace(/\{\{RESPONSE_LANGUAGE\}\}/g, aiLanguage) +
-    buildDateContext(now, timeZone);
+    buildDateContext(now, timeZone) +
+    (historyRows.length === 0 ? NEW_CHAT_NOTE : "");
 
   // Thread history (persisted rolling chat). Proposals compress to one line
   // so the model knows what happened without re-parsing card payloads.
@@ -158,14 +189,9 @@ export async function POST(request: NextRequest) {
     };
   });
 
-  // Responses API multimodal shape: one user item, text part + image parts.
-  const userContent =
-    images.length > 0
-      ? [
-          { type: "input_text", text: message },
-          ...images.map((url) => ({ type: "input_image", image_url: url })),
-        ]
-      : message;
+  // Responses API multimodal shape: ONE user item — the text, then every
+  // photo of the capture — so several frames are read together as one meal.
+  const userContent = buildChatUserContent(message, images);
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -177,6 +203,15 @@ export async function POST(request: NextRequest) {
       // client swap its spinner for a live typing indicator before the model
       // has produced anything.
       send({ type: "open" });
+      // The client may have sent no id; it needs to know which chat this is
+      // before the next message.
+      send({
+        type: "conversation",
+        id: conversation.id,
+        title: conversation.title,
+        titleSource: conversation.titleSource,
+        created: startedNew,
+      });
 
       try {
         // Responses API input list — grows with each loop turn.
@@ -301,6 +336,7 @@ export async function POST(request: NextRequest) {
                 data: {
                   role: "proposal",
                   content: String(args.message ?? ""),
+                  conversationId: conversation.id,
                   meta: { kind, data: args as object, status: "pending" },
                 },
               });
@@ -351,9 +387,11 @@ export async function POST(request: NextRequest) {
           // The user's row must land first or the thread reloads out of order.
           await userRowWrite;
           await prisma.chatMessage.create({
-            data: { role: "assistant", content: finalText },
+            data: { role: "assistant", content: finalText, conversationId: conversation.id },
           });
         }
+        await userRowWrite;
+        await touchConversation(conversation.id);
 
         recordAIUsage({
           surface: "chat",
@@ -363,6 +401,15 @@ export async function POST(request: NextRequest) {
         });
 
         send({ type: "done" });
+
+        // Name a new chat from its first exchange. AFTER "done": the reply
+        // is already complete on his screen, so this costs him nothing —
+        // the client frees the composer on "done" and picks the title up
+        // when it lands.
+        if (startedNew) {
+          const title = await writeAiTitle(conversation.id);
+          if (title) send({ type: "title", id: conversation.id, title });
+        }
       } catch (error) {
         console.error("Chat stream error:", error);
         const { userMessage } = classifyOpenAIError(error);

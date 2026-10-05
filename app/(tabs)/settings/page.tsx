@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { AIStatusCard } from "@/components/ai-status-card";
+import { NEW_CHAT_GAP_CHOICES, normalizeGapHours } from "@/lib/chat-history";
 import {
   getSettings,
   saveSettingsToServer,
@@ -18,8 +19,9 @@ import {
 // (docs/design/pitaya-app.dc.html, screen 5). Watch pairing card + feature
 // list are state-driven from real DeviceSession rows. Surfaced deviations:
 // Strava row (current GPS source until the watch replaces it), chat language
-// EN/ES (bilingual requirement), and the AI status card (added after the
-// prod outage) — everything else is the design verbatim.
+// EN/ES (bilingual requirement), "New chat after" (chat history,
+// 2026-10-04), and the AI status card (added after the prod outage) —
+// everything else is the design verbatim.
 
 interface Device {
   id: string;
@@ -457,6 +459,37 @@ export default function SettingsPage() {
           <span className="text-[12.5px] text-foreground/85">Chat language</span>
           <span className="text-xs font-semibold text-foreground">
             {settings.aiLanguage === "english" ? "English" : "Español"}
+          </span>
+        </button>
+        {/* Chat history (2026-10-04): how long a chat may sit quiet before
+            the next message starts a new one. Tap to step through the
+            choices, like Units above. Why 6 h is the default:
+            lib/chat-history.ts. */}
+        <button
+          onClick={() => {
+            const current = normalizeGapHours(settings.chatNewChatGapHours);
+            const at = NEW_CHAT_GAP_CHOICES.indexOf(
+              current as (typeof NEW_CHAT_GAP_CHOICES)[number]
+            );
+            update({
+              chatNewChatGapHours:
+                NEW_CHAT_GAP_CHOICES[(at + 1) % NEW_CHAT_GAP_CHOICES.length],
+            });
+          }}
+          className="flex items-center justify-between gap-3 bg-card px-3.5 py-3 text-left"
+        >
+          <span className="min-w-0">
+            <span className="block text-[12.5px] text-foreground/85">New chat after</span>
+            <span className="mt-px block text-[11px] text-muted-foreground">
+              a quiet gap this long starts a fresh chat — the old one stays in history
+            </span>
+          </span>
+          <span className="flex-none text-xs font-semibold text-foreground">
+            {(() => {
+              const hours = normalizeGapHours(settings.chatNewChatGapHours);
+              if (hours === 0) return "Never";
+              return hours === 24 ? "1 day quiet" : `${hours} h quiet`;
+            })()}
           </span>
         </button>
       </div>

@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { MicIcon } from "@/components/pitaya-icons";
+import { ChatHistoryDrawer } from "@/components/chat-history-drawer";
+import { JournalIcon, MicIcon } from "@/components/pitaya-icons";
 import { HANDOFF_EVENT, takeChatHandOff, type ChatHandOff } from "@/lib/chat-handoff";
+import { isStale, normalizeGapHours, type ConversationSummary } from "@/lib/chat-history";
 import { haptic } from "@/lib/haptics";
+import { getSettings } from "@/lib/settings";
 import { formatStepPrescription } from "@/lib/sequences";
 import {
   getOrCreateMicrophoneStream,
@@ -30,6 +33,14 @@ import { useStickToBottom } from "@/lib/use-stick-to-bottom";
 // foot rather than flowing after the last message, and a "Latest" pill
 // appears while he reads history (neither exists in the design's static
 // frame).
+//
+// CHATS (2026-10-04). The thread is no longer one endless transcript: this
+// screen shows ONE chat, the ☰ opens the shelf of all of them
+// (components/chat-history-drawer.tsx), and "New" starts a clean one. A
+// chat that has gone quiet for longer than the setting (6 h by default)
+// is not continued — the next message starts a new chat by itself. Nothing
+// is created until he actually says something. Surfaced deviation: the ☰,
+// the "New" pill and the chat's title line are not in the design.
 
 interface FoodItem {
   mealType?: string;
@@ -239,17 +250,122 @@ export default function ChatPage() {
     watch: `${messages.length}:${streamText.length}:${busy}:${toolLine}:${filter}:${editingCard}`,
   });
 
+  // ——— which chat is on screen ———
+  // `conversation` null = a new chat that does not exist yet (it is created
+  // by the first message). The ref mirrors it for send(), which must read
+  // the chat as of the moment of sending, not as of its own last render.
+  const [conversation, setConversationState] = useState<ConversationSummary | null>(null);
+  const conversationRef = useRef<ConversationSummary | null>(null);
+  const applyConversation = useCallback((next: ConversationSummary | null) => {
+    conversationRef.current = next;
+    setConversationState(next);
+  }, []);
+  // The chat the quiet-gap rule declined to continue — named on the empty
+  // screen so "where did my messages go" has a one-tap answer.
+  const [passedOver, setPassedOver] = useState<ConversationSummary | null>(null);
+  // He picked this chat from the shelf himself. Continuing an old chat on
+  // purpose is not "going quiet", so the gap rule leaves it alone.
+  const pickedByHim = useRef(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [shelfVersion, setShelfVersion] = useState(0);
+  const [renaming, setRenaming] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+
   // Until the thread has answered, "you haven't said anything yet" is not
   // known to be true — and showing it for the half-second of the fetch made
   // every visit open on an empty-state card that then vanished.
   const [loaded, setLoaded] = useState(false);
+  // Resolves once the current chat is known. A message sent before that —
+  // a dock hand-off arriving with the navigation, a fast thumb — waits for
+  // it, or it would start a new chat while a live one was still loading.
+  const ready = useRef<Promise<void> | null>(null);
+
   useEffect(() => {
-    fetch("/api/ai/chat/messages")
-      .then((r) => (r.ok ? r.json() : { messages: [] }))
-      .then((d) => setMessages(d.messages ?? []))
-      .catch(() => {})
-      .finally(() => setLoaded(true));
-  }, []);
+    if (ready.current) return; // StrictMode's second pass reuses the first load
+    ready.current = (async () => {
+      try {
+        const gap = normalizeGapHours(getSettings().chatNewChatGapHours);
+        const res = await fetch(`/api/ai/chat/messages?gap=${gap}`);
+        if (!res.ok) return;
+        const d = (await res.json()) as {
+          conversation: ConversationSummary | null;
+          latest: ConversationSummary | null;
+          messages: ChatMsg[];
+        };
+        applyConversation(d.conversation ?? null);
+        setPassedOver(d.conversation ? null : (d.latest ?? null));
+        setMessages(d.messages ?? []);
+      } catch {
+        // offline or failed: the screen opens on an empty new chat
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [applyConversation]);
+
+  const openChat = useCallback(
+    async (target: ConversationSummary) => {
+      setDrawerOpen(false);
+      if (target.id === conversationRef.current?.id) return;
+      try {
+        const res = await fetch(
+          `/api/ai/chat/messages?conversationId=${encodeURIComponent(target.id)}`
+        );
+        const d = await res.json().catch(() => null);
+        if (!res.ok || !d?.conversation) throw new Error();
+        pickedByHim.current = true;
+        fresh.current.clear();
+        setFilter("all");
+        setEditingCard(null);
+        setPassedOver(null);
+        setRenaming(false);
+        applyConversation(d.conversation as ConversationSummary);
+        pinNow(); // a chat opens on its newest message
+        setMessages((d.messages ?? []) as ChatMsg[]);
+      } catch {
+        toast.error("Couldn't open that chat.");
+      }
+    },
+    [applyConversation, pinNow]
+  );
+
+  const startNewChat = useCallback(() => {
+    setDrawerOpen(false);
+    pickedByHim.current = false;
+    fresh.current.clear();
+    setFilter("all");
+    setEditingCard(null);
+    setRenaming(false);
+    // the chat being left is the one worth naming on the empty screen
+    setPassedOver(conversationRef.current);
+    applyConversation(null);
+    setMessages([]);
+    draftRef.current?.focus();
+  }, [applyConversation]);
+
+  const commitTitle = useCallback(async () => {
+    const current = conversationRef.current;
+    setRenaming(false);
+    if (!current) return;
+    const title = titleDraft.trim();
+    if (title === current.title) return;
+    try {
+      const res = await fetch(`/api/ai/chat/conversations/${current.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body.conversation) throw new Error();
+      if (conversationRef.current?.id === current.id) {
+        applyConversation(body.conversation as ConversationSummary);
+      }
+      setShelfVersion((v) => v + 1);
+      haptic("light");
+    } catch {
+      toast.error("Couldn't rename this chat.");
+    }
+  }, [applyConversation, titleDraft]);
 
   // The composer grows with what he has written (dictation appends whole
   // sentences) up to a few lines, then scrolls inside itself.
@@ -280,6 +396,21 @@ export default function ChatPage() {
       setStreamText("");
       setToolLine("");
       haptic("light");
+
+      // Which chat does this join? Not decided until the current chat is
+      // known — and a chat that has sat quiet past the gap is finished, even
+      // if it has been open on this screen the whole time.
+      await ready.current;
+      let target = conversationRef.current;
+      const gap = normalizeGapHours(getSettings().chatNewChatGapHours);
+      if (target && !pickedByHim.current && isStale(target.lastMessageAt, new Date(), gap)) {
+        setPassedOver(target);
+        fresh.current.clear();
+        applyConversation(null);
+        setMessages([]);
+        target = null;
+      }
+
       // His own message always pulls the thread to the end — even if he was
       // reading history a moment ago.
       pinNow();
@@ -296,6 +427,14 @@ export default function ChatPage() {
         },
       ]);
 
+      // Assigned once the stream is open; until then "finishing" is just
+      // letting go of the composer (a failed request must not leave it locked).
+      let finish = () => {
+        setStreamText("");
+        setToolLine("");
+        setBusy(false);
+      };
+
       try {
         const res = await fetch("/api/ai/chat/stream", {
           method: "POST",
@@ -305,6 +444,7 @@ export default function ChatPage() {
             source,
             images,
             thumbs: photos?.thumbs ?? [],
+            conversationId: target?.id ?? null,
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
         });
@@ -317,6 +457,7 @@ export default function ChatPage() {
         const decoder = new TextDecoder();
         let buffer = "";
         let assistantText = "";
+        let finished = false;
 
         // Deltas arrive faster than the screen refreshes. Painting each one
         // meant a full list re-render per token; coalescing to one paint per
@@ -326,8 +467,33 @@ export default function ChatPage() {
           if (pendingPaint) return;
           pendingPaint = requestAnimationFrame(() => {
             pendingPaint = 0;
-            setStreamText(assistantText);
+            if (!finished) setStreamText(assistantText);
           });
+        };
+        // The turn is over: settle the reply into its bubble and free the
+        // composer. Runs on the server's "done" — which now arrives BEFORE
+        // the stream closes, because a new chat's title is written after it
+        // and he should not wait on a title to type his next message.
+        finish = () => {
+          if (finished) return;
+          finished = true;
+          if (pendingPaint) cancelAnimationFrame(pendingPaint);
+          pendingPaint = 0;
+          const settled = assistantText;
+          assistantText = "";
+          if (settled) {
+            setMessages((prev) => [
+              ...prev,
+              { id: `a-${Date.now()}`, role: "assistant", content: settled },
+            ]);
+          }
+          setStreamText("");
+          setToolLine("");
+          setBusy(false);
+          const current = conversationRef.current;
+          if (current) {
+            applyConversation({ ...current, lastMessageAt: new Date().toISOString() });
+          }
         };
         const paintNow = () => {
           if (pendingPaint) cancelAnimationFrame(pendingPaint);
@@ -352,6 +518,9 @@ export default function ChatPage() {
               data?: ProposalData;
               query?: string;
               message?: string;
+              title?: string;
+              titleSource?: string;
+              created?: boolean;
             };
             try {
               event = JSON.parse(line.slice(6));
@@ -386,28 +555,43 @@ export default function ChatPage() {
                   createdAt: new Date().toISOString(),
                 },
               ]);
+            } else if (event.type === "conversation" && event.id) {
+              // Which chat this turn landed in — new information when it
+              // was sent with no id (a new chat was just born).
+              const now = new Date().toISOString();
+              const known = conversationRef.current;
+              applyConversation({
+                id: event.id,
+                title: event.title ?? known?.title ?? "",
+                titleSource: event.titleSource ?? known?.titleSource ?? "auto",
+                createdAt: known?.id === event.id ? known.createdAt : now,
+                lastMessageAt: now,
+                messageCount: known?.id === event.id ? known.messageCount : 0,
+              });
+              if (event.created) {
+                setPassedOver(null);
+                setShelfVersion((v) => v + 1);
+              }
+            } else if (event.type === "title" && event.id && event.title) {
+              const known = conversationRef.current;
+              if (known?.id === event.id) {
+                applyConversation({ ...known, title: event.title, titleSource: "ai" });
+              }
+              setShelfVersion((v) => v + 1);
+            } else if (event.type === "done") {
+              finish();
             } else if (event.type === "error") {
               toast.error(event.message ?? "Chat error");
             }
           }
         }
-
-        if (pendingPaint) cancelAnimationFrame(pendingPaint);
-        if (assistantText) {
-          setMessages((prev) => [
-            ...prev,
-            { id: `a-${Date.now()}`, role: "assistant", content: assistantText },
-          ]);
-        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Chat unavailable");
       } finally {
-        setStreamText("");
-        setToolLine("");
-        setBusy(false);
+        finish();
       }
     },
-    [busy, pinNow]
+    [applyConversation, busy, pinNow]
   );
   sendRef.current = send;
 
@@ -427,6 +611,9 @@ export default function ChatPage() {
       sendRef.current?.(text, source, photos);
     };
 
+    // send() itself waits for the current chat to be known, so a hand-off
+    // that arrives with the navigation joins the live chat instead of
+    // racing its load and starting a second one.
     const pending = takeChatHandOff();
     if (pending) dispatch(pending);
 
@@ -1252,19 +1439,109 @@ export default function ChatPage() {
       <header className="shrink-0 px-4 pt-[calc(env(safe-area-inset-top,0px)+14px)] lg:px-0 lg:pt-8">
         {/* While he types there is half a screen left; the label and the
             lenses step aside for the thread and come back with the keyboard. */}
-        <p className="micro-label [html[data-keyboard=open]_&]:hidden">
-          The notebook that talks back
-        </p>
-        <h1
-          className="mt-0.5 text-3xl font-bold tracking-[-0.02em]"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          Chat
-        </h1>
+        <div className="flex items-start gap-3">
+          {/* ☰ — the shelf of every chat. The button is the design's round
+              header control (36px, white, hairline); the glyph is not in
+              the design's icon set, so it is three plain strokes in the
+              set's weight (undesigned element). */}
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              setDrawerOpen(true);
+            }}
+            aria-label="Chat history"
+            className="tap-scale mt-1.5 flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#E4E2E6] bg-white text-[#232227]"
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              aria-hidden
+            >
+              <path d="M4 7h16M4 12h16M4 17h10" />
+            </svg>
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="micro-label [html[data-keyboard=open]_&]:hidden">
+              The notebook that talks back
+            </p>
+            <h1
+              className="mt-0.5 text-3xl font-bold tracking-[-0.02em]"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Chat
+            </h1>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              startNewChat();
+            }}
+            disabled={busy || (!conversation && messages.length === 0)}
+            aria-label="Start a new chat"
+            className="tap-scale mt-2 flex-none rounded-full bg-accent px-[13px] py-[7px] text-[11.5px] font-semibold text-[#8C2F51] transition-opacity disabled:opacity-40"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            + New
+          </button>
+        </div>
+
+        {/* This chat's name — the app's until he changes it. */}
+        <div className="mt-1.5 flex min-h-[26px] items-center">
+          {renaming && conversation ? (
+            <form
+              className="flex min-w-0 flex-1 items-center gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                commitTitle();
+              }}
+            >
+              <input
+                autoFocus
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={commitTitle}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setRenaming(false);
+                }}
+                maxLength={80}
+                enterKeyHint="done"
+                aria-label="Chat title"
+                className="min-w-0 flex-1 rounded-[9px] border border-[#DCA8BE] bg-white px-2.5 py-[5px] font-semibold text-foreground outline-none"
+                style={{ fontSize: "13px" }}
+              />
+            </form>
+          ) : conversation ? (
+            <button
+              type="button"
+              onClick={() => {
+                setTitleDraft(conversation.title);
+                setRenaming(true);
+              }}
+              aria-label={`Rename this chat — ${conversation.title}`}
+              className="flex min-w-0 max-w-full items-center gap-1.5 text-left text-[12.5px] font-semibold text-secondary-foreground"
+            >
+              <span key={conversation.title} className="fade-up truncate">
+                {conversation.title || "Untitled chat"}
+              </span>
+              <JournalIcon size={12} className="flex-none text-[#B9B7BE]" />
+            </button>
+          ) : (
+            <span className="text-[12.5px] font-semibold text-muted-foreground">
+              {loaded ? "New chat" : "\u00a0"}
+            </span>
+          )}
+        </div>
 
         {/* Quick filters — read the thread as a food log, a usuals shelf, a
             weight history, or just the conversation. */}
-        <div className="-mx-4 mt-3.5 flex gap-1.5 overflow-x-auto px-4 pb-1 lg:mx-0 lg:px-0 [html[data-keyboard=open]_&]:hidden">
+        <div className="-mx-4 mt-2.5 flex gap-1.5 overflow-x-auto px-4 pb-1 lg:mx-0 lg:px-0 [html[data-keyboard=open]_&]:hidden">
           {FILTERS.map((f) => {
             const active = filter === f.key;
             const count =
@@ -1307,7 +1584,11 @@ export default function ChatPage() {
           ref={scrollerRef}
           className="chat-scroller absolute inset-0 overflow-y-auto overscroll-contain px-4 lg:px-0"
         >
-          <div ref={contentRef} className="flex flex-col gap-3 pb-3 pt-3.5">
+          <div ref={contentRef}>
+          <div
+            key={conversation?.id ?? "new"}
+            className="thread-in flex flex-col gap-3 pb-3 pt-3.5"
+          >
             {filter !== "all" && visibleMessages.length === 0 && (
               <div className="rounded-[14px] border-[1.5px] border-dashed border-[#D9D7DC] p-3.5 text-center text-[12.5px] text-muted-foreground">
                 Nothing filed under{" "}
@@ -1324,6 +1605,21 @@ export default function ChatPage() {
                 <span className="font-semibold text-[#8C2F51]">mic</span> and just
                 talk.
               </div>
+            )}
+            {/* A new chat is a clean page, not a lost one: name the chat it
+                follows and offer the way back into it. */}
+            {loaded && messages.length === 0 && !busy && passedOver && (
+              <p className="fade-up text-center text-[11.5px] leading-relaxed text-muted-foreground">
+                New chat. Your last one —{" "}
+                <button
+                  type="button"
+                  onClick={() => openChat(passedOver)}
+                  className="font-semibold text-[#8C2F51] underline-offset-2 active:underline"
+                >
+                  {passedOver.title || "untitled"}
+                </button>{" "}
+                — is in history, along with everything you&apos;ve logged.
+              </p>
             )}
 
             {visibleMessages.map((msg) => {
@@ -1402,6 +1698,7 @@ export default function ChatPage() {
                 )}
               </div>
             )}
+          </div>
           </div>
         </div>
 
@@ -1566,6 +1863,24 @@ export default function ChatPage() {
           </button>
         </form>
       </div>
+
+      <ChatHistoryDrawer
+        open={drawerOpen}
+        activeId={conversation?.id ?? null}
+        version={shelfVersion}
+        onClose={() => setDrawerOpen(false)}
+        onOpenChat={(target) => {
+          if (busy) {
+            toast("Let this reply finish first.");
+            return;
+          }
+          openChat(target);
+        }}
+        onNewChat={startNewChat}
+        onRenamed={(renamed) => {
+          if (conversationRef.current?.id === renamed.id) applyConversation(renamed);
+        }}
+      />
     </div>
   );
 }

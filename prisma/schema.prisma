@@ -1141,8 +1141,42 @@ model ChatMessage {
   meta      Json? // {source} for user msgs; {kind, data, status} for proposals
   createdAt DateTime @default(now())
 
+  // Which chat this belongs to (2026-10-04). Nullable on purpose: a row
+  // written by a deploy that predates conversations simply has none yet,
+  // and lib/chat-conversations.ts adopts it into its calendar day on the
+  // next read. SetNull, never Cascade — removing a conversation must not be
+  // able to take his log book with it.
+  conversationId String?
+  conversation   ChatConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
   @@index([createdAt])
+  @@index([conversationId, createdAt])
   @@map("chat_messages")
+}
+
+// One chat. The thread used to be a single endless transcript; it is now a
+// shelf of these (2026-10-04). Every timestamp is UTC — which day a chat
+// "belongs to" is decided at display time, in the timezone of the device
+// looking at it, so the shelf re-sorts itself correctly when he moves.
+model ChatConversation {
+  id          String @id @default(uuid())
+  title       String @default("")
+  // auto = first words of the first message · ai = written from the first
+  // exchange · user = he renamed it, and nothing may overwrite that
+  titleSource String @default("auto")
+  // Set ONLY on conversations minted by splitting the old endless thread:
+  // the calendar day (YYYY-MM-DD, America/Bogota — where every one of those
+  // messages was written) the conversation covers. Unique, so the split is
+  // idempotent and two racing requests cannot mint the same day twice.
+  legacyDay     String?  @unique
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messages ChatMessage[]
+
+  @@index([lastMessageAt])
+  @@map("chat_conversations")
 }
 
 model Sequence {
