@@ -165,9 +165,10 @@ were made, settle without bouncing, leave faster than they came.
 
 ## Decisions that are yours
 
-1. **Deploy.** Not deployed. Both migrations are additive and already
-   applied (dev and prod share the database; the live app is unaffected).
-   Say go and I merge.
+1. ~~**Deploy.**~~ Done — merged and deployed 2026-10-05 on your go (PR #23).
+   Both migrations are additive and were already applied to the shared
+   database. To see it in the iPhone app: swipe the app closed and reopen it,
+   so it loads the new build.
 2. **Exact-minute reminders.** Hourly cron + anything that talks to the
    server is "within minutes, usually; ~2 h worst case". Exact needs Vercel
    Pro (~$20/mo) or a per-minute job in Supabase (free, but a secret in the
@@ -189,7 +190,7 @@ were made, settle without bouncing, leave faster than they came.
   Activities).
 - History shows a chat's most recent 400 messages and the newest 300 chats.
 
-## Your checklist — on the iPhone, after deploy
+## Your checklist — on the iPhone
 
 Add `?vvdebug=1` to any URL for an on-screen readout if something looks off;
 a screenshot of it tells me exactly what the phone reported.

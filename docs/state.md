@@ -7,7 +7,8 @@ first. Update the top of this file whenever a session ships.
 
 **Last updated:** 2026-10-05 (THE CHAT + PUSH ROUND — his `pitaya-prompt-1` list: two chat
 bugs, chat history, multi-photo, push, plus a motion pass. Branch
-`claude/pitaya-bugs-motion-ux-5caf0c`, **NOT deployed — merge waits on his go.** Full write-up,
+`claude/pitaya-bugs-motion-ux-5caf0c`, **deployed to prod 2026-10-05 on his go ("push so I can see
+in my app on my phone") — PR #23.** Full write-up,
 his four up-front answers, both bug repros, the open decisions and his checklist:
 [`docs/chat-push-round.md`](chat-push-round.md); push specifics:
 [`docs/push-notifications.md`](push-notifications.md). **Both bugs were somewhere other than the
@@ -157,7 +158,7 @@ The header blurb and `docs/chat-push-round.md` are the record. The load-bearing 
   "+ New" / title line in the chat header, the composer's camera + photo tray, the "Latest" pill,
   the notification card in chat, and the additions to Settings → Notifications.
 
-**Waits on Michael:** the go to deploy · a real-iPhone pass (checklist in the round doc, item 1 in
+**Waits on Michael:** a real-iPhone pass (checklist in the round doc, item 1 in
 the TestFlight app specifically) · exact-minute reminders: Vercel Pro vs a Supabase per-minute job
 vs neither · an APNs key + a native round if notifications should reach the TestFlight app.
 
