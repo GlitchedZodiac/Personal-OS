@@ -954,10 +954,12 @@ export function agoText(fromMs: number, nowMs: number): string {
 export function sourceLines(row: { source: string | null; externalId?: string | null; fieldSources?: Record<string, string> }): { device: string; via: string } {
   const sources = new Set(Object.values(row.fieldSources ?? {}));
   if (row.source) sources.add(row.source);
-  const fromRenpho = sources.has("renpho_api") || Boolean(row.externalId?.startsWith("renpho:"));
+  const fromRenpho =
+    sources.has("renpho_api") || sources.has("renpho_report") || Boolean(row.externalId?.startsWith("renpho:"));
   const via: Record<string, string> = {
     apple_health: "via Apple Health",
     renpho_api: "via RENPHO cloud",
+    renpho_report: "from its report",
     mcp: "logged through Claude",
     manual: "typed in",
     vesync: "VeSync import",

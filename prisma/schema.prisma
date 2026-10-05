@@ -54,7 +54,7 @@ model BodyMeasurement {
   bmrKcal            Int?
   metabolicAge       Int?
   heartRateBpm       Int?
-  source             String? // who CREATED the row: manual, mcp, vesync, apple_health, renpho_api, import
+  source             String? // who CREATED the row: manual, mcp, vesync, apple_health, renpho_api, renpho_report, import
 
   // Whole-body composition the 8-electrode RENPHO adds (2026-10-04). The kg
   // values are stored, not re-derived at read time, so a row keeps what the

@@ -21,6 +21,8 @@ import {
   mapRenphoRecord,
   planRenphoWrite,
 } from "@/lib/renpho";
+import { REPORT_SOURCE, type ReportReading, planReportWrite } from "@/lib/scale-report";
+import { getDateStringInTimeZone } from "@/lib/timezone";
 import { NEAR_KG, NEAR_MS } from "@/lib/vesync";
 
 // The persistence half of the weigh-in ingest. Shared by the companion's daily
@@ -331,4 +333,92 @@ export async function ingestRenphoRecords(
   }
 
   return result;
+}
+
+// ————————————————————————————————————————————————————————————————————————
+// A scale report he uploaded (PDF or screenshot), already read and normalized
+// by lib/scale-report.ts and confirmed by him. Authoritative like the cloud
+// record — it is the same scale reporting the same reading — but it carries
+// no external id: if the cloud pull is ever switched on, it must be free to
+// adopt this row rather than create a second one beside it.
+// ————————————————————————————————————————————————————————————————————————
+
+export interface SaveReportResult {
+  action: "created" | "joined";
+  id: string;
+  measuredAt: Date;
+  /** Columns the report filled that were blank. */
+  added: number;
+  /** Columns the report changed. */
+  corrected: number;
+}
+
+export async function saveScaleReport(
+  reading: ReportReading,
+  opts: { timeZone: string; now?: Date }
+): Promise<SaveReportResult> {
+  const now = opts.now ?? new Date();
+  const at = reading.measuredAt ?? now;
+  // A day either side covers both the timed match and the same-day match.
+  const nearby = await prisma.bodyMeasurement.findMany({
+    where: {
+      measuredAt: { gte: new Date(at.getTime() - 36 * 3600_000), lte: new Date(at.getTime() + 36 * 3600_000) },
+      weightKg: { not: null },
+    },
+  });
+  const plan = planReportWrite(
+    reading,
+    nearby.map((row) => ({
+      id: row.id,
+      measuredAt: row.measuredAt,
+      day: getDateStringInTimeZone(row.measuredAt, opts.timeZone),
+      weightKg: row.weightKg,
+      values: Object.fromEntries(
+        MEASURED_FIELDS.map((f) => [f, (row as unknown as Record<string, number | null>)[f]])
+      ),
+    })),
+    NEAR_MS,
+    NEAR_KG
+  );
+
+  const payload = { source: REPORT_SOURCE, reportId: reading.reportId, readAt: now.toISOString() };
+
+  if (plan.action === "join") {
+    const row = nearby.find((r) => r.id === plan.rowId) as FullRow;
+    const ranges = {
+      ...((row.referenceRanges as Record<string, unknown> | null) ?? {}),
+      ...(reading.referenceRanges ?? {}),
+    };
+    const updated = await prisma.bodyMeasurement.update({
+      where: { id: row.id },
+      data: {
+        ...plan.patch,
+        ...(reading.impedance && row.impedance == null
+          ? { impedance: reading.impedance as unknown as Prisma.InputJsonValue }
+          : {}),
+        ...(Object.keys(ranges).length > 0 ? { referenceRanges: ranges as Prisma.InputJsonValue } : {}),
+        // The cloud record, when there is one, is the fuller archive — keep it.
+        ...(row.rawPayload == null ? { rawPayload: payload as Prisma.InputJsonValue } : {}),
+        fieldSources: stampSources(plan.patch, REPORT_SOURCE, fieldSourcesOf(row)),
+      },
+    });
+    return { action: "joined", id: updated.id, measuredAt: updated.measuredAt, added: plan.adds, corrected: plan.corrects };
+  }
+
+  const values = {
+    ...(reading.weightKg !== null ? { weightKg: reading.weightKg } : {}),
+    ...reading.fields,
+  };
+  const created = await prisma.bodyMeasurement.create({
+    data: {
+      measuredAt: at,
+      ...values,
+      ...(reading.impedance ? { impedance: reading.impedance as unknown as Prisma.InputJsonValue } : {}),
+      ...(reading.referenceRanges ? { referenceRanges: reading.referenceRanges as Prisma.InputJsonValue } : {}),
+      rawPayload: payload as Prisma.InputJsonValue,
+      source: REPORT_SOURCE,
+      fieldSources: stampSources(values, REPORT_SOURCE),
+    },
+  });
+  return { action: "created", id: created.id, measuredAt: created.measuredAt, added: Object.keys(values).length, corrected: 0 };
 }
