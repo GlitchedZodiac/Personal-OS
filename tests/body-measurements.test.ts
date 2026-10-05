@@ -4,15 +4,18 @@ import { describe, expect, it } from "vitest";
 import {
   COMPOSITION_FIELDS,
   MEASURED_FIELDS,
+  SEGMENTAL_FIELDS,
   TAPE_FIELDS,
   buildFillPatch,
   buildTapeTrend,
   compactMeasurement,
+  fieldSourcesOf,
   findNearTwin,
   normalizeBodySample,
   describeMeasurement,
   hasAnyMeasurementWhere,
   hasTapeWhere,
+  stampSources,
 } from "@/lib/body-measurements";
 
 // Regression pins for the 2026-08-26 report: "our AI can't read my
@@ -180,6 +183,91 @@ describe("buildTapeTrend", () => {
   });
 });
 
+describe("per-field provenance", () => {
+  // "The source of each field is visible" — one `source` column cannot say
+  // that about a row three sources contributed to.
+  it("falls back to the row's source for rows written before fieldSources", () => {
+    expect(
+      fieldSourcesOf({ source: "vesync", weightKg: 82, bodyFatPct: 15, waistCm: null })
+    ).toEqual({ weightKg: "vesync", bodyFatPct: "vesync" });
+  });
+
+  it("names 'unknown' rather than inventing an origin", () => {
+    expect(fieldSourcesOf({ weightKg: 82 })).toEqual({ weightKg: "unknown" });
+  });
+
+  it("prefers the explicit map and only lists fields that hold a value", () => {
+    expect(
+      fieldSourcesOf({
+        source: "apple_health",
+        weightKg: 82.75,
+        bodyFatPct: 13.2,
+        waistCm: 84,
+        fieldSources: { bodyFatPct: "renpho_api", waistCm: "manual", chestCm: "manual" },
+      })
+    ).toEqual({ weightKg: "apple_health", bodyFatPct: "renpho_api", waistCm: "manual" });
+  });
+
+  it("stampSources marks what one write contributed and keeps the rest", () => {
+    expect(
+      stampSources(
+        { bodyFatPct: 13.2, muscleTrunkKg: 31.33, notes: "x", bmi: null },
+        "renpho_api",
+        { weightKg: "apple_health", bodyFatPct: "mcp" }
+      )
+    ).toEqual({
+      weightKg: "apple_health",
+      bodyFatPct: "renpho_api",
+      muscleTrunkKg: "renpho_api",
+    });
+  });
+
+  it("compactMeasurement shows fieldSources only when a row is mixed", () => {
+    const single = compactMeasurement({ source: "vesync", weightKg: 82, bodyFatPct: 15 });
+    expect(single).not.toHaveProperty("fieldSources");
+
+    const mixed = compactMeasurement({
+      source: "apple_health",
+      weightKg: 82.75,
+      bodyFatPct: 13.2,
+      fieldSources: { bodyFatPct: "renpho_api" },
+    });
+    expect(mixed.fieldSources).toEqual({
+      weightKg: "apple_health",
+      bodyFatPct: "renpho_api",
+    });
+  });
+
+  it("shows fieldSources when every value came from somewhere other than `source`", () => {
+    // His 10-04 row: created by hand over MCP, then filled entirely by the
+    // scale's cloud. `source: "mcp"` alone would misattribute every number.
+    const adopted = compactMeasurement({
+      source: "mcp",
+      weightKg: 82.75,
+      bodyFatPct: 13.2,
+      fieldSources: { weightKg: "renpho_api", bodyFatPct: "renpho_api" },
+    });
+    // …and one source for every field collapses to a single key.
+    expect(adopted.fieldSources).toEqual({ "*": "renpho_api" });
+  });
+
+  it("passes reference ranges and the external id through when selected", () => {
+    const detail = compactMeasurement({
+      weightKg: 82.75,
+      referenceRanges: { bodyFatPct: { min: 10, max: 20 } },
+      externalId: "renpho:1",
+    });
+    expect(detail.referenceRanges).toEqual({ bodyFatPct: { min: 10, max: 20 } });
+    expect(detail.externalId).toBe("renpho:1");
+  });
+
+  it("describes segmental values by name", () => {
+    expect(describeMeasurement({ muscleTrunkKg: 31.33, fatLeftArmKg: 0.43 })).toBe(
+      "trunk muscle 31.33kg, left-arm fat 0.43kg"
+    );
+  });
+});
+
 describe("schema parity", () => {
   // Adding a numeric column to BodyMeasurement without adding it here would
   // silently hide it from the AI again. Fail at CI instead.
@@ -202,9 +290,9 @@ describe("schema parity", () => {
       expect(MEASURED_FIELDS).toContain(column);
     }
     expect(MEASURED_FIELDS).toHaveLength(numericColumns.length);
-    expect(TAPE_FIELDS.length + COMPOSITION_FIELDS.length + 2).toBe(
-      numericColumns.length
-    );
+    expect(
+      TAPE_FIELDS.length + COMPOSITION_FIELDS.length + SEGMENTAL_FIELDS.length + 2
+    ).toBe(numericColumns.length);
   });
 });
 

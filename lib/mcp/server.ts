@@ -58,7 +58,12 @@ const INSTRUCTIONS =
   "reads one back in full. Sermon recordings: query_data spirit_recordings " +
   "lists them; transcribe_recording (batch by batch), summarize_recording, " +
   "attach_recording_summary and create_recording_worksheet run the whole " +
-  "sermon workflow without opening the app.";
+  "sermon workflow without opening the app. Body composition: " +
+  "log_measurement takes every value on a scale report as its own field " +
+  "(segmental muscle and fat per arm, trunk and leg; impedance) — pass the " +
+  "report's time as measuredAt so it joins the weigh-in already stored. " +
+  "Everything except weight is a bioimpedance estimate, and fieldSources " +
+  "on a row says where each value came from.";
 
 export async function handleMcpMessage(raw: unknown): Promise<McpHttpResponse> {
   // The 2025-06-18 revision dropped JSON-RPC batching — reject arrays.

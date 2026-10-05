@@ -30,10 +30,32 @@ vi.mock("@/lib/prs", () => ({
 const favorites: Array<Record<string, unknown> & { id: string }> = [];
 let hymns: Record<string, unknown>[] = [];
 const foodLogs: Array<Record<string, unknown> & { id: string }> = [];
+let measurements: Array<Record<string, unknown> & { id: string; measuredAt: Date }> = [];
 let seq = 0;
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    bodyMeasurement: {
+      findMany: vi.fn(
+        async ({ where }: { where: { measuredAt: { gte: Date; lte: Date } } }) =>
+          measurements.filter(
+            (m) =>
+              m.weightKg != null &&
+              m.measuredAt >= where.measuredAt.gte &&
+              m.measuredAt <= where.measuredAt.lte
+          )
+      ),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        const row = { id: `bm-${++seq}`, ...data } as (typeof measurements)[number];
+        measurements.push(row);
+        return row;
+      }),
+      update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const row = measurements.find((m) => m.id === where.id)!;
+        Object.assign(row, data);
+        return row;
+      }),
+    },
     hymn: {
       findFirst: vi.fn(async ({ where }: { where: { title?: { equals?: string } } }) => {
         const t = where?.title?.equals?.toLowerCase();
@@ -223,7 +245,9 @@ describe("the connector's own briefing", () => {
 
   it("arrives whole — a finished sentence, not a truncated one", async () => {
     const text = await instructions();
-    expect(text.endsWith("sermon workflow without opening the app.")).toBe(true);
+    expect(text).toContain("sermon workflow without opening the app.");
+    // Pinned to the LAST sentence, so a dropped `+` anywhere above it fails.
+    expect(text.endsWith("says where each value came from.")).toBe(true);
     // The tell for the ASI bug: the briefing stopped at this exact phrase.
     expect(text).not.toMatch(/spirit_recordings\s*$/);
   });
@@ -393,6 +417,110 @@ describe("hymns over MCP", () => {
     expect(got.parsed.hymn.body.length).toBeGreaterThan(700); // never clipped
     const missing = await callTool("get_hymn", { title: "no such hymn" });
     expect(missing.isError).toBe(true);
+  });
+});
+
+describe("log_measurement (2026-10-04: every composition field, no duplicate weigh-ins)", () => {
+  const AT = "2026-10-04T14:58:30.000Z";
+
+  beforeEach(() => {
+    measurements = [];
+  });
+
+  it("accepts every measured column in its schema", () => {
+    const def = MCP_TOOL_DEFS.find((t) => t.name === "log_measurement")!;
+    const props = Object.keys((def.inputSchema as { properties: object }).properties);
+    for (const field of [
+      "weightKg", "bodyFatPct", "waistCm", "bmi", "fatMassKg", "skeletalMuscleKg",
+      "smi", "bodyWaterKg", "proteinKg", "visceralFat", "bmrKcal",
+      "muscleLeftArmKg", "muscleTrunkKg", "fatRightLegKg", "impedance",
+    ]) {
+      expect(props, `log_measurement should accept ${field}`).toContain(field);
+    }
+  });
+
+  it("stores composition, segmental and impedance in real columns, stamped mcp", async () => {
+    const { parsed } = await callTool("log_measurement", {
+      measuredAt: AT,
+      weightKg: 82.75,
+      bodyFatPct: 13.2,
+      skeletalMuscleKg: 41.29,
+      visceralFat: 2.4,
+      muscleTrunkKg: 31.33,
+      waistCm: 0, // zero is "not measured", never a reading
+      impedance: { z20: { rightArm: 269.7, bogus: 1 }, z100: { trunk: 16.6 }, z5: { trunk: 1 } },
+    });
+    const row = (parsed as { measurement: Record<string, unknown> }).measurement;
+    expect(row).toMatchObject({
+      source: "mcp",
+      weightKg: 82.75,
+      skeletalMuscleKg: 41.29,
+      visceralFat: 2, // integer column
+      muscleTrunkKg: 31.33,
+      impedance: { z20: { rightArm: 269.7 }, z100: { trunk: 16.6 } },
+    });
+    expect(row).not.toHaveProperty("waistCm");
+    expect(row.fieldSources).toMatchObject({ weightKg: "mcp", muscleTrunkKg: "mcp" });
+    expect(measurements).toHaveLength(1);
+  });
+
+  it("adds to the weigh-in Apple Health already delivered instead of duplicating it", async () => {
+    measurements.push({
+      id: "ah",
+      measuredAt: new Date("2026-10-04T14:58:25.000Z"),
+      weightKg: 82.75,
+      source: "apple_health",
+    });
+    const { parsed } = await callTool("log_measurement", {
+      measuredAt: AT,
+      weightKg: 82.75,
+      bodyFatPct: 13.2,
+      notes: "from the report",
+    });
+    expect(measurements).toHaveLength(1);
+    expect(parsed).toMatchObject({ addedToExistingWeighIn: true });
+    expect(measurements[0]).toMatchObject({
+      id: "ah",
+      source: "apple_health", // the row keeps its origin
+      bodyFatPct: 13.2,
+      notes: "from the report",
+      fieldSources: { weightKg: "apple_health", bodyFatPct: "mcp" },
+    });
+  });
+
+  it("never overwrites a stored value, and says which ones differed", async () => {
+    measurements.push({
+      id: "scale",
+      measuredAt: new Date(AT),
+      weightKg: 82.75,
+      bodyFatPct: 13.2,
+      source: "renpho_api",
+    });
+    const { parsed } = await callTool("log_measurement", {
+      measuredAt: AT,
+      weightKg: 82.8,
+      bodyFatPct: 14,
+      waistCm: 84,
+    });
+    expect(measurements[0]).toMatchObject({ weightKg: 82.75, bodyFatPct: 13.2, waistCm: 84 });
+    expect(parsed).toMatchObject({
+      notOverwritten: {
+        weightKg: { stored: 82.75, given: 82.8 },
+        bodyFatPct: { stored: 13.2, given: 14 },
+      },
+    });
+  });
+
+  it("creates a new row for a tape-only check-in, however close in time", async () => {
+    measurements.push({ id: "ah", measuredAt: new Date(AT), weightKg: 82.75 });
+    await callTool("log_measurement", { measuredAt: AT, waistCm: 84 });
+    expect(measurements).toHaveLength(2);
+  });
+
+  it("rejects a call with no positive reading", async () => {
+    const { parsed } = await callTool("log_measurement", { weightKg: 0, notes: "nothing" });
+    expect(parsed).toHaveProperty("error");
+    expect(measurements).toHaveLength(0);
   });
 });
 

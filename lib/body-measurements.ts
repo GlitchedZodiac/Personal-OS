@@ -32,9 +32,9 @@ export const TAPE_FIELDS = [
 ] as const;
 
 /**
- * The twelve smart-scale columns. These arrive ONLY from the VeSync CSV import
- * or Apple Health — `POST /api/health/body` (manual + chat) cannot write them,
- * so the read path must surface fields the write path can never produce.
+ * Whole-body smart-scale columns. The first twelve date from the VeSync scale;
+ * the last seven arrived with the 8-electrode RENPHO (2026-10-04). Every one
+ * is a bioimpedance ESTIMATE — only weight is measured.
  */
 export const COMPOSITION_FIELDS = [
   "bmi",
@@ -49,6 +49,30 @@ export const COMPOSITION_FIELDS = [
   "bmrKcal",
   "metabolicAge",
   "heartRateBpm",
+  "fatMassKg",
+  "muscleMassPct",
+  "skeletalMuscleKg",
+  "smi",
+  "bodyWaterKg",
+  "proteinKg",
+  "whrEstimate",
+] as const;
+
+/**
+ * Segmental lean and fat mass in kg — arms, trunk, legs. Only an 8-electrode
+ * scale produces these, so every row before 2026-09-12 has none.
+ */
+export const SEGMENTAL_FIELDS = [
+  "muscleLeftArmKg",
+  "muscleRightArmKg",
+  "muscleTrunkKg",
+  "muscleLeftLegKg",
+  "muscleRightLegKg",
+  "fatLeftArmKg",
+  "fatRightArmKg",
+  "fatTrunkKg",
+  "fatLeftLegKg",
+  "fatRightLegKg",
 ] as const;
 
 /** Every numeric column that constitutes "a reading". */
@@ -57,11 +81,18 @@ export const MEASURED_FIELDS = [
   "bodyFatPct",
   ...TAPE_FIELDS,
   ...COMPOSITION_FIELDS,
+  ...SEGMENTAL_FIELDS,
 ] as const;
 
 export type TapeField = (typeof TAPE_FIELDS)[number];
 export type CompositionField = (typeof COMPOSITION_FIELDS)[number];
+export type SegmentalField = (typeof SEGMENTAL_FIELDS)[number];
 export type MeasuredField = (typeof MEASURED_FIELDS)[number];
+
+/** Columns stored as integers — rounded on the way in. */
+export const INT_FIELDS: ReadonlySet<string> = new Set([
+  "visceralFat", "bmrKcal", "metabolicAge", "heartRateBpm",
+]);
 
 /** Human labels for the tape dims — used in AI output and CSV headers. */
 export const TAPE_LABELS: Record<TapeField, string> = {
@@ -105,7 +136,50 @@ type MeasurementRow = {
   notes?: string | null;
   source?: string | null;
   skinfoldData?: unknown;
+  fieldSources?: unknown;
+  impedance?: unknown;
+  referenceRanges?: unknown;
+  externalId?: string | null;
 } & Partial<Record<MeasuredField, number | null>>;
+
+/**
+ * Where each recorded value came from.
+ *
+ * `source` names who CREATED the row. That stops being the whole truth the
+ * moment two sources merge into one weigh-in — an Apple Health weight row
+ * enriched by the RENPHO cloud, with waist typed by hand. `fieldSources` holds
+ * the per-field answer; rows written before it existed fall back to `source`
+ * for everything they carry, which is exactly what was true of them.
+ */
+export function fieldSourcesOf(row: MeasurementRow): Record<string, string> {
+  const explicit =
+    row.fieldSources && typeof row.fieldSources === "object" && !Array.isArray(row.fieldSources)
+      ? (row.fieldSources as Record<string, unknown>)
+      : {};
+  const fallback = row.source ?? "unknown";
+  const out: Record<string, string> = {};
+  for (const field of MEASURED_FIELDS) {
+    if (row[field] == null) continue;
+    const named = explicit[field];
+    out[field] = typeof named === "string" && named ? named : fallback;
+  }
+  return out;
+}
+
+/** A fieldSources map naming `source` for every field in `fields`. */
+export function stampSources(
+  fields: Record<string, unknown>,
+  source: string,
+  existing: Record<string, string> = {}
+): Record<string, string> {
+  const out = { ...existing };
+  for (const [field, value] of Object.entries(fields)) {
+    if (value != null && (MEASURED_FIELDS as readonly string[]).includes(field)) {
+      out[field] = source;
+    }
+  }
+  return out;
+}
 
 /**
  * Shape one row for the model: drop what is null, keep everything else.
@@ -131,8 +205,22 @@ export function compactMeasurement(row: MeasurementRow): Record<string, unknown>
     if (value != null) out[field] = value;
   }
   if (row.skinfoldData != null) out.skinfoldData = row.skinfoldData;
+  if (row.impedance != null) out.impedance = row.impedance;
+  // Present only on a single-row fetch (the registry's detailFields).
+  if (row.referenceRanges != null) out.referenceRanges = row.referenceRanges;
+  if (row.externalId != null) out.externalId = row.externalId;
   if (row.notes != null && row.notes !== "") out.notes = row.notes;
   if (row.source != null) out.source = row.source;
+  // Worth the tokens only when `source` alone would mislead: a row some other
+  // source contributed to. A hand-logged row the scale's cloud later filled
+  // in still says source "mcp" — the map is what tells the truth about it.
+  const sources = fieldSourcesOf(row);
+  const origin = row.source ?? "unknown";
+  const distinct = new Set(Object.values(sources));
+  if ([...distinct].some((s) => s !== origin)) {
+    // One source for everything is one key, not thirty identical ones.
+    out.fieldSources = distinct.size === 1 ? { "*": [...distinct][0] } : sources;
+  }
   return out;
 }
 
@@ -157,16 +245,14 @@ export interface NormalizedBodySample {
 }
 
 /** Fields a weigh-in may carry besides weight. Superset of the tape dims and
- *  the scale composition columns, so one shape serves HealthKit and VeSync. */
+ *  the scale composition columns, so one shape serves HealthKit, VeSync and
+ *  RENPHO. */
 const FILLABLE_FIELDS: readonly string[] = [
   "bodyFatPct",
   ...COMPOSITION_FIELDS,
+  ...SEGMENTAL_FIELDS,
   ...TAPE_FIELDS,
 ];
-
-const INT_FIELDS = new Set([
-  "visceralFat", "bmrKcal", "metabolicAge", "heartRateBpm",
-]);
 
 function finiteNumber(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
@@ -274,11 +360,48 @@ const FIELD_UNITS: Record<MeasuredField, string> = {
   bmrKcal: " kcal BMR",
   metabolicAge: " metabolic age",
   heartRateBpm: " bpm",
+  fatMassKg: "kg fat",
+  muscleMassPct: "% muscle",
+  skeletalMuscleKg: "kg skeletal muscle",
+  smi: " SMI",
+  bodyWaterKg: "kg water",
+  proteinKg: "kg protein",
+  whrEstimate: " WHR (scale estimate)",
+  muscleLeftArmKg: "kg",
+  muscleRightArmKg: "kg",
+  muscleTrunkKg: "kg",
+  muscleLeftLegKg: "kg",
+  muscleRightLegKg: "kg",
+  fatLeftArmKg: "kg",
+  fatRightArmKg: "kg",
+  fatTrunkKg: "kg",
+  fatLeftLegKg: "kg",
+  fatRightLegKg: "kg",
+};
+
+/** Spoken names for the segmental columns, so a one-liner reads as English. */
+export const SEGMENTAL_LABELS: Record<SegmentalField, string> = {
+  muscleLeftArmKg: "left-arm muscle",
+  muscleRightArmKg: "right-arm muscle",
+  muscleTrunkKg: "trunk muscle",
+  muscleLeftLegKg: "left-leg muscle",
+  muscleRightLegKg: "right-leg muscle",
+  fatLeftArmKg: "left-arm fat",
+  fatRightArmKg: "right-arm fat",
+  fatTrunkKg: "trunk fat",
+  fatLeftLegKg: "left-leg fat",
+  fatRightLegKg: "right-leg fat",
 };
 
 const NAMED_FIELDS = new Set<MeasuredField>([
   ...TAPE_FIELDS,
+  ...SEGMENTAL_FIELDS,
 ]);
+
+const FIELD_NAMES: Partial<Record<MeasuredField, string>> = {
+  ...TAPE_LABELS,
+  ...SEGMENTAL_LABELS,
+};
 
 /**
  * One human-readable line of whatever the row actually holds, e.g.
@@ -293,7 +416,7 @@ export function describeMeasurement(row: MeasurementRow): string {
     const unit = FIELD_UNITS[field];
     parts.push(
       NAMED_FIELDS.has(field)
-        ? `${TAPE_LABELS[field as TapeField]} ${value}${unit}`
+        ? `${FIELD_NAMES[field]} ${value}${unit}`
         : `${value}${unit}`
     );
   }

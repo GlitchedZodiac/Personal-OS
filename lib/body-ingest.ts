@@ -1,11 +1,26 @@
+import type { Prisma } from "@prisma/client";
 import {
+  COMPOSITION_FIELDS,
   type IncomingBodySample,
+  MEASURED_FIELDS,
+  SEGMENTAL_FIELDS,
   type StoredWeighIn,
+  TAPE_FIELDS,
   buildFillPatch,
+  fieldSourcesOf,
   findNearTwin,
   normalizeBodySample,
+  stampSources,
 } from "@/lib/body-measurements";
 import { prisma } from "@/lib/prisma";
+import {
+  RENPHO_SOURCE,
+  type RenphoCandidateRow,
+  type RenphoRecord,
+  isScaleReading,
+  mapRenphoRecord,
+  planRenphoWrite,
+} from "@/lib/renpho";
 import { NEAR_KG, NEAR_MS } from "@/lib/vesync";
 
 // The persistence half of the weigh-in ingest. Shared by the companion's daily
@@ -25,12 +40,13 @@ import { NEAR_KG, NEAR_MS } from "@/lib/vesync";
 //   4. An unparseable `measuredAt` fell back to `new Date()`, inventing a
 //      weigh-in dated today.
 
+// Every column a weigh-in can carry besides weight — from the shared
+// vocabulary, so a column added to the schema cannot be missed here.
 const COLUMNS = [
-  "bodyFatPct", "bmi", "fatFreeWeightKg", "subcutaneousFatPct", "visceralFat",
-  "bodyWaterPct", "skeletalMusclePct", "muscleMassKg", "boneMassKg",
-  "proteinPct", "bmrKcal", "metabolicAge", "heartRateBpm",
-  "neckCm", "shouldersCm", "chestCm", "armsCm", "forearmsCm", "waistCm",
-  "hipsCm", "legsCm", "calvesCm",
+  "bodyFatPct",
+  ...COMPOSITION_FIELDS,
+  ...SEGMENTAL_FIELDS,
+  ...TAPE_FIELDS,
 ] as const;
 
 export interface IngestBodyResult {
@@ -81,6 +97,10 @@ export async function ingestBodySamples(
       COLUMNS.map((c) => [c, (row as unknown as Record<string, number | null>)[c]])
     ),
   }));
+  // Per-field provenance of each stored row, kept current through the batch.
+  const provenance = new Map<string, Record<string, string>>(
+    existing.map((row) => [row.id, fieldSourcesOf(row)])
+  );
 
   for (const sample of samples) {
     const twin = findNearTwin(stored, sample, NEAR_MS, NEAR_KG);
@@ -91,10 +111,17 @@ export async function ingestBodySamples(
         result.skipped++;
         continue;
       }
-      await prisma.bodyMeasurement.update({ where: { id: twin.id }, data: patch });
+      // The row keeps its own `source`; what this sample contributed is
+      // recorded per field instead.
+      const fieldSources = stampSources(patch, source, provenance.get(twin.id));
+      await prisma.bodyMeasurement.update({
+        where: { id: twin.id },
+        data: { ...patch, fieldSources },
+      });
       // Keep the in-memory twin current so a later sample in this same batch
       // does not re-fill what we just wrote.
       Object.assign(twin.fields, patch);
+      provenance.set(twin.id, fieldSources);
       result.merged++;
       continue;
     }
@@ -124,8 +151,13 @@ export async function ingestBodySamples(
         // falsify where the number came from.
         source,
         ...sample.fields,
+        fieldSources: stampSources(
+          { weightKg: sample.weightKg, ...sample.fields },
+          source
+        ),
       },
     });
+    provenance.set(created.id, fieldSourcesOf(created));
 
     // Intra-batch collapse: the row we just made is now a dedup candidate.
     stored.push({
@@ -140,6 +172,135 @@ export async function ingestBodySamples(
       ),
     });
     result.imported++;
+  }
+
+  return result;
+}
+
+// ————————————————————————————————————————————————————————————————————————
+// RENPHO cloud records. Unlike the path above, the scale's own record is
+// AUTHORITATIVE for what it carries: it overwrites, where Apple Health and
+// hand entry only fill blanks. The decision itself is planRenphoWrite.
+// ————————————————————————————————————————————————————————————————————————
+
+export interface IngestRenphoResult {
+  fetched: number;
+  created: number;
+  /** Adopted another source's row, or refreshed one already imported. */
+  merged: number;
+  unchanged: number;
+  /** Not a scale reading (a weight typed into the app) or unmappable. */
+  skipped: number;
+}
+
+type FullRow = Awaited<ReturnType<typeof prisma.bodyMeasurement.findMany>>[number];
+
+function toCandidate(row: FullRow): RenphoCandidateRow {
+  return {
+    id: row.id,
+    measuredAt: row.measuredAt,
+    externalId: row.externalId,
+    values: Object.fromEntries(
+      MEASURED_FIELDS.map((f) => [f, (row as unknown as Record<string, number | null>)[f]])
+    ),
+    impedance: row.impedance,
+    referenceRanges: row.referenceRanges,
+  };
+}
+
+export async function ingestRenphoRecords(
+  records: readonly RenphoRecord[]
+): Promise<IngestRenphoResult> {
+  const result: IngestRenphoResult = {
+    fetched: records.length,
+    created: 0,
+    merged: 0,
+    unchanged: 0,
+    skipped: 0,
+  };
+
+  const mapped = [];
+  for (const record of records) {
+    const one = isScaleReading(record) ? mapRenphoRecord(record) : null;
+    if (one) mapped.push(one);
+    else result.skipped++;
+  }
+  if (mapped.length === 0) return result;
+  mapped.sort((a, b) => a.measuredAt.getTime() - b.measuredAt.getTime());
+
+  const times = mapped.map((m) => m.measuredAt.getTime());
+  const existing = await prisma.bodyMeasurement.findMany({
+    where: {
+      OR: [
+        { externalId: { in: mapped.map((m) => m.externalId) } },
+        {
+          measuredAt: {
+            gte: new Date(Math.min(...times) - NEAR_MS),
+            lte: new Date(Math.max(...times) + NEAR_MS),
+          },
+          weightKg: { not: null },
+        },
+      ],
+    },
+  });
+  const full = new Map(existing.map((row) => [row.id, row]));
+  const candidates = existing.map(toCandidate);
+
+  for (const m of mapped) {
+    const plan = planRenphoWrite(m, candidates, NEAR_MS, NEAR_KG);
+    const values = { weightKg: m.weightKg, ...m.fields };
+    const json = {
+      impedance: (m.impedance ?? undefined) as Prisma.InputJsonValue | undefined,
+      referenceRanges: (m.referenceRanges ?? undefined) as
+        | Prisma.InputJsonValue
+        | undefined,
+      rawPayload: m.raw as Prisma.InputJsonValue,
+    };
+
+    if (plan.action === "unchanged") {
+      result.unchanged++;
+      continue;
+    }
+
+    if (plan.action === "create") {
+      try {
+        const created = await prisma.bodyMeasurement.create({
+          data: {
+            measuredAt: m.measuredAt,
+            ...values,
+            ...json,
+            externalId: m.externalId,
+            source: RENPHO_SOURCE,
+            fieldSources: stampSources(values, RENPHO_SOURCE),
+          },
+        });
+        full.set(created.id, created);
+        candidates.push(toCandidate(created));
+        result.created++;
+      } catch (error) {
+        // Two pulls racing: the unique index on externalId lets exactly one
+        // insert through, and the loser has nothing left to do.
+        if ((error as { code?: string })?.code !== "P2002") throw error;
+        result.unchanged++;
+      }
+      continue;
+    }
+
+    // link | refresh — the scale's numbers win on what it carries; tape,
+    // notes, measuredAt and the row's own `source` are not touched.
+    const row = full.get(plan.rowId) as FullRow;
+    const updated = await prisma.bodyMeasurement.update({
+      where: { id: plan.rowId },
+      data: {
+        ...plan.patch,
+        ...json,
+        externalId: m.externalId,
+        fieldSources: stampSources(values, RENPHO_SOURCE, fieldSourcesOf(row)),
+      },
+    });
+    full.set(updated.id, updated);
+    candidates[candidates.findIndex((c) => c.id === updated.id)] = toCandidate(updated);
+    result.merged++;
   }
 
   return result;

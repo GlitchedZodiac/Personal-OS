@@ -29,6 +29,13 @@ import { ensureUserExercisesLoaded, mintUnknownExercises } from "@/lib/user-exer
 import { validateSequence } from "@/lib/sequences";
 import { detectAndRecordPRs, rebuildPersonalRecords } from "@/lib/prs";
 import {
+  INT_FIELDS,
+  MEASURED_FIELDS,
+  fieldSourcesOf,
+  stampSources,
+} from "@/lib/body-measurements";
+import { NEAR_KG, NEAR_MS } from "@/lib/vesync";
+import {
   applyEntryEdit,
   applyWeightAssignments,
   findEntryIndex,
@@ -84,6 +91,25 @@ const isoDate = (v: unknown) => {
   const d = new Date(String(v));
   return Number.isFinite(d.getTime()) ? d : null;
 };
+
+const IMPEDANCE_SEGMENTS = ["rightArm", "leftArm", "trunk", "rightLeg", "leftLeg"] as const;
+
+/** Keep only positive ohm readings under the two known frequencies. */
+function cleanImpedance(v: unknown): Prisma.InputJsonObject | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const out: Record<string, Record<string, number>> = {};
+  for (const band of ["z20", "z100"] as const) {
+    const given = (v as Record<string, unknown>)[band];
+    if (!given || typeof given !== "object") continue;
+    const kept: Record<string, number> = {};
+    for (const segment of IMPEDANCE_SEGMENTS) {
+      const ohms = posNum((given as Record<string, unknown>)[segment]);
+      if (ohms != null) kept[segment] = ohms;
+    }
+    if (Object.keys(kept).length > 0) out[band] = kept;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
 
 // ── Reads ────────────────────────────────────────────────────────────────
 
@@ -674,55 +700,93 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     def: {
       name: "log_measurement",
       description:
-        "Record body size data: weight and/or tape measurements in cm (waist, chest, arms, legs, hips, shoulders, neck, forearms, calves), body-fat %. Omit anything not measured — never zero-fill.",
+        "Record a body check-in: weight, tape measurements in cm, and any body-composition value from a scale report — body fat %, BMI, fat/muscle/skeletal-muscle/water/protein/bone mass, visceral and subcutaneous fat, BMR, metabolic age, SMI, segmental muscle and fat per arm/trunk/leg in kg, and impedance. Omit anything not measured — never zero-fill. Pass measuredAt as the time on the report: a check-in within 10 minutes and 0.3 kg of an existing weigh-in is added to that row instead of creating a duplicate, filling blanks only (existing values are never overwritten; the result lists any that differed).",
       inputSchema: {
         type: "object",
         properties: {
-          measuredAt: { type: "string", description: "ISO datetime; default now" },
-          weightKg: { type: "number" },
-          bodyFatPct: { type: "number" },
-          waistCm: { type: "number" },
-          chestCm: { type: "number" },
-          armsCm: { type: "number" },
-          legsCm: { type: "number" },
-          hipsCm: { type: "number" },
-          shouldersCm: { type: "number" },
-          neckCm: { type: "number" },
-          forearmsCm: { type: "number" },
-          calvesCm: { type: "number" },
+          measuredAt: { type: "string", description: "ISO datetime of the reading; default now" },
+          ...Object.fromEntries(
+            MEASURED_FIELDS.map((f) => [f, { type: "number" }])
+          ),
+          impedance: {
+            type: "object",
+            description:
+              "Ohms per segment at each frequency: { z20: { rightArm, leftArm, trunk, rightLeg, leftLeg }, z100: { … } }",
+          },
           notes: { type: "string" },
         },
       },
     },
     handler: async (args) => {
-      const fields = [
-        "weightKg",
-        "bodyFatPct",
-        "waistCm",
-        "chestCm",
-        "armsCm",
-        "legsCm",
-        "hipsCm",
-        "shouldersCm",
-        "neckCm",
-        "forearmsCm",
-        "calvesCm",
-      ] as const;
-      const data: Record<string, unknown> = {
-        measuredAt: isoDate(args.measuredAt) ?? undefined,
-        notes: str(args.notes) || null,
-        source: "mcp",
-      };
-      let any = false;
-      for (const f of fields) {
+      const fields: Record<string, number> = {};
+      for (const f of MEASURED_FIELDS) {
         const v = posNum(args[f]);
-        if (v != null) {
-          data[f] = v;
-          any = true;
+        if (v != null) fields[f] = INT_FIELDS.has(f) ? Math.round(v) : v;
+      }
+      if (Object.keys(fields).length === 0) {
+        return { error: "Provide at least one measurement (positive number)" };
+      }
+      const impedance = cleanImpedance(args.impedance);
+      const measuredAt = isoDate(args.measuredAt) ?? new Date();
+      const notes = str(args.notes) || null;
+
+      // The same weigh-in often exists already — Apple Health relays the
+      // weight within seconds. Add to that row rather than drawing a second
+      // point on the chart. Fill-only, so this tool still never destroys data.
+      if (fields.weightKg != null) {
+        const near = await prisma.bodyMeasurement.findMany({
+          where: {
+            measuredAt: {
+              gte: new Date(measuredAt.getTime() - NEAR_MS),
+              lte: new Date(measuredAt.getTime() + NEAR_MS),
+            },
+            weightKg: { not: null },
+          },
+        });
+        const twin = near
+          .filter((row) => Math.abs((row.weightKg as number) - fields.weightKg) <= NEAR_KG)
+          .sort(
+            (a, b) =>
+              Math.abs(a.measuredAt.getTime() - measuredAt.getTime()) -
+              Math.abs(b.measuredAt.getTime() - measuredAt.getTime())
+          )[0];
+        if (twin) {
+          const stored = twin as unknown as Record<string, number | null>;
+          const patch: Record<string, number> = {};
+          const notOverwritten: Record<string, { stored: number; given: number }> = {};
+          for (const [f, v] of Object.entries(fields)) {
+            if (stored[f] == null) patch[f] = v;
+            else if (stored[f] !== v) notOverwritten[f] = { stored: stored[f] as number, given: v };
+          }
+          const measurement = await prisma.bodyMeasurement.update({
+            where: { id: twin.id },
+            data: {
+              ...patch,
+              ...(impedance && twin.impedance == null ? { impedance } : {}),
+              ...(notes && !twin.notes ? { notes } : {}),
+              fieldSources: stampSources(patch, "mcp", fieldSourcesOf(twin)),
+            },
+          });
+          return {
+            measurement,
+            addedToExistingWeighIn: true,
+            ...(Object.keys(notOverwritten).length > 0 ? { notOverwritten } : {}),
+          };
         }
       }
-      if (!any) return { error: "Provide at least one measurement (positive number)" };
-      return { measurement: await prisma.bodyMeasurement.create({ data }) };
+
+      return {
+        measurement: await prisma.bodyMeasurement.create({
+          data: {
+            measuredAt,
+            notes,
+            source: "mcp",
+            ...fields,
+            ...(impedance ? { impedance } : {}),
+            fieldSources: stampSources(fields, "mcp"),
+          },
+        }),
+      };
     },
   },
   {

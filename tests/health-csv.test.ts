@@ -140,7 +140,7 @@ describe("measurements.csv", () => {
     for (const row of rows) expect(row).toHaveLength(header.length);
   });
 
-  it("carries all 23 measured columns", () => {
+  it("carries the measured columns", () => {
     for (const column of [
       "weightKg", "bodyFatPct", "chestCm", "armsCm", "shouldersCm",
       "forearmsCm", "muscleMassKg", "boneMassKg", "bmrKcal", "metabolicAge",

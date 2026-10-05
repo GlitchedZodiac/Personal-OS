@@ -127,9 +127,16 @@ export const REGISTRY: readonly DatasetSpec[] = [
     kind: "table",
     summary: "Raw measurement check-ins — weight, tape, scale composition.",
     model: "bodyMeasurement",
-    // All 23 measured columns, from the shared vocabulary — so a column added
+    // Every measured column, from the shared vocabulary — so a column added
     // to the schema cannot go missing here without failing the parity test.
-    fields: ["id", "measuredAt", "notes", "source", "skinfoldData", ...MEASURED_FIELDS],
+    fields: [
+      "id", "measuredAt", "notes", "source", "skinfoldData",
+      "fieldSources", "impedance",
+      ...MEASURED_FIELDS,
+    ],
+    // The scale's own reference ranges are context for one reading, not a
+    // series — a single-row fetch only. The raw payload is never exposed.
+    detailFields: ["referenceRanges", "externalId"],
     dateField: "measuredAt",
     orderBy: { measuredAt: "desc" },
     search: ["notes"],
