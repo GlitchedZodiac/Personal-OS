@@ -3,6 +3,25 @@
 Running record of the RENPHO body-composition work. Research and the gap
 table are in [`renpho-gap-report.md`](renpho-gap-report.md).
 
+## 2026-10-05 · Phase 3: the Body screen, round 1
+
+Ported from `docs/design/pitaya-body/`.
+
+- **New Body screen**, eight cards on real data: today's weigh-in, target and
+  forecast, composition against reference bands, body map, body-type matrix,
+  trends, tape, milestones. Light and dark.
+- **New metric push-in** for the nine scale metrics and waist: trend, the
+  value against its band with one sentence, weekly readings, what it means.
+- **Targets**: weight, body fat and a date, editable in a sheet. Stored in
+  settings, default 77 kg · 13% · Feb 28.
+- **Tape by voice or keypad.** "waist 86.5 and hips 96" becomes two cards and
+  one Save. English and Spanish site words. Nothing saves until Save.
+- **Milestones**: the weight, BMI and body-fat lines appear on their own;
+  anything else is logged through the Claude connector (`log_milestone`).
+- **Database**: one new table, `body_milestones` (additive).
+- **Not in this round**: back view, the detailed anatomical figure, training
+  mode on the body map, pulling from the scale on demand.
+
 ## 2026-10-04 · Phase 1 (data model) and the sync engine, switched off
 
 **Database** (migration `20261004230000_body_composition_renpho`, additive)
