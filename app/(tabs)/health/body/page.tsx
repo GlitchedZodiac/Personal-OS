@@ -3,694 +3,980 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { BodyMap } from "@/components/body/body-map";
+import { BodyTypeMatrix } from "@/components/body/body-type-matrix";
+import { GoalSheet } from "@/components/body/goal-sheet";
+import { PaceChart } from "@/components/body/pace-chart";
+import { RangeBar } from "@/components/body/range-bar";
+import { TapeSheet, type TapeSheetRequest } from "@/components/body/tape-sheet";
+import {
+  Card,
+  DISPLAY,
+  EstTag,
+  KICKER,
+  LABEL,
+  MicGlyph,
+  SortChip,
+  chipStyle,
+  useBodyTheme,
+  useRevealOnce,
+} from "@/components/body/theme";
+import { TrendChart } from "@/components/body/trend-chart";
 import { useDataLoggedListener } from "@/components/use-data-logged";
-import { SheetPortal } from "@/components/sheet-portal";
+import type { BodySummary } from "@/lib/body-summary";
+import {
+  COMP,
+  COMP_SORTS,
+  type MetricKey,
+  type ParsedTape,
+  RANGES,
+  type RangeKey,
+  SEGMENT_GROUPS,
+  SER,
+  type SegmentKey,
+  TAPE_SITES,
+  TAPE_SORTS,
+  TREND_METRICS,
+  type TapeSite,
+  addDays,
+  agoText,
+  autoMilestones,
+  balance,
+  balanceVerdict,
+  bodyTypeMatrix,
+  buildCompRow,
+  buildTapeRow,
+  cellTitle,
+  dayLabel,
+  daysBetween,
+  describeMuscle,
+  goalProgress,
+  goalsNote,
+  mergeMilestones,
+  monthlyTrail,
+  nearestValue,
+  pace as computePace,
+  pointsInRange,
+  scaleChangeNote,
+  signed,
+  sortCompRows,
+  sortTapeRows,
+  sourceLines,
+} from "@/lib/body-view";
+import { haptic } from "@/lib/haptics";
+import type { HealthGoals } from "@/lib/settings";
 
-// Pitaya Body — full port of the design's Body screen (docs/design/
-// pitaya-app.dc.html, screen 4): scrubable 12-week trend chart
-// (weight/volume/calories), the tape-measure figure with per-point history,
-// progress-photo compare, and the recovery card. Surfaced deviations: the
-// sleep/recovery card renders its honest "arrives with sleep sync" state
-// (no data source until the watch ships it), and the photo compare shows a
-// quiet empty state until two photos exist.
+// Pitaya Body — port of docs/design/pitaya-body/ (Handoff Spec + the DC). One
+// scroll of eight cards: today's weigh-in, target & forecast, composition
+// against reference bands, the body map, the body-type matrix, trends, tape
+// and milestones. The arithmetic lives in lib/body-view.ts; this file lays it
+// out to the spec's numbers.
+//
+// Surfaced deviations (all in docs/state.md):
+//  - Body map: interim front figure only, no shading layer, no Front/Back
+//    toggle and no training mode — none of them exist in the handoff yet.
+//  - Pull-to-sync refreshes from Pitaya; it cannot pull from the scale until
+//    the RENPHO sync is switched on (a login with his account signs his phone
+//    out), so the chip reports when data last arrived.
+//  - Band notes and two "what it means" notes are computed from his numbers
+//    instead of quoting the design's sample morning.
+//  - The dock mic stays the app-wide voice input; the Tape button is the way
+//    into tape-by-voice.
 
-type MetricKey = "weight" | "volume" | "kcal";
+type SyncState = "idle" | "syncing" | "done";
+const SEG_ORDER: SegmentKey[] = ["armRight", "armLeft", "trunk", "legRight", "legLeft"];
+const MONTH = (day: string) => dayLabel(day).split(" ")[0];
 
-interface Overview {
-  date: string;
-  latestWeightKg: number | null;
-  weekLabels: { start: string; end: string };
-  weighIns: { date: string; value: number }[];
-  series: {
-    volume: number[];
-    kcal: (number | null)[];
-  };
-  lastTapedAt: string | null;
-  tape: Record<string, { points: { date: string; value: number }[] }>;
-  photos: { id: string; takenAt: string; imageData: string; weightKg: number | null }[];
-  sleepAvailable: boolean;
-}
-
-// Design's tap points on the figure (viewBox 120×250) → schema fields.
-const BODY_POINTS: { key: string; label: string; cx: number; cy: number }[] = [
-  { key: "neckCm", label: "NECK", cx: 60, cy: 37 },
-  { key: "chestCm", label: "CHEST", cx: 60, cy: 66 },
-  { key: "armsCm", label: "ARM", cx: 93, cy: 75 },
-  { key: "waistCm", label: "WAIST", cx: 60, cy: 101 },
-  { key: "hipsCm", label: "HIPS", cx: 60, cy: 124 },
-  { key: "legsCm", label: "THIGH", cx: 70, cy: 158 },
-  { key: "calvesCm", label: "CALF", cx: 66, cy: 198 },
-];
-
-// The design's body figure, verbatim.
-const FIGURE_PATH =
-  "M60,4 C67.5,4 72.5,9.5 72.5,17.5 C72.5,23.5 70.5,28.5 66.5,31.5 L66.5,36.5 C66.5,40 69,42 73.5,44 C81,46.5 87,48.5 90,52.5 C93,56 94.5,60 95,65 C95.5,73 93.5,81 92,88.5 C90.5,96 89,103 87.5,109 C86.5,114 85.5,118 85.2,121.5 C85,125 86,129 86.5,132.5 C87,136.5 85,139 82.8,138.5 C80.8,138 79.8,135.5 79.6,132.5 C79.2,128.5 78.8,124.5 78.7,121.5 C77.8,113.5 76.4,103 75.4,93 C75,86 74.8,75 76.8,63.5 C75.6,70 74.6,78 74.2,86 C73.8,94 73.6,101 74.6,108 C75.8,115 78.2,120 78.8,127.5 C79.2,137 78,147 76.4,157 C74.8,166 72.8,172.5 71.8,178.5 C71.2,184.5 72,190 72.6,196 C73,203 71.8,212.5 70.4,220.5 C69.8,225.5 69.6,229.5 69.9,232.5 C70.2,235.5 71.8,237.5 73.2,239 C74.8,240.8 74.2,243.5 71,243.5 L63.5,243.5 C61.5,243.5 60.8,241.5 61.1,238.5 C61.4,233 61.6,227 61.4,221.5 C61,212.5 60.4,204 61.2,196.5 C61.9,189.5 62.4,184 62.9,178.5 C63.4,170 63.2,161.5 62.9,154.5 C62.6,148.5 61.8,145 60,142 C58.2,145 57.4,148.5 57.1,154.5 C56.8,161.5 56.6,170 57.1,178.5 C57.6,184 58.1,189.5 58.8,196.5 C59.6,204 59,212.5 58.6,221.5 C58.4,227 58.6,233 58.9,238.5 C59.2,241.5 58.5,243.5 56.5,243.5 L49,243.5 C45.8,243.5 45.2,240.8 46.8,239 C48.2,237.5 49.8,235.5 50.1,232.5 C50.4,229.5 50.2,225.5 49.6,220.5 C48.2,212.5 47,203 47.4,196 C48,190 48.8,184.5 48.2,178.5 C47.2,172.5 45.2,166 43.6,157 C42,147 40.8,137 41.2,127.5 C41.8,120 44.2,115 45.4,108 C46.4,101 46.2,94 45.8,86 C45.4,78 44.4,70 43.2,63.5 C45.2,75 45,86 44.6,93 C43.6,103 42.2,113.5 41.3,121.5 C41.2,124.5 40.8,128.5 40.4,132.5 C40.2,135.5 39.2,138 37.2,138.5 C35,139 33,136.5 33.5,132.5 C34,129 35,125 34.8,121.5 C34.5,118 33.5,114 32.5,109 C31,103 29.5,96 28,88.5 C26.5,81 24.5,73 25,65 C25.5,60 27,56 30,52.5 C33,48.5 39,46.5 46.5,44 C51,42 53.5,40 53.5,36.5 L53.5,31.5 C49.5,28.5 47.5,23.5 47.5,17.5 C47.5,9.5 52.5,4 60,4 Z";
-
-const TAPE_FIELDS: { key: string; label: string }[] = [
-  { key: "weightKg", label: "Weight (kg)" },
-  { key: "neckCm", label: "Neck" },
-  { key: "chestCm", label: "Chest" },
-  { key: "armsCm", label: "Arm" },
-  { key: "waistCm", label: "Waist" },
-  { key: "hipsCm", label: "Hips" },
-  { key: "legsCm", label: "Thigh" },
-  { key: "calvesCm", label: "Calf" },
-];
-
-const fmt = (n: number) => n.toLocaleString("en-US");
-
-function monthDay(dateStr: string) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d))
-    .toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
-    .toUpperCase();
-}
-
-function localDateStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function timeIn(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone }).format(new Date(iso));
 }
 
 export default function BodyPage() {
   const router = useRouter();
-  const [data, setData] = useState<Overview | null>(null);
-  const [metric, setMetric] = useState<MetricKey>("weight");
-  const [scrubIdx, setScrubIdx] = useState<number | null>(null);
-  const [selPoint, setSelPoint] = useState<string | null>(null);
-  const [showTape, setShowTape] = useState(false);
-  const [tapeDraft, setTapeDraft] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [cmp, setCmp] = useState(50);
-  const chartRef = useRef<HTMLDivElement | null>(null);
+  const theme = useBodyTheme();
+  const [data, setData] = useState<BodySummary | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [sync, setSync] = useState<SyncState>("idle");
+  const [pull, setPull] = useState(0);
+  const [pulling, setPulling] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [compSort, setCompSort] = useState(0);
+  const [tapeSort, setTapeSort] = useState(0);
+  const [mapMode, setMapMode] = useState<"muscle" | "fat">("muscle");
+  const [muscle, setMuscle] = useState<string | null>(null);
+  const [trMetric, setTrMetric] = useState<MetricKey>("weight");
+  const [trRange, setTrRange] = useState<RangeKey>("90d");
+  const [custom, setCustom] = useState<{ from: string; to: string } | null>(null);
+  const [trDelta, setTrDelta] = useState("");
+  const [tapeRequest, setTapeRequest] = useState<TapeSheetRequest | null>(null);
+  const [goalOpen, setGoalOpen] = useState(false);
+  const [flash, setFlash] = useState<TapeSite[]>([]);
+  const requestId = useRef(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const sheetOpen = tapeRequest !== null || goalOpen;
 
-  const load = useCallback(() => {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    fetch(`/api/health/body/overview?date=${localDateStr()}&tz=${encodeURIComponent(tz)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setData)
-      .catch(() => setData(null));
-  }, []);
-
-  useEffect(load, [load]);
-  useDataLoggedListener(load);
-
-  // ——— chart geometry (design: 360×150, y = 14 + (1−t)·108) ———
-  // Weight plots the FULL history (daily morning weigh-ins, server-
-  // downsampled ≤96 points); volume/kcal plot 12 Mon-start weeks.
-  const chart = useMemo(() => {
-    if (!data) return null;
-    const raw: { v: number; label: string }[] = [];
-    if (metric === "weight") {
-      for (const w of data.weighIns) raw.push({ v: w.value, label: monthDay(w.date) });
-    } else {
-      const series = data.series[metric] as (number | null)[];
-      series.forEach((v, i) => {
-        if (v == null || v <= 0) return;
-        const [y, m, d] = data.weekLabels.start.split("-").map(Number);
-        const dt = new Date(Date.UTC(y, m - 1, d + i * 7));
-        raw.push({
-          v,
-          label: dt
-            .toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
-            .toUpperCase(),
-        });
-      });
+  const load = useCallback(async (): Promise<BodySummary | null> => {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const res = await fetch(`/api/health/body/summary?tz=${encodeURIComponent(tz)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const next = (await res.json()) as BodySummary;
+      setData(next);
+      setFailed(false);
+      setNow(Date.now());
+      return next;
+    } catch (error) {
+      console.error("Body summary load failed:", error);
+      setFailed(true);
+      return null;
     }
-    const pts: { x: number; y: number; v: number; label: string }[] = [];
-    if (raw.length < 2) return { pts, empty: true as const };
-    const values = raw.map((r) => r.v);
-    const mn = Math.min(...values);
-    const mx = Math.max(...values);
-    const span = mx - mn || 1;
-    const stepX = 347.6 / (raw.length - 1);
-    raw.forEach((r, i) => {
-      pts.push({
-        x: 6 + i * stepX,
-        y: 14 + (1 - (r.v - mn) / span) * 108,
-        v: r.v,
-        label: r.label,
-      });
-    });
-    return { pts, empty: false as const };
-  }, [data, metric]);
-
-  const fv = useCallback(
-    (v: number) =>
-      metric === "weight" ? `${v.toFixed(1)} kg` : metric === "volume" ? `${fmt(Math.round(v))} kg` : `${fmt(Math.round(v))} kcal`,
-    [metric]
-  );
-
-  // Composition mini-series for the SMART SCALE card (12-wk, 3 metrics).
-  const [composition, setComposition] = useState<Record<
-    string,
-    { series: { weekStart: string; value: number }[] }
-  > | null>(null);
+  }, []);
 
   useEffect(() => {
-    Promise.all(
-      ["fat", "muscle", "bmr"].map((m) =>
-        fetch(`/api/health/body/metric?metric=${m}&weeks=12`)
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null)
-      )
-    ).then(([fat, muscle, bmr]) => {
-      if (fat || muscle || bmr) {
-        setComposition({
-          fat: fat ?? { series: [] },
-          muscle: muscle ?? { series: [] },
-          bmr: bmr ?? { series: [] },
-        });
-      }
-    });
+    void load();
+  }, [load]);
+  useDataLoggedListener(() => void load());
+  // Keeps "Synced 12 min ago" honest while the page sits open.
+  useEffect(() => {
+    const tick = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(tick);
   }, []);
 
-  const deltaText = useMemo(() => {
-    if (!chart || chart.empty || chart.pts.length < 2) return "";
-    const first = chart.pts[0].v;
-    const last = chart.pts[chart.pts.length - 1].v;
-    if (metric === "weight") {
-      const d = last - first;
-      const ins = data?.weighIns ?? [];
-      let span = "";
-      if (ins.length >= 2) {
-        const ms =
-          new Date(ins[ins.length - 1].date).getTime() -
-          new Date(ins[0].date).getTime();
-        const wk = Math.max(1, Math.round(ms / (7 * 86_400_000)));
-        span = ` · ${wk} wk`;
+  // ——— sync chip + pull-to-sync (spec §1) ———
+  const doSync = useCallback(async () => {
+    if (sync === "syncing") return;
+    setSync("syncing");
+    const before = data?.latest?.arrivedAt ?? null;
+    const started = Date.now();
+    // A no-op while the RENPHO pull is switched off; the refresh still runs.
+    await fetch("/api/health/body/sync", { method: "POST" }).catch(() => null);
+    const next = await load();
+    await new Promise((r) => setTimeout(r, Math.max(0, 700 - (Date.now() - started))));
+    if (next?.latest && next.latest.arrivedAt !== before) {
+      haptic("success");
+      setSync("done");
+      window.setTimeout(() => setSync("idle"), 3500);
+    } else {
+      setSync("idle");
+    }
+  }, [sync, data, load]);
+
+  const pullRef = useRef({ startY: null as number | null, value: 0, armed: false });
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const state = pullRef.current;
+    const start = (e: TouchEvent) => {
+      state.startY = window.scrollY <= 0 && !sheetOpen && sync !== "syncing" ? e.touches[0].clientY : null;
+      state.armed = false;
+    };
+    const move = (e: TouchEvent) => {
+      if (state.startY == null || window.scrollY > 0) return;
+      const dy = (e.touches[0].clientY - state.startY) * 0.55;
+      if (dy <= 4) return;
+      // Ours, not the browser's rubber band.
+      if (e.cancelable) e.preventDefault();
+      state.value = Math.min(90, dy);
+      if (state.value > 56 && !state.armed) {
+        state.armed = true;
+        haptic("light");
+      } else if (state.value <= 56) state.armed = false;
+      setPull(state.value);
+      setPulling(true);
+    };
+    const end = () => {
+      if (state.startY == null) return;
+      state.startY = null;
+      const go = state.value > 56;
+      state.value = 0;
+      setPull(0);
+      setPulling(false);
+      if (go) void doSync();
+    };
+    el.addEventListener("touchstart", start, { passive: true });
+    el.addEventListener("touchmove", move, { passive: false });
+    el.addEventListener("touchend", end);
+    el.addEventListener("touchcancel", end);
+    return () => {
+      el.removeEventListener("touchstart", start);
+      el.removeEventListener("touchmove", move);
+      el.removeEventListener("touchend", end);
+      el.removeEventListener("touchcancel", end);
+    };
+  }, [sheetOpen, sync, doSync]);
+
+  // ——— everything the cards draw, derived once per payload ———
+  const view = useMemo(() => {
+    if (!data || !data.latest) return null;
+    const { series, tape, goals, today, latest } = data;
+    const fatNow = series.fat[series.fat.length - 1] ?? null;
+    const ffmNow = series.ffm[series.ffm.length - 1]?.value ?? null;
+    const skmNow = series.skm[series.skm.length - 1]?.value ?? null;
+    const bmiNow = series.bmi[series.bmi.length - 1]?.value ?? null;
+
+    const w30 = nearestValue(series.weight, addDays(today, -30));
+    const f30 = fatNow ? nearestValue(series.fat, addDays(today, -30)) : null;
+
+    const compRows = COMP.filter((c) => c.main)
+      .map((spec) =>
+        buildCompRow(spec, series[spec.key as keyof typeof series] ?? [], today, {
+          start: spec.key === "weight" ? data.start.weightKg : undefined,
+          target: spec.key === "weight" ? goals.weightKg : spec.key === "fat" ? goals.bodyFatPct : null,
+        })
+      )
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    const tapeRows = TAPE_SITES.map((site) => ({ site, row: buildTapeRow(site, tape[site.key], today) }));
+    const tapeDays = Object.values(tape).flatMap((points) => points.map((p) => p.day));
+    const lastTaped = tapeDays.length ? tapeDays.sort()[tapeDays.length - 1] : null;
+
+    const trail = monthlyTrail(series.bmi, series.fat);
+    const matrix =
+      bmiNow != null && fatNow
+        ? bodyTypeMatrix({ bmi: bmiNow, bf: fatNow.value }, trail.filter((t) => t.month !== today.slice(0, 7)))
+        : null;
+
+    const milestones = mergeMilestones(
+      autoMilestones({ weight: series.weight, bmi: series.bmi, fat: series.fat, today }),
+      data.milestones
+    );
+
+    const seg = data.segments?.values ?? null;
+    const pair = (l: SegmentKey, r: SegmentKey, field: "muscleKg" | "fatKg") => {
+      const left = seg?.[l][field];
+      const right = seg?.[r][field];
+      return left != null && right != null && left + right > 0 ? balance(left, right) : null;
+    };
+
+    return {
+      fatNow, ffmNow, skmNow, bmiNow, w30, f30, compRows, tapeRows, lastTaped, matrix, milestones, seg,
+      startFat: series.fat[0]?.value ?? null,
+      startBmi: series.bmi[0]?.value ?? null,
+      lost: data.start.weightKg - latest.weightKg,
+      weeks: Math.round(daysBetween(data.start.day, today) / 7),
+      balanceFor: (field: "muscleKg" | "fatKg") => ({
+        arms: pair("armLeft", "armRight", field),
+        legs: pair("legLeft", "legRight", field),
+      }),
+    };
+  }, [data]);
+
+  const pace = useMemo(
+    () => (data ? computePace(data.series.weight, data.today, data.goals) : null),
+    [data]
+  );
+
+  const trendPoints = useMemo(() => {
+    if (!data) return [];
+    const all = trMetric === "waist" ? data.tape.waist : data.series[trMetric as keyof typeof data.series];
+    return pointsInRange(all ?? [], trRange, data.today, custom ?? undefined);
+  }, [data, trMetric, trRange, custom]);
+
+  const saveTape = useCallback(
+    async (readings: ParsedTape[]): Promise<boolean> => {
+      const body: Record<string, unknown> = { measuredAt: new Date().toISOString() };
+      for (const r of readings) body[TAPE_SITES.find((s) => s.key === r.site)!.field] = r.value;
+      try {
+        const res = await fetch("/api/health/body", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } catch {
+        toast.error("Couldn’t save the tape");
+        return false;
       }
-      return `${d > 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} kg${span}`;
-    }
-    if (metric === "volume") {
-      if (first === 0) return "12 wk";
-      return `${last >= first ? "+" : ""}${Math.round(((last - first) / first) * 100)}% · 12 wk`;
-    }
-    const avg = chart.pts.reduce((s, p) => s + p.v, 0) / chart.pts.length;
-    const dev = Math.round(Math.max(...chart.pts.map((p) => Math.abs(p.v - avg))));
-    return `steady · ±${dev}`;
-  }, [chart, metric]);
+      await load();
+      // The row flashes once the sheet has closed, then fades over .9s.
+      window.setTimeout(() => setFlash(readings.map((r) => r.site)), 1300);
+      window.setTimeout(() => setFlash([]), 2600);
+      return true;
+    },
+    [load]
+  );
 
-  const selected = useMemo(() => {
-    if (!chart || chart.empty || chart.pts.length === 0) return null;
-    if (scrubIdx == null) return chart.pts[chart.pts.length - 1];
-    // scrubIdx carries the target x — snap to the nearest point
-    let best = chart.pts[0];
-    for (const p of chart.pts) {
-      if (Math.abs(p.x - scrubIdx) < Math.abs(best.x - scrubIdx)) best = p;
-    }
-    return best;
-  }, [chart, scrubIdx]);
+  const saveGoals = useCallback(
+    async (draft: HealthGoals) => {
+      setGoalOpen(false);
+      if (!data) return;
+      const g = data.goals;
+      if (draft.weightKg === g.weightKg && draft.bodyFatPct === g.bodyFatPct && draft.byDate === g.byDate) return;
+      setData({ ...data, goals: draft });
+      try {
+        const res = await fetch("/api/health/body/goals", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(draft),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } catch {
+        toast.error("Couldn’t save the targets");
+        setData({ ...data, goals: g });
+      }
+    },
+    [data]
+  );
 
-  const scrub = (clientX: number) => {
-    const rect = chartRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setScrubIdx(((clientX - rect.left) / rect.width) * 360);
+  const openTape = (mode: "voice" | "pad", site?: TapeSite) =>
+    setTapeRequest({ id: ++requestId.current, mode, site });
+
+  const rootStyle = { background: "var(--b-bg)", minHeight: "100dvh", padding: "48px 22px 150px" } as const;
+
+  if (!data || !view || !data.latest) {
+    return (
+      <div ref={rootRef} className="body-theme" data-theme={theme} style={rootStyle}>
+        <Header pill={null} />
+        <Card delay={0.04} padding="20px" style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 13, color: "var(--b-sub)", lineHeight: 1.55 }}>
+            {failed
+              ? "Couldn’t load your body data. Pull down to try again."
+              : data
+                ? "No weigh-ins yet. Step on the scale and your first reading lands here."
+                : "Loading…"}
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  const { latest, goals, today } = data;
+  const dLast = data.previous ? latest.weightKg - data.previous.weightKg : null;
+  const d30 = view.w30 != null ? latest.weightKg - view.w30 : null;
+  const fd30 = view.fatNow && view.f30 != null ? view.fatNow.value - view.f30 : null;
+  const src = sourceLines(latest);
+  const toGo = latest.weightKg - goals.weightKg;
+  const progress = goalProgress(latest.weightKg, goals.weightKg, data.start.weightKg);
+  const fatToGo = view.fatNow ? view.fatNow.value - goals.bodyFatPct : null;
+  const note = goalsNote(goals, view.ffmNow);
+  const kg = (d: number) => (Math.abs(d) < 0.05 ? "±0 kg" : signed(d, `${Math.abs(d).toFixed(1)} kg`));
+
+  const syncText =
+    sync === "syncing"
+      ? data.sync.enabled ? "Syncing from scale…" : "Checking for readings…"
+      : sync === "done"
+        ? "Synced just now"
+        : `Synced ${agoText(new Date(latest.arrivedAt).getTime(), now)}`;
+  const pullH = sync === "syncing" ? 44 : pull;
+
+  const segText = (key: SegmentKey) => {
+    const r = view.seg?.[key];
+    const kgValue = mapMode === "muscle" ? r?.muscleKg : r?.fatKg;
+    const pct = mapMode === "muscle" ? r?.musclePct : r?.fatPct;
+    return {
+      value: kgValue != null ? `${kgValue.toFixed(2)} kg` : "—",
+      pct: pct != null ? `${pct.toFixed(0)}% of std` : "",
+    };
   };
+  const bal = view.balanceFor(mapMode === "muscle" ? "muscleKg" : "fatKg");
+  const verdict = balanceVerdict(bal.arms, bal.legs);
+  const selectedMuscle = muscle ? describeMuscle(muscle) : null;
+  const mapCaption = (() => {
+    if (!view.seg) return "";
+    const pcts = SEG_ORDER.map((k) => (mapMode === "muscle" ? view.seg![k].musclePct : view.seg![k].fatPct));
+    const lines =
+      mapMode === "muscle"
+        ? ["Deeper = more muscle than standard.", pcts.every((p) => p != null && p > 110) ? "Every segment above 110%." : ""]
+        : [
+            "Deeper = more fat than standard.",
+            (view.seg.armLeft.fatPct ?? 100) < 80 && (view.seg.armRight.fatPct ?? 100) < 80 && (view.seg.trunk.fatPct ?? 0) > 100
+              ? "Arms lean; trunk carries what’s left."
+              : "",
+          ];
+    if (data.segments && data.segments.day !== today) lines.push(`Reading from ${dayLabel(data.segments.day)}.`);
+    return lines.filter(Boolean).join("\n");
+  })();
 
-  // ——— tape panel ———
-  const activePoint = selPoint ?? BODY_POINTS.find((p) => (data?.tape[p.key]?.points.length ?? 0) > 0)?.key ?? "waistCm";
-  const activeDef = BODY_POINTS.find((p) => p.key === activePoint);
-  const activeHistory = data?.tape[activePoint]?.points ?? [];
-  const activeLatest = activeHistory[activeHistory.length - 1];
-  const activeFirst = activeHistory[0];
-  const miniBars = useMemo(() => {
-    if (activeHistory.length === 0) return [];
-    const picks =
-      activeHistory.length >= 3
-        ? [activeHistory[0], activeHistory[Math.floor(activeHistory.length / 2)], activeLatest]
-        : activeHistory;
-    const vals = picks.map((p) => p.value);
-    const mn = Math.min(...vals);
-    const mx = Math.max(...vals);
-    const span = mx - mn || 1;
-    return picks.map((p) => ({
-      label: monthDay(p.date).split(" ")[0],
-      pct: 40 + ((p.value - mn) / span) * 60,
-    }));
-  }, [activeHistory, activeLatest]);
-
-  const saveTape = async () => {
-    const payload: Record<string, number> = {};
-    for (const { key } of TAPE_FIELDS) {
-      const v = Number.parseFloat(tapeDraft[key] ?? "");
-      if (Number.isFinite(v) && v > 0) payload[key] = v;
-    }
-    if (Object.keys(payload).length === 0) {
-      toast("Nothing to save — add at least one number.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch("/api/health/body", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error();
-      toast.success("Taped.");
-      setShowTape(false);
-      setTapeDraft({});
-      load();
-    } catch {
-      toast.error("Couldn't save the tape");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const photos = data?.photos ?? [];
-  const canCompare = photos.length >= 2;
-  const newer = photos[0];
-  const older = photos[1];
+  const tapeList = sortTapeRows(
+    view.tapeRows.filter((t) => t.row).map((t) => t.row!),
+    tapeSort
+  );
+  const untaped = view.tapeRows.filter((t) => !t.row).map((t) => t.site);
 
   return (
-    <div className="px-4 pb-32 pt-12 lg:px-0 lg:pt-8 max-w-lg lg:max-w-2xl">
-      {/* Header */}
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="micro-label">Trends · Measurements · Recovery</p>
-          <h1
-            className="mt-0.5 text-3xl font-bold tracking-[-0.02em]"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            Body
-          </h1>
+    <div ref={rootRef} className="body-theme" data-theme={theme} style={rootStyle}>
+      {/* Pull-to-sync well */}
+      <div
+        style={{
+          height: pullH, overflow: "hidden", display: "flex", alignItems: "flex-end", justifyContent: "center",
+          transition: pulling ? "none" : "height .35s cubic-bezier(.22,.9,.3,1)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, fontWeight: 600, color: "var(--b-deep)", paddingBottom: 10 }}>
+          <span
+            style={{
+              width: 14, height: 14, borderRadius: 99, border: "2px solid var(--b-edge)", borderTopColor: "var(--b-rasp)",
+              animation: sync === "syncing" ? "body-spin .8s linear infinite" : "none",
+            }}
+          />
+          {sync === "syncing"
+            ? syncText
+            : pull > 56
+              ? "Release to sync"
+              : data.sync.enabled ? "Pull to sync from scale" : "Pull to check for readings"}
         </div>
-        {data?.latestWeightKg != null && (
-          <span className="rounded-full bg-accent px-3 py-[5px] text-xs font-semibold tabular-nums text-[#8C2F51]">
-            {data.latestWeightKg.toFixed(1)} kg
-          </span>
-        )}
       </div>
 
-      {/* Trend chart */}
-      <div className="mt-[18px] rounded-[18px] bg-card p-[18px] shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
-        <div className="flex items-center justify-between">
-          <div className="flex gap-1.5">
-            {(
-              [
-                ["weight", "Weight"],
-                ["volume", "Volume"],
-                ["kcal", "Calories"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => {
-                  setMetric(key);
-                  setScrubIdx(null);
-                }}
-                className="rounded-full border border-border px-3 py-[5px] text-[11.5px] font-semibold"
-                style={{
-                  fontFamily: "var(--font-display)",
-                  background: metric === key ? "#A63D63" : "#FFFFFF",
-                  color: metric === key ? "#FFFFFF" : "#66646C",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {/* design 11e: the delta chip drills into the weekly trend view */}
-          <button
-            onClick={() =>
-              router.push(
-                `/health/body/metric?m=${metric === "weight" ? "weight" : metric === "volume" ? "volume" : "kcal"}`
-              )
-            }
-            className="flex items-center gap-1 rounded-full bg-accent px-2.5 py-[5px] text-[10.5px] font-semibold text-[#8C2F51] hover:bg-[#F0D3E0]"
-          >
-            {deltaText} ›
-          </button>
-        </div>
+      <Header pill={`${signed(-view.lost, Math.abs(view.lost).toFixed(1))} kg · since ${MONTH(data.start.day)}`} />
 
-        {chart && !chart.empty ? (
-          <div className="relative mt-3" ref={chartRef}>
-            <svg width="100%" viewBox="0 0 360 150" className="block">
-              <line x1="0" y1="30" x2="360" y2="30" stroke="#F2F1F2" strokeWidth="1" />
-              <line x1="0" y1="75" x2="360" y2="75" stroke="#F2F1F2" strokeWidth="1" />
-              <line x1="0" y1="120" x2="360" y2="120" stroke="#F2F1F2" strokeWidth="1" />
-              <polygon
-                points={`${chart.pts[0].x},128 ${chart.pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} ${chart.pts[chart.pts.length - 1].x},128`}
-                fill="#F6E3EB"
-              />
-              <polyline
-                points={chart.pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
-                fill="none"
-                stroke="#A63D63"
-                strokeWidth="2.5"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-              {/* Per-point dots only while the series is sparse — the
-                  full-history weight line (90+ daily points) reads as a
-                  clean stroke, not a bead chain. */}
-              {chart.pts.length <= 20 &&
-                chart.pts.map((p) => (
-                  <circle
-                    key={p.x}
-                    cx={p.x}
-                    cy={p.y}
-                    r="3"
-                    fill="#FFFFFF"
-                    stroke="#A63D63"
-                    strokeWidth="1.8"
-                  />
-                ))}
-              {selected && (
-                <circle
-                  cx={selected.x}
-                  cy={selected.y}
-                  r="5.5"
-                  fill="#A63D63"
-                  stroke="#FFFFFF"
-                  strokeWidth="2"
-                />
-              )}
-            </svg>
-            <div
-              className="absolute inset-0 cursor-ew-resize touch-none"
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture?.(e.pointerId);
-                scrub(e.clientX);
-              }}
-              onPointerMove={(e) => {
-                if (e.buttons > 0) scrub(e.clientX);
+      {/* TODAY'S WEIGH-IN */}
+      <Card delay={0.04} padding="20px" style={{ marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={KICKER}>
+            {latest.isToday ? "TODAY’S WEIGH-IN" : `LAST WEIGH-IN · ${dayLabel(latest.day).toUpperCase()}`} ·{" "}
+            {timeIn(latest.measuredAt, data.timeZone)}
+          </div>
+          <div
+            role="button"
+            onClick={() => void doSync()}
+            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 500, color: "var(--b-faint)", cursor: "pointer" }}
+          >
+            <span
+              style={{
+                width: 6, height: 6, borderRadius: 99,
+                background: sync === "syncing" ? "var(--b-rasp)" : sync === "done" ? "var(--b-green)" : "var(--b-ghost)",
+                animation: sync === "syncing" ? "body-pulse .9s ease-in-out infinite" : "none",
               }}
             />
-            {selected && (
+            {syncText}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 24, marginTop: 12 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+            <span style={{ ...DISPLAY, fontSize: 54, fontWeight: 700, color: "var(--b-ink)", letterSpacing: "-0.03em", lineHeight: 1 }}>
+              {latest.weightKg.toFixed(1)}
+            </span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: "var(--b-faint)" }}>kg</span>
+          </div>
+          {view.fatNow && (
+            <div style={{ paddingBottom: 5 }}>
+              <div style={{ ...LABEL, display: "flex", alignItems: "center", gap: 5 }}>
+                BODY FAT <EstTag />
+                {view.fatNow.day !== latest.day && <span style={{ letterSpacing: ".08em" }}>· {dayLabel(view.fatNow.day).toUpperCase()}</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 3, marginTop: 3 }}>
+                <span style={{ ...DISPLAY, fontSize: 26, fontWeight: 700, color: "var(--b-ink)", lineHeight: 1 }}>
+                  {view.fatNow.value.toFixed(1)}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--b-faint)" }}>%</span>
+              </div>
+            </div>
+          )}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.3fr", gap: 12, marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--b-rule)" }}>
+          <div>
+            <div style={LABEL}>VS LAST</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4, color: dLast != null && dLast < -0.05 ? "var(--b-green)" : "var(--b-sub)" }}>
+              {dLast != null ? kg(dLast) : "—"}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--b-faint)", marginTop: 2 }}>
+              {data.previous ? `${dayLabel(data.previous.day)} · ${data.previous.weightKg.toFixed(1)}` : "first reading"}
+            </div>
+          </div>
+          <div>
+            <div style={LABEL}>VS 30 DAYS</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4, color: d30 != null && d30 < -0.05 ? "var(--b-green)" : "var(--b-sub)" }}>
+              {d30 != null ? kg(d30) : "—"}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--b-faint)", marginTop: 2 }}>
+              {fd30 != null ? `fat ${Math.abs(fd30) < 0.05 ? "±0" : signed(fd30, Math.abs(fd30).toFixed(1))} pt` : " "}
+            </div>
+          </div>
+          <div>
+            <div style={LABEL}>SOURCE</div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--b-ink)", marginTop: 4 }}>{src.device}</div>
+            <div style={{ fontSize: 11, color: "var(--b-faint)", marginTop: 2 }}>{src.via}</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* TARGET & FORECAST */}
+      <Card delay={0.08} padding="20px">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={KICKER}>TARGET · {dayLabel(goals.byDate).toUpperCase()}</div>
+          <button
+            onClick={() => setGoalOpen(true)}
+            style={{ ...DISPLAY, fontSize: 11.5, fontWeight: 600, color: "var(--b-deep)", background: "var(--b-wash)", border: "none", borderRadius: 8, padding: "6px 11px", cursor: "pointer" }}
+          >
+            Edit targets
+          </button>
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 10 }}>
+          <span style={{ ...DISPLAY, fontSize: 22, fontWeight: 700, color: "var(--b-ink)" }}>
+            {goals.weightKg} kg · {goals.bodyFatPct}%
+          </span>
+          <span style={{ fontSize: 12, color: "var(--b-sub)" }}>{toGo > 0 ? `${toGo.toFixed(1)} kg to go` : "arrived"}</span>
+        </div>
+        <div style={{ position: "relative", height: 22, marginTop: 12 }}>
+          <div style={{ position: "absolute", left: 0, right: 0, top: 9, height: 4, borderRadius: 99, background: "var(--b-track)" }} />
+          <div style={{ position: "absolute", left: 0, top: 9, height: 4, borderRadius: 99, background: "var(--b-rasp)", opacity: 0.35, width: `${progress.toFixed(1)}%`, transition: "width 1s cubic-bezier(.22,.9,.3,1)" }} />
+          <div style={{ position: "absolute", top: 7, left: -1, width: 6, height: 6, borderRadius: 99, border: "1.5px solid var(--b-faint)", background: "var(--b-card)" }} />
+          <div style={{ position: "absolute", top: 7, right: 0, width: 7, height: 7, background: "var(--b-ink)", transform: "rotate(45deg)" }} />
+          <div style={{ position: "absolute", top: 6, width: 10, height: 10, borderRadius: 99, background: "var(--b-rasp)", boxShadow: "0 0 0 2px var(--b-card)", left: `calc(${progress.toFixed(1)}% - 5px)`, transition: "left 1s cubic-bezier(.22,.9,.3,1)" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--b-faint)", letterSpacing: ".06em", marginTop: -2 }}>
+          <span>{data.start.weightKg.toFixed(1)} · {MONTH(data.start.day).toUpperCase()}</span>
+          <span style={{ color: "var(--b-deep)", fontWeight: 600 }}>{progress.toFixed(0)}% of the way</span>
+          <span>{goals.weightKg} kg</span>
+        </div>
+
+        {pace && (
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--b-rule)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, letterSpacing: "0.12em", fontWeight: 600, color: "var(--b-faint)" }}>
+              <span>PACE NEEDED VS PACE YOU&apos;RE ON</span>
+              <span>KG / WK</span>
+            </div>
+            <PaceChart pace={pace} goalWeightKg={goals.weightKg} goalDay={goals.byDate} />
+            <div style={{ display: "flex", gap: 14, marginTop: 8 }}>
+              <div style={{ flex: 1, background: "var(--b-card2)", borderRadius: 12, padding: "10px 12px" }}>
+                <div style={{ ...LABEL, letterSpacing: "0.12em" }}>NEEDED</div>
+                <div style={{ ...DISPLAY, fontSize: 18, fontWeight: 700, color: "var(--b-ink)", marginTop: 2 }}>
+                  {toGo > 0 ? pace.needed.toFixed(2) : "—"}
+                </div>
+              </div>
+              <div style={{ flex: 1, background: "var(--b-wash)", borderRadius: 12, padding: "10px 12px" }}>
+                <div style={{ ...LABEL, letterSpacing: "0.12em", color: "var(--b-deep)" }}>YOU&apos;RE ON</div>
+                <div style={{ ...DISPLAY, fontSize: 18, fontWeight: 700, color: "var(--b-deep)", marginTop: 2 }}>
+                  {pace.rate < 0 ? `−${Math.abs(pace.rate).toFixed(2)}` : pace.rate.toFixed(2)}
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: 13, lineHeight: 1.55, color: "var(--b-ink)", marginTop: 12 }}>{pace.sentence}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--b-rule)" }}>
+              <div style={{ fontSize: 12.5, color: "var(--b-sub)" }}>Body fat target</div>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--b-ink)" }}>
+                {view.fatNow && fatToGo != null
+                  ? fatToGo <= 0
+                    ? `${goals.bodyFatPct}% · arrived (${view.fatNow.value.toFixed(1)})`
+                    : `${goals.bodyFatPct}% · ${fatToGo.toFixed(1)} pt to go (${view.fatNow.value.toFixed(1)})`
+                  : `${goals.bodyFatPct}%`}
+              </div>
+            </div>
+            {note && <div style={{ fontSize: 11.5, lineHeight: 1.5, color: "var(--b-faint)", marginTop: 8 }}>{note}</div>}
+          </div>
+        )}
+      </Card>
+
+      {/* COMPOSITION OVERVIEW */}
+      <Card delay={0.12} padding="18px 20px 10px">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={KICKER}>COMPOSITION · SMART SCALE</div>
+          <SortChip label={COMP_SORTS[compSort]} onTap={() => setCompSort((n) => (n + 1) % 3)} />
+        </div>
+        <div style={{ marginTop: 6 }}>
+          {sortCompRows(view.compRows, compSort).map((r) => (
+            <div
+              key={r.key}
+              role="button"
+              onClick={() => router.push(`/health/body/metric?m=${r.key}`)}
+              style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 0", borderBottom: "1px solid var(--b-rule)", cursor: "pointer" }}
+            >
+              <div style={{ width: 108, flex: "none" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--b-ink)", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
+                  {r.label}
+                  {r.estimate && <EstTag />}
+                </div>
+                <div style={{ fontSize: 10.5, color: r.good ? "var(--b-green)" : "var(--b-faint)", marginTop: 2 }}>{r.d30Text} · 30d</div>
+              </div>
+              <RangeBar geometry={r} />
+              <div style={{ ...DISPLAY, width: 72, flex: "none", textAlign: "right", fontSize: 15, fontWeight: 700, color: "var(--b-ink)" }}>
+                {r.valueText}
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--b-faint)", marginLeft: 2 }}>{r.unit}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", fontSize: 10.5, color: "var(--b-faint)", padding: "10px 0 6px", lineHeight: 1.5 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 14, height: 6, borderRadius: 99, background: "var(--b-band)" }} />
+            reference band
+            {data.profile.age != null ? ` · ${data.profile.age} y` : ""}
+            {data.profile.heightCm != null ? ` · ${data.profile.heightCm} cm` : ""}
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 6, height: 6, borderRadius: 99, border: "1.5px solid var(--b-faint)" }} />
+            {MONTH(data.start.day)} start
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--b-rasp)" }} />
+            now
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 6, height: 6, background: "var(--b-ink)", transform: "rotate(45deg)" }} />
+            target
+          </span>
+          <span>EST = bioimpedance estimate</span>
+        </div>
+      </Card>
+
+      {/* BODY MAP */}
+      <Card delay={0.16} padding="18px 20px 20px">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={KICKER}>BODY MAP · SEGMENTAL</div>
+          <div style={{ display: "flex", background: "var(--b-card2)", border: "1px solid var(--b-rule2)", borderRadius: 99, padding: 2 }}>
+            {(["muscle", "fat"] as const).map((m) => (
               <div
-                className="pointer-events-none absolute whitespace-nowrap rounded-[7px] bg-foreground px-2 py-[5px] text-[11px] font-semibold tabular-nums text-background"
+                key={m}
+                role="button"
+                aria-pressed={mapMode === m}
+                onClick={() => setMapMode(m)}
                 style={{
-                  left: `${Math.max(2, Math.min(272, selected.x - 44)) / 3.6}%`,
-                  top: selected.y - 38,
-                  transition: "left .15s ease, top .15s ease",
+                  padding: "5px 12px", borderRadius: 99, fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+                  background: mapMode === m ? "var(--b-rasp)" : "var(--b-chip)", color: mapMode === m ? "#FFFFFF" : "var(--b-sub)",
+                  transition: "background .3s, color .3s",
                 }}
               >
-                {fv(selected.v)} · {selected.label}
+                {m === "muscle" ? "Muscle" : "Fat"}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 150px 1fr", gap: 6, alignItems: "center", marginTop: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: 280, padding: "22px 0 18px", textAlign: "right" }}>
+            <SegLabel title="RIGHT ARM" {...segText("armRight")} />
+            <SegLabel title="RIGHT LEG" {...segText("legRight")} />
+          </div>
+          <BodyMap mode={mapMode} segments={view.seg} selected={muscle} onSelect={setMuscle} />
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: 280, padding: "22px 0 18px" }}>
+            <SegLabel title="LEFT ARM" {...segText("armLeft")} />
+            <SegLabel title="LEFT LEG" {...segText("legLeft")} />
+          </div>
+        </div>
+        {view.seg ? (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginTop: -6 }}>
+              <div style={{ flex: "none", whiteSpace: "nowrap" }}>
+                <div style={{ ...LABEL, letterSpacing: "0.12em" }}>TRUNK</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, whiteSpace: "nowrap" }}>
+                  <span style={{ ...DISPLAY, fontSize: 16, fontWeight: 700, color: "var(--b-ink)" }}>{segText("trunk").value}</span>
+                  <span style={{ fontSize: 10.5, color: "var(--b-sub)" }}>{segText("trunk").pct}</span>
+                </div>
+              </div>
+              <div style={{ flex: 1, minWidth: 0, maxWidth: 200, fontSize: 11, color: "var(--b-faint)", textAlign: "right", lineHeight: 1.4, whiteSpace: "pre-line" }}>
+                {mapCaption}
+              </div>
+            </div>
+            {selectedMuscle && muscle && (
+              <div
+                style={{
+                  marginTop: 12, background: "var(--b-card2)", borderRadius: 12, padding: "10px 12px",
+                  display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12,
+                  animation: "body-rise .25s ease both",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--b-ink)", textTransform: "capitalize" }}>{selectedMuscle.name}</div>
+                  <div style={{ fontSize: 10.5, color: "var(--b-faint)", marginTop: 1 }}>
+                    {SEGMENT_GROUPS[selectedMuscle.segment].label} · the scale reads the whole segment
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flex: "none" }}>
+                  <div style={{ ...DISPLAY, fontSize: 15, fontWeight: 700, color: "var(--b-ink)" }}>{segText(selectedMuscle.segment).value}</div>
+                  <div style={{ fontSize: 10.5, color: "var(--b-sub)" }}>{segText(selectedMuscle.segment).pct}</div>
+                </div>
               </div>
             )}
-            <div className="mt-0.5 flex justify-between text-[10px] text-muted-foreground">
-              <span>{chart.pts[0].label}</span>
-              <span>touch &amp; drag</span>
-              <span>{chart.pts[chart.pts.length - 1].label}</span>
-            </div>
-          </div>
-        ) : (
-          <p className="mt-6 pb-4 text-center text-[12.5px] text-muted-foreground">
-            Not enough {metric === "weight" ? "weigh-ins" : metric === "volume" ? "training" : "food logs"} in the last 12 weeks yet — log a couple and the line appears.
-          </p>
-        )}
-      </div>
-
-      {/* BODY COMPOSITION · SMART SCALE (design 11e) — tap a metric to
-          drill into its weekly trend */}
-      {composition && (
-        <div className="mt-3 rounded-[18px] bg-card p-[18px] shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
-          <div className="flex items-center justify-between">
-            <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
-              BODY COMPOSITION · SMART SCALE
-            </p>
-            <p className="text-[11px] text-muted-foreground">12 weeks</p>
-          </div>
-          <div className="mt-3.5 grid grid-cols-3 gap-3.5">
-            {(
-              [
-                ["fat", "BODY FAT", "%", "#A63D63", true],
-                ["muscle", "MUSCLE", " kg", "#232227", false],
-                ["bmr", "BMR", "", "#A9A7AE", false],
-              ] as const
-            ).map(([key, label, unit, color, downGood]) => {
-              const s = composition[key];
-              if (!s || s.series.length === 0) return <div key={key} />;
-              const last = s.series[s.series.length - 1].value;
-              const delta = s.series.length >= 2 ? last - s.series[0].value : 0;
-              const good = downGood ? delta <= 0 : delta >= 0;
-              const vals = s.series.map((p) => p.value);
-              const mn = Math.min(...vals);
-              const span = Math.max(...vals) - mn || 1;
-              const spark = vals
-                .map(
-                  (v, i) =>
-                    `${((i / Math.max(1, vals.length - 1)) * 100).toFixed(1)},${(3 + (1 - (v - mn) / span) * 20).toFixed(1)}`
-                )
-                .join(" ");
-              return (
-                <button key={key} onClick={() => router.push(`/health/body/metric?m=${key}`)} className="text-left hover:opacity-75">
-                  <p className="text-[9.5px] font-semibold tracking-[0.08em] text-muted-foreground">
-                    {label} ›
-                  </p>
-                  <p
-                    className="mt-[3px] text-[19px] font-bold text-foreground tabular-nums"
-                    style={{ fontFamily: "var(--font-display)" }}
-                  >
-                    {key === "bmr" ? fmt(Math.round(last)) : last.toFixed(1)}
-                    {unit && <span className="text-[11px] text-[#66646C]">{unit}</span>}
-                  </p>
-                  <p
-                    className="text-[10.5px] font-semibold"
-                    style={{ color: good ? "#5E9B72" : "#D9A23E" }}
-                  >
-                    {delta >= 0 ? "+" : "−"}
-                    {key === "bmr"
-                      ? `${fmt(Math.round(Math.abs(delta)))} kcal`
-                      : Math.abs(delta).toFixed(1)}
-                  </p>
-                  <svg width="100%" height="26" viewBox="0 0 100 26" preserveAspectRatio="none" className="mt-[5px]">
-                    <polyline points={spark} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </button>
-              );
-            })}
-          </div>
-          <p className="mt-3 text-[11px] leading-[1.5] text-muted-foreground">
-            Tap a metric to drill in · syncs each weigh-in from your smart scale.
-          </p>
-        </div>
-      )}
-
-      {/* Measurements */}
-      <div className="mt-3 rounded-[18px] bg-card p-[18px] shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
-            MEASUREMENTS{data?.lastTapedAt ? ` · TAPED ${monthDay(data.lastTapedAt)}` : ""}
-          </p>
-          <button
-            onClick={() => setShowTape(true)}
-            className="rounded-[8px] bg-primary px-3.5 py-[7px] text-xs font-semibold text-white"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            + New tape
-          </button>
-        </div>
-        <div className="flex gap-4">
-          <svg width="104" height="217" viewBox="0 0 120 250" className="shrink-0">
-            <path
-              d={FIGURE_PATH}
-              fill="#F2F1F2"
-              stroke="#E4E2E6"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-            <path d="M47,64 C53,69 67,69 73,64" fill="none" stroke="#E6E0E4" strokeWidth="1.2" />
-            <path d="M60,72 L60,116" stroke="#E6E0E4" strokeWidth="1.2" />
-            {BODY_POINTS.map((p) => (
-              <circle
-                key={p.key}
-                cx={p.cx}
-                cy={p.cy}
-                r="6"
-                fill="#A63D63"
-                stroke="#FFFFFF"
-                strokeWidth="2"
-                opacity={activePoint === p.key ? 1 : 0.55}
-                className="cursor-pointer"
-                onClick={() => setSelPoint(p.key)}
-              />
-            ))}
-          </svg>
-          <div className="min-w-0 flex-1">
-            <div className="rounded-[12px] bg-accent p-3.5">
-              <p className="text-[10.5px] font-semibold tracking-[0.14em] text-[#8C2F51]">
-                {activeDef?.label ?? ""}
-              </p>
-              {activeLatest ? (
-                <>
-                  <p
-                    className="mt-1 text-[28px] font-bold tabular-nums text-foreground"
-                    style={{ fontFamily: "var(--font-display)" }}
-                  >
-                    {activeLatest.value}{" "}
-                    <span className="text-[13px] font-normal text-secondary-foreground">cm</span>
-                  </p>
-                  {activeFirst && activeFirst !== activeLatest && (
-                    <p className="mt-0.5 text-xs font-semibold text-[#8C2F51]">
-                      {activeLatest.value - activeFirst.value >= 0 ? "+" : "−"}
-                      {Math.abs(activeLatest.value - activeFirst.value).toFixed(1)} since{" "}
-                      {monthDay(activeFirst.date).split(" ")[0]}
-                    </p>
-                  )}
-                  {miniBars.length > 1 && (
-                    <>
-                      <div className="mt-2.5 flex h-8 items-end gap-1">
-                        {miniBars.map((b, i) => (
-                          <div
-                            key={i}
-                            className="flex-1 rounded-t"
-                            style={{
-                              height: `${b.pct}%`,
-                              background: ["#DCA8BE", "#C97D9C", "#A63D63"][
-                                i + (3 - miniBars.length)
-                              ],
-                            }}
-                          />
-                        ))}
-                      </div>
-                      <div className="mt-[3px] flex justify-between text-[9px] text-muted-foreground">
-                        {miniBars.map((b, i) => (
-                          <span key={i}>{b.label}</span>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </>
-              ) : (
-                <p className="mt-2 text-[12px] leading-relaxed text-secondary-foreground">
-                  No tape yet for this point — grab the measuring tape and hit + New tape.
-                </p>
-              )}
-            </div>
-            <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
-              Tap a point on the body.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Progress photos */}
-      <div className="mt-3 rounded-[18px] bg-card p-[18px] shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
-        <div className="mb-2.5 flex items-center justify-between">
-          <p className="text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
-            PROGRESS PHOTOS
-          </p>
-          <p className="text-[11px] text-muted-foreground">from weigh-ins</p>
-        </div>
-        {canCompare ? (
-          <>
-            <div className="relative h-[150px] overflow-hidden rounded-[12px]">
-              <div
-                className="absolute inset-0 bg-cover bg-center"
-                style={{ backgroundImage: `url(${newer.imageData})` }}
-              />
-              <span className="absolute bottom-1.5 right-2 rounded bg-black/50 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.1em] text-white">
-                {monthDay(newer.takenAt.slice(0, 10))}
-                {newer.weightKg ? ` · ${newer.weightKg.toFixed(1)} KG` : ""}
-              </span>
-              <div
-                className="absolute bottom-0 left-0 top-0 overflow-hidden"
-                style={{ width: `${cmp}%` }}
-              >
-                <div
-                  className="h-[150px] bg-cover bg-center"
-                  style={{
-                    backgroundImage: `url(${older.imageData})`,
-                    width: chartRef.current?.getBoundingClientRect().width ?? 360,
-                  }}
-                />
-                <span className="absolute bottom-1.5 left-2 rounded bg-black/50 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.1em] text-white">
-                  {monthDay(older.takenAt.slice(0, 10))}
-                  {older.weightKg ? ` · ${older.weightKg.toFixed(1)} KG` : ""}
-                </span>
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--b-rule)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, letterSpacing: "0.12em", fontWeight: 600, color: "var(--b-faint)" }}>
+                <span>LEFT · RIGHT BALANCE</span>
+                {verdict && <span style={{ color: verdict.balanced ? "var(--b-green)" : "var(--b-sub)" }}>{verdict.text}</span>}
               </div>
-              <div
-                className="absolute bottom-0 top-0 w-0.5 bg-white"
-                style={{ left: `${cmp}%` }}
-              />
+              <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 92px", gap: 12, alignItems: "center", marginTop: 10 }}>
+                {([["Arms", bal.arms], ["Legs", bal.legs]] as const).map(([name, b]) =>
+                  b ? (
+                    <BalanceRow key={name} name={name} offsetPx={b.offsetPx} text={b.text} />
+                  ) : null
+                )}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--b-ghost)", letterSpacing: ".08em", marginTop: 6, paddingLeft: 64, paddingRight: 104 }}>
+                <span>RIGHT</span>
+                <span>LEFT</span>
+              </div>
             </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={cmp}
-              onChange={(e) => setCmp(Number(e.target.value))}
-              className="mt-2.5 w-full accent-[#A63D63]"
-            />
           </>
         ) : (
-          <p className="py-3 text-center text-[12.5px] text-muted-foreground">
-            Two photos make a comparison — add one at your next weigh-in.
-          </p>
-        )}
-      </div>
-
-      {/* Recovery — honest state until the watch syncs sleep */}
-      <div className="mt-3 rounded-[18px] border border-[#362931] bg-[#1B1518] p-[18px]">
-        <div className="flex items-center justify-between">
-          <p className="text-[10.5px] font-semibold tracking-[0.16em] text-[#7E6F77]">
-            LAST NIGHT · APPLE WATCH
-          </p>
-        </div>
-        <p className="mt-3 text-[12.5px] leading-relaxed text-[#B3A3AC]">
-          Recovery score, HRV, resting HR and sleep stages land here the night
-          your watch starts syncing sleep.
-        </p>
-      </div>
-
-      {/* ——— New tape sheet ——— */}
-      {showTape && (
-        <SheetPortal>
-          <div
-            className="fixed inset-0 z-[80] bg-[rgba(27,21,24,0.45)]"
-            onClick={() => setShowTape(false)}
-          />
-          <div className="sheet-up fixed inset-x-0 bottom-0 z-[81] rounded-t-[28px] bg-card px-6 pb-11 pt-6">
-            <div className="mx-auto mb-[18px] h-1 w-10 rounded-full bg-border" />
-            <p
-              className="text-xl font-bold text-foreground"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              New tape
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Fill what you measured — skip the rest. All in kg / cm.
-            </p>
-            <div className="mt-3.5 grid grid-cols-2 gap-2.5">
-              {TAPE_FIELDS.map(({ key, label }) => (
-                <label key={key} className="block">
-                  <span className="text-[10px] font-semibold tracking-wide text-muted-foreground">
-                    {label.toUpperCase()}
-                  </span>
-                  <input
-                    inputMode="decimal"
-                    value={tapeDraft[key] ?? ""}
-                    onChange={(e) =>
-                      setTapeDraft((prev) => ({ ...prev, [key]: e.target.value }))
-                    }
-                    className="mt-0.5 w-full rounded-[10px] border border-border bg-background px-3 py-2 text-center text-[15px] font-semibold tabular-nums outline-none"
-                  />
-                </label>
-              ))}
-            </div>
-            <div className="mt-4 flex gap-2.5">
-              <button
-                onClick={() => setShowTape(false)}
-                className="flex-1 rounded-[12px] border border-[#D9D7DC] bg-card py-3 text-[13.5px] font-semibold text-foreground"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveTape}
-                disabled={saving}
-                className="flex-[1.5] rounded-[12px] bg-primary py-3 text-[13.5px] font-semibold text-white disabled:opacity-50"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                {saving ? "Saving…" : "Save tape"}
-              </button>
-            </div>
+          <div style={{ fontSize: 12.5, color: "var(--b-faint)", textAlign: "center", marginTop: 4, lineHeight: 1.5 }}>
+            Your scale hasn&apos;t sent segmental readings yet.
           </div>
-        </SheetPortal>
+        )}
+      </Card>
+
+      {/* BODY-TYPE MATRIX */}
+      {view.matrix && view.fatNow && view.bmiNow != null && (
+        <Card delay={0.2}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={KICKER}>BODY TYPE · BMI × BODY FAT</div>
+            <div style={{ fontSize: 11, color: "var(--b-faint)" }}>trail · monthly</div>
+          </div>
+          <BodyTypeMatrix view={view.matrix} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 6 }}>
+            <div style={{ fontSize: 13, color: "var(--b-ink)" }}>
+              Now <strong style={{ fontWeight: 700 }}>{cellTitle(view.matrix.cell.name)}</strong> · BMI {view.bmiNow.toFixed(1)} · {view.fatNow.value.toFixed(1)}% fat
+            </div>
+            {view.startBmi != null && view.startFat != null && (
+              <div style={{ fontSize: 11, color: "var(--b-faint)" }}>
+                {MONTH(data.start.day)}: BMI {view.startBmi.toFixed(0)} · {view.startFat.toFixed(0)}%
+              </div>
+            )}
+          </div>
+          {data.scaleChangedOn && (
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: "var(--b-faint)", marginTop: 6 }}>
+              The sideways step in {MONTH(data.scaleChangedOn)} is the new scale reading body fat lower than the old one.
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* TRENDS */}
+      <Card delay={0.24}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={KICKER}>TRENDS</div>
+          {trDelta && trendPoints.length > 0 && (
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--b-deep)", background: "var(--b-wash)", padding: "4px 10px", borderRadius: 99 }}>{trDelta}</div>
+          )}
+        </div>
+        <div className="body-noscroll" style={{ display: "flex", gap: 6, marginTop: 12, overflowX: "auto", paddingBottom: 2 }}>
+          {TREND_METRICS.map((k) => (
+            <div key={k} role="button" onClick={() => setTrMetric(k)} style={chipStyle(trMetric === k)}>
+              {SER[k].label}
+            </div>
+          ))}
+        </div>
+        <div className="body-noscroll" style={{ display: "flex", gap: 6, marginTop: 8, overflowX: "auto" }}>
+          {RANGES.map(([key, label]) => (
+            <div
+              key={key}
+              role="button"
+              onClick={() => {
+                setTrRange(key);
+                if (key === "custom" && !custom) setCustom({ from: addDays(today, -120), to: today });
+              }}
+              style={chipStyle(trRange === key, "square")}
+            >
+              {label}
+            </div>
+          ))}
+        </div>
+        {trRange === "custom" && custom && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: "var(--b-sub)" }}>
+            <DateChip value={custom.from} min={data.start.day} max={custom.to} onChange={(from) => setCustom({ ...custom, from })} />
+            →
+            <DateChip value={custom.to} min={custom.from} max={today} onChange={(to) => setCustom({ ...custom, to })} />
+            <span style={{ color: "var(--b-faint)" }}>tap a date to change</span>
+          </div>
+        )}
+        <TrendChart
+          metric={trMetric}
+          points={trendPoints}
+          rangeLabel={RANGES.find((r) => r[0] === trRange)![1]}
+          resetKey={`${trMetric}-${trRange}-${custom?.from}-${custom?.to}`}
+          onDelta={setTrDelta}
+          note={scaleChangeNote(trMetric, trendPoints, data.scaleChangedOn)}
+        />
+      </Card>
+
+      {/* TAPE */}
+      <Card delay={0.28} padding="18px 20px 12px">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={KICKER}>TAPE{view.lastTaped ? ` · TAPED ${dayLabel(view.lastTaped).toUpperCase()}` : ""}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <SortChip label={TAPE_SORTS[tapeSort]} onTap={() => setTapeSort((n) => (n + 1) % 3)} />
+            <button
+              onClick={() => openTape("voice")}
+              style={{ ...DISPLAY, display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#FFFFFF", background: "var(--b-rasp)", border: "none", borderRadius: 8, padding: "7px 12px", cursor: "pointer" }}
+            >
+              <MicGlyph size={11} />
+              Tape
+            </button>
+          </div>
+        </div>
+        <div style={{ marginTop: 6 }}>
+          {tapeList.map((r) => (
+            <div
+              key={r.key}
+              role="button"
+              onClick={() => openTape("pad", r.key)}
+              style={{
+                display: "grid", gridTemplateColumns: "92px 1fr 64px 76px", gap: 10, alignItems: "center",
+                padding: "10px 6px", margin: "0 -6px", borderRadius: 10, borderBottom: "1px solid var(--b-rule)",
+                background: flash.includes(r.key) ? "var(--b-wash)" : "transparent", transition: "background .9s ease", cursor: "pointer",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--b-ink)" }}>{r.label}</div>
+                <div style={{ fontSize: 10.5, color: "var(--b-faint)", marginTop: 1 }}>{r.when}</div>
+              </div>
+              <svg viewBox="0 0 60 20" width="100%" height="20" preserveAspectRatio="none" style={{ display: "block" }}>
+                <polyline points={r.spark} fill="none" stroke="var(--b-rasp)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity=".7" />
+                <circle cx={r.sparkX} cy={r.sparkY} r="2" fill="var(--b-rasp)" />
+              </svg>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: r.good ? "var(--b-green)" : "var(--b-sub)", textAlign: "right" }}>{r.deltaText}</div>
+              <div style={{ ...DISPLAY, textAlign: "right", fontSize: 16, fontWeight: 700, color: "var(--b-ink)" }}>
+                {r.valueText}
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--b-faint)", marginLeft: 2 }}>cm</span>
+              </div>
+            </div>
+          ))}
+          {untaped.map((site) => (
+            <div
+              key={site.key}
+              role="button"
+              onClick={() => openTape("pad", site.key)}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--b-rule)", cursor: "pointer" }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--b-ink)" }}>{site.label}</div>
+              <div style={{ fontSize: 11.5, color: "var(--b-faint)" }}>not taped yet</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--b-faint)", padding: "10px 0 4px" }}>
+          Change is since your first tape. Tap a site to type one number; the mic takes a whole sentence.
+        </div>
+      </Card>
+
+      {/* MILESTONES */}
+      <MilestonesCard
+        startKg={data.start.weightKg}
+        weeks={view.weeks}
+        rows={view.milestones.map((m) => ({
+          key: `${m.day}-${m.title}`,
+          title: m.title,
+          date: m.day === today && m.title === "Today" ? dayLabel(m.day) : dayLabel(m.day),
+          // A fat line "crossed" on the day the scale changed was crossed by
+          // the scale, and the row says so.
+          sub:
+            m.note ??
+            (m.title.startsWith("Body fat") && m.day === data.scaleChangedOn ? "first reading on the new scale" : ""),
+          weight: m.weightKg != null ? `${m.weightKg.toFixed(1)} kg` : "",
+        }))}
+      />
+
+      <TapeSheet
+        request={tapeRequest}
+        theme={theme}
+        today={today}
+        tape={data.tape}
+        onSave={saveTape}
+        onClose={() => setTapeRequest(null)}
+      />
+      <GoalSheet
+        open={goalOpen}
+        theme={theme}
+        today={today}
+        goals={goals}
+        sentenceFor={(draft) => computePace(data.series.weight, today, draft)?.sentence ?? ""}
+        onClose={saveGoals}
+      />
+    </div>
+  );
+}
+
+function Header({ pill }: { pill: string | null }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", animation: "body-rise .5s ease both" }}>
+      <div>
+        <div style={{ fontSize: 11, letterSpacing: "0.18em", fontWeight: 600, color: "var(--b-faint)" }}>TODAY · BODY</div>
+        <h1 style={{ ...DISPLAY, fontSize: 30, fontWeight: 700, color: "var(--b-ink)", letterSpacing: "-0.02em", marginTop: 2 }}>Body</h1>
+      </div>
+      {pill && (
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--b-deep)", background: "var(--b-wash)", padding: "6px 12px", borderRadius: 99 }}>{pill}</div>
       )}
     </div>
+  );
+}
+
+function SegLabel({ title, value, pct }: { title: string; value: string; pct: string }) {
+  return (
+    <div>
+      <div style={{ ...LABEL, letterSpacing: "0.12em", whiteSpace: "nowrap" }}>{title}</div>
+      <div style={{ ...DISPLAY, fontSize: 16, fontWeight: 700, color: "var(--b-ink)", marginTop: 2, whiteSpace: "nowrap" }}>{value}</div>
+      <div style={{ fontSize: 10.5, color: "var(--b-sub)" }}>{pct}</div>
+    </div>
+  );
+}
+
+function BalanceRow({ name, offsetPx, text }: { name: string; offsetPx: number; text: string }) {
+  return (
+    <>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--b-ink)" }}>{name}</div>
+      <div style={{ position: "relative", height: 14 }}>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 6, height: 2, background: "var(--b-rule2)" }} />
+        <div style={{ position: "absolute", left: "50%", top: 2, width: 1, height: 10, background: "var(--b-ghost)" }} />
+        <div
+          style={{
+            position: "absolute", top: 3, width: 8, height: 8, borderRadius: 99, background: "var(--b-rasp)",
+            left: `calc(50% + ${offsetPx}px - 4px)`, transition: "left .6s cubic-bezier(.22,.9,.3,1)",
+          }}
+        />
+      </div>
+      <div style={{ fontSize: 11.5, color: "var(--b-sub)", textAlign: "right" }}>{text}</div>
+    </>
+  );
+}
+
+function DateChip({ value, min, max, onChange }: { value: string; min: string; max: string; onChange: (day: string) => void }) {
+  return (
+    <label style={{ position: "relative", padding: "5px 10px", border: "1px dashed var(--b-rule2)", borderRadius: 8, fontWeight: 600, color: "var(--b-ink)", cursor: "pointer" }}>
+      {dayLabel(value)}
+      <input
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => e.target.value && onChange(e.target.value)}
+        style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", cursor: "pointer" }}
+      />
+    </label>
+  );
+}
+
+function MilestonesCard({
+  startKg,
+  weeks,
+  rows,
+}: {
+  startKg: number;
+  weeks: number;
+  rows: { key: string; title: string; date: string; sub: string; weight: string }[];
+}) {
+  const [ref, on] = useRevealOnce<HTMLDivElement>();
+  return (
+    <Card delay={0.32}>
+      <div ref={ref}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={KICKER}>MILESTONES · FROM {startKg.toFixed(1)}</div>
+          <div style={{ fontSize: 11, color: "var(--b-faint)" }}>{weeks} weeks</div>
+        </div>
+        <div style={{ position: "relative", marginTop: 14, paddingLeft: 18 }}>
+          <div style={{ position: "absolute", left: 4, top: 6, bottom: 6, width: 1, background: "var(--b-rule2)" }} />
+          <div
+            style={{
+              position: "absolute", left: 4, top: 6, width: 1, background: "var(--b-rasp)",
+              height: on ? "calc(100% - 12px)" : "0%", transition: "height 2.2s cubic-bezier(.4,0,.2,1)",
+            }}
+          />
+          {rows.map((m, i) => (
+            <div
+              key={m.key}
+              style={{
+                position: "relative", display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12,
+                padding: "7px 0", opacity: on ? 1 : 0, transform: `translateY(${on ? 0 : 14}px)`,
+                transition: `opacity .5s ease ${(i * 0.09).toFixed(2)}s, transform .5s cubic-bezier(.22,.9,.3,1) ${(i * 0.09).toFixed(2)}s`,
+              }}
+            >
+              <div style={{ position: "absolute", left: -17.5, top: 12, width: 6, height: 6, borderRadius: 99, background: "var(--b-rasp)", boxShadow: "0 0 0 2px var(--b-card)" }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--b-ink)", lineHeight: 1.35 }}>{m.title}</div>
+                <div style={{ fontSize: 11, color: "var(--b-faint)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {m.date}
+                  {m.sub ? ` · ${m.sub}` : ""}
+                </div>
+              </div>
+              <div style={{ flex: "none", fontSize: 12.5, fontWeight: 600, color: "var(--b-sub)", whiteSpace: "nowrap" }}>{m.weight}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
   );
 }

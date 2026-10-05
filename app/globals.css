@@ -539,3 +539,111 @@ main {
     user-select: none;
   }
 }
+
+/* ————— Pitaya Body (2026-10-05) —————
+   Tokens for the Body screen, straight from the handoff spec §0. Light is the
+   existing Pitaya paper; dark is new and scoped to this route — the rest of
+   the app stays light until told otherwise. Sheets portal to <body>, so the
+   tokens live on a class the page and its sheets both wear. */
+.body-theme {
+  --b-bg: #f2f1f2;
+  --b-card: #ffffff;
+  --b-card2: #f6f5f7;
+  --b-ink: #232227;
+  --b-sub: #66646c;
+  --b-faint: #96949b;
+  --b-ghost: #b4b2b8;
+  --b-rule: #edebee;
+  --b-rule2: #e4e2e6;
+  --b-rasp: #a63d63;
+  --b-deep: #8c2f51;
+  --b-wash: #f6e3eb;
+  --b-edge: #e9cfdc;
+  --b-green: #5e9b72;
+  --b-slate: #5e7fa6;
+  --b-shadow: 0 2px 12px rgba(35, 34, 39, 0.06);
+  --b-chip: #ffffff;
+  --b-band: #e2e0e5;
+  --b-track: #f2f1f2;
+  --b-tip: #232227;
+  --b-tip-ink: #ffffff;
+  --b-scrim: rgba(35, 34, 39, 0.38);
+  color: var(--b-ink);
+  font-variant-numeric: tabular-nums;
+}
+.body-theme[data-theme="dark"] {
+  --b-bg: #131217;
+  --b-card: #1e1d23;
+  --b-card2: #27262c;
+  --b-ink: #f2f1f2;
+  --b-sub: #b9b7be;
+  --b-faint: #85838b;
+  --b-ghost: #5f5d65;
+  --b-rule: #2b2a30;
+  --b-rule2: #37363c;
+  --b-rasp: #d0628c;
+  --b-deep: #e795b4;
+  --b-wash: #3a2331;
+  --b-edge: #4c2c3e;
+  --b-green: #7fb893;
+  --b-slate: #86a3c8;
+  --b-shadow: 0 2px 12px rgba(0, 0, 0, 0.32);
+  --b-chip: #27262c;
+  --b-band: #38373e;
+  --b-track: #27262c;
+  --b-tip: #f2f1f2;
+  --b-tip-ink: #232227;
+  --b-scrim: rgba(0, 0, 0, 0.6);
+}
+/* While the dark Body screen is up, the tab bar, dock and page ground take
+   the same dark roles — a dark page inside light chrome reads as broken. The
+   attribute is set by the page on mount and removed on leave. */
+html[data-body-theme="dark"] {
+  --background: #131217;
+  --foreground: #f2f1f2;
+  --card: #1e1d23;
+  --border: #2b2a30;
+  --muted-foreground: #85838b;
+  --primary: #d0628c;
+}
+html[data-body-theme="dark"] .floating-action-dock {
+  background: rgba(42, 41, 47, 0.96);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes body-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes body-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes body-vu { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1); } }
+@keyframes body-ring { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes body-draw { to { stroke-dashoffset: 0; } }
+@keyframes body-pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes body-spin { to { transform: rotate(360deg); } }
+@keyframes body-push { from { transform: translateX(100%); } to { transform: none; } }
+
+.body-card {
+  background: var(--b-card);
+  border-radius: 22px;
+  box-shadow: var(--b-shadow);
+  animation: body-rise 0.5s ease both;
+}
+.body-noscroll { scrollbar-width: none; }
+.body-noscroll::-webkit-scrollbar { display: none; }
+.body-key:active { background: var(--b-wash) !important; }
+
+/* Body map (spec §4): the artwork is the asset, untouched — only fill and
+   opacity are driven from here, by group id. */
+.body-map svg { display: block; margin: 0 auto; width: 150px; height: 312px; }
+.body-map #base { fill: var(--b-band); }
+.body-map #color { fill: var(--seg-col, var(--b-band)); stroke: var(--b-card); }
+.body-map #color path,
+.body-map #color rect { transition: fill 0.55s ease; pointer-events: all; cursor: pointer; }
+.body-map #arm-right { opacity: var(--o-arm-right, 1); transition: opacity 0.55s ease 0s; }
+.body-map #arm-left { opacity: var(--o-arm-left, 1); transition: opacity 0.55s ease 0.05s; }
+.body-map #trunk { opacity: var(--o-trunk, 1); transition: opacity 0.55s ease 0.1s; }
+.body-map #leg-right { opacity: var(--o-leg-right, 1); transition: opacity 0.55s ease 0.15s; }
+.body-map #leg-left { opacity: var(--o-leg-left, 1); transition: opacity 0.55s ease 0.2s; }
+.body-map #color [data-selected="true"] { stroke: var(--b-ink); stroke-width: 1.4; }
+
+@media (prefers-reduced-motion: reduce) {
+  .body-theme *, .body-card { animation: none !important; transition: none !important; }
+}
