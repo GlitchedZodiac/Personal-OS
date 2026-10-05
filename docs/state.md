@@ -5,7 +5,34 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
-**Last updated:** 2026-10-05 (PITAYA BODY — ROUND 1 PORT. The Body screen is rebuilt to
+**Last updated:** 2026-10-05 (REPORT UPLOAD — his ask, in place of the second RENPHO
+account: "build a pdf upload companion… I give Pitaya the RENPHO report and it extracts
+everything." Body screen → **Add report** (in the composition card header, and as a prompt
+on the weigh-in card whenever the latest weigh-in has weight only) → pick the PDF or up to
+four screenshots → the model transcribes it under a strict schema
+(`POST /api/health/body/report`, CHAT_MODEL, usage recorded as `photo`) → a confirm card
+lists every value → Save (`PUT`). Nothing saves before the confirm, and PUT re-runs the
+checks rather than trusting the client. `lib/scale-report.ts` is the pure half: bounds on
+every value, the report's own arithmetic checked against itself (fat mass vs fat %, BMR vs
+lean mass, BMI vs height…), and the match to a stored weigh-in — by printed time (±10 min,
+±0.3 kg), else same local day + weight. The report is authoritative like the cloud record
+(fills and corrects, never touches tape/notes/time/weight) but carries NO external id, so a
+future cloud pull can still adopt the row. Source `renpho_report`, per field.
+**The date trap:** his report prints "4/10/2026" for 4 October. The model copies the
+characters; the code offers both readings and lets the weigh-ins decide (the day already
+holding that weight wins), day-first otherwise, flagged when nothing decides.
+**Verified** against the cloud record for his 10-04 weigh-in: the report path lands on
+exactly the same 29 columns and 10 impedance values (a test pins it). Real model reads of a
+stand-in built from his actual report (same content, date format and table quirks): PDF
+40/40 exact; a 1840px screenshot 40/40; **a 920px screenshot misread one impedance digit
+(236.5 → 236.9), twice** — impedance has no arithmetic to catch that, so the card shows
+every ohm, says when a read came from a picture, and the client never shrinks a picture
+below 2400px. Save path proven on a throwaway 2001 weigh-in (join 29 added, repeat 0,
+create), rows 425 → 425. Driven in the app end to end. **Not yet read: his real PDF file**
+— he sent the report as a picture in chat, which never reached disk; his first upload is
+that test. 620 tests. The RENPHO cloud pull stays built and OFF.)
+
+**Body screen round (2026-10-05):** (PITAYA BODY — ROUND 1 PORT. The Body screen is rebuilt to
 the Claude Design handoff in `docs/design/pitaya-body/` (spec, the interactive DC, the build
 prompt, the front figure). `app/(tabs)/health/body/page.tsx` is replaced; the metric page
 renders a new push-in for the scale metrics and waist. All arithmetic is pure and tested in

@@ -3,6 +3,19 @@
 Running record of the RENPHO body-composition work. Research and the gap
 table are in [`renpho-gap-report.md`](renpho-gap-report.md).
 
+## 2026-10-05 · Report upload
+
+- **Add report** on the Body screen: choose the RENPHO report as a PDF or as
+  screenshots, check the numbers on a confirm card, save.
+- Reads the whole report: weight, composition, all five segments for muscle
+  and fat with their standards, impedance at both frequencies.
+- Joins the weigh-in already stored for that moment instead of creating a
+  second one; fills what is blank and corrects what disagrees.
+- Checks each value is plausible and that the report agrees with itself;
+  anything doubtful is said in a sentence on the card.
+- A PDF reads exactly. A low-resolution screenshot misread one impedance digit
+  in testing, so picture reads are labelled and every number is shown.
+
 ## 2026-10-05 · Phase 3: the Body screen, round 1
 
 Ported from `docs/design/pitaya-body/`.
