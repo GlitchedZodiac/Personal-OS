@@ -59,6 +59,21 @@ vi.mock("@/lib/prisma", () => ({
         if (key) byKey.set(key, row);
         return row;
       }),
+      findUnique: vi.fn(
+        async ({
+          where,
+        }: {
+          where: {
+            externalSource_externalId: {
+              externalSource: string;
+              externalId: string;
+            };
+          };
+        }) => {
+          const k = where.externalSource_externalId;
+          return byKey.get(`${k.externalSource}|${k.externalId}`) ?? null;
+        }
+      ),
       update: vi.fn(
         async ({
           where,
@@ -94,6 +109,10 @@ vi.mock("@/lib/prs", () => ({
 
 vi.mock("@/lib/strava", () => ({
   buildStreamMetrics: vi.fn(() => ({})),
+}));
+
+vi.mock("@/lib/user-exercises", () => ({
+  ensureUserExercisesLoaded: vi.fn(async () => {}),
 }));
 
 vi.mock("@/lib/mobile-summary", () => ({

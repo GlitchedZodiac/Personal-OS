@@ -1,7 +1,10 @@
-// Freestyle — the wrist's whole job during a follow-along video or an
-// improvised EMOM: record. Elapsed, live HR, the zone he's in, End. No
-// structure UI: he describes the session on the phone afterwards and the
-// coach attaches the movements.
+// Freestyle — the wrist's job during a follow-along video or an improvised
+// EMOM: record. Elapsed, live HR, calories, the zone he's in, End.
+//
+// 2026-10-05: it can also LISTEN. One big mic button — tap (or Double Tap),
+// say "10 kettlebell swings", and the movement list builds itself, so the
+// session no longer needs describing on the phone afterwards. Describing it
+// later still works for sessions he never spoke during.
 //
 // NO DESIGN SLICE EXISTS for this screen — built inside the watch design
 // system (Theme idiom, existing tile/CTA grammar) and flagged for the next
@@ -57,6 +60,7 @@ struct FreestyleRunView: View {
             #endif
         }
         .overlay { ZoneBloomOverlay(recorder: recorder) }
+        .overlay { VoiceFlashOverlay(voice: model.voice) }
         .overlay { CountdownOverlay() }
         .overlay {
             if model.idleNudgeActive {
@@ -88,17 +92,46 @@ struct FreestyleRunView: View {
 
             Spacer(minLength: 0)
 
-            Text(Fmt.clock(recorder.elapsed))
-                .font(Theme.wNumeric(16))
-                .foregroundStyle(Theme.textBright)
+            // Elapsed and calories side by side — calories were recorded on
+            // every freestyle session and shown nowhere on this face.
+            HStack(alignment: .firstTextBaseline, spacing: Theme.px(8)) {
+                Text(Fmt.clock(recorder.elapsed))
+                    .font(Theme.wNumeric(14))
+                    .foregroundStyle(Theme.textBright)
+                Text("·")
+                    .font(Theme.wNumeric(14))
+                    .foregroundStyle(Theme.textMuted)
+                Text(recorder.activeCalories.map { String(Int($0)) } ?? "––")
+                    .font(Theme.wNumeric(14))
+                    .foregroundStyle(Theme.textBright)
+                    .contentTransition(.numericText())
+                Text("KCAL")
+                    .font(Theme.wText(6, weight: .semibold))
+                    .kerning(0.8)
+                    .foregroundStyle(Theme.textTertiary)
+            }
 
             Spacer(minLength: 0)
 
-            // Deliberately NOT wearing the Double Tap gesture: everywhere
-            // else the primary action is additive, but here it would end a
-            // running session — a bad thing to fire by accident mid-video.
-            PitayaCTA(title: "End", background: Theme.accentDeep) {
-                Task { await model.finishWorkout(.freestyle) }
+            // The mic is the pink button now, so it is what Double Tap
+            // presses — additive, like every other primary. End stays on
+            // this face (never a swipe away mid-video) but steps back: dark,
+            // smaller, and still NOT reachable by gesture, because ending a
+            // running session by accident is the one thing that must not
+            // happen here.
+            HStack(spacing: Theme.px(10)) {
+                Button {
+                    Task { await model.finishWorkout(.freestyle) }
+                } label: {
+                    Text("End")
+                        .font(Theme.display(13, weight: .semibold))
+                        .foregroundStyle(Theme.danger)
+                        .frame(maxWidth: .infinity)
+                        .pitayaTappable(minHeight: 44)
+                        .background(Theme.dangerDim, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                VoiceMicButton(voice: model.voice, diameter: 54, primary: true)
             }
         }
         .padding(.horizontal, Theme.px(10))
@@ -121,6 +154,12 @@ struct FreestyleRunView: View {
                     .font(Theme.wText(5.5, weight: .bold))
                     .kerning(1)
                     .foregroundStyle(Theme.textTertiary)
+            } else if !model.voiceEntries.isEmpty {
+                // How much of the session he has already said.
+                Text("\(model.voiceEntries.count) LOGGED")
+                    .font(Theme.wText(5.5, weight: .bold))
+                    .kerning(1)
+                    .foregroundStyle(Theme.mint)
             }
         }
     }

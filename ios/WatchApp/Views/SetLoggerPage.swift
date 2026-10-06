@@ -19,6 +19,7 @@ struct SetLoggerPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            HStack(spacing: 4) {
             Button {
                 showPicker = true
             } label: {
@@ -37,6 +38,13 @@ struct SetLoggerPage: View {
                 .background(Theme.card, in: Capsule())
             }
             .buttonStyle(.plain)
+            // 2026-10-05: say the set instead of dialling it ("10 presses
+            // with one 24 kilo"). Double Tap stays on Log — this is a tap.
+            Spacer(minLength: 0)
+            VoiceMicButton(voice: model.voice, diameter: 34)
+            }
+            // Clear of the carousel's page dots on the right edge.
+            .padding(.trailing, 12)
 
             Spacer(minLength: 2)
 
@@ -210,7 +218,9 @@ struct ExercisePickerView: View {
             }
 
             Section {
-                ForEach(ExerciseCatalog.all.filter { $0.category != .kettlebell }) { exercise in
+                ForEach(ExerciseCatalog.all.filter {
+                    $0.category != .kettlebell && $0.category != .cardio
+                }) { exercise in
                     row(exercise)
                 }
             } header: {

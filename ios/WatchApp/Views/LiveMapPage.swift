@@ -207,6 +207,19 @@ struct LiveMapPage: View {
                 Text("/ KM")
                     .font(Theme.r3Text(9, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
+            } else {
+                // DEVIATION from the Round 3 slice, at his 2026-10-05 call
+                // ("calories for any workout"): the map face showed steps
+                // and never calories. They sit beside the distance, in the
+                // dimmed-pace slot's own type.
+                Spacer(minLength: 0)
+                Text(recorder.activeCalories.map { String(Int($0)) } ?? "––")
+                    .font(Theme.r3Display(20, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textBright)
+                Text("KCAL")
+                    .font(Theme.r3Text(9, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
             }
         }
     }

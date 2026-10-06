@@ -1,9 +1,12 @@
 // Activity typing for Train → Activities (design 2026-08-11 rev): every
-// workout is one of three card types — kettlebell/strength (kb), protocol
-// circuit/EMOM (cir), outdoor GPS (out). Shared by the list and detail
-// endpoints so filters and icons agree.
+// workout is one of four card types — kettlebell/strength (kb), protocol
+// circuit/EMOM (cir), outdoor GPS (out), and jump rope (rope, 2026-10-05 —
+// his call: a type of its own, not a kettlebell card reading "0 kg").
+// Shared by the list and detail endpoints so filters and icons agree.
 
-export type ActivityType = "kb" | "cir" | "out";
+import { JUMP_ROPE_TYPE } from "@/lib/jump-rope";
+
+export type ActivityType = "kb" | "cir" | "out" | "rope";
 
 // Treadmill types are "out" too (distance work) — they just carry no GPS,
 // so the detail renders the distance header instead of a map.
@@ -41,6 +44,11 @@ export function routeDataAllowed(workoutType: string): boolean {
 // 900 m on it is still a kettlebell session.
 const STRUCTURED_INDOOR_TYPES = new Set(["freestyle", "strength", "other"]);
 
+/** Types whose distance means ground covered — the only ones whose km count. */
+export function isDistanceType(workoutType: string): boolean {
+  return OUTDOOR_TYPES.has(workoutType);
+}
+
 export interface RunMetrics {
   sequenceId?: string;
   sequenceName?: string;
@@ -62,6 +70,16 @@ export interface RunMetrics {
   splits?: number[];
   /// Session-mean step cadence from the wrist (2026-08-29, Strava parity).
   avgCadenceSpm?: number;
+  /// Jump rope (2026-10-05): the interval record — lib/jump-rope.ts reads it.
+  intervals?: unknown;
+  /// Per-entry log from the wrist (voice + taps) — lib/set-log.ts.
+  setLog?: unknown;
+  /// Stamped when the movement list was edited off the wrist, so a late
+  /// re-send from the watch can never overwrite the correction.
+  exercisesEditedAt?: string;
+  /// "Looks right" on the voice log, and ids that arrived after an edit.
+  setLogReviewedAt?: string;
+  lateEntryIds?: string[];
   /// Strava-only legacy keys still read as fallbacks on old imported rows.
   movingTime?: number;
   elapsedTime?: number;
@@ -74,6 +92,7 @@ export function activityTypeOf(workout: {
   metricsData: unknown;
 }): ActivityType {
   const m = (workout.metricsData ?? {}) as RunMetrics;
+  if (workout.workoutType === JUMP_ROPE_TYPE) return "rope";
   if (OUTDOOR_TYPES.has(workout.workoutType)) return "out";
   const structured = m.emom || m.roundsCompleted != null ? "cir" : "kb";
   if (STRUCTURED_INDOOR_TYPES.has(workout.workoutType)) return structured;

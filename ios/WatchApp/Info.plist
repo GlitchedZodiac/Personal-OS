@@ -20,14 +20,21 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Pitaya reads heart rate, calories, and steps to show live workout metrics and sync your training.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Pitaya saves workouts you record on the watch to Apple Health.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Pitaya records your route and distance during outdoor walks, runs, and hikes.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Pitaya listens only while you hold a voice log open, to turn what you say ("10 kettlebell swings") into a workout entry.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>Pitaya reads elevation from the barometer during outdoor workouts.</string>
+	<string>Pitaya reads elevation from the barometer during outdoor workouts, and wrist motion during jump rope to estimate rope turns.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>FamiljenGrotesk-Regular.ttf</string>

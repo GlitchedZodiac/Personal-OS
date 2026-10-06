@@ -1,6 +1,6 @@
 // GENERATED from lib/exercises.ts — do not edit by hand.
 // Regenerate with: node ios/scripts/gen-catalog.mjs
-// 47 exercises, categories: kettlebell, barbell, dumbbell, bodyweight, machine.
+// 48 exercises, categories: kettlebell, barbell, dumbbell, bodyweight, machine, cardio.
 
 import Foundation
 
@@ -19,6 +19,7 @@ public enum ExerciseCategory: String, CaseIterable, Codable, Sendable {
     case dumbbell = "dumbbell"
     case bodyweight = "bodyweight"
     case machine = "machine"
+    case cardio = "cardio"
 }
 
 public enum ExerciseCatalog {
@@ -29,16 +30,16 @@ public enum ExerciseCatalog {
         ExerciseDef(id: "kb-goblet-squat", name: "Goblet Squat", category: .kettlebell, aliases: ["goblet squats", "sentadilla goblet", "sentadilla copa"]),
         ExerciseDef(id: "kb-turkish-get-up", name: "Turkish Get-Up", category: .kettlebell, aliases: ["tgu", "get up", "get ups", "turkish get ups", "levantamiento turco"]),
         ExerciseDef(id: "kb-clean", name: "Kettlebell Clean", category: .kettlebell, aliases: ["clean", "cleans", "cargada"]),
-        ExerciseDef(id: "kb-press", name: "Kettlebell Press", category: .kettlebell, aliases: ["kb press", "military press", "strict press", "overhead press kettlebell", "press militar", "press de hombro"]),
+        ExerciseDef(id: "kb-press", name: "Kettlebell Press", category: .kettlebell, aliases: ["kb press", "kettlebell presses", "kb presses", "military press", "strict press", "overhead press kettlebell", "press militar", "press de hombro"]),
         ExerciseDef(id: "kb-clean-and-press", name: "Clean and Press", category: .kettlebell, aliases: ["clean & press", "clean press", "cleans and presses", "cargada y press"]),
         ExerciseDef(id: "kb-snatch", name: "Kettlebell Snatch", category: .kettlebell, aliases: ["snatch", "snatches", "arranque"]),
-        ExerciseDef(id: "kb-row", name: "Kettlebell Row", category: .kettlebell, aliases: ["kb row", "single arm row", "remo con pesa rusa", "remo"]),
+        ExerciseDef(id: "kb-row", name: "Kettlebell Row", category: .kettlebell, aliases: ["kb row", "kettlebell rows", "kb rows", "single arm row", "remo con pesa rusa", "remo"]),
         ExerciseDef(id: "kb-deadlift", name: "Kettlebell Deadlift", category: .kettlebell, aliases: ["kb deadlift", "peso muerto con pesa rusa"]),
         ExerciseDef(id: "kb-front-squat", name: "Kettlebell Front Squat", category: .kettlebell, aliases: ["double front squat", "front squat kettlebell", "sentadilla frontal"]),
         ExerciseDef(id: "kb-lunge", name: "Kettlebell Lunge", category: .kettlebell, aliases: ["kb lunge", "racked lunge", "zancada con pesa"]),
         ExerciseDef(id: "kb-halo", name: "Kettlebell Halo", category: .kettlebell, aliases: ["halo", "halos"]),
         ExerciseDef(id: "kb-windmill", name: "Kettlebell Windmill", category: .kettlebell, aliases: ["windmill", "windmills", "molino"]),
-        ExerciseDef(id: "kb-farmer-carry", name: "Farmer Carry", category: .kettlebell, aliases: ["farmers carry", "farmer's carry", "farmers walk", "loaded carry", "caminata del granjero"]),
+        ExerciseDef(id: "kb-farmer-carry", name: "Farmer Carry", category: .kettlebell, aliases: ["farmers carry", "farmer's carry", "farmer carries", "farmers walk", "loaded carry", "caminata del granjero"]),
         ExerciseDef(id: "kb-push-press", name: "Kettlebell Push Press", category: .kettlebell, aliases: ["push press", "envión"]),
         ExerciseDef(id: "kb-high-pull", name: "Kettlebell High Pull", category: .kettlebell, aliases: ["high pull", "high pulls"]),
         ExerciseDef(id: "kb-thruster", name: "Kettlebell Thruster", category: .kettlebell, aliases: ["thruster", "thrusters"]),
@@ -62,7 +63,7 @@ public enum ExerciseCatalog {
         ExerciseDef(id: "plank", name: "Plank", category: .bodyweight, aliases: ["planks", "plancha"]),
         ExerciseDef(id: "lunge", name: "Lunge", category: .bodyweight, aliases: ["lunges", "walking lunge", "zancadas", "estocadas"]),
         ExerciseDef(id: "burpee", name: "Burpee", category: .bodyweight, aliases: ["burpees"]),
-        ExerciseDef(id: "crunch", name: "Crunch", category: .bodyweight, aliases: ["crunches", "abdominales", "sit up", "situps"]),
+        ExerciseDef(id: "crunch", name: "Crunch", category: .bodyweight, aliases: ["crunches", "abdominales", "sit up", "sit ups", "situps"]),
         ExerciseDef(id: "lat-pulldown", name: "Lat Pulldown", category: .machine, aliases: ["pulldown", "jalón al pecho", "jalon"]),
         ExerciseDef(id: "seated-row", name: "Seated Row", category: .machine, aliases: ["cable row", "remo sentado"]),
         ExerciseDef(id: "leg-press", name: "Leg Press", category: .machine, aliases: ["prensa", "prensa de piernas"]),
@@ -71,6 +72,7 @@ public enum ExerciseCatalog {
         ExerciseDef(id: "calf-raise", name: "Calf Raise", category: .machine, aliases: ["calf raises", "elevación de talones", "pantorrillas"]),
         ExerciseDef(id: "cable-fly", name: "Cable Fly", category: .machine, aliases: ["cable crossover", "cruce de poleas"]),
         ExerciseDef(id: "face-pull", name: "Face Pull", category: .machine, aliases: ["face pulls"]),
+        ExerciseDef(id: "jump-rope", name: "Jump Rope", category: .cardio, aliases: ["jump ropes", "jumping rope", "skipping rope", "skip rope", "skipping", "rope skipping", "saltar la cuerda", "saltar cuerda", "salto de cuerda", "comba"]),
     ]
 
     /// AI-created customs from GET /api/mobile/exercises, set at runtime

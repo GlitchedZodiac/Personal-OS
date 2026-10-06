@@ -28,6 +28,8 @@ import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded, mintUnknownExercises } from "@/lib/user-exercises";
 import { validateSequence } from "@/lib/sequences";
 import { detectAndRecordPRs, rebuildPersonalRecords } from "@/lib/prs";
+import { JUMP_ROPE_TYPE, jumpRopeExerciseRow, readIntervals } from "@/lib/jump-rope";
+import { stampExercisesEdited } from "@/lib/workout-resync";
 import {
   INT_FIELDS,
   MEASURED_FIELDS,
@@ -82,6 +84,17 @@ const num = (v: unknown) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
+/** A worn vest on a movement row — kept apart from weightKg (the implement). */
+const vestOf = (e: Json) => {
+  const kg = typeof e.vestKg === "number" && Number.isFinite(e.vestKg) ? e.vestKg : null;
+  return {
+    ...(kg != null && kg >= 1 && kg <= 40
+      ? { load: { type: "vest" as const, kg: Math.round(kg * 10) / 10 } }
+      : {}),
+    ...(e.perSide === true ? { perSide: true } : {}),
+  };
+};
+
 const posNum = (v: unknown) => {
   const n = num(v);
   return n != null && n > 0 ? n : null;
@@ -419,13 +432,25 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     def: {
       name: "log_workout",
       description:
-        "Log a completed workout. exercises entries: {name, sets?, reps?, seconds?, weightKg?} — names normalize against the catalog; PRs detect automatically.",
+        "Log a completed workout. exercises entries: {name, sets?, reps?, seconds?, weightKg?, vestKg?, perSide?} — names normalize against the catalog; PRs detect automatically. For jump rope use workoutType 'jump_rope' with `rope` (the protocol) and no exercises — the movement row is built from it.",
       inputSchema: {
         type: "object",
         properties: {
           workoutType: {
             type: "string",
-            description: "strength | freestyle | walk | run | hike | cycling | other…",
+            description: "strength | freestyle | jump_rope | walk | run | hike | cycling | other…",
+          },
+          rope: {
+            type: "object",
+            description:
+              "Jump rope only. Intervals: {workSeconds, restSeconds, rounds}. Continuous: {jumpSeconds}. jumps = his own total count, if he gave one.",
+            properties: {
+              workSeconds: { type: "number" },
+              restSeconds: { type: "number" },
+              rounds: { type: "number" },
+              jumpSeconds: { type: "number" },
+              jumps: { type: "number" },
+            },
           },
           startedAt: { type: "string", description: "ISO datetime; default now" },
           durationMinutes: { type: "number" },
@@ -446,6 +471,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
                 reps: { type: "number" },
                 seconds: { type: "number" },
                 weightKg: { type: "number" },
+                vestKg: { type: "number", description: "Weighted vest worn for this movement, 1–40 kg" },
+                perSide: { type: "boolean" },
               },
               required: ["name"],
             },
@@ -475,6 +502,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
                 ...(posNum(e.reps) != null ? { reps: posNum(e.reps) } : {}),
                 ...(posNum(e.seconds) != null ? { seconds: posNum(e.seconds) } : {}),
                 ...(weight != null && weight >= 0 ? { weightKg: weight } : {}),
+                ...vestOf(e),
               };
             })
             .filter((e): e is NonNullable<typeof e> => e !== null)
@@ -483,6 +511,37 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       // tool call must not write a twin row.
       const startedAt = isoDate(args.startedAt) ?? new Date();
       const durationMinutes = Math.max(0, num(args.durationMinutes) ?? 0);
+      // Jump rope told to Claude rather than recorded on the wrist: the
+      // protocol is DECLARED — no round marks, so the phone shows the
+      // protocol-level numbers and never draws rounds it did not measure.
+      let ropeMetrics: Json | null = null;
+      let ropeRow: object | null = null;
+      if (workoutType === JUMP_ROPE_TYPE) {
+        const rope = (args.rope ?? {}) as Json;
+        const work = posNum(rope.workSeconds);
+        const rounds = posNum(rope.rounds);
+        const jumps = posNum(rope.jumps);
+        const interval = work != null && rounds != null;
+        const jumpSeconds = interval
+          ? Math.round(work * rounds)
+          : Math.round(posNum(rope.jumpSeconds) ?? durationMinutes * 60);
+        const record = {
+          mode: interval ? "interval" : "continuous",
+          ...(interval
+            ? { workSeconds: Math.round(work), restSeconds: Math.round(num(rope.restSeconds) ?? 0) }
+            : {}),
+          roundsCompleted: interval ? Math.round(rounds) : 1,
+          jumpSeconds,
+          restSecondsTotal: Math.max(0, Math.round(durationMinutes * 60 - jumpSeconds)),
+          source: "declared",
+          ...(jumps != null ? { jumps: { source: "manual", total: Math.round(jumps) } } : {}),
+        };
+        const parsed = readIntervals({ intervals: record });
+        if (parsed) {
+          ropeMetrics = { intervals: record };
+          ropeRow = jumpRopeExerciseRow(parsed);
+        }
+      }
       const dupe = await findRecentDuplicate({
         startedAt,
         workoutType,
@@ -505,7 +564,9 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           maxHeartRateBpm: posNum(args.maxHeartRateBpm) ? Math.round(posNum(args.maxHeartRateBpm)!) : null,
           elevationGainM: posNum(args.elevationGainM),
           packKg,
-          exercises: (exercises as Prisma.InputJsonValue) ?? undefined,
+          exercises:
+            ((ropeRow ? [ropeRow] : exercises) as Prisma.InputJsonValue) ?? undefined,
+          ...(ropeMetrics ? { metricsData: ropeMetrics as Prisma.InputJsonValue } : {}),
           source: "mcp",
           externalSource: "mcp",
         },
@@ -516,6 +577,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           workoutLogId: entry.id,
           exercises: entry.exercises,
           achievedAt: entry.startedAt,
+          workoutType: entry.workoutType,
+          metricsData: entry.metricsData,
         });
       } catch {
         // PR detection must never break logging (same policy as the route).
@@ -542,6 +605,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
                 reps: { type: "number" },
                 seconds: { type: "number" },
                 weightKg: { type: "number" },
+                vestKg: { type: "number", description: "Weighted vest worn for this movement, 1–40 kg" },
+                perSide: { type: "boolean" },
               },
               required: ["name"],
             },
@@ -610,6 +675,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
               ...(posNum(e.reps) != null ? { reps: posNum(e.reps) } : {}),
               ...(posNum(e.seconds) != null ? { seconds: posNum(e.seconds) } : {}),
               ...(weight != null && weight >= 0 ? { weightKg: weight } : {}),
+              ...vestOf(e),
             };
           })
           .filter((e): e is NonNullable<typeof e> => e !== null);
@@ -638,7 +704,14 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
         where: { id },
         data: {
           ...(nextExercises != null
-            ? { exercises: nextExercises as Prisma.InputJsonValue }
+            ? {
+                exercises: nextExercises as Prisma.InputJsonValue,
+                // Tells the sync route this list is no longer the watch's
+                // to overwrite on a late re-send (lib/workout-resync.ts).
+                metricsData: stampExercisesEdited(
+                  workout.metricsData
+                ) as Prisma.InputJsonValue,
+              }
             : {}),
           ...(packPatch ?? {}),
         },

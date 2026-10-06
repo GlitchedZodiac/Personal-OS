@@ -8,7 +8,13 @@ import {
   getWeekStartDateString,
 } from "@/lib/timezone";
 import { sessionVolumeKg } from "@/lib/prs";
-import { GPS_WORKOUT_TYPES } from "@/lib/activities";
+import { GPS_WORKOUT_TYPES, isDistanceType } from "@/lib/activities";
+import {
+  JUMP_ROPE_TYPE,
+  formatJumpRopePR,
+  groupByProtocol,
+  jumpSecondsOf,
+} from "@/lib/jump-rope";
 import { volumeTrendPct } from "@/lib/format-training";
 import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
@@ -62,7 +68,7 @@ export async function GET(request: NextRequest) {
     // Custom movements must resolve for display names and PR chips.
     await ensureUserExercisesLoaded();
 
-    const [workouts, weightRecords, trail, effortRow] = await Promise.all([
+    const [workouts, weightRecords, trail, effortRow, ropeRows, ropeRecords] = await Promise.all([
       prisma.workoutLog.findMany({
         where: { startedAt: { gte: rangeStart } },
         orderBy: { startedAt: "desc" },
@@ -121,6 +127,26 @@ export async function GET(request: NextRequest) {
           metricsData: true,
         },
       }),
+      // Jump rope (2026-10-05) has no tonnage — its section is built from
+      // the interval records, across all history (the protocol comparison
+      // is not an 8-week question).
+      prisma.workoutLog.findMany({
+        where: { workoutType: JUMP_ROPE_TYPE },
+        orderBy: { startedAt: "desc" },
+        take: 80,
+        select: {
+          id: true,
+          startedAt: true,
+          workoutType: true,
+          durationMinutes: true,
+          caloriesBurned: true,
+          metricsData: true,
+        },
+      }),
+      prisma.personalRecord.findMany({
+        where: { kind: { in: ["rounds", "duration", "jumps", "jumps_round"] } },
+        orderBy: { achievedAt: "desc" },
+      }),
     ]);
 
     // Bucket volume per week (Mon-start, user TZ).
@@ -149,14 +175,19 @@ export async function GET(request: NextRequest) {
 
     // THIS WEEK · OVERVIEW (design 2026-08-11 rev): sessions, active time,
     // burn, outdoor distance for the current Mon-start week.
-    const weekOverview = { sessions: 0, activeMinutes: 0, kcal: 0, outdoorKm: 0 };
+    const weekOverview = { sessions: 0, activeMinutes: 0, kcal: 0, outdoorKm: 0, jumpSeconds: 0 };
     for (const w of workouts) {
       const localDate = getDateStringInTimeZone(w.startedAt, timeZone);
       if (getWeekStartDateString(localDate, 1) !== weekStartStr) continue;
       weekOverview.sessions += 1;
       weekOverview.activeMinutes += w.durationMinutes ?? 0;
       weekOverview.kcal += Math.round(w.caloriesBurned ?? 0);
-      weekOverview.outdoorKm += (w.distanceMeters ?? 0) / 1000;
+      // Ground covered only. This summed distance across EVERY type, so an
+      // indoor session carrying a stale or arm-swing distance (the watch
+      // leak fixed 2026-10-05) inflated the week's kilometres.
+      if (isDistanceType(w.workoutType)) {
+        weekOverview.outdoorKm += (w.distanceMeters ?? 0) / 1000;
+      }
     }
     weekOverview.outdoorKm = Math.round(weekOverview.outdoorKm * 10) / 10;
 
@@ -217,9 +248,24 @@ export async function GET(request: NextRequest) {
         const sets = Number(raw.sets) || null;
         const reps = Number(raw.reps) || null;
         const weight = Number(raw.weightKg ?? raw.weight) || null;
+        // Timed rows (planks, jump rope rounds) used to print a blank line;
+        // a worn vest reads beside the weight, never added to it.
+        const seconds = Number(raw.seconds) || null;
+        const clock = (n: number) =>
+          n >= 60 ? `${Math.floor(n / 60)}:${String(Math.round(n % 60)).padStart(2, "0")}` : `${n}s`;
+        const load = raw.load as { type?: string; kg?: number } | undefined;
         const parts = [
-          sets && reps ? `${sets} × ${reps}` : reps ? `${reps} reps` : null,
+          reps
+            ? sets
+              ? `${sets} × ${reps}`
+              : `${reps} reps`
+            : seconds
+              ? sets && sets > 1
+                ? `${sets} × ${clock(seconds)}`
+                : clock(seconds)
+              : null,
           weight ? `${weight} kg` : null,
+          load?.type === "vest" && typeof load.kg === "number" ? `vest ${load.kg} kg` : null,
         ].filter(Boolean);
         const workSeconds = stepSeconds?.[i];
         rows.push({
@@ -238,6 +284,54 @@ export async function GET(request: NextRequest) {
           : null,
       };
     }
+
+    // Jump rope section: jump time per week (where tonnage is 0 by nature),
+    // the protocol groups, and the bests.
+    const jumpBuckets = new Map<string, number>();
+    for (let i = 0; i < 8; i++) {
+      jumpBuckets.set(addDaysToDateString(chartStartStr, i * 7), 0);
+    }
+    for (const r of ropeRows) {
+      const week = getWeekStartDateString(getDateStringInTimeZone(r.startedAt, timeZone), 1);
+      const seconds = jumpSecondsOf(r);
+      if (jumpBuckets.has(week)) jumpBuckets.set(week, (jumpBuckets.get(week) ?? 0) + seconds);
+      if (week === weekStartStr) weekOverview.jumpSeconds += seconds;
+    }
+    const kindLabel: Record<string, string> = {
+      rounds: "Most rounds",
+      duration: "Longest unbroken jump",
+      jumps: "Most jumps in a session",
+      jumps_round: "Most jumps in a round",
+    };
+    const jumpRope =
+      ropeRows.length > 0
+        ? {
+            sessions: ropeRows.length,
+            weekJumpSeconds: weekOverview.jumpSeconds,
+            weeklyJump: [...jumpBuckets.entries()].map(([weekStart, jumpSeconds]) => ({
+              weekStart,
+              label: `W${isoWeek(weekStart)}`,
+              jumpSeconds,
+            })),
+            // Newest six per protocol is enough to read a trend at a glance;
+            // the detail screen carries the full list.
+            protocols: groupByProtocol(ropeRows).map((g) => ({
+              ...g,
+              sessions: g.sessions.slice(-6),
+              count: g.sessions.length,
+            })),
+            bests: ropeRecords.map((r) => ({
+              kind: r.kind,
+              label:
+                r.kind === "rounds"
+                  ? `${kindLabel.rounds} · ${r.exerciseName.split(" · ")[1] ?? ""}`
+                  : (kindLabel[r.kind] ?? r.kind),
+              value: formatJumpRopePR(r.kind, r.value),
+              achievedAt: r.achievedAt.toISOString(),
+              workoutLogId: r.workoutLogId,
+            })),
+          }
+        : null;
 
     // PR banner only stays fresh for a week — after that the shimmer would lie.
     const latestPRRow = weightRecords[0] ?? null;
@@ -276,6 +370,7 @@ export async function GET(request: NextRequest) {
       latestPR,
       prWall,
       movementTonnage,
+      jumpRope,
       session,
       weeklyVolume,
       pctChange,

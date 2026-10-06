@@ -147,6 +147,66 @@ additive since 08-28b: `GET /api/mobile/trails?nearLat…` rows carry
 `matchPct` (50–99, null when not near-ranked) — the wrist prints it in
 save-track suggestions ("94% match").
 
+## Jump rope + voice logging (2026-10-05 — LIVE, all additive)
+
+Nothing below changes an existing key; an item written by an older watch
+build decodes and stores exactly as before.
+
+**`workoutType: "jump_rope"`** (watch `WorkoutKind.jumpRope`, HealthKit
+`.jumpRope`). The phone gives it its own card type (`rope`), analytics and
+records (`lib/jump-rope.ts`). Send raw streams as for any non-freestyle kind
+(≤900 points; the server keeps ≤600 for this type) and do NOT send
+`timeInZones` — the server computes zones and load.
+
+```
+exercises: [{ name: "Jump Rope", exercise: "jump-rope",
+              sets: <rounds completed>, seconds: <work seconds per round> }]
+              // continuous: sets 1, seconds = total jump seconds
+metricsData.intervals: {
+  mode: "interval" | "continuous",
+  workSeconds?, restSeconds?, plannedRounds?,
+  roundsCompleted, jumpSeconds, restSecondsTotal,
+  marks: [[start, end], ...],   // every WORK interval, elapsed seconds on the
+                                // SAME clock as timeStream (pauses excluded)
+  source: "measured",           // "declared" = typed in afterwards, no marks
+  jumps?: { source: "manual", total?, perRound? },        // his own count
+  jumpsEstimated?: { total, perRound?, algo },            // wrist counter, ON TRIAL
+  trace?: { hz, channels, scale, samples, b64 }           // trial only, first 3 sessions
+}
+```
+
+Records: `personal_records.kind` gains `rounds` (exercise key
+`jump-rope@<work>-<rest>`, one per protocol), `duration`, `jumps`,
+`jumps_round`. The sync response's `prs[].newPRs[].kind` can now carry
+them — a wrist that only knows `weight`/`volume` must not print them as kg.
+
+**Exercise rows gain optional keys** (never sent when nil): `seconds`,
+`exercise` (canonical id), `perSide`, `load: { type: "vest", kg, assumed? }`.
+A vest is a worn load and is never folded into `weightKg`.
+
+**`metricsData.setLog`** — the per-entry log, `lib/set-log.ts`:
+`[{ id, t, at, source: "voice"|"tap", status: "ok"|"review"|"queued"|"failed",
+name, exercise?, reps?, sets?, weightKg?, seconds?, perSide?, load?,
+transcript?, confidence?, reason? }]`. The watch still sends the composed
+`exercises` list; when an item carries a `setLog` the server only adds
+canonical ids to rows that lack one.
+
+**`POST /api/mobile/voice/workout-entry`** (bearer) — one spoken entry.
+Body `{ entryId, audioBase64, mime }` (AAC/m4a; ≤2 MB). Response
+`{ entryId, transcript, entries: [{ name, exercise?, reps?, sets?, weightKg?,
+seconds?, perSide?, load?, confidence, needsReview, reason?, display }],
+parser: "rules"|"llm"|"rules-fallback", ms: { transcribe, parse, total } }`.
+`entries: []` means nothing usable was heard. Stateless: the watch owns the
+session's entry list. `GET` on the same path is an authenticated warm-up.
+
+**Re-sending a workout** (same `externalSource`+`externalId`) is still an
+update, with one rule added — `lib/workout-resync.ts`: once the movement list
+has been edited off the wrist (`metricsData.exercisesEditedAt`), a re-send
+updates the watch's own numbers but NOT `exercises`; set-log entries that
+were not on the row at the edit come back flagged in
+`metricsData.lateEntryIds` for the phone to offer. A stored `hrrDelta` or a
+phone-typed `intervals.jumps` is never erased by a re-send that lacks it.
+
 ## Companion contract (added 2026-08-12 — main lane LIVE, build against it)
 
 Everything the iOS companion needs from the server exists now.

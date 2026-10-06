@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jumpSecondsOf } from "@/lib/jump-rope";
 import { prisma } from "@/lib/prisma";
 import { getUserTimeZone } from "@/lib/server-timezone";
 import {
@@ -60,7 +61,13 @@ export async function GET(request: NextRequest) {
       }),
       prisma.workoutLog.findMany({
         where: { startedAt: { gte: weekStart, lte: dayEnd } },
-        select: { exercises: true, startedAt: true, caloriesBurned: true },
+        select: {
+          exercises: true,
+          startedAt: true,
+          caloriesBurned: true,
+          workoutType: true,
+          metricsData: true,
+        },
       }),
       // Only genuine improvements count. A first-ever log of a movement mints
       // a baseline row per kind (weight AND volume) — counting those made one
@@ -116,6 +123,8 @@ export async function GET(request: NextRequest) {
       0
     );
     const weekSessions = weekWorkouts.length;
+    // Jump rope lifts nothing — a rope week is measured in time on the rope.
+    const weekJumpSeconds = weekWorkouts.reduce((sum, w) => sum + jumpSecondsOf(w), 0);
 
     // Exercise burn for TODAY only — the tile's "net vs target" line needs it
     // (target is an intake goal, so training earns the calories back).
@@ -154,6 +163,7 @@ export async function GET(request: NextRequest) {
       },
       train: {
         weekVolumeKg,
+        weekJumpSeconds,
         weekPRCount,
         weekSessions,
         burnedToday,

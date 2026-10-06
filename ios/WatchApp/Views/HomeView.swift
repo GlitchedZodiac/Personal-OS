@@ -33,6 +33,14 @@ struct WorkoutListView: View {
                 row(kind: .freestyle, title: "Freestyle", subtitle: "just record · shape it in Pitaya after") {
                     PitayaGlyph(paths: Glyphs.freestyle, color: Theme.accent, size: 15)
                 }
+                // 2026-10-05: a type of its own. The row pushes to its setup
+                // (intervals or continuous) — undesigned, flagged with the
+                // screens it opens.
+                row(title: "Jump Rope", subtitle: ropeSubtitle, pushes: true) {
+                    PitayaGlyph(paths: Glyphs.jumpRope, color: Theme.accent, size: 15)
+                } action: {
+                    model.openJumpRope()
+                }
                 row(title: "Kettlebell", subtitle: routineSubtitle(.kettlebell), pushes: true) {
                     PitayaGlyph(paths: Glyphs.kettlebell, color: Theme.accent, size: 15)
                 } action: {
@@ -108,6 +116,15 @@ struct WorkoutListView: View {
             .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         }
         .buttonStyle(.plain)
+    }
+
+    /// The protocol he will get if he just taps Start — his last one.
+    private var ropeSubtitle: String {
+        let config = model.ropeConfig
+        guard config.intervals else { return "continuous" }
+        return config.rounds > 0
+            ? "\(config.protocolLabel) · \(config.rounds) rounds"
+            : "\(config.protocolLabel) · open"
     }
 
     /// "3 routines" / "1 routine" / the honest empty hint. The row stays

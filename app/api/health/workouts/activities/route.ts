@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg } from "@/lib/prs";
 import { activityTypeOf, type RunMetrics } from "@/lib/activities";
+import { JUMP_ROPE_NAME, protocolKey, readIntervals } from "@/lib/jump-rope";
 
 // GET ?before=<ISO>&take=N — light activity cards for Train → Activities
 // (design: activities list, 2026-08-11 rev). Full detail lives at
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
           workoutType: true,
           description: true,
           durationMinutes: true,
+          caloriesBurned: true,
           distanceMeters: true,
           elevationGainM: true,
           stepCount: true,
@@ -54,7 +56,11 @@ export async function GET(request: NextRequest) {
       const volumeKg = type === "out" ? 0 : sessionVolumeKg(w.exercises);
       // Strava imports pack the whole stat line into description
       // ("Afternoon Run · 1.87 km · avg HR…") — the card wants the title.
-      const title = (m.sequenceName ?? w.description ?? w.workoutType).split(/\s[·•]\s/)[0];
+      const rope = type === "rope" ? readIntervals(m) : null;
+      const title =
+        type === "rope"
+          ? JUMP_ROPE_NAME
+          : (m.sequenceName ?? w.description ?? w.workoutType).split(/\s[·•]\s/)[0];
       return {
         id: w.id,
         type,
@@ -62,6 +68,15 @@ export async function GET(request: NextRequest) {
         workoutType: w.workoutType,
         startedAt: w.startedAt.toISOString(),
         durationMinutes: w.durationMinutes,
+        // Calories on every card, whatever the type (his 2026-10-05 call).
+        caloriesBurned: w.caloriesBurned,
+        rope: rope
+          ? {
+              protocol: protocolKey(rope),
+              rounds: rope.roundsCompleted,
+              jumpSeconds: rope.jumpSeconds,
+            }
+          : null,
         distanceMeters: w.distanceMeters,
         elevationGainM: w.elevationGainM,
         stepCount: w.stepCount,

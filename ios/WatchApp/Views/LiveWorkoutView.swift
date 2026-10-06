@@ -48,6 +48,10 @@ struct LiveWorkoutView: View {
         }
         .overlay { ZoneBloomOverlay(recorder: model.recorder) }
         .overlay { SplitBannerOverlay(recorder: model.recorder) }
+        .overlay {
+            // What Pitaya heard (kettlebell free sessions log by voice too).
+            if kind == .kettlebell { VoiceFlashOverlay(voice: model.voice) }
+        }
         .overlay(alignment: .bottom) {
             if let flash = model.prFlash {
                 // §05: while the flash is up, Double Tap dismisses it.
@@ -153,6 +157,17 @@ struct MetricsPage: View {
                         label: "KM",
                         color: Theme.accent
                     )
+                    // 2026-10-05 (his call): steps on every distance kind.
+                    // They were counted live all along and shown only two
+                    // swipes away on the Effort page.
+                    if kind.countsSteps {
+                        StatCell(
+                            value: recorder.stepCountLive.map {
+                                Fmt.grouped(Double($0))
+                            } ?? "––",
+                            label: "STEPS"
+                        )
+                    }
                 }
             }
         }
@@ -181,6 +196,8 @@ struct ControlsPage: View {
                     Task {
                         if isSequence {
                             await model.endSequenceEarly()
+                        } else if kind == .jumpRope {
+                            await model.endJumpRope()
                         } else {
                             await model.finishWorkout(kind)
                         }

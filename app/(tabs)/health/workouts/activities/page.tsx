@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CircuitIcon, TrailIcon, TrainIcon, WalkIcon } from "@/components/pitaya-icons";
+import { CircuitIcon, RopeIcon, TrailIcon, TrainIcon, WalkIcon } from "@/components/pitaya-icons";
 import { RangePicker } from "@/components/range-picker";
 
 // Train → Activities — port of the design's activity-history push-in screens
@@ -11,7 +11,7 @@ import { RangePicker } from "@/components/range-picker";
 // route on 2026-08-28 — this file is list-only, and old ?id= deep links
 // redirect to /health/workouts/activities/<id>.
 
-type ActivityType = "kb" | "cir" | "out";
+type ActivityType = "kb" | "cir" | "out" | "rope";
 
 interface ActivityCard {
   id: string;
@@ -28,14 +28,22 @@ interface ActivityCard {
   workSeconds: number | null;
   externalSource: string | null;
   source: string | null;
+  caloriesBurned: number | null;
+  rope: { protocol: string; rounds: number; jumpSeconds: number } | null;
 }
 
 // Design's type palettes (ICO/CLR maps) — icon circle bg + stroke.
+// rope (2026-10-05) is not in the design: it takes the kettlebell circle's
+// blush with the deepest brand pink, so it reads as training, not outdoors.
 const TYPE_COLORS: Record<ActivityType, [string, string]> = {
   kb: ["#F6E3EB", "#8C2F51"],
   cir: ["#F0EEF2", "#66646C"],
   out: ["#EAF3ED", "#3E7A54"],
+  rope: ["#F6E3EB", "#A63D63"],
 };
+
+// Types whose distance is ground covered — the ones that show steps.
+const DISTANCE_TYPE = /^(run|walk|hike|trail_run|treadmill_walk|treadmill_run)$/;
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
@@ -63,8 +71,23 @@ function subLine(a: ActivityCard) {
           : "");
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const label =
-    a.type === "out" ? a.workoutType.replace(/_/g, " ") : a.type === "cir" ? "circuit" : "kettlebell";
-  return `${day} · ${time} · ${label}`;
+    a.type === "out"
+      ? a.workoutType.replace(/_/g, " ")
+      : a.type === "rope"
+        ? a.rope && a.rope.protocol !== "continuous"
+          ? `jump rope · ${a.rope.protocol}`
+          : "jump rope"
+        : a.type === "cir"
+          ? "circuit"
+          : "kettlebell";
+  // Calories on every card; steps on anything measured by distance. Both
+  // were recorded all along and shown nowhere on the list (2026-10-05).
+  const steps =
+    a.type === "out" && DISTANCE_TYPE.test(a.workoutType) && a.stepCount
+      ? ` · ${fmt(a.stepCount)} steps`
+      : "";
+  const kcal = a.caloriesBurned ? ` · ${fmt(Math.round(a.caloriesBurned))} kcal` : "";
+  return `${day} · ${time} · ${label}${steps}${kcal}`;
 }
 
 function ActivityGlyph({ a, size = 20 }: { a: { type: ActivityType; workoutType: string }; size?: number }) {
@@ -75,6 +98,8 @@ function ActivityGlyph({ a, size = 20 }: { a: { type: ActivityType; workoutType:
       ) : (
         <TrailIcon size={size} strokeWidth={1.9} />
       )
+    ) : a.type === "rope" ? (
+      <RopeIcon size={size} strokeWidth={1.9} />
     ) : a.type === "cir" ? (
       <CircuitIcon size={size} strokeWidth={1.9} />
     ) : (
@@ -90,7 +115,7 @@ export default function ActivitiesPage() {
   const [total, setTotal] = useState(0);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [filter, setFilter] = useState<"all" | "gym" | "out">("all");
+  const [filter, setFilter] = useState<"all" | "gym" | "out" | "rope">("all");
   const [range, setRange] = useState<{ from: string | null; to: string | null }>({
     from: null,
     to: null,
@@ -140,7 +165,13 @@ export default function ActivitiesPage() {
   const shown = useMemo(
     () =>
       items.filter((a) =>
-        filter === "all" ? true : filter === "gym" ? a.type !== "out" : a.type === "out"
+        filter === "all"
+          ? true
+          : filter === "rope"
+            ? a.type === "rope"
+            : filter === "gym"
+              ? a.type !== "out" && a.type !== "rope"
+              : a.type === "out"
       ),
     [items, filter]
   );
@@ -156,6 +187,15 @@ export default function ActivitiesPage() {
             : `${a.durationMinutes} min`;
       return [`${km} km`, lab];
     }
+    if (a.type === "rope") {
+      // Jump time is the number that means something; rounds sit under it.
+      const jump = a.rope ? mmss(a.rope.jumpSeconds) : `${a.durationMinutes}:00`;
+      const lab =
+        a.rope && a.rope.protocol !== "continuous"
+          ? `${a.rope.rounds} rounds`
+          : "jump time";
+      return [jump, lab];
+    }
     const time = heroTime(a);
     const lab =
       a.type === "cir" && a.roundsCompleted
@@ -164,7 +204,7 @@ export default function ActivitiesPage() {
     return [time, lab];
   };
 
-  const chip = (key: "all" | "gym" | "out", label: string) => (
+  const chip = (key: "all" | "gym" | "out" | "rope", label: string) => (
     <button
       key={key}
       onClick={() => setFilter(key)}
@@ -213,6 +253,7 @@ export default function ActivitiesPage() {
         {chip("all", "All")}
         {chip("gym", "Gym")}
         {chip("out", "Outdoor")}
+        {chip("rope", "Rope")}
         <div className="flex-1" />
         <button
           onClick={() => setPickerOpen(true)}
@@ -244,9 +285,9 @@ export default function ActivitiesPage() {
               >
                 <ActivityGlyph a={a} />
               </div>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <div className="text-[13.5px] font-semibold text-foreground">{a.name}</div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground">{subLine(a)}</div>
+                <div className="mt-0.5 text-[11px] leading-[1.35] text-muted-foreground">{subLine(a)}</div>
               </div>
               <div className="text-right">
                 <div className="text-[13px] font-semibold text-foreground tabular-nums">{stat}</div>

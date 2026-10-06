@@ -232,8 +232,8 @@ export const WORKOUT_LOG_FUNCTION = {
     properties: {
       workoutType: {
         type: "string" as const,
-        enum: ["strength", "cardio", "run", "walk", "hike", "cycling", "swimming", "yoga", "hiit", "other"],
-        description: "Type of workout — use 'hike' for hikes, 'walk' for walks, etc. All activities count, not just planned workouts.",
+        enum: ["strength", "cardio", "jump_rope", "run", "walk", "hike", "cycling", "swimming", "yoga", "hiit", "other"],
+        description: "Type of workout — use 'hike' for hikes, 'walk' for walks, 'jump_rope' for jump rope / skipping, etc. All activities count, not just planned workouts.",
       },
       durationMinutes: {
         type: "number" as const,

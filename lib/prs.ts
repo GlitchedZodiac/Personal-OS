@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
+import { JUMP_ROPE_TYPE, jumpRopePRCandidates } from "@/lib/jump-rope";
 
 // Personal-record detection for strength work — kettlebell-first, but any
 // exercise with a weight qualifies. Two record kinds keep it unambiguous:
@@ -8,6 +9,11 @@ import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
 //   volume — best single-session tonnage (sets × reps × kg) on the movement
 // Detection runs on workout create; new records return to the caller so the
 // UI (and later the watch, via haptics) can celebrate.
+//
+// Jump rope (2026-10-05) has no kilograms, so it brings its own kinds —
+// rounds (per protocol), duration (longest unbroken jump) and jumps — read
+// from the interval record rather than the exercise list. They share the
+// table; nothing about weight/volume changes.
 
 export interface RawExercise {
   name?: string;
@@ -17,10 +23,12 @@ export interface RawExercise {
   weight?: number | string; // legacy rows pre-catalog
 }
 
+export type PRKind = "weight" | "volume" | "rounds" | "duration" | "jumps" | "jumps_round";
+
 export interface PRCandidate {
   exercise: string; // canonical id
   exerciseName: string;
-  kind: "weight" | "volume";
+  kind: PRKind;
   value: number;
   unit: string;
 }
@@ -109,11 +117,19 @@ export async function detectAndRecordPRs(input: {
   workoutLogId: string;
   exercises: unknown;
   achievedAt: Date;
+  /** With metricsData, lets a jump rope session raise its own records. */
+  workoutType?: string | null;
+  metricsData?: unknown;
 }): Promise<NewPR[]> {
   // User-minted movements PR like catalog ones — load them into the index
   // before extraction so a custom flow's tonnage isn't invisible.
   await ensureUserExercisesLoaded();
-  const candidates = extractPRCandidates(input.exercises);
+  const candidates: PRCandidate[] = [
+    ...extractPRCandidates(input.exercises),
+    ...(input.workoutType === JUMP_ROPE_TYPE
+      ? jumpRopePRCandidates(input.metricsData)
+      : []),
+  ];
   if (candidates.length === 0) return [];
 
   const existing = await prisma.personalRecord.findMany({
@@ -165,10 +181,23 @@ export async function rebuildPersonalRecords(): Promise<{
 }> {
   await prisma.personalRecord.deleteMany({});
 
+  // Jump rope rows are included by type: their records come from the
+  // interval record, which exists even when the movement list is empty.
   const workouts = await prisma.workoutLog.findMany({
-    where: { exercises: { not: { equals: null } } },
+    where: {
+      OR: [
+        { exercises: { not: { equals: null } } },
+        { workoutType: JUMP_ROPE_TYPE },
+      ],
+    },
     orderBy: { startedAt: "asc" },
-    select: { id: true, startedAt: true, exercises: true },
+    select: {
+      id: true,
+      startedAt: true,
+      exercises: true,
+      workoutType: true,
+      metricsData: true,
+    },
   });
 
   let recordsSet = 0;
@@ -177,6 +206,8 @@ export async function rebuildPersonalRecords(): Promise<{
       workoutLogId: workout.id,
       exercises: workout.exercises,
       achievedAt: workout.startedAt,
+      workoutType: workout.workoutType,
+      metricsData: workout.metricsData,
     });
     recordsSet += newPRs.length;
   }

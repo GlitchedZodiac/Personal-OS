@@ -95,6 +95,11 @@ targets:
         # above is a sibling, not a host; revisit if we ever embed).
         WKWatchOnly: true
         WKBackgroundModes: [workout-processing, location]
+        # DEBUG smoke against `npm run dev` (PITAYA_SMOKE_BASEURL →
+        # http://localhost:3000) — the same allowance the iOS target has.
+        # Local network only; production traffic stays HTTPS.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         # CoreLocation validates against UIBackgroundModes even on watchOS —
         # without it, allowsBackgroundLocationUpdates throws (crashed a sim
         # walk before this was here).
@@ -116,7 +121,14 @@ targets:
         NSHealthUpdateUsageDescription: >-
           Pitaya saves workouts you record on the watch to Apple Health.
         NSMotionUsageDescription: >-
-          Pitaya reads elevation from the barometer during outdoor workouts.
+          Pitaya reads elevation from the barometer during outdoor workouts,
+          and wrist motion during jump rope to estimate rope turns.
+        # 2026-10-05: voice logging. Without this string the app is killed
+        # the first time it touches the microphone. Audio is sent to
+        # Pitaya's own server to be turned into a workout entry.
+        NSMicrophoneUsageDescription: >-
+          Pitaya listens only while you hold a voice log open, to turn what
+          you say ("10 kettlebell swings") into a workout entry.
     entitlements:
       path: WatchApp/PersonalOSWatch.entitlements
       properties:

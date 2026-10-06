@@ -191,6 +191,18 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         self.session = session
         self.builder = builder
 
+        // Totals belong to ONE session. These five were never cleared, so a
+        // session whose activity type reports no distance (freestyle, jump
+        // rope, strength) kept the previous walk's kilometres and synced
+        // them as its own — 13 freestyle rows in September carry a stale
+        // distance (found 2026-10-05).
+        heartRate = nil
+        avgHeartRate = nil
+        maxHeartRate = nil
+        activeCalories = nil
+        distanceMeters = nil
+        elapsed = 0
+
         hrStream = []
         timeStream = []
         altitudeStream = []
@@ -299,6 +311,14 @@ public final class WorkoutRecorder: NSObject, ObservableObject {
         phase = .running
         startTicker()
     }
+
+    /// The builder's own clock, sub-second and pause-aware — the same clock
+    /// timeStream is stamped with. The jump rope engine reads it so a round
+    /// mark lands exactly where its heart rate does.
+    public var elapsedNow: TimeInterval { builder?.elapsedTime ?? elapsed }
+
+    /// False on the headless smoke path (no HealthKit session at all).
+    public var isLive: Bool { builder != nil }
 
     #if DEBUG
     /// Smoke-only: stand in for the heart sensor the simulator doesn't have,

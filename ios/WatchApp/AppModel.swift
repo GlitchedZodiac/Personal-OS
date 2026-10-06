@@ -43,12 +43,13 @@ public enum WorkoutDiscipline: String, CaseIterable, Identifiable, Hashable, Sen
 // MARK: - Workout kinds
 
 public enum WorkoutKind: String, CaseIterable, Identifiable {
-    case kettlebell, walk, treadmill, run, hike, freestyle, other
+    case kettlebell, walk, treadmill, run, hike, freestyle, jumpRope, other
 
     public var id: String { rawValue }
 
     public var title: String {
         switch self {
+        case .jumpRope: return "Jump Rope"
         case .kettlebell: return "Kettlebell"
         case .walk: return "Walk"
         case .treadmill: return "Treadmill"
@@ -72,14 +73,25 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         // Freestyle's own vocabulary — the phone keys its "Describe what
         // this was →" affordance off this type.
         case .freestyle: return "freestyle"
+        // A type of its own (2026-10-05) — the phone gives it its own card,
+        // interval analytics and records (lib/jump-rope.ts).
+        case .jumpRope: return "jump_rope"
         case .other: return "other"
+        }
+    }
+
+    /// Kinds measured by ground covered — the ones that show steps.
+    public var countsSteps: Bool {
+        switch self {
+        case .walk, .treadmill, .run, .hike: return true
+        case .kettlebell, .freestyle, .jumpRope, .other: return false
         }
     }
 
     public var isOutdoor: Bool {
         switch self {
         case .walk, .run, .hike: return true
-        case .kettlebell, .treadmill, .freestyle, .other: return false
+        case .kettlebell, .treadmill, .freestyle, .jumpRope, .other: return false
         }
     }
 
@@ -92,6 +104,9 @@ public enum WorkoutKind: String, CaseIterable, Identifiable {
         // Follow-alongs and improvised EMOMs read as interval work, which
         // is also what gives HealthKit its best calorie model for them.
         case .freestyle: return .highIntensityIntervalTraining
+        // Apple Health files it under Jump Rope, and the watch applies that
+        // activity's calorie model instead of HIIT's.
+        case .jumpRope: return .jumpRope
         case .other: return .other
         }
     }
@@ -123,6 +138,14 @@ public struct WorkoutSummary {
     public let roundsCompleted: Int?
     public let sequenceName: String?
     public var prs: [PRBaselines.SessionPR]
+    /// Steps for anything measured by distance (his 2026-10-05 call — they
+    /// were recorded all along and shown on no summary).
+    public var stepCount: Int?
+    /// Jump rope: seconds the rope was actually turning, and the plan.
+    public var jumpSeconds: Int?
+    public var plannedRounds: Int?
+    /// Entries he logged by voice during the session.
+    public var voiceEntryCount = 0
 }
 
 // MARK: - App model
@@ -138,6 +161,8 @@ public final class AppModel: ObservableObject {
         case settings          // Round 1 §01
         case workoutList       // design 05
         case hikeMenu          // Michael's 2026-08-20 IA: new hike vs. a saved trail
+        case jumpRopeSetup     // 2026-10-05: intervals or continuous, then Start
+        case liveJumpRope      // the interval clock
         case sequences(WorkoutDiscipline) // design 06, split by discipline
         case sequenceDetail(SequenceDef) // design 07
         case live(WorkoutKind)           // freeform live pages
@@ -200,6 +225,33 @@ public final class AppModel: ObservableObject {
     /// §08 voice-confirm card state (set by the App Intents).
     @Published public var voiceWeightKg: Double = 0
     @Published public private(set) var voiceFoodText: String = ""
+
+    // Jump rope (2026-10-05). The config is what he dials on the setup
+    // screen; the rest is the interval clock's live output.
+    @Published var ropeConfig = RopeConfig.load()
+    @Published private(set) var ropePhase: RopePhase = .work
+    @Published public private(set) var ropeRound = 0
+    @Published public private(set) var ropeSecondsLeft = 0
+    @Published public private(set) var ropePhaseProgress: Double = 0
+    @Published public private(set) var ropeJumpSeconds = 0
+    /// His own jump count for the session on the summary (nil = not entered).
+    @Published public private(set) var manualJumps: Int?
+    private var ropeActive: RopeConfig?
+    private var ropeMarks: [[Int]] = []
+    private var ropeOpenMark: Int?
+    private var ropeEngine: Task<Void, Never>?
+    private let jumpCounter = JumpCounter()
+
+    // Voice logging (2026-10-05): what he has said this session, and the
+    // entry currently flashed on the live screen.
+    let voice = VoiceLogger()
+    @Published private(set) var voiceEntries: [VoiceEntryState] = []
+    @Published private(set) var voiceFlash: VoiceEntryState?
+    private var voiceFlashTask: Task<Void, Never>?
+    private var voiceRetryTask: Task<Void, Never>?
+    /// Tapped-set rows of the session being saved — kept so a late voice
+    /// entry can be recomposed onto them.
+    private var pendingTapEntries: [ExerciseEntry] = []
 
     // Kettlebell live state
     @Published public private(set) var loggedSets: [LoggedSet] = []
@@ -322,6 +374,16 @@ public final class AppModel: ObservableObject {
         if let cached = SequencesCache.load() { sequences = cached }
         if let cached = TrailsCache.load() { trails = cached }
         AppModel.shared = self
+        voice.onClip = { [weak self] url in self?.handleVoiceClip(url) }
+        voice.onNothingHeard = { [weak self] in self?.voiceHeardNothing() }
+        voice.onStartFailed = { [weak self] in
+            // Say so — a mic button that silently does nothing reads as broken.
+            self?.flashVoice(VoiceEntryState(
+                id: "mic", t: 0, at: Date(), status: .failed,
+                note: "Mic unavailable right now"
+            ), seconds: 3)
+            Haptics.key(.failure)
+        }
     }
 
     // MARK: - Boot & pairing
@@ -698,6 +760,13 @@ public final class AppModel: ObservableObject {
         }
         phase = .live(kind)
         guard useRecorder else { return }
+        if kind == .freestyle || kind == .kettlebell {
+            // The microphone question is asked HERE, once, before the
+            // countdown — never mid-set with a bell in his hand. And the
+            // voice route is woken so the first clip is not the slow one.
+            await VoiceLogger.requestPermissionIfUndetermined()
+            Task { [api] in await api.warmVoice() }
+        }
         // A recovery window still watching the previous session yields first.
         await recorder.abortRecoveryIfNeeded()
         // Round 3 §00: served boundaries feed the chips + ZonePublisher.
@@ -781,7 +850,17 @@ public final class AppModel: ObservableObject {
     }
 
     public func finishWorkout(_ kind: WorkoutKind) async {
-        let entries = aggregatedEntries()
+        if voice.state == .recording { voice.stop() }
+        voiceRetryTask?.cancel()
+        voiceRetryTask = nil
+        // Tapped sets keep their grouping; voice entries follow them, with
+        // consecutive repeats folded into sets. The per-entry log rides
+        // along so the phone can show what was said and when.
+        let tapEntries = aggregatedEntries()
+        let voiceLog = SetLog.payload(from: voiceEntries)
+        let setLog = SetLog.payload(taps: loggedSets, startedAt: workoutStartedAt) + voiceLog
+        let entries = tapEntries + SetLog.compose(voiceLog)
+        pendingTapEntries = tapEntries
         // Round 3 §07 opened the 60 s recovery window to EVERY kind with a
         // live recorder (it was kettlebell-only) — the post-save HRR screen
         // rides it, and the sensors freeze at End either way.
@@ -795,7 +874,7 @@ public final class AppModel: ObservableObject {
         let covered = totals?.distanceMeters ?? 0
         // Smokes are exempt via their existing marker — a 65 s scripted walk
         // must still reach save.
-        if elapsed < 240, loggedSets.isEmpty, covered < 150,
+        if elapsed < 240, loggedSets.isEmpty, voiceEntries.isEmpty, covered < 150,
            externalSourceOverride == nil {
             recoveryTask?.cancel()
             recoveryTask = nil
@@ -818,7 +897,8 @@ public final class AppModel: ObservableObject {
             setCount: loggedSets.count,
             rounds: nil,
             sequence: nil,
-            description: sessionDescription(kind: kind)
+            description: sessionDescription(kind: kind),
+            setLog: voiceLog.isEmpty ? nil : setLog
         )
     }
 
@@ -875,6 +955,11 @@ public final class AppModel: ObservableObject {
             .withHRR(delta: capture.drop, seconds: 60)
         let updated = item.replacingMetrics(metrics)
         lastSavedItem = updated
+        VoicePendingStore.update(externalId: updated.externalId) { stored in
+            let m = (stored.metricsData ?? WorkoutMetricsData())
+                .withHRR(delta: capture.drop, seconds: 60)
+            stored = stored.replacingMetrics(m)
+        }
         Task { [weak self] in
             guard let self, let queue = self.queue else { return }
             try? await queue.enqueue(updated)
@@ -1174,7 +1259,9 @@ public final class AppModel: ObservableObject {
         setCount: Int,
         rounds: Int?,
         sequence: SequenceDef?,
-        description: String?
+        description: String?,
+        intervals: IntervalPayload? = nil,
+        setLog: [SetLogEntryPayload]? = nil
     ) {
         stopIdleWatchdog()
         let started = totals?.startedAt ?? workoutStartedAt
@@ -1211,7 +1298,13 @@ public final class AppModel: ObservableObject {
             setCount: setCount,
             roundsCompleted: rounds,
             sequenceName: sequence?.name,
-            prs: prs
+            prs: prs,
+            stepCount: kind.countsSteps ? totals?.stepCount : nil,
+            jumpSeconds: intervals?.jumpSeconds,
+            plannedRounds: intervals?.plannedRounds,
+            voiceEntryCount: voiceEntries.filter {
+                $0.status == .ok || $0.status == .review || $0.status == .queued
+            }.count
         )
 
         // Raw streams ride along for the server's zone/load enrichment
@@ -1234,12 +1327,16 @@ public final class AppModel: ObservableObject {
         // arrays (~3×3600 ints for an hour) that the server immediately
         // reduced to ≤120 — ≤600 keeps full analytic headroom at a sixth
         // of the payload.
+        // Jump rope sends more: the phone reads each round's peak and trough
+        // off this stream, and a 30-second round needs more than a handful
+        // of samples (the server keeps up to 600 for this type).
+        let streamLimit = kind == .jumpRope ? 900 : 600
         let hrStream = isFreestyle
             ? StreamMath.downsample(rawHR)
-            : StreamMath.downsample(rawHR, limit: 600)
+            : StreamMath.downsample(rawHR, limit: streamLimit)
         let timeStream = isFreestyle
             ? StreamMath.downsample(rawTime)
-            : StreamMath.downsample(rawTime, limit: 600)
+            : StreamMath.downsample(rawTime, limit: streamLimit)
         let altitudeStream = isFreestyle
             ? StreamMath.downsample(rawAltitude)
             : StreamMath.downsample(rawAltitude, limit: 600)
@@ -1260,7 +1357,9 @@ public final class AppModel: ObservableObject {
                 ? (recorder.elevationGain * 10).rounded() / 10 : nil,
             // §07: per-km seconds banked live on the wrist.
             splits: recorder.splitSeconds.isEmpty ? nil : recorder.splitSeconds,
-            avgCadenceSpm: recorder.avgCadenceSpm
+            avgCadenceSpm: recorder.avgCadenceSpm,
+            intervals: intervals,
+            setLog: setLog
         )
 
         pendingItem = WorkoutSyncItem(
@@ -1312,6 +1411,21 @@ public final class AppModel: ObservableObject {
         }
         pendingItem = nil
         lastSavedItem = item
+        // Clips recorded out of range are still owed to this workout: put
+        // the item on disk with them, so they can be added whenever the
+        // audio finally uploads — even after the app has been closed.
+        let owed = voiceEntries.compactMap { entry -> PendingClip? in
+            guard entry.status == .queued, let file = entry.audioFile else { return nil }
+            return PendingClip(entryId: entry.id, file: file)
+        }
+        if !owed.isEmpty {
+            var pending = VoicePendingStore.load()
+            pending.removeAll { $0.item.externalId == item.externalId }
+            pending.append(PendingVoiceWorkout(
+                item: item, tapEntries: pendingTapEntries, clips: owed
+            ))
+            VoicePendingStore.save(pending)
+        }
         await drainQueue(reconcilePRsFor: item.externalId)
 
         // ——— Round 3 post-save chain (the "full sequence", locked) ———
@@ -1553,6 +1667,7 @@ public final class AppModel: ObservableObject {
         recoveryTask?.cancel()
         recoveryTask = nil
         Task { await recorder.abortRecoveryIfNeeded() }
+        clearVoiceSession(deleteQueuedAudio: true)
         pendingItem = nil
         summary = nil
         loggedSets = []
@@ -1617,6 +1732,44 @@ public final class AppModel: ObservableObject {
     /// smoke can count its rows server-side after the race.
     var pendingItemExternalId: String? { pendingItem?.externalId }
 
+    /// Smoke-only: push a transcript through the REAL voice route and the
+    /// real entry handling — the simulator script has no microphone to talk
+    /// into. Returns the round-trip in ms.
+    func debugVoiceEntry(transcript: String) async -> Int {
+        let entry = VoiceEntryState(
+            id: UUID().uuidString, t: Int(sessionClock()), at: Date(), status: .working
+        )
+        voiceEntries.append(entry)
+        let started = Date()
+        do {
+            let response = try await api.postVoiceEntry(
+                VoiceEntryRequest(entryId: entry.id, audioBase64: nil, transcript: transcript),
+                timeout: 20
+            )
+            landVoiceResponse(id: entry.id, response: response)
+        } catch {
+            _ = updateVoiceEntry(entry.id) { $0.status = .failed }
+            print("PITAYA-SMOKE: voice entry error \(error)")
+        }
+        return Int(Date().timeIntervalSince(started) * 1000)
+    }
+
+    /// Smoke-only: adopt a device session minted for this run instead of
+    /// pairing with the PIN.
+    func debugAdoptSession(accessToken: String) async {
+        let day: TimeInterval = 86_400
+        try? await sessionStore.save(StoredSession(
+            accessToken: accessToken, refreshToken: "smoke-no-refresh",
+            expiresAt: Date().addingTimeInterval(day),
+            refreshExpiresAt: Date().addingTimeInterval(day),
+            deviceSessionId: "smoke"
+        ))
+        phase = .home
+    }
+
+    /// Smoke-only: what the pending item will send.
+    var debugPendingItem: WorkoutSyncItem? { pendingItem }
+
     /// Server-side truth for the smoke: how many rows carry this externalId.
     func debugCountWorkouts(externalId: String) async -> Int? {
         guard let list = try? await api.fetchWorkouts(limit: 20) else { return nil }
@@ -1637,7 +1790,25 @@ public final class AppModel: ObservableObject {
         countdown = nil
         circuitRestTask?.cancel()
         circuitRestLeft = nil
+        // A routine's step timings belong to that routine's run. These were
+        // only cleared when the NEXT routine started, so every walk and
+        // freestyle after a circuit shipped its stepSeconds (21 rows in
+        // September carry [784,1222,0,0,0,0] — found 2026-10-05).
+        circuitStepSeconds = []
+        circuitStepCompletions = []
         weightDetentOverride = nil
+        // Jump rope + voice are session-scoped.
+        ropeEngine?.cancel()
+        ropeEngine = nil
+        ropeActive = nil
+        ropeMarks = []
+        ropeOpenMark = nil
+        ropeRound = 0
+        ropeJumpSeconds = 0
+        manualJumps = nil
+        if jumpCounter.isRunning { _ = jumpCounter.stop() }
+        clearVoiceSession(deleteQueuedAudio: false)
+        pendingTapEntries = []
         clearSummaryExtras()
         workoutStartedAt = Date()
         markActivity()
@@ -1690,6 +1861,9 @@ public final class AppModel: ObservableObject {
     /// reloads, so this never needs the full history refresh.
     public func backgroundRefresh() async {
         await drainQueue()
+        // drainQueue returns early on an empty queue — clips recorded out of
+        // range are owed regardless of whether a workout is waiting.
+        await drainVoicePending()
         WidgetCenter.shared.reloadAllTimelines()
     }
 
@@ -1731,6 +1905,8 @@ public final class AppModel: ObservableObject {
             }
             // §02: every sync refreshes the complication timeline.
             WidgetCenter.shared.reloadAllTimelines()
+            // The connection is evidently back: send any clips still owed.
+            await drainVoicePending()
         } else if outcome.pendingCount > 0 {
             syncState = .queued(outcome.pendingCount)
             queuedCount = outcome.pendingCount
@@ -1764,6 +1940,501 @@ public final class AppModel: ObservableObject {
                 previousValue: pr.previousValue
             )
         }.sorted { $0.exerciseName < $1.exerciseName }
+    }
+
+    // MARK: - Jump rope (2026-10-05)
+    //
+    // His sessions are EMOM-shaped — 30 on, 30 off — and until now the wrist
+    // could only record them as a shapeless freestyle that he restructured
+    // by hand afterwards (and whose round count was just the minutes). Here
+    // the wrist runs the clock, cues every transition, and reports WHEN
+    // each work interval ran, on the same clock the HR stream is stamped
+    // with. NO DESIGN SLICE EXISTS for these screens — built inside the
+    // watch design system at his call; PORT GATE applies when one lands.
+
+    public func openJumpRope() { phase = .jumpRopeSetup }
+
+    /// The clock the marks are written in. The builder's own (pause-aware,
+    /// sub-second) whenever a HealthKit session exists; wall time on the
+    /// headless smoke path, which has none.
+    private func sessionClock() -> TimeInterval {
+        // Only a session that is actually collecting has a clock worth
+        // trusting — if HealthKit refused, the builder exists but never
+        // advances, and the rounds would sit at 1 forever.
+        let collecting = recorder.isLive
+            && (recorder.phase == .running || recorder.phase == .paused)
+        return collecting ? recorder.elapsedNow : Date().timeIntervalSince(workoutStartedAt)
+    }
+
+    public func startJumpRope(useRecorder: Bool = true) async {
+        if useRecorder, !DoubleTapCoach.shared.coachShown {
+            pendingCoachAction = { [weak self] in await self?.startJumpRope() }
+            phase = .doubleTapCoach
+            return
+        }
+        resetLiveState()
+        let config = ropeConfig
+        config.save()
+        ropeActive = config
+        ropePhase = .work
+        ropeRound = 1
+        ropeSecondsLeft = config.intervals ? config.workSeconds : 0
+        ropePhaseProgress = 0
+        phase = .liveJumpRope
+
+        if useRecorder {
+            await recorder.abortRecoveryIfNeeded()
+            recorder.hrZones = zones
+            await runCountdown()
+        }
+        workoutStartedAt = Date()
+        if useRecorder {
+            do {
+                try await recorder.start(activityType: .jumpRope, outdoor: false)
+            } catch {
+                // HealthKit refused — the clock still runs on wall time so
+                // the session is never lost.
+            }
+            jumpCounter.start()
+        }
+        ropeEngine?.cancel()
+        ropeEngine = Task { [weak self] in await self?.runRopeEngine(config) }
+    }
+
+    /// Close the work interval that is open, if any, at `second`.
+    private func closeRopeMark(at second: Int) {
+        guard let start = ropeOpenMark else { return }
+        ropeOpenMark = nil
+        if second > start { ropeMarks.append([start, second]) }
+        jumpCounter.endRound()
+    }
+
+    private func openRopeMark(at second: Int) {
+        ropeOpenMark = second
+        jumpCounter.beginRound()
+    }
+
+    /// Phase and round are DERIVED from the clock every tick, never counted
+    /// up — so a late tick, a dropped wrist or a pause cannot drift the
+    /// rounds out of step with the heart-rate stream.
+    private func runRopeEngine(_ config: RopeConfig) async {
+        let work = Double(max(config.workSeconds, 5))
+        let rest = Double(max(config.restSeconds, 0))
+        let period = work + rest
+        var lastPhase: RopePhase?
+        var lastRound = 0
+        var lastTick = -1
+        var wasPaused = false
+
+        while !Task.isCancelled {
+            guard case .liveJumpRope = phase else { return }
+            let t = sessionClock()
+            let paused = recorder.phase == .paused
+
+            if !config.intervals {
+                // Continuous: one unbroken interval, split only by a pause —
+                // "longest unbroken jump" has to mean unbroken.
+                if paused, !wasPaused { closeRopeMark(at: Int(t)) }
+                if !paused, ropeOpenMark == nil { openRopeMark(at: Int(t)) }
+                wasPaused = paused
+                let jumped = ropeMarks.reduce(0) { $0 + ($1[1] - $1[0]) }
+                    + (ropeOpenMark.map { max(0, Int(t) - $0) } ?? 0)
+                if jumped != ropeJumpSeconds { ropeJumpSeconds = jumped }
+                if ropeSecondsLeft != Int(t) { ropeSecondsLeft = Int(t) }
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                continue
+            }
+
+            let index = Int(t / period)
+            if config.rounds > 0, index >= config.rounds {
+                // The plan is done. The last rest already ran out.
+                closeRopeMark(at: Int((Double(config.rounds - 1) * period + work).rounded()))
+                Haptics.key(.success)
+                await finishJumpRope()
+                return
+            }
+            let into = t - Double(index) * period
+            let newPhase: RopePhase = into < work ? .work : .rest
+            let round = index + 1
+
+            if newPhase != lastPhase || round != lastRound {
+                let roundStart = Int((Double(index) * period).rounded())
+                if newPhase == .work {
+                    // A zero-rest protocol goes work → work: bank the round
+                    // that just ended before opening the next.
+                    closeRopeMark(at: roundStart)
+                    openRopeMark(at: roundStart)
+                    if lastPhase != nil {
+                        // GO. Two taps so it cannot be mistaken for the
+                        // softer stop cue with the wrist down.
+                        Haptics.key(.start)
+                        Task {
+                            try? await Task.sleep(nanoseconds: 180_000_000)
+                            Haptics.key(.start)
+                        }
+                    }
+                } else {
+                    let workEnd = roundStart + Int(work)
+                    closeRopeMark(at: workEnd)
+                    Haptics.key(.stop)
+                    // Each round is a named segment in Apple Health too.
+                    recorder.addSegment(
+                        name: "Round \(round) · jump rope",
+                        from: Date().addingTimeInterval(-work), to: Date()
+                    )
+                }
+                lastPhase = newPhase
+                lastRound = round
+                ropePhase = newPhase
+                ropeRound = round
+                markActivity()
+            }
+
+            let left = Int((newPhase == .work ? work - into : period - into).rounded(.up))
+            if left != ropeSecondsLeft {
+                ropeSecondsLeft = left
+                // 3 · 2 · 1 before the rope starts again.
+                if newPhase == .rest, (1...3).contains(left), left != lastTick {
+                    lastTick = left
+                    Haptics.minor(.click)
+                }
+            }
+            let progress = newPhase == .work ? into / work : (into - work) / max(rest, 1)
+            if abs(progress - ropePhaseProgress) > 0.01 { ropePhaseProgress = progress }
+            let jumped = Int(Double(index) * work + min(into, work))
+            if jumped != ropeJumpSeconds { ropeJumpSeconds = jumped }
+
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+    }
+
+    /// End from the controls page (or the plan running out).
+    public func endJumpRope() async { await finishJumpRope() }
+
+    private func finishJumpRope() async {
+        ropeEngine?.cancel()
+        ropeEngine = nil
+        guard let config = ropeActive else { return }
+        ropeActive = nil
+        // A round cut short still counts for the seconds it lasted — but not
+        // as a completed round.
+        closeRopeMark(at: Int(sessionClock()))
+        let estimate = jumpCounter.stop()
+
+        let jumpSeconds = ropeMarks.reduce(0) { $0 + ($1[1] - $1[0]) }
+        let fullRounds = config.intervals
+            ? ropeMarks.filter { $0[1] - $0[0] >= config.workSeconds - 1 }.count
+            : (jumpSeconds > 0 ? 1 : 0)
+
+        recorder.sessionTitle = config.intervals
+            ? "Jump Rope \(config.protocolLabel)" : "Jump Rope"
+        let totals = await beginRecoveryOrFinish()
+
+        // An accidental start: the rope never really turned. Same silent
+        // discard as the phantom guard on every other kind.
+        if jumpSeconds < 20, externalSourceOverride == nil {
+            recoveryTask?.cancel()
+            recoveryTask = nil
+            Task { await recorder.abortRecoveryIfNeeded() }
+            Haptics.minor(.click)
+            resetLiveState()
+            clearSummaryExtras()
+            phase = .home
+            return
+        }
+
+        let elapsed = Int((totals?.durationSeconds ?? sessionClock()).rounded())
+        let intervals = IntervalPayload(
+            mode: config.intervals ? "interval" : "continuous",
+            workSeconds: config.intervals ? config.workSeconds : nil,
+            restSeconds: config.intervals ? config.restSeconds : nil,
+            plannedRounds: config.intervals && config.rounds > 0 ? config.rounds : nil,
+            roundsCompleted: fullRounds,
+            jumpSeconds: jumpSeconds,
+            restSecondsTotal: max(0, elapsed - jumpSeconds),
+            marks: ropeMarks,
+            // The wrist's own count is ON TRIAL: sent beside `jumps`, never
+            // as it (ios/WatchApp/JumpCounter.swift).
+            jumpsEstimated: estimate.map {
+                JumpEstimatePayload(
+                    total: $0.total,
+                    perRound: $0.perRound.isEmpty ? nil : $0.perRound,
+                    algo: JumpCounter.algo
+                )
+            },
+            trace: estimate?.trace
+        )
+        // His own row shape from the sessions he fixed by hand: sets = rounds,
+        // seconds = work per round.
+        let entry = ExerciseEntry(
+            name: "Jump Rope",
+            sets: config.intervals ? max(fullRounds, 1) : 1,
+            reps: nil, weightKg: nil,
+            seconds: config.intervals ? config.workSeconds : max(jumpSeconds, 1),
+            exercise: "jump-rope"
+        )
+        prepareSummary(
+            kind: .jumpRope,
+            totals: totals,
+            entries: [entry],
+            volume: 0,
+            setCount: fullRounds,
+            rounds: config.intervals ? fullRounds : nil,
+            sequence: nil,
+            description: nil,
+            intervals: intervals
+        )
+    }
+
+    /// His own jump count, typed on the summary. Lands on the item whether
+    /// or not it has been saved yet (an already-synced item is re-sent; the
+    /// server's upsert makes that an update).
+    public func setManualJumps(_ count: Int) {
+        guard count > 0 else { return }
+        manualJumps = count
+        Haptics.minor(.click)
+        func withJumps(_ item: WorkoutSyncItem) -> WorkoutSyncItem? {
+            guard var metrics = item.metricsData, var intervals = metrics.intervals else { return nil }
+            intervals.jumps = JumpCountPayload(total: count)
+            metrics.intervals = intervals
+            return item.replacingMetrics(metrics)
+        }
+        if let item = pendingItem, let updated = withJumps(item) {
+            pendingItem = updated
+            return
+        }
+        guard let item = lastSavedItem, let updated = withJumps(item) else { return }
+        lastSavedItem = updated
+        Task { [weak self] in
+            guard let self, let queue = self.queue else { return }
+            try? await queue.enqueue(updated)
+            _ = await WorkoutSyncFlight.run(queue: queue, api: self.api)
+        }
+    }
+
+    // MARK: - Voice logging (2026-10-05)
+    //
+    // Tap, say what you just did, keep moving. The clip goes to the server
+    // (watchOS has no speech framework), the parsed line comes back, and the
+    // session's movement list builds itself. Nothing here ever blocks the
+    // workout: an entry that cannot reach the server is kept as audio and
+    // added whenever the connection returns — even after Save.
+
+    /// Mic button / Double Tap: start listening, or stop.
+    public func toggleVoice() {
+        markActivity()
+        if voice.state == .recording {
+            voice.stop()
+            return
+        }
+        switch VoiceLogger.permission {
+        case .granted:
+            voice.start()
+        case .undetermined:
+            Task { await VoiceLogger.requestPermissionIfUndetermined() }
+        default:
+            // Denied in Settings: say so once rather than a dead button.
+            flashVoice(VoiceEntryState(
+                id: "denied", t: 0, at: Date(), status: .failed,
+                note: "Mic is off — Settings › Pitaya"
+            ), seconds: 4)
+            Haptics.key(.failure)
+        }
+    }
+
+    private func voiceHeardNothing() {
+        Haptics.minor(.click)
+    }
+
+    private func handleVoiceClip(_ url: URL) {
+        let entry = VoiceEntryState(
+            id: UUID().uuidString, t: Int(sessionClock()), at: Date(), status: .working
+        )
+        voiceEntries.append(entry)
+        flashVoice(entry, seconds: nil)
+        Task { [weak self] in await self?.resolveVoiceClip(id: entry.id, url: url) }
+    }
+
+    private func updateVoiceEntry(_ id: String, _ change: (inout VoiceEntryState) -> Void) -> VoiceEntryState? {
+        guard let index = voiceEntries.firstIndex(where: { $0.id == id }) else { return nil }
+        change(&voiceEntries[index])
+        return voiceEntries[index]
+    }
+
+    private func resolveVoiceClip(id: String, url: URL, timeout: TimeInterval = 8) async {
+        guard let data = try? Data(contentsOf: url) else {
+            if let entry = updateVoiceEntry(id, { $0.status = .failed }) {
+                flashVoice(entry, seconds: 4)
+            }
+            return
+        }
+        do {
+            let response = try await api.postVoiceEntry(
+                VoiceEntryRequest(entryId: id, audioBase64: data.base64EncodedString()),
+                timeout: timeout
+            )
+            try? FileManager.default.removeItem(at: url)
+            landVoiceResponse(id: id, response: response)
+        } catch {
+            // No connection, or too slow to be worth his attention: keep the
+            // audio (out of tmp, which the system may purge) and move on.
+            let file = VoicePendingStore.stash(url)
+            guard let entry = updateVoiceEntry(id, {
+                $0.status = file == nil ? .failed : .queued
+                $0.audioFile = file
+            }) else {
+                VoicePendingStore.deleteAudio(file)
+                return
+            }
+            Haptics.minor(.click)
+            flashVoice(entry, seconds: 5)
+            scheduleVoiceRetry()
+        }
+    }
+
+    /// The server answered: the entry becomes what it heard, with a haptic
+    /// he can tell apart without looking — logged, check later, or nothing.
+    private func landVoiceResponse(id: String, response: VoiceEntryResponse) {
+        guard let entry = updateVoiceEntry(id, {
+            $0.transcript = response.transcript
+            $0.parsed = response.entries
+            $0.audioFile = nil
+            $0.status = response.entries.isEmpty
+                ? .failed
+                : (response.entries.contains { $0.needsReview } ? .review : .ok)
+        }) else { return } // undone while it was in the air
+        switch entry.status {
+        case .ok:
+            Haptics.key(.success)
+            celebrateVoicePRs(entry)
+        case .review:
+            Haptics.key(.retry)
+        default:
+            Haptics.key(.failure)
+        }
+        flashVoice(entry, seconds: 7)
+    }
+
+    /// A voice entry heavier than his best on that movement still gets its
+    /// moment — same local baselines the tap logger uses; the server
+    /// confirms it at sync.
+    private func celebrateVoicePRs(_ entry: VoiceEntryState) {
+        for parsed in entry.parsed {
+            guard let id = parsed.exercise, let weight = parsed.weightKg, weight > 0 else { continue }
+            let result = baselines.evaluate(exerciseId: id, weightKg: weight)
+            guard result.isWeightPR, result.previousWeightKg != nil else { continue }
+            recorder.addMarker(name: "PR · \(parsed.name) \(Fmt.kg(weight)) kg", at: entry.at)
+            Haptics.key(.directionUp)
+        }
+    }
+
+    /// While the session is still running, try the queued clips again now
+    /// and then — the phone may simply have been out of reach for a minute.
+    private func scheduleVoiceRetry() {
+        guard voiceRetryTask == nil else { return }
+        voiceRetryTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 25_000_000_000)
+                guard let self, !Task.isCancelled else { return }
+                let queued = self.voiceEntries.filter { $0.status == .queued }
+                if queued.isEmpty {
+                    self.voiceRetryTask = nil
+                    return
+                }
+                for entry in queued {
+                    guard let file = entry.audioFile,
+                          let url = VoicePendingStore.audioURL(file) else { continue }
+                    _ = self.updateVoiceEntry(entry.id) { $0.status = .working }
+                    await self.resolveVoiceClip(id: entry.id, url: url, timeout: 12)
+                }
+            }
+        }
+    }
+
+    /// One tap takes back the last thing he said.
+    public func undoLastVoiceEntry() {
+        guard let last = voiceEntries.popLast() else { return }
+        VoicePendingStore.deleteAudio(last.audioFile)
+        voiceFlashTask?.cancel()
+        voiceFlash = nil
+        Haptics.key(.click)
+        markActivity()
+    }
+
+    public func dismissVoiceFlash() {
+        voiceFlashTask?.cancel()
+        voiceFlash = nil
+    }
+
+    private func flashVoice(_ entry: VoiceEntryState, seconds: TimeInterval?) {
+        voiceFlashTask?.cancel()
+        voiceFlash = entry
+        guard let seconds else { return }
+        voiceFlashTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            if !Task.isCancelled { self?.voiceFlash = nil }
+        }
+    }
+
+    private func clearVoiceSession(deleteQueuedAudio: Bool) {
+        if voice.state == .recording { voice.stop() }
+        voiceRetryTask?.cancel()
+        voiceRetryTask = nil
+        voiceFlashTask?.cancel()
+        voiceFlash = nil
+        if deleteQueuedAudio {
+            for entry in voiceEntries { VoicePendingStore.deleteAudio(entry.audioFile) }
+        }
+        voiceEntries = []
+    }
+
+    /// Send clips recorded out of range for workouts that are already saved,
+    /// then re-send each workout with the entry filled in. The server keeps
+    /// a movement list he has since corrected on the phone and offers the
+    /// late entry there instead (lib/workout-resync.ts).
+    private func drainVoicePending() async {
+        var store = VoicePendingStore.load()
+        guard !store.isEmpty, let queue else { return }
+        var resent = false
+        for i in store.indices {
+            var pending = store[i]
+            var log = pending.item.metricsData?.setLog ?? []
+            var remaining: [PendingClip] = []
+            var touched = false
+            for clip in pending.clips {
+                guard let url = VoicePendingStore.audioURL(clip.file),
+                      let data = try? Data(contentsOf: url) else { continue } // audio gone
+                do {
+                    let response = try await api.postVoiceEntry(
+                        VoiceEntryRequest(
+                            entryId: clip.entryId, audioBase64: data.base64EncodedString()
+                        ),
+                        timeout: 20
+                    )
+                    VoicePendingStore.deleteAudio(clip.file)
+                    log = SetLog.resolve(log, entryId: clip.entryId, with: response)
+                    touched = true
+                } catch {
+                    remaining.append(clip)
+                }
+            }
+            if touched {
+                var metrics = pending.item.metricsData ?? WorkoutMetricsData()
+                metrics.setLog = log
+                let exercises = pending.tapEntries
+                    + SetLog.compose(log.filter { $0.source == "voice" })
+                pending.item = pending.item.replacing(
+                    exercises: exercises.isEmpty ? nil : exercises, metricsData: metrics
+                )
+                try? await queue.enqueue(pending.item)
+                resent = true
+            }
+            pending.clips = remaining
+            store[i] = pending
+        }
+        store.removeAll { $0.clips.isEmpty }
+        VoicePendingStore.save(store)
+        if resent { _ = await WorkoutSyncFlight.run(queue: queue, api: api) }
     }
 
     // MARK: - Helpers

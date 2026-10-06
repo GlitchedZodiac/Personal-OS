@@ -69,6 +69,16 @@ struct TrailPage: View {
                         .foregroundStyle(Theme.textTertiary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // 2026-10-05 (his call): calories on every workout face,
+                // steps on every distance one.
+                StatCell(
+                    value: recorder.activeCalories.map { String(Int($0)) } ?? "––",
+                    label: "KCAL"
+                )
+                StatCell(
+                    value: recorder.stepCountLive.map { Fmt.grouped(Double($0)) } ?? "––",
+                    label: "STEPS"
+                )
             }
             .padding(.top, 5)
             .padding(.horizontal, 2)
