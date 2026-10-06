@@ -1,4 +1,8 @@
 #!/bin/bash
+# DEBUGGING ONLY since 2026-10-05 — builds reach his devices through
+# TestFlight (ios/scripts/testflight-upload.sh; see CLAUDE.md "Shipping
+# native builds"). This direct path needs the watch paired with this Mac.
+#
 # Build the watch app from origin/main and install it on the paired Apple
 # Watch. Run it with the watch ON YOUR WRIST AND UNLOCKED — a locked or
 # charging watch answers "the device rejected the connection request".

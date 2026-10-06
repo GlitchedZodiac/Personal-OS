@@ -5,6 +5,8 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
+**NATIVE BUILDS SHIP THROUGH TESTFLIGHT (2026-10-06, his call):** "I want ipad and all devices to go through test flight so I don't wait on a macbook sync." The 2026-08-28 TestFlight work (watch app embedded in the iPhone app, export-compliance keys, `ios/scripts/testflight-upload.sh`, `asc-api.mjs`, `docs/apple-developer-setup.md`) had never been merged; it is merged now, and **CLAUDE.md §"Shipping native builds" makes it the rule.** A new build — the first since build 2 of 28 Aug — was archived from this tree and uploaded (`Upload succeeded`, 2026-10-06 08:22); it carries everything merged to `ios/**` since 28 Aug, including jump rope and voice logging. **Why it came to this:** the watch build from the jump rope session could not be installed. devicectl's last successful connection to the watch was 2026-08-28 22:04; since the profiles became year-long the daily re-sign job has been a no-op, so nothing had tried — and when something finally did, the watch refused the Mac (RemotePairingError 1007). Five weeks of watch work was reported as delivered and was not. The stale pairing record was removed during the diagnosis; the direct path now needs a one-time re-pair in Xcode and is for debugging only (`ios/scripts/install-watch.sh`).
+
 **Jump rope + wrist voice logging (2026-10-05, his `pitaya-prompt` — both features, the count trial and three bug fixes, built in one session across web AND watch on his word):** plan, findings and feasibility are in [`docs/jump-rope-voice-plan.md`](jump-rope-voice-plan.md); the wire contract is in `docs/watch-contract.md` §2026-10-05. **Lane note:** he approved one session across `app/**`, `lib/**` and `ios/**` for this work (parity checked first: `git log HEAD..claude/watch-app -- ios/` empty).
 
 **Jump rope is a workout type of its own** (`workoutType: "jump_rope"`, HealthKit `.jumpRope`). No migration — everything is additive inside `exercises` / `metricsData`.
@@ -32,7 +34,7 @@ first. Update the top of this file whenever a session ships.
 
 **Verified:** 1,102 tests (482 new), build green, both Xcode targets build clean. Driven end to end on the dev server and the watch simulator: a recorded 15/10 × 4 jump rope session → synced → stored with marks, zones and load → the phone detail, list and Train section; a nine-phrase voice session → movement list built (swings folded 2×10, vest kept apart, unknown flagged) → the review card; a phone edit surviving a watch re-send with a late entry flagged. All throwaway rows deleted and records rebuilt (72 → 72). **NOT verified, and cannot be without him and the watch:** real microphone capture, real voice latency, haptics with the wrist down, the calorie model for `.jumpRope`, and the jump counter.
 
-**Deployed 2026-10-05 on his word ("do it all … and in the app"):** PR #30 merged to `main`, Vercel production Ready. Checked on prod with single requests: the voice route answers 401 without a credential; his 29-round session returns as a rope card (30/30 declared, 14:30 of 29:22 jumping, 21.6 kcal per jumping minute); records rebuilt 72 → 74. **The watch build is NOT on his wrist yet.** It is built and signed from `main`, but the Mac cannot reach the watch: devicectl's last successful connection to it was 2026-08-28 22:04 (Bogotá) and every attempt since is refused (RemotePairingError 1007) — so the watch is still running that day's build. The stale pairing record was removed; the watch must be re-paired once in Xcode (Devices and Simulators, Trust on the watch), then `ios/scripts/install-watch.sh`.
+**Deployed 2026-10-05 on his word ("do it all … and in the app"):** PR #30 merged to `main`, Vercel production Ready. Checked on prod with single requests: the voice route answers 401 without a credential; his 29-round session returns as a rope card (30/30 declared, 14:30 of 29:22 jumping, 21.6 kcal per jumping minute); records rebuilt 72 → 74. **The watch build did not go out by direct install** — the Mac could not reach the watch (see the TestFlight entry above, which is how it shipped instead).
 
 **Two facts found on the way:** (1) **his watch is a Series 8** (`Watch6,15`, devicectl) — he believed Series 11. Double Tap needs a Series 9 or later, so on his wrist the Freestyle mic is a TAP; nothing in the app that mentions Double Tap works hands-free for him. (2) `pitaya-resign.sh --force` no longer works: it moves the provisioning profiles aside to mint new ones and xcodebuild then fails with "No Accounts". The profiles are valid for a year, so a plain build signs with the ones on disk — which is what `install-watch.sh` does.
 
@@ -992,6 +994,80 @@ re-sign** — the automation builds from `origin/main`, so the save fix
 reaches the watch after merge, on its 09:30/18:30 cycle.
 
 ---
+
+## 2026-08-28 · Apple Developer Program enrolled — setup plan written (docs only)
+
+Michael enrolled in the $99 program (deferred #81, his 08-22 "let's buy it").
+This session wrote **`docs/apple-developer-setup.md`** — the grounded
+follow-through, no code changes:
+
+- **Phase 1**: swap `DEVELOPMENT_TEAM` in `ios/project.yml` (still the free
+  personal team HDR67SL3JG) to the new paid Team ID + `xcodegen generate` —
+  pending because only Michael can read the new ID off his Membership page.
+  Team change = **delete-and-reinstall on every device** (signature + keychain
+  prefix change → re-PIN, re-grant Health, re-add widgets). Health data and
+  the server are unaffected.
+- **Phases 2–3**: App Store Connect records (iOS app + the standalone
+  `WKWatchOnly` watch app = **two records**, or embed later — flagged as a
+  Michael decision) → TestFlight internal testing → OTA updates to iPhone,
+  iPad, and Watch with no cable and no 7-day expiry (iPad build was due to
+  die ~08-30, deferred #55 — TestFlight is the exit).
+- **Phase 4**: what the paid team unlocks — the `aps-environment` entitlement
+  (server's `PushDevice` + `/api/mobile/push/register` + companion token flow
+  have been waiting on it, deferred #183; sender + .p8 key still to build)
+  and App Groups (Smart Stack live tile, deferred #119.1).
+- **Phase 5**: the second-user question answered honestly — TestFlight makes
+  *distribution* trivial (internal tester, or external with the PIN-in-review-
+  notes caveat), but the app is architecturally single-user (one PIN, no
+  `userId` on any of 43 models; a second person's Health sync would collide
+  with his `DailyHealthSnapshot` rows). Recommended shape if it ever happens:
+  a deployment per person + a server-URL field on the pairing screen
+  (`MobileAPIClient.productionBaseURL` is hardcoded today) — filed as
+  if/when, not built.
+
+Second pass same day (Michael: "how much can you do yourself?") — the
+Team-ID-independent `ios/**` prep landed on this branch, parity with
+`claude/watch-app` verified empty first: `ITSAppUsesNonExemptEncryption: false`
+on both app targets (project.yml + regenerated Info.plists) and
+**`ios/scripts/testflight-upload.sh`** — archive + upload of both schemes,
+authenticated end-to-end by an App Store Connect API key
+(`ASC_KEY_ID`/`ASC_ISSUER_ID` env + `.p8` under
+`~/.appstoreconnect/private_keys/`), `manageAppVersionAndBuildNumber` so
+build numbers never need manual bumps, and a guard that refuses to run while
+project.yml still carries the free team. Third pass same day — EXECUTED end-to-end. What the first real run taught:
+
+- **Same team**: enrollment upgraded HDR67SL3JG in place (ASC bundleIds
+  seedId proves it) — no swap, no Xcode visit, no device reinstall ever
+  needed. The script's free-team guard was wrong and is gone.
+- **Cloud signing needs an Admin API key**: App Manager (`pitaya-upload`,
+  MSZT9NJJP4) does every API operation but cannot mint the Apple
+  Distribution cert; a second key (`pitaya-admin`, XZ64H3U47U) signs and
+  uploads. Both .p8s live in `~/.appstoreconnect/private_keys/`.
+- `ios/scripts/asc-api.mjs` (zero-dep ES256-JWT ASC client) verified his app
+  records (**Pitaya Personal** 6806347708 iOS · **Pitaya Watch** 6806347894
+  watchOS), created Internal groups with `hasAccessToAllBuilds` on both, and
+  added him as tester. **iOS build 1 uploaded and reached VALID** — his
+  green light to install from TestFlight went out.
+- **Watch-only archives cannot be CLI-exported for the App Store** (Xcode
+  26.6 offers only release-testing/enterprise/debugging; legacy `app-store`
+  rejected too). Michael's call via decision prompt: **embed the watch app
+  in the iPhone app** (`WKRunsIndependentlyOfCompanionApp: true` keeps it
+  phone-free; the `.watchkitapp` bundle id was already companion-shaped).
+  One archive now ships both; "Pitaya Watch" record is vestigial, zero
+  builds.
+- En route: xcodegen's standalone-era `SKIP_INSTALL=YES` default made a
+  product-less "generic archive" (fixed, then superseded by the embed); the
+  script now always `clean archive`s; and App Store validation rejected
+  `location` inside `WKBackgroundModes` (error 90362 — never a legal value
+  there; `UIBackgroundModes: [location]` is what CoreLocation checks).
+  **Smoke flag: confirm outdoor-walk GPS route recording on the next real
+  walk.**
+- **Combined iOS+watch build 2 uploaded and CONFIRMED VALID** — live on
+  TestFlight, auto-distributed to the internal group. Ship-an-update
+  contract from now on:
+  `ASC_KEY_ID=XZ64H3U47U ASC_ISSUER_ID=<issuer> ios/scripts/testflight-upload.sh ios`
+  — ASC manages build numbers, TestFlight auto-distributes, 90-day expiry
+  means upload at least quarterly.
 
 ## 2026-08-26 · The AI reads everything · data export · Apple Health weight sync
 
