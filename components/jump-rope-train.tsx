@@ -32,6 +32,14 @@ const BAR_COLORS = [
 const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
+/** "Oct 5", or "Oct 5 · 5:23 PM" when another session shares the day. */
+function sessionLabel(iso: string, all: { startedAt: string }[]) {
+  const day = shortDate(iso);
+  if (all.filter((s) => shortDate(s.startedAt) === day).length < 2) return day;
+  const time = new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return `${day} · ${time}`;
+}
+
 /** ↑ / ↓ / → between the last two values; "better" depends on the column. */
 function trend(values: (number | null)[], higherIsBetter: boolean) {
   const v = values.filter((x): x is number => x != null);
@@ -137,7 +145,7 @@ export function JumpRopeSection({ data }: { data: JumpRopeTrainData }) {
               </span>
               {[...g.sessions].reverse().map((s) => (
                 <button key={s.id} onClick={() => open(s.id)} className="contents text-left">
-                  <span className="text-foreground">{shortDate(s.startedAt)}</span>
+                  <span className="text-foreground">{sessionLabel(s.startedAt, g.sessions)}</span>
                   <span className="text-right text-foreground">
                     {continuous ? formatClock(s.jumpSeconds) : s.roundsCompleted}
                   </span>

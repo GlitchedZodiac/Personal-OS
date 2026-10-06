@@ -391,6 +391,14 @@ function shortDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/** "Oct 5", or "Oct 5 · 5:23 PM" when another session shares the day. */
+function sessionLabel(iso: string, all: { startedAt: string }[]) {
+  const day = shortDate(iso);
+  if (all.filter((s) => shortDate(s.startedAt) === day).length < 2) return day;
+  const time = new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return `${day} · ${time}`;
+}
+
 export function RopeCards({
   id,
   rope,
@@ -570,7 +578,7 @@ export function RopeCards({
                   className="contents"
                 >
                   <span className={cls}>
-                    {shortDate(s.startedAt)}
+                    {sessionLabel(s.startedAt, history.sessions)}
                     {here ? " · this one" : ""}
                   </span>
                   <span className={`text-right ${cls}`}>
