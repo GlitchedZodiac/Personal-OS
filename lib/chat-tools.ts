@@ -1,3 +1,10 @@
+import { isDistanceType } from "@/lib/activities";
+import {
+  JUMP_ROPE_TYPE,
+  analyzeIntervals,
+  jumpSecondsOf,
+  readIntervals,
+} from "@/lib/jump-rope";
 import {
   buildTapeTrend,
   compactMeasurement,
@@ -114,6 +121,9 @@ export async function executeGetHealthData(
             hrrDelta?: number;
             hrrSeconds?: number;
             avgCadenceSpm?: number;
+            hrStream?: number[];
+            timeStream?: number[];
+            setLog?: unknown[];
             routeAnalytics?: {
               movingSeconds?: number;
               stoppedSeconds?: number;
@@ -128,6 +138,19 @@ export async function executeGetHealthData(
             };
           };
           const ra = m.routeAnalytics;
+          // Jump rope (2026-10-05): the interval numbers a coach needs —
+          // protocol, work vs rest HR, recovery between rounds, drift.
+          const intervals = w.workoutType === JUMP_ROPE_TYPE ? readIntervals(m) : null;
+          const lastT = m.timeStream?.length ? m.timeStream[m.timeStream.length - 1] : 0;
+          const rope = intervals
+            ? analyzeIntervals({
+                intervals,
+                hrStream: m.hrStream,
+                timeStream: m.timeStream,
+                durationSeconds: lastT > 0 ? lastT : w.durationMinutes * 60,
+                caloriesBurned: w.caloriesBurned,
+              })
+            : null;
           return {
             id: w.id,
             startedAt: w.startedAt.toISOString(),
@@ -178,6 +201,29 @@ export async function executeGetHealthData(
             sequenceName: m.sequenceName,
             roundsCompleted: m.roundsCompleted ?? m.emom?.roundsCompleted,
             stepSeconds: m.stepSeconds,
+            rope: rope
+              ? {
+                  protocol: rope.protocol,
+                  // "declared" = typed in afterwards; rounds were not timed.
+                  source: rope.source,
+                  roundsCompleted: rope.roundsCompleted,
+                  plannedRounds: rope.plannedRounds,
+                  jumpSeconds: rope.jumpSeconds,
+                  sessionSeconds: rope.sessionSeconds,
+                  kcalPerJumpMinute: rope.kcalPerJumpMinute,
+                  avgWorkHr: rope.avgWorkHr,
+                  avgRestHr: rope.avgRestHr,
+                  avgDropInRest: rope.avgDrop,
+                  drift: rope.drift,
+                  troughTrend: rope.troughTrend,
+                  longestJumpSeconds: rope.longestJumpSeconds,
+                  // his own count only; the wrist estimate is on trial
+                  jumps: rope.jumps,
+                  jumpsWristEstimateOnTrial: rope.jumpsEstimated,
+                }
+              : undefined,
+            // entries he logged by voice on the wrist mid-workout
+            voiceEntries: Array.isArray(m.setLog) ? m.setLog.length : undefined,
           };
         }),
       };
@@ -205,6 +251,8 @@ export async function executeGetHealthData(
           sessions: number;
           strength: number;
           outdoor: number;
+          rope: number;
+          jumpSeconds: number;
           volumeKg: number;
           activeMinutes: number;
           kcal: number;
@@ -219,16 +267,22 @@ export async function executeGetHealthData(
         );
         const b =
           weeks.get(week) ??
-          { sessions: 0, strength: 0, outdoor: 0, volumeKg: 0, activeMinutes: 0, kcal: 0, km: 0, load: [] };
+          { sessions: 0, strength: 0, outdoor: 0, rope: 0, jumpSeconds: 0, volumeKg: 0, activeMinutes: 0, kcal: 0, km: 0, load: [] };
         const m = (w.metricsData ?? {}) as { loadScore?: number };
-        const outdoor = (w.distanceMeters ?? 0) > 0;
+        // Ground covered only: "any distance = outdoor" counted indoor
+        // sessions carrying a stale or arm-swing distance as outdoor work
+        // and added their kilometres (the watch leak fixed 2026-10-05).
+        const outdoor = isDistanceType(w.workoutType) && (w.distanceMeters ?? 0) > 0;
+        const rope = w.workoutType === JUMP_ROPE_TYPE;
         b.sessions += 1;
-        if (outdoor) b.outdoor += 1;
+        if (rope) b.rope += 1;
+        else if (outdoor) b.outdoor += 1;
         else b.strength += 1;
+        b.jumpSeconds += jumpSecondsOf(w);
         b.volumeKg += sessionVolumeKg(w.exercises);
         b.activeMinutes += w.durationMinutes ?? 0;
         b.kcal += Math.round(w.caloriesBurned ?? 0);
-        b.km += (w.distanceMeters ?? 0) / 1000;
+        if (outdoor) b.km += (w.distanceMeters ?? 0) / 1000;
         if (typeof m.loadScore === "number") b.load.push(m.loadScore);
         weeks.set(week, b);
       }
@@ -238,6 +292,8 @@ export async function executeGetHealthData(
           sessions: b.sessions,
           strength: b.strength,
           outdoor: b.outdoor,
+          jumpRope: b.rope,
+          jumpMinutes: Math.round(b.jumpSeconds / 6) / 10,
           volumeKg: Math.round(b.volumeKg),
           activeMinutes: b.activeMinutes,
           kcalBurned: b.kcal,

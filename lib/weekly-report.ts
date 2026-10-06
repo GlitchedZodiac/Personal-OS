@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { jumpSecondsOf } from "@/lib/jump-rope";
 import { sessionVolumeKg } from "@/lib/prs";
 import { generateChatText } from "@/lib/openai-text";
 import { COACH_MODEL } from "@/lib/openai";
@@ -48,6 +49,9 @@ export interface WeeklyReportData {
     volumeKg: number;
     activeMinutes: number;
     kcalBurned: number;
+    /// Seconds on the rope — jump rope's stand-in for tonnage. Optional:
+    /// reports persisted before 2026-10-05 do not carry it.
+    jumpSeconds?: number;
     zonesPct: number[] | null;
     progression?: string[];
   };
@@ -88,6 +92,7 @@ export async function generateWeeklyReport(dayInWeek: string, timeZone: string) 
       where: { startedAt: { gte: rangeStart, lte: rangeEnd } },
       select: {
         startedAt: true,
+        workoutType: true,
         durationMinutes: true,
         caloriesBurned: true,
         exercises: true,
@@ -124,6 +129,8 @@ export async function generateWeeklyReport(dayInWeek: string, timeZone: string) 
   let volumeKg = 0;
   let activeMinutes = 0;
   let trainKcal = 0;
+  // Jump rope adds no tonnage; its week is measured in time on the rope.
+  let jumpSeconds = 0;
   const zoneSeconds = [0, 0, 0, 0, 0];
   let zonesTotal = 0;
   for (const w of workouts) {
@@ -132,6 +139,7 @@ export async function generateWeeklyReport(dayInWeek: string, timeZone: string) 
     volumeKg += sessionVolumeKg(w.exercises);
     activeMinutes += w.durationMinutes ?? 0;
     trainKcal += Math.round(w.caloriesBurned ?? 0);
+    jumpSeconds += jumpSecondsOf(w);
     const z = (w.metricsData as { timeInZones?: { seconds: number[] } } | null)
       ?.timeInZones;
     if (z?.seconds?.length === 5) {
@@ -218,6 +226,7 @@ export async function generateWeeklyReport(dayInWeek: string, timeZone: string) 
       volumeKg: Math.round(volumeKg),
       activeMinutes,
       kcalBurned: trainKcal,
+      jumpSeconds,
       zonesPct,
       // Pure-math progression status — the coach names it, never auto-applies.
       progression: progressionSuggestions.map(

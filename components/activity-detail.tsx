@@ -14,13 +14,24 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { decodePolyline } from "@/lib/polyline";
 import type { RouteAnalytics } from "@/lib/route-analytics";
+import type { IntervalAnalysis, ProtocolGroup } from "@/lib/jump-rope";
+import type { SetLogEntry } from "@/lib/set-log";
+import {
+  RopeCards,
+  RopeHeaderPanel,
+  ropeStats,
+  type RopeRecord,
+} from "@/components/jump-rope-detail";
+import { VoiceLogReview } from "@/components/voice-log-review";
 
 const TrailMap = dynamic(() => import("@/components/trail-map"), {
   ssr: false,
   loading: () => <div className="h-[340px] bg-[#251C21]" />,
 });
 
-export type ActivityType = "kb" | "cir" | "out";
+export type ActivityType = "kb" | "cir" | "out" | "rope";
+
+type VestLoad = { type: "vest"; kg: number; assumed?: boolean };
 
 export interface ActivityDetailData {
   id: string;
@@ -73,7 +84,31 @@ export interface ActivityDetailData {
   hrr: { delta: number; seconds: number; band: string } | null;
   packKg: number | null;
   bodyWeight: { kg: number | null; measuredAt: string } | null;
-  exercises: { name: string; sets: number | null; reps: number | null; seconds: number | null; weightKg: number | null }[];
+  exercises: {
+    name: string;
+    /// Canonical id when the name resolved; null = not in the vocabulary yet.
+    exercise: string | null;
+    sets: number | null;
+    reps: number | null;
+    seconds: number | null;
+    weightKg: number | null;
+    /// A worn vest — shown beside the weight, never added to it.
+    load: VestLoad | null;
+    perSide: boolean;
+  }[];
+  /// Jump rope (2026-10-05): interval analysis, this session's records and
+  /// every session on the same protocol. Null on every other type.
+  rope: IntervalAnalysis | null;
+  ropeRecords: RopeRecord[];
+  ropeHistory: ProtocolGroup | null;
+  /// Elapsed seconds parallel to hrStream.
+  timeStream: number[] | null;
+  /// The wrist's per-entry log (voice + taps), and the entries not counted.
+  setLog: SetLogEntry[] | null;
+  setLogPending: SetLogEntry[];
+  setLogReviewedAt: string | null;
+  lateEntryIds: string[];
+  exercisesEditedAt: string | null;
   polyline: string | null;
   routeAnalytics: RouteAnalytics | null;
   trail: {
@@ -131,7 +166,17 @@ function deltaLabel(deltaSeconds: number | null): { text: string; color: string 
 // so names normalize, volume recomputes and PRs rebuild identically; this
 // just doesn't cost a conversation. Born from "I can't enter the kettlebell
 // weight I did".
-type EditRow = { name: string; sets: string; reps: string; weightKg: string; seconds: string };
+type EditRow = {
+  name: string;
+  sets: string;
+  reps: string;
+  weightKg: string;
+  seconds: string;
+  // Not editable here, but an edit must not drop them (a voice-logged vest
+  // used to vanish the moment a neighbouring row was corrected).
+  load?: VestLoad | null;
+  perSide?: boolean;
+};
 
 function MovementEditor({
   det,
@@ -151,6 +196,8 @@ function MovementEditor({
     reps: e.reps != null ? String(e.reps) : "",
     weightKg: e.weightKg != null ? String(e.weightKg) : "",
     seconds: e.seconds != null ? String(e.seconds) : "",
+    load: e.load,
+    perSide: e.perSide,
   });
   const [rows, setRows] = useState<EditRow[]>([]);
 
@@ -188,6 +235,8 @@ function MovementEditor({
         ...(r.weightKg.trim() !== "" && Number(r.weightKg) >= 0
           ? { weightKg: Number(r.weightKg) }
           : {}),
+        ...(r.load ? { load: r.load } : {}),
+        ...(r.perSide ? { perSide: true } : {}),
       }));
     if (exercises.length === 0) {
       toast.error("Name at least one movement");
@@ -223,7 +272,7 @@ function MovementEditor({
   return (
     <div className="mt-3 rounded-[18px] bg-white p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
       <div className="mb-2 text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
-        MOVEMENTS · SETS × REPS · KG
+        MOVEMENTS · SETS × REPS · SEC · KG
       </div>
       <datalist id="pitaya-exercise-names">
         {names.map((n) => (
@@ -244,25 +293,32 @@ function MovementEditor({
             onChange={(e) => setField(i, "sets", e.target.value)}
             placeholder="sets"
             inputMode="numeric"
-            className="w-12 rounded-[10px] border border-[#E3E1E5] px-1.5 py-2 text-center text-[13px] tabular-nums"
+            className="w-10 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
           />
           <input
             value={r.reps}
             onChange={(e) => setField(i, "reps", e.target.value)}
             placeholder="reps"
             inputMode="numeric"
-            className="w-12 rounded-[10px] border border-[#E3E1E5] px-1.5 py-2 text-center text-[13px] tabular-nums"
+            className="w-10 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
+          />
+          <input
+            value={r.seconds}
+            onChange={(e) => setField(i, "seconds", e.target.value)}
+            placeholder="sec"
+            inputMode="numeric"
+            className="w-11 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
           />
           <input
             value={r.weightKg}
             onChange={(e) => setField(i, "weightKg", e.target.value)}
             placeholder="kg"
             inputMode="decimal"
-            className="w-14 rounded-[10px] border border-[#E3E1E5] px-1.5 py-2 text-center text-[13px] tabular-nums"
+            className="w-12 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
           />
           <button
             onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-[#B4536F]"
+            className="flex h-8 w-6 flex-none items-center justify-center rounded-full text-[#B4536F]"
             aria-label="Remove row"
           >
             ×
@@ -536,7 +592,7 @@ export default function ActivityDetail({
   const ra = det.routeAnalytics;
 
   const blocks = useMemo(() => {
-    if (det.type === "out") return [];
+    if (det.type === "out" || det.type === "rope") return [];
     if (det.totalRounds && det.totalRounds > 1) {
       return Array.from({ length: Math.min(det.totalRounds, 40) }, (_, i) => ({
         w: `${100 / det.totalRounds!}%`,
@@ -554,6 +610,7 @@ export default function ActivityDetail({
 
   const stats = useMemo(() => {
     const hr = (v: number | null) => (v ? `${Math.round(v)} bpm` : "—");
+    if (det.type === "rope" && det.rope) return ropeStats(det.rope, det);
     if (det.type === "out") {
       // v3: with route analytics the card answers "how much did I stop" and
       // "how hard was it really" — moving/stopped + grade-adjusted pace.
@@ -575,6 +632,9 @@ export default function ActivityDetail({
             ? ([["DESCENT", `−${fmt(Math.round(det.descentM))} m`]] as [string, string][])
             : []),
           ["STEPS", det.stepCount ? fmt(det.stepCount) : "—"],
+          // 2026-10-05: calories were recorded on every walk, run and hike
+          // and missing from exactly this grid — the one with a GPS track.
+          ["CALORIES", det.caloriesBurned ? fmt(Math.round(det.caloriesBurned)) : "—"],
           ...(det.avgCadenceSpm
             ? ([["CADENCE", `${det.avgCadenceSpm} spm`]] as [string, string][])
             : []),
@@ -730,6 +790,8 @@ export default function ActivityDetail({
             {(det.trail?.name ?? det.name ?? "").toUpperCase()}
           </div>
         </div>
+      ) : det.type === "rope" && det.rope ? (
+        <RopeHeaderPanel rope={det.rope} />
       ) : (
         <div className="relative overflow-hidden bg-[#1B1518] px-[22px] pb-[22px] pt-16">
           <div className="text-[10.5px] font-bold tracking-[0.18em] text-[#7E6F77]">
@@ -901,8 +963,22 @@ export default function ActivityDetail({
           </div>
         )}
 
+        {/* jump rope: rounds, drift, work vs rest, jump count, protocol history */}
+        {det.type === "rope" && det.rope && (
+          <RopeCards
+            id={det.id}
+            rope={det.rope}
+            hrStream={det.hrStream}
+            timeStream={det.timeStream}
+            avgHeartRateBpm={det.avgHeartRateBpm}
+            records={det.ropeRecords}
+            history={det.ropeHistory}
+            onSaved={() => window.location.reload()}
+          />
+        )}
+
         {/* segments (strength/circuit) */}
-        {dark && det.segments.length > 0 && (
+        {dark && det.type !== "rope" && det.segments.length > 0 && (
           <div className="mt-3 overflow-hidden rounded-[18px] bg-white shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
             <div className="px-4 pb-2 pt-3.5 text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
               SEGMENTS · TIME TO COMPLETE
@@ -949,7 +1025,7 @@ export default function ActivityDetail({
 
         {/* v4: correct sets/reps/weights in place — the deterministic twin
             of the chat describe-flow */}
-        {dark && det.segments.length > 0 && (
+        {dark && det.type !== "rope" && det.segments.length > 0 && (
           <MovementEditor
             det={det}
             trigger="Edit movements & weights"
@@ -957,10 +1033,24 @@ export default function ActivityDetail({
           />
         )}
 
+        {/* what he said on the wrist, and anything Pitaya wasn't sure of */}
+        {det.type !== "rope" && (det.setLog?.length || det.setLogPending.length > 0) ? (
+          <VoiceLogReview
+            id={det.id}
+            entries={det.setLog ?? []}
+            pending={det.setLogPending}
+            exercises={det.exercises}
+            lateEntryIds={det.lateEntryIds}
+            reviewed={det.setLogReviewedAt != null || det.exercisesEditedAt != null}
+            onSaved={() => window.location.reload()}
+          />
+        ) : null}
+
         {/* v4 EFFORT (strength) — loadScore/relativeEffort were computed on
             every sync and never rendered here; work density says how much
             of the clock was actually under the bell */}
         {dark &&
+          det.type !== "rope" &&
           (det.loadScore != null ||
             det.relativeEffort != null ||
             (det.workSeconds != null && det.workSeconds > 0 && det.durationMinutes > 0) ||
@@ -1075,7 +1165,9 @@ export default function ActivityDetail({
                 {det.maxHeartRateBpm ? `${det.maxHeartRateBpm} bpm` : "—"}
               </div>
             </div>
-            {hrLine && (
+            {/* a measured jump rope session draws its HR above, on a time
+                axis with the rounds shaded — not a second, plainer copy here */}
+            {hrLine && !(det.type === "rope" && (det.rope?.rounds.length ?? 0) > 0) && (
               <svg width="100%" height="110" viewBox="0 0 360 110" preserveAspectRatio="none" className="mt-2.5">
                 <line x1="0" y1="28" x2="360" y2="28" stroke="#F2F1F2" strokeWidth="1" />
                 <line x1="0" y1="56" x2="360" y2="56" stroke="#F2F1F2" strokeWidth="1" />

@@ -8,20 +8,52 @@ import type { RouteAnalytics } from "@/lib/route-analytics";
 import { movementContext, timeUnderLoadSeconds } from "@/lib/strength-history";
 import { getMovementHistoriesCached } from "@/lib/strength-history-db";
 import { runProfileMatchesTrail } from "@/lib/trails";
+import {
+  JUMP_ROPE_NAME,
+  JUMP_ROPE_TYPE,
+  analyzeIntervals,
+  groupByProtocol,
+  readIntervals,
+} from "@/lib/jump-rope";
+import { isSetLog, withGaps } from "@/lib/set-log";
 
 // GET ?id= — everything the activity detail screen shows (design 2026-08-11
 // rev): stats, per-movement segments with time-vs-last-run comparison,
 // segment-timeline blocks, HR stream + zones, elevation, route. One call.
 
-function segSub(e: RawExercise): string {
+type LoadedExercise = RawExercise & {
+  seconds?: number | string;
+  exercise?: string;
+  perSide?: boolean;
+  load?: { type?: string; kg?: number; assumed?: boolean };
+};
+
+function clock(seconds: number): string {
+  return seconds >= 60
+    ? `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, "0")}`
+    : `${Math.round(seconds)}s`;
+}
+
+// A timed row used to print nothing at all ("Jump Rope" with a blank line
+// under it); a worn vest is shown beside the implement weight, never added.
+function segSub(e: LoadedExercise): string {
   const sets = Number(e.sets) || null;
   const reps = Number(e.reps) || null;
+  const seconds = Number(e.seconds) || null;
   const weight = Number(e.weightKg ?? e.weight) || null;
-  const parts = [
-    sets && reps ? `${sets} × ${reps}` : reps ? `${reps} reps` : null,
-    weight ? `${weight} kg` : null,
-  ].filter(Boolean);
-  return parts.join(" · ");
+  const side = e.perSide ? "/side" : "";
+  const dose = reps
+    ? sets
+      ? `${sets} × ${reps}${side}`
+      : `${reps} reps${side}`
+    : seconds
+      ? sets && sets > 1
+        ? `${sets} × ${clock(seconds)}`
+        : clock(seconds)
+      : null;
+  const vest =
+    e.load?.type === "vest" && typeof e.load.kg === "number" ? `vest ${e.load.kg} kg` : null;
+  return [dose, weight ? `${weight} kg` : null, vest].filter(Boolean).join(" · ");
 }
 
 export async function GET(request: NextRequest) {
@@ -82,6 +114,54 @@ export async function GET(request: NextRequest) {
     });
 
     const prCount = await prisma.personalRecord.count({ where: { workoutLogId: w.id } });
+
+    // Jump rope (2026-10-05): the interval arithmetic, this session's own
+    // records, and every earlier session on the same protocol — "all my
+    // 30/30s" is the only comparison that means anything.
+    const intervals = type === "rope" ? readIntervals(m) : null;
+    const timeStream = Array.isArray(m.timeStream) ? m.timeStream : null;
+    const lastT = timeStream && timeStream.length ? Number(timeStream[timeStream.length - 1]) : 0;
+    const rope = intervals
+      ? analyzeIntervals({
+          intervals,
+          hrStream: m.hrStream,
+          timeStream: m.timeStream,
+          // The stream's own clock when there is one (pauses excluded, like
+          // the marks); the rounded minutes only as a fallback.
+          durationSeconds: lastT > 0 ? lastT : w.durationMinutes * 60,
+          caloriesBurned: w.caloriesBurned,
+        })
+      : null;
+    const [ropeRecords, ropeHistory] = rope
+      ? await Promise.all([
+          prisma.personalRecord.findMany({
+            where: { workoutLogId: w.id, kind: { in: ["rounds", "duration", "jumps", "jumps_round"] } },
+            select: { kind: true, value: true, previousValue: true, exerciseName: true },
+          }),
+          prisma.workoutLog
+            .findMany({
+              where: { workoutType: JUMP_ROPE_TYPE },
+              orderBy: { startedAt: "desc" },
+              take: 60,
+              select: {
+                id: true,
+                startedAt: true,
+                durationMinutes: true,
+                caloriesBurned: true,
+                metricsData: true,
+              },
+            })
+            .then(
+              (rows) =>
+                groupByProtocol(rows).find((g) => g.protocol === rope.protocol) ?? null
+            ),
+        ])
+      : [[], null];
+
+    // The wrist's per-entry log (voice + taps), with the gap since the
+    // previous entry stamped on each — the review card reads this.
+    const setLog = isSetLog(m.setLog) ? withGaps(m.setLog) : null;
+    const rawLog = isSetLog(m.setLog) ? m.setLog : null;
 
     // Display-side half of the freestyle-integrity guard: rows written by
     // pre-2026-08-28 watch builds can still carry a leaked trail — a
@@ -234,7 +314,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       id: w.id,
       type,
-      name: (m.sequenceName ?? w.description ?? w.workoutType).split(/\s[·•]\s/)[0],
+      name:
+        type === "rope"
+          ? JUMP_ROPE_NAME
+          : (m.sequenceName ?? w.description ?? w.workoutType).split(/\s[·•]\s/)[0],
       workoutType: w.workoutType,
       startedAt: w.startedAt.toISOString(),
       durationMinutes: w.durationMinutes,
@@ -256,14 +339,36 @@ export async function GET(request: NextRequest) {
       segments,
       // Raw movement list for the on-page editor (2026-08-29) — the same
       // shape PATCH /api/health/workouts/entry ATTACH accepts back.
-      exercises: exercises.map((e) => ({
+      exercises: (exercises as LoadedExercise[]).map((e) => ({
         name: typeof e.name === "string" ? e.name : "",
+        // Present when the name resolved — a row without it is a movement
+        // the vocabulary does not know yet (the review card offers to add it).
+        exercise: typeof e.exercise === "string" ? e.exercise : null,
         sets: Number(e.sets) || null,
         reps: Number(e.reps) || null,
-        seconds: Number((e as { seconds?: unknown }).seconds) || null,
+        seconds: Number(e.seconds) || null,
         weightKg: Number(e.weightKg ?? e.weight) || null,
+        load:
+          e.load?.type === "vest" && typeof e.load.kg === "number"
+            ? { type: "vest" as const, kg: e.load.kg, ...(e.load.assumed ? { assumed: true } : {}) }
+            : null,
+        perSide: e.perSide === true,
       })),
+      rope,
+      ropeRecords,
+      ropeHistory,
+      setLog,
+      // Entries still waiting on audio, or dropped — shown, never counted.
+      setLogPending: rawLog
+        ? rawLog.filter((e) => e.status === "queued" || e.status === "failed")
+        : [],
+      setLogReviewedAt: typeof m.setLogReviewedAt === "string" ? m.setLogReviewedAt : null,
+      lateEntryIds: Array.isArray(m.lateEntryIds) ? m.lateEntryIds : [],
+      exercisesEditedAt: m.exercisesEditedAt ?? null,
       hrStream: Array.isArray(m.hrStream) ? m.hrStream : null,
+      // The time axis the HR trace was always missing (it plotted by sample
+      // index) — the interval chart needs it to put a round where it was.
+      timeStream,
       zonePct: m.timeInZones?.pct ?? null,
       zoneSeconds: m.timeInZones?.seconds ?? null,
       zoneTops: await getZoneTops(),

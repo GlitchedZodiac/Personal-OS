@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { formatClock } from "@/lib/jump-rope";
 import { useRouter } from "next/navigation";
 
 // The Sunday Report — port of the design's report push-in (2026-08-11e
@@ -35,6 +36,7 @@ interface ReportData {
     volumeKg: number;
     activeMinutes: number;
     kcalBurned: number;
+    jumpSeconds?: number;
     zonesPct: number[] | null;
   };
   weight: {
@@ -343,6 +345,10 @@ export default function ReportPage() {
                     "ACTIVE",
                   ],
                   [fmt(report.training.kcalBurned), "KCAL"],
+                  // jump rope lifts nothing — its week is time on the rope
+                  ...((report.training.jumpSeconds ?? 0) > 0
+                    ? ([[formatClock(report.training.jumpSeconds!), "ROPE"]] as const)
+                    : []),
                 ] as const
               ).map(([v, l]) => (
                 <div key={l} className="flex-1">

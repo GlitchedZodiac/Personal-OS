@@ -161,6 +161,24 @@ export function WalkIcon(props: IconProps) {
   );
 }
 
+/* ── Jump rope (2026-10-05) ───────────────────────────────────────────
+   NOT extracted — no design file has a rope. Drawn at Michael's explicit
+   ask ("create a new jumprope icon that matches our brand") inside the
+   activity-icon grammar: 24×24, one stroke weight, round caps, a single
+   idea per glyph. Two handles and the rope hanging between them. The watch
+   draws the same three paths (ios/WatchApp/Views/PitayaGlyphs.swift →
+   Glyphs.jumpRope); change them together. */
+
+export function RopeIcon(props: IconProps) {
+  return (
+    <Stroke24 {...props}>
+      <path d="M5.6 4.4a1.4 1.4 0 0 1 2.8 0v3.4a1.4 1.4 0 0 1-2.8 0Z" />
+      <path d="M15.6 4.4a1.4 1.4 0 0 1 2.8 0v3.4a1.4 1.4 0 0 1-2.8 0Z" />
+      <path d="M7 9.2c0 6.2 1.7 11.3 5 11.3c3.3 0 5-5.1 5-11.3" />
+    </Stroke24>
+  );
+}
+
 /* ── Utility glyphs (verbatim) ────────────────────────────────────────
    Calendar: the range pill on Food → History and Activities.
    Search: the magnifier in the Spirit search field. Both are drawn by the

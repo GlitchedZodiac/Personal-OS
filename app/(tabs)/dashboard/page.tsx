@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatClock } from "@/lib/jump-rope";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { SettingsIcon, TrainIcon } from "@/components/pitaya-icons";
@@ -33,6 +34,7 @@ interface TodayData {
   };
   train: {
     weekVolumeKg: number;
+    weekJumpSeconds?: number;
     weekPRCount: number;
     weekSessions: number;
     burnedToday: number;
@@ -473,6 +475,16 @@ export default function TodayPage() {
               {" · "}
               {data?.train.weekSessions ?? 0} session
               {data?.train.weekSessions === 1 ? "" : "s"}
+              {/* jump rope has no tonnage — its week is time on the rope */}
+              {(data?.train.weekJumpSeconds ?? 0) > 0 && (
+                <>
+                  {" · "}
+                  <span className="tabular-nums">
+                    {formatClock(data!.train.weekJumpSeconds!)}
+                  </span>{" "}
+                  rope
+                </>
+              )}
             </span>
           </p>
           <p className="mt-0.5 text-[11.5px] text-secondary-foreground">

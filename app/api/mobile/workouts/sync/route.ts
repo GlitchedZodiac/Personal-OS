@@ -14,6 +14,13 @@ import { prisma } from "@/lib/prisma";
 import { detectAndRecordPRs, type NewPR } from "@/lib/prs";
 import { buildStreamMetrics } from "@/lib/strava";
 import {
+  INTERVAL_STREAM_POINTS,
+  JUMP_ROPE_TYPE,
+  formatJumpRopePR,
+} from "@/lib/jump-rope";
+import { mergeResync, withCanonicalIds } from "@/lib/workout-resync";
+import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
+import {
   buildHeroMetrics,
   buildRoutineCoda,
   type HeroMetrics,
@@ -50,6 +57,15 @@ type MobileWorkoutPayload = {
   trailId?: string;
 };
 
+/** A watch item that carries a per-entry log (voice or taps). */
+function hasSetLog(metricsData: unknown): boolean {
+  return (
+    !!metricsData &&
+    typeof metricsData === "object" &&
+    Array.isArray((metricsData as { setLog?: unknown }).setLog)
+  );
+}
+
 function toNullableNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
@@ -75,6 +91,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Custom movements must be in the index before any row is given an id.
+    if (items.some((i) => hasSetLog(i.metricsData))) {
+      await ensureUserExercisesLoaded();
+    }
+
     let created = 0;
     let updated = 0;
     let strippedRoutes = 0;
@@ -87,7 +108,8 @@ export async function POST(request: NextRequest) {
     // downsample/zones/load math the Strava import runs, so the Activities
     // detail charts light up identically for watch-recorded sessions.
     const enrichMetrics = (
-      raw: Prisma.InputJsonValue | undefined
+      raw: Prisma.InputJsonValue | undefined,
+      workoutType: string
     ): Prisma.InputJsonValue | undefined => {
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
       const m = raw as Record<string, unknown>;
@@ -97,7 +119,13 @@ export async function POST(request: NextRequest) {
       const alt = Array.isArray(m.altitudeStream)
         ? (m.altitudeStream as number[])
         : undefined;
-      const computed = buildStreamMetrics({ heartrate: hr, time, altitude: alt });
+      // Jump rope keeps a finer stream: the per-round peaks and troughs are
+      // read off it, and 120 points leaves a 30-second round three samples.
+      const computed = buildStreamMetrics(
+        { heartrate: hr, time, altitude: alt },
+        undefined,
+        workoutType === JUMP_ROPE_TYPE ? INTERVAL_STREAM_POINTS : undefined
+      );
       return { ...m, ...computed } as Prisma.InputJsonValue;
     };
 
@@ -223,9 +251,16 @@ export async function POST(request: NextRequest) {
             ? item.routeData
             : Prisma.DbNull,
         metricsData:
-          withRouteAnalytics(enrichMetrics(item.metricsData), routeAnalytics) ??
-          Prisma.JsonNull,
-        exercises: item.exercises ?? Prisma.JsonNull,
+          withRouteAnalytics(
+            enrichMetrics(item.metricsData, workoutType),
+            routeAnalytics
+          ) ?? Prisma.JsonNull,
+        // Voice-logged rows arrive named by the server's own parser; the id
+        // is added where it is missing so they are findable like edited rows.
+        exercises: hasSetLog(item.metricsData)
+          ? ((withCanonicalIds(item.exercises) as Prisma.InputJsonValue | undefined) ??
+            Prisma.JsonNull)
+          : (item.exercises ?? Prisma.JsonNull),
         deviceType:
           typeof item.deviceType === "string" && item.deviceType.trim().length > 0
             ? item.deviceType.trim()
@@ -261,10 +296,39 @@ export async function POST(request: NextRequest) {
             error instanceof Prisma.PrismaClientKnownRequestError &&
             error.code === "P2002";
           if (!isDup) throw error;
-          const entry = await prisma.workoutLog.update({
-            where: { externalSource_externalId: { externalSource, externalId } },
-            data,
+          // A re-send must not undo what was fixed on the phone since the
+          // first one — lib/workout-resync.ts holds the rule.
+          const where = { externalSource_externalId: { externalSource, externalId } };
+          const prior = await prisma.workoutLog.findUnique({
+            where,
+            select: { exercises: true, metricsData: true, description: true },
           });
+          const merged = prior
+            ? mergeResync(prior, {
+                exercises: data.exercises === Prisma.JsonNull ? null : data.exercises,
+                metricsData: data.metricsData === Prisma.JsonNull ? null : data.metricsData,
+                description: data.description,
+              })
+            : null;
+          const entry = await prisma.workoutLog.update({
+            where,
+            data: merged
+              ? {
+                  ...data,
+                  description: merged.description,
+                  exercises:
+                    (merged.exercises as Prisma.InputJsonValue | null) ?? Prisma.JsonNull,
+                  metricsData:
+                    (merged.metricsData as Prisma.InputJsonValue | null) ?? Prisma.JsonNull,
+                }
+              : data,
+          });
+          if (merged) {
+            data.exercises =
+              (merged.exercises as Prisma.InputJsonValue | null) ?? Prisma.JsonNull;
+            data.metricsData =
+              (merged.metricsData as Prisma.InputJsonValue | null) ?? Prisma.JsonNull;
+          }
           updated++;
           workoutId = entry.id;
         }
@@ -281,6 +345,8 @@ export async function POST(request: NextRequest) {
           workoutLogId: workoutId,
           exercises: data.exercises === Prisma.JsonNull ? null : data.exercises,
           achievedAt: data.startedAt,
+          workoutType,
+          metricsData: data.metricsData === Prisma.JsonNull ? null : data.metricsData,
         });
         if (newPRs.length > 0) prResults.push({ externalId, newPRs });
       } catch (error) {
@@ -322,11 +388,20 @@ export async function POST(request: NextRequest) {
         if (firstPR) {
           const prefs = await getNotificationPrefs();
           if (prefs.prCelebration) {
+            // Jump rope records are rounds, a duration or a jump count —
+            // one formatter so the push reads like the phone.
+            const isRope = firstPR.unit !== "kg" && firstPR.unit !== "kg-reps";
             const unit = firstPR.unit === "kg-reps" ? "kg total" : firstPR.unit;
             await notify({
               category: "prCelebration",
               title: `PR · ${firstPR.exerciseName}`,
-              body: `${firstPR.value} ${unit}${
+              body: isRope
+                ? `${formatJumpRopePR(firstPR.kind, firstPR.value)}${
+                    firstPR.previousValue != null
+                      ? ` — was ${formatJumpRopePR(firstPR.kind, firstPR.previousValue)}`
+                      : ""
+                  }`
+                : `${firstPR.value} ${unit}${
                 firstPR.previousValue != null ? ` — was ${firstPR.previousValue}` : ""
               }`,
               url: "/health/workouts",

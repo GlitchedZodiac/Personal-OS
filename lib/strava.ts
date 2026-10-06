@@ -165,17 +165,20 @@ export function buildRoutePoints(streams: StravaStreams): Array<{
 // Full-resolution streams drive the math; downsampled copies get stored.
 export function buildStreamMetrics(
   streams: StravaStreams,
-  relativeEffort?: number
+  relativeEffort?: number,
+  // Interval sessions keep more points: a 30-second round needs more than
+  // the three samples the default leaves it (lib/jump-rope.ts).
+  maxPoints?: number
 ) {
   const hr = streams.heartrate ?? [];
   const time = streams.time ?? [];
   const zones = timeInZones(hr, time);
   const loadScore = trainingLoad(zones) ?? undefined;
   return {
-    hrStream: hr.length ? downsample(hr) : undefined,
-    timeStream: time.length ? downsample(time) : undefined,
+    hrStream: hr.length ? downsample(hr, maxPoints) : undefined,
+    timeStream: time.length ? downsample(time, maxPoints) : undefined,
     altitudeStream: streams.altitude?.length
-      ? downsample(streams.altitude)
+      ? downsample(streams.altitude, maxPoints)
       : undefined,
     timeInZones: zones ?? undefined,
     loadScore,

@@ -13,6 +13,8 @@ import {
 } from "@/components/emom-runner";
 import type { SequenceStep } from "@/lib/sequences";
 import { tonnageLabel } from "@/lib/format-training";
+import { formatClock } from "@/lib/jump-rope";
+import { JumpRopeSection, type JumpRopeTrainData } from "@/components/jump-rope-train";
 
 // Pitaya Train — full port of the design's Train screen (docs/design/
 // pitaya-app.dc.html, screen 3) plus its Live-workout and Routines sheets
@@ -31,6 +33,7 @@ interface TrainData {
     activeMinutes: number;
     kcal: number;
     outdoorKm: number;
+    jumpSeconds: number;
   };
   latestPR: {
     exerciseName: string;
@@ -58,6 +61,7 @@ interface TrainData {
     workoutLogId: string | null;
   }[];
   movementTonnage: { key: string; name: string; totalKg: number; weeksActive: number }[];
+  jumpRope: JumpRopeTrainData | null;
   latestTrail: {
     id: string;
     startedAt: string;
@@ -437,7 +441,10 @@ export default function TrainPage() {
           </h1>
         </div>
         <span className="rounded-full bg-accent px-3 py-[5px] text-xs font-semibold tabular-nums text-[#8C2F51]">
-          {tonnageLabel(data?.weekVolumeKg ?? 0)} lifted
+          {/* a week of nothing but rope read "0 kg lifted" */}
+          {(data?.weekVolumeKg ?? 0) === 0 && (data?.weekOverview?.jumpSeconds ?? 0) > 0
+            ? `${formatClock(data!.weekOverview.jumpSeconds)} jumped`
+            : `${tonnageLabel(data?.weekVolumeKg ?? 0)} lifted`}
         </span>
       </div>
 
@@ -478,7 +485,9 @@ export default function TrainPage() {
               {data.weekOverview.sessions} this week
             </p>
           </div>
-          <div className="mt-3 flex">
+          {/* four across, as designed; a rope week adds a fifth cell that
+              wraps to its own row rather than crowding the labels together */}
+          <div className="mt-3 grid grid-cols-4 gap-y-3">
             {(
               [
                 [String(data.weekOverview.sessions), "SESSIONS", null],
@@ -491,9 +500,13 @@ export default function TrainPage() {
                 ],
                 [fmt(data.weekOverview.kcal), "KCAL", null],
                 [data.weekOverview.outdoorKm.toFixed(1), "OUTDOORS", "km"],
+                // Jump time stands in for tonnage on a rope week.
+                ...(data.weekOverview.jumpSeconds > 0
+                  ? ([[formatClock(data.weekOverview.jumpSeconds), "ROPE", null]] as const)
+                  : []),
               ] as const
             ).map(([value, label, unit]) => (
-              <div key={label} className="flex-1">
+              <div key={label}>
                 <div
                   className="text-[19px] font-bold text-foreground tabular-nums"
                   style={{ fontFamily: "var(--font-display)" }}
@@ -652,6 +665,9 @@ export default function TrainPage() {
           <span>{data?.weeklyVolume[7]?.label ?? ""}</span>
         </div>
       </div>
+
+      {/* Jump rope — its own section: jump time, bests, each protocol */}
+      {data?.jumpRope && <JumpRopeSection data={data.jumpRope} />}
 
       {/* v4 BY MOVEMENT — where the 8 weeks of tonnage actually went */}
       {data && data.movementTonnage.length > 0 && (
