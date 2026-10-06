@@ -993,6 +993,80 @@ reaches the watch after merge, on its 09:30/18:30 cycle.
 
 ---
 
+## 2026-08-28 · Apple Developer Program enrolled — setup plan written (docs only)
+
+Michael enrolled in the $99 program (deferred #81, his 08-22 "let's buy it").
+This session wrote **`docs/apple-developer-setup.md`** — the grounded
+follow-through, no code changes:
+
+- **Phase 1**: swap `DEVELOPMENT_TEAM` in `ios/project.yml` (still the free
+  personal team HDR67SL3JG) to the new paid Team ID + `xcodegen generate` —
+  pending because only Michael can read the new ID off his Membership page.
+  Team change = **delete-and-reinstall on every device** (signature + keychain
+  prefix change → re-PIN, re-grant Health, re-add widgets). Health data and
+  the server are unaffected.
+- **Phases 2–3**: App Store Connect records (iOS app + the standalone
+  `WKWatchOnly` watch app = **two records**, or embed later — flagged as a
+  Michael decision) → TestFlight internal testing → OTA updates to iPhone,
+  iPad, and Watch with no cable and no 7-day expiry (iPad build was due to
+  die ~08-30, deferred #55 — TestFlight is the exit).
+- **Phase 4**: what the paid team unlocks — the `aps-environment` entitlement
+  (server's `PushDevice` + `/api/mobile/push/register` + companion token flow
+  have been waiting on it, deferred #183; sender + .p8 key still to build)
+  and App Groups (Smart Stack live tile, deferred #119.1).
+- **Phase 5**: the second-user question answered honestly — TestFlight makes
+  *distribution* trivial (internal tester, or external with the PIN-in-review-
+  notes caveat), but the app is architecturally single-user (one PIN, no
+  `userId` on any of 43 models; a second person's Health sync would collide
+  with his `DailyHealthSnapshot` rows). Recommended shape if it ever happens:
+  a deployment per person + a server-URL field on the pairing screen
+  (`MobileAPIClient.productionBaseURL` is hardcoded today) — filed as
+  if/when, not built.
+
+Second pass same day (Michael: "how much can you do yourself?") — the
+Team-ID-independent `ios/**` prep landed on this branch, parity with
+`claude/watch-app` verified empty first: `ITSAppUsesNonExemptEncryption: false`
+on both app targets (project.yml + regenerated Info.plists) and
+**`ios/scripts/testflight-upload.sh`** — archive + upload of both schemes,
+authenticated end-to-end by an App Store Connect API key
+(`ASC_KEY_ID`/`ASC_ISSUER_ID` env + `.p8` under
+`~/.appstoreconnect/private_keys/`), `manageAppVersionAndBuildNumber` so
+build numbers never need manual bumps, and a guard that refuses to run while
+project.yml still carries the free team. Third pass same day — EXECUTED end-to-end. What the first real run taught:
+
+- **Same team**: enrollment upgraded HDR67SL3JG in place (ASC bundleIds
+  seedId proves it) — no swap, no Xcode visit, no device reinstall ever
+  needed. The script's free-team guard was wrong and is gone.
+- **Cloud signing needs an Admin API key**: App Manager (`pitaya-upload`,
+  MSZT9NJJP4) does every API operation but cannot mint the Apple
+  Distribution cert; a second key (`pitaya-admin`, XZ64H3U47U) signs and
+  uploads. Both .p8s live in `~/.appstoreconnect/private_keys/`.
+- `ios/scripts/asc-api.mjs` (zero-dep ES256-JWT ASC client) verified his app
+  records (**Pitaya Personal** 6806347708 iOS · **Pitaya Watch** 6806347894
+  watchOS), created Internal groups with `hasAccessToAllBuilds` on both, and
+  added him as tester. **iOS build 1 uploaded and reached VALID** — his
+  green light to install from TestFlight went out.
+- **Watch-only archives cannot be CLI-exported for the App Store** (Xcode
+  26.6 offers only release-testing/enterprise/debugging; legacy `app-store`
+  rejected too). Michael's call via decision prompt: **embed the watch app
+  in the iPhone app** (`WKRunsIndependentlyOfCompanionApp: true` keeps it
+  phone-free; the `.watchkitapp` bundle id was already companion-shaped).
+  One archive now ships both; "Pitaya Watch" record is vestigial, zero
+  builds.
+- En route: xcodegen's standalone-era `SKIP_INSTALL=YES` default made a
+  product-less "generic archive" (fixed, then superseded by the embed); the
+  script now always `clean archive`s; and App Store validation rejected
+  `location` inside `WKBackgroundModes` (error 90362 — never a legal value
+  there; `UIBackgroundModes: [location]` is what CoreLocation checks).
+  **Smoke flag: confirm outdoor-walk GPS route recording on the next real
+  walk.**
+- **Combined iOS+watch build 2 uploaded and CONFIRMED VALID** — live on
+  TestFlight, auto-distributed to the internal group. Ship-an-update
+  contract from now on:
+  `ASC_KEY_ID=XZ64H3U47U ASC_ISSUER_ID=<issuer> ios/scripts/testflight-upload.sh ios`
+  — ASC manages build numbers, TestFlight auto-distributes, 90-day expiry
+  means upload at least quarterly.
+
 ## 2026-08-26 · The AI reads everything · data export · Apple Health weight sync
 
 Three asks, all confirmed as real defects before a line was written.
