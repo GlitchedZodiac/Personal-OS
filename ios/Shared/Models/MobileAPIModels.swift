@@ -41,23 +41,54 @@ public struct TokenRefreshRequest: Codable, Hashable, Sendable {
 
 // MARK: - Exercises (the kettlebell set payload)
 
+/// A worn load on one movement — a weighted vest. Kept apart from weightKg
+/// (the implement), so a vested bodyweight squat never reads as a loaded one.
+public struct EntryLoad: Codable, Hashable, Sendable {
+    public let type: String // "vest"
+    public let kg: Double
+    /// True when he said "with a vest" and no number — his usual was assumed.
+    public let assumed: Bool?
+
+    public init(type: String = "vest", kg: Double, assumed: Bool? = nil) {
+        self.type = type
+        self.kg = kg
+        self.assumed = assumed
+    }
+}
+
 /// One line of the workout's `exercises` JSON — the exact shape
 /// lib/prs.ts extracts PRs from: {name, sets, reps, weightKg}.
+/// 2026-10-05 (additive — nil keys are never encoded, so every payload
+/// written before is byte-identical): `seconds` for timed work (the server
+/// always had it; the wrist just could not say it), `exercise` (canonical
+/// id), `load` and `perSide` for voice-logged entries.
 public struct ExerciseEntry: Codable, Hashable, Sendable {
     public let name: String
     public let sets: Int?
     public let reps: Int?
     public let weightKg: Double?
+    public let seconds: Int?
+    public let exercise: String?
+    public let load: EntryLoad?
+    public let perSide: Bool?
 
-    public init(name: String, sets: Int?, reps: Int?, weightKg: Double?) {
+    public init(
+        name: String, sets: Int?, reps: Int?, weightKg: Double?,
+        seconds: Int? = nil, exercise: String? = nil,
+        load: EntryLoad? = nil, perSide: Bool? = nil
+    ) {
         self.name = name
         self.sets = sets
         self.reps = reps
         self.weightKg = weightKg
+        self.seconds = seconds
+        self.exercise = exercise
+        self.load = load
+        self.perSide = perSide
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, sets, reps, weightKg
+        case name, sets, reps, weightKg, seconds, exercise, load, perSide
     }
 
     // Web-written values are occasionally strings ("20") — accept both.
@@ -67,6 +98,10 @@ public struct ExerciseEntry: Codable, Hashable, Sendable {
         sets = Self.flexibleInt(c, .sets)
         reps = Self.flexibleInt(c, .reps)
         weightKg = Self.flexibleDouble(c, .weightKg)
+        seconds = Self.flexibleInt(c, .seconds)
+        exercise = (try? c.decodeIfPresent(String.self, forKey: .exercise)) ?? nil
+        load = (try? c.decodeIfPresent(EntryLoad.self, forKey: .load)) ?? nil
+        perSide = (try? c.decodeIfPresent(Bool.self, forKey: .perSide)) ?? nil
     }
 
     private static func flexibleDouble(
@@ -524,6 +559,145 @@ public struct WorkoutZoneBreakdown: Codable, Hashable, Sendable {
     }
 }
 
+// MARK: - Jump rope intervals + the per-entry log (2026-10-05, additive)
+
+/// His own jump count, typed in. `source` is "manual"; the server promotes
+/// an estimate here only once the wrist counter has been validated.
+public struct JumpCountPayload: Codable, Hashable, Sendable {
+    public let source: String
+    public let total: Int?
+    public let perRound: [Int]?
+
+    public init(source: String = "manual", total: Int?, perRound: [Int]? = nil) {
+        self.source = source
+        self.total = total
+        self.perRound = perRound
+    }
+}
+
+/// The wrist counter's number — on trial, stored beside `jumps`, never as it.
+public struct JumpEstimatePayload: Codable, Hashable, Sendable {
+    public let total: Int
+    public let perRound: [Int]?
+    public let algo: String
+
+    public init(total: Int, perRound: [Int]?, algo: String) {
+        self.total = total
+        self.perRound = perRound
+        self.algo = algo
+    }
+}
+
+/// A short window of wrist motion for tuning the counter (trial only):
+/// int8 samples, channel-interleaved, base64. Sent for a few sessions, then
+/// the wrist stops including it by itself.
+public struct MotionTracePayload: Codable, Hashable, Sendable {
+    public let hz: Int
+    public let channels: [String]
+    /// Multiply a stored sample by this to get the physical unit back.
+    public let scale: [Double]
+    public let samples: Int
+    public let b64: String
+
+    public init(hz: Int, channels: [String], scale: [Double], samples: Int, b64: String) {
+        self.hz = hz
+        self.channels = channels
+        self.scale = scale
+        self.samples = samples
+        self.b64 = b64
+    }
+}
+
+/// workout_logs.metricsData.intervals — lib/jump-rope.ts reads it. `marks`
+/// are [start, end] of every work interval on the SAME clock as timeStream
+/// (elapsed seconds, pauses excluded), which is what lets the phone shade a
+/// round exactly where its heart rate sits.
+public struct IntervalPayload: Codable, Hashable, Sendable {
+    public let mode: String // "interval" | "continuous"
+    public let workSeconds: Int?
+    public let restSeconds: Int?
+    public let plannedRounds: Int?
+    public let roundsCompleted: Int
+    public let jumpSeconds: Int
+    public let restSecondsTotal: Int
+    public let marks: [[Int]]
+    public let source: String // "measured"
+    public var jumps: JumpCountPayload?
+    public var jumpsEstimated: JumpEstimatePayload?
+    public var trace: MotionTracePayload?
+
+    public init(
+        mode: String, workSeconds: Int?, restSeconds: Int?, plannedRounds: Int?,
+        roundsCompleted: Int, jumpSeconds: Int, restSecondsTotal: Int,
+        marks: [[Int]], source: String = "measured",
+        jumps: JumpCountPayload? = nil, jumpsEstimated: JumpEstimatePayload? = nil,
+        trace: MotionTracePayload? = nil
+    ) {
+        self.mode = mode
+        self.workSeconds = workSeconds
+        self.restSeconds = restSeconds
+        self.plannedRounds = plannedRounds
+        self.roundsCompleted = roundsCompleted
+        self.jumpSeconds = jumpSeconds
+        self.restSecondsTotal = restSecondsTotal
+        self.marks = marks
+        self.source = source
+        self.jumps = jumps
+        self.jumpsEstimated = jumpsEstimated
+        self.trace = trace
+    }
+}
+
+/// One entry of workout_logs.metricsData.setLog — lib/set-log.ts SetLogEntry.
+/// What he said (or tapped), when, and what Pitaya made of it.
+public struct SetLogEntryPayload: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    /// Elapsed seconds from workout start.
+    public let t: Int
+    public let at: Date
+    public let source: String // "voice" | "tap"
+    public var status: String // ok | review | queued | failed | undone
+    public var name: String
+    public var exercise: String?
+    public var reps: Int?
+    public var sets: Int?
+    public var weightKg: Double?
+    public var seconds: Int?
+    public var perSide: Bool?
+    public var load: EntryLoad?
+    public var transcript: String?
+    public var confidence: Double?
+    public var reason: String?
+
+    public init(
+        id: String, t: Int, at: Date, source: String, status: String, name: String,
+        exercise: String? = nil, reps: Int? = nil, sets: Int? = nil,
+        weightKg: Double? = nil, seconds: Int? = nil, perSide: Bool? = nil,
+        load: EntryLoad? = nil, transcript: String? = nil,
+        confidence: Double? = nil, reason: String? = nil
+    ) {
+        self.id = id
+        self.t = t
+        self.at = at
+        self.source = source
+        self.status = status
+        self.name = name
+        self.exercise = exercise
+        self.reps = reps
+        self.sets = sets
+        self.weightKg = weightKg
+        self.seconds = seconds
+        self.perSide = perSide
+        self.load = load
+        self.transcript = transcript
+        self.confidence = confidence
+        self.reason = reason
+    }
+
+    /// Counts toward the workout (lib/set-log.ts countedEntries).
+    public var counted: Bool { status == "ok" || status == "review" }
+}
+
 public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     public let sequenceId: String?
     public let sequenceName: String?
@@ -550,11 +724,17 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
     /// distinct from the server's GPS-derived routeAnalytics.splits.
     public let splits: [Int]?
     /// Round 3 §07 (additive): the 60 s HR-recovery drop and its window.
-    public let hrrDelta: Int?
-    public let hrrSeconds: Int?
+    public var hrrDelta: Int?
+    public var hrrSeconds: Int?
     /// 2026-08-29 (additive): session-mean step cadence from CMPedometer —
     /// collected live since Round 3, persisted now (Strava parity).
     public let avgCadenceSpm: Int?
+    /// 2026-10-05 (additive): the jump rope interval record.
+    public var intervals: IntervalPayload?
+    /// 2026-10-05 (additive): per-entry log — voice entries with their
+    /// transcript and timestamp (and tapped sets, which closes the
+    /// 2026-08-28 "true per-set capture" ask).
+    public var setLog: [SetLogEntryPayload]?
 
     public init(
         sequenceId: String? = nil, sequenceName: String? = nil,
@@ -566,7 +746,9 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
         splits: [Int]? = nil,
         hrrDelta: Int? = nil,
         hrrSeconds: Int? = nil,
-        avgCadenceSpm: Int? = nil
+        avgCadenceSpm: Int? = nil,
+        intervals: IntervalPayload? = nil,
+        setLog: [SetLogEntryPayload]? = nil
     ) {
         self.sequenceId = sequenceId
         self.sequenceName = sequenceName
@@ -581,25 +763,25 @@ public struct WorkoutMetricsData: Codable, Hashable, Sendable {
         self.hrrDelta = hrrDelta
         self.hrrSeconds = hrrSeconds
         self.avgCadenceSpm = avgCadenceSpm
+        self.intervals = intervals
+        self.setLog = setLog
     }
 
     public var isEmpty: Bool {
         sequenceId == nil && stepSeconds == nil && hrStream == nil
             && timeInZones == nil && splits == nil && hrrDelta == nil
+            && intervals == nil && setLog == nil
     }
 
     /// Round 3 §07: the HRR numbers land up to 60 s after the item was
-    /// built — clone with the capture attached.
+    /// built — clone with the capture attached. (A copy, not a rebuild: the
+    /// old field-by-field constructor silently dropped any key added after
+    /// it was written.)
     public func withHRR(delta: Int, seconds: Int) -> WorkoutMetricsData {
-        WorkoutMetricsData(
-            sequenceId: sequenceId, sequenceName: sequenceName,
-            roundsCompleted: roundsCompleted, stepSeconds: stepSeconds,
-            hrStream: hrStream, timeStream: timeStream,
-            altitudeStream: altitudeStream, timeInZones: timeInZones,
-            elevationGainM: elevationGainM, splits: splits,
-            hrrDelta: delta, hrrSeconds: seconds,
-            avgCadenceSpm: avgCadenceSpm
-        )
+        var copy = self
+        copy.hrrDelta = delta
+        copy.hrrSeconds = seconds
+        return copy
     }
 }
 
@@ -619,6 +801,76 @@ public extension WorkoutSyncItem {
             syncStatus: syncStatus, deviceType: deviceType, trailId: trailId
         )
     }
+
+    /// Same item with a new movement list AND metrics — a voice entry whose
+    /// audio was queued out of range resolves after the workout was saved.
+    func replacing(
+        exercises: [ExerciseEntry]?, metricsData: WorkoutMetricsData?
+    ) -> WorkoutSyncItem {
+        WorkoutSyncItem(
+            externalId: externalId, externalSource: externalSource,
+            startedAt: startedAt, endedAt: endedAt,
+            durationMinutes: durationMinutes, workoutType: workoutType,
+            description: description, caloriesBurned: caloriesBurned,
+            distanceMeters: distanceMeters, stepCount: stepCount,
+            avgHeartRateBpm: avgHeartRateBpm, maxHeartRateBpm: maxHeartRateBpm,
+            elevationGainM: elevationGainM, exercises: exercises,
+            metricsData: metricsData, routeData: routeData, source: source,
+            syncStatus: syncStatus, deviceType: deviceType, trailId: trailId
+        )
+    }
+}
+
+// MARK: - Wrist voice logging (POST /api/mobile/voice/workout-entry)
+
+public struct VoiceEntryRequest: Codable, Sendable {
+    public let entryId: String
+    public let audioBase64: String?
+    public let mime: String?
+    /// DEBUG smoke only — skips recognition server-side.
+    public let transcript: String?
+
+    public init(entryId: String, audioBase64: String?, mime: String? = "audio/m4a", transcript: String? = nil) {
+        self.entryId = entryId
+        self.audioBase64 = audioBase64
+        self.mime = mime
+        self.transcript = transcript
+    }
+}
+
+/// One parsed movement — lib/voice-entry-parser.ts ParsedVoiceEntry plus the
+/// short `display` line the server composes for the wrist.
+public struct ParsedVoiceEntryPayload: Codable, Hashable, Sendable {
+    public let name: String
+    public let exercise: String?
+    public let reps: Int?
+    public let sets: Int?
+    public let weightKg: Double?
+    public let seconds: Int?
+    public let perSide: Bool?
+    public let load: EntryLoad?
+    public let confidence: Double?
+    public let needsReview: Bool
+    public let reason: String?
+    public let display: String
+}
+
+public struct VoiceEntryTimings: Codable, Hashable, Sendable {
+    public let transcribe: Int?
+    public let parse: Int?
+    public let total: Int?
+}
+
+public struct VoiceEntryResponse: Codable, Sendable {
+    public let entryId: String?
+    public let transcript: String
+    public let entries: [ParsedVoiceEntryPayload]
+    public let parser: String?
+    public let ms: VoiceEntryTimings?
+}
+
+public struct VoiceWarmResponse: Codable, Sendable {
+    public let ok: Bool
 }
 
 // MARK: - Custom exercises (GET /api/mobile/exercises)

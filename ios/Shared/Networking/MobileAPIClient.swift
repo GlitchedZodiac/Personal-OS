@@ -219,6 +219,29 @@ public actor MobileAPIClient {
         )
     }
 
+    // MARK: - Wrist voice logging (2026-10-05)
+
+    /// One spoken entry: audio up, parsed movement(s) back. The deadline is
+    /// short on purpose — he is between sets, and a clip that cannot make it
+    /// in time is queued on disk rather than waited for.
+    public func postVoiceEntry(
+        _ body: VoiceEntryRequest, timeout: TimeInterval = 8
+    ) async throws -> VoiceEntryResponse {
+        try await send(
+            path: "/api/mobile/voice/workout-entry", method: "POST",
+            body: body, authorized: true, timeout: timeout
+        )
+    }
+
+    /// Fired when a workout starts so the first real clip does not pay for
+    /// a cold server. Failure is silent — it is only a warm-up.
+    public func warmVoice() async {
+        let _: VoiceWarmResponse? = try? await send(
+            path: "/api/mobile/voice/workout-entry", method: "GET",
+            body: Optional<String>.none, authorized: true, timeout: 10
+        )
+    }
+
     // MARK: - Transport
 
     private func send<T: Decodable, Body: Encodable>(
@@ -227,7 +250,8 @@ public actor MobileAPIClient {
         method: String,
         body: Body?,
         authorized: Bool,
-        isRetry: Bool = false
+        isRetry: Bool = false,
+        timeout: TimeInterval? = nil
     ) async throws -> T {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw ClientError.invalidResponse
@@ -239,6 +263,7 @@ public actor MobileAPIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let timeout { request.timeoutInterval = timeout }
 
         if authorized {
             guard let stored = await sessionStore.load() else {
@@ -263,7 +288,7 @@ public actor MobileAPIClient {
             try await refreshSession()
             return try await send(
                 path: path, query: query, method: method, body: body,
-                authorized: authorized, isRetry: true
+                authorized: authorized, isRetry: true, timeout: timeout
             )
         case 401:
             throw ClientError.unauthorized

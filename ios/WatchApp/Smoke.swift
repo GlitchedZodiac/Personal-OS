@@ -25,10 +25,31 @@
 import Foundation
 
 enum Smoke {
+    /// Where the app talks to. Production, always — except a DEBUG simulator
+    /// run pointed at `npm run dev` (PITAYA_SMOKE_BASEURL=http://localhost:3000),
+    /// which is how a change to the mobile API is smoked BEFORE it deploys.
+    static var baseURL: URL {
+        #if DEBUG
+        if let raw = ProcessInfo.processInfo.environment["PITAYA_SMOKE_BASEURL"],
+           let url = URL(string: raw) {
+            return url
+        }
+        #endif
+        return MobileAPIClient.productionBaseURL
+    }
+
     @MainActor
     static func runIfRequested(on model: AppModel) async {
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
+
+        // Pair without a PIN ever being typed: a device session minted
+        // locally for this run (the wrist twin of the browser smoke's minted
+        // cookie). The session is revoked when the smoke is done.
+        if let token = env["PITAYA_SMOKE_TOKEN"], model.phase == .welcome {
+            await model.debugAdoptSession(accessToken: token)
+            log("adopted a minted device session — phase=\(String(describing: model.phase))")
+        }
 
         if let pin = env["PITAYA_SMOKE_PIN"], model.phase == .welcome {
             log("pairing via smoke PIN…")
@@ -268,6 +289,114 @@ enum Smoke {
             // home itself. If this ever prints .summary again, the second
             // "Done" tap is back.
             log("freestyle: phase after save = \(String(describing: model.phase))")
+            return
+        }
+
+        // JUMP ROPE (2026-10-05). SETUP holds the setup screen for a
+        // screenshot; otherwise a short interval session runs to its planned
+        // end on the real engine — "work/rest/rounds", default 6/4/3 — then
+        // a jump count is typed and the session is saved. Proves: the clock
+        // derives rounds from elapsed time, marks land on the stream's
+        // clock, the row syncs as workoutType "jump_rope" with its interval
+        // record. RECORDER=1 uses HealthKit (synthetic HR in the simulator).
+        if env["PITAYA_SMOKE_OPEN"] == "workouts", model.phase == .home {
+            model.openWorkoutList()
+            log("open: workout list")
+            return
+        }
+        if env["PITAYA_SMOKE_ROPE_SETUP"] == "1", model.phase == .home {
+            model.openJumpRope()
+            log("rope: setup screen")
+            return
+        }
+        if let spec = env["PITAYA_SMOKE_ROPE"], model.phase == .home {
+            model.externalSourceOverride = "watch_smoke"
+            DoubleTapCoach.shared.coachShown = true
+            await model.refreshHistory()
+            let parts = spec.split(separator: "/").compactMap { Int($0) }
+            let continuous = spec == "continuous"
+            var config = RopeConfig()
+            config.intervals = !continuous
+            config.workSeconds = parts.count > 0 ? parts[0] : 6
+            config.restSeconds = parts.count > 1 ? parts[1] : 4
+            config.rounds = parts.count > 2 ? parts[2] : 3
+            let saved = model.ropeConfig
+            model.ropeConfig = config
+            let useRecorder = env["PITAYA_SMOKE_RECORDER"] == "1"
+            log("rope: starting \(config.protocolLabel) × \(config.rounds) (recorder \(useRecorder ? "ON" : "off"))…")
+            await model.startJumpRope(useRecorder: useRecorder)
+            if env["PITAYA_SMOKE_ROPE_HOLD"] == "1" {
+                log("rope: holding on the live face")
+                return
+            }
+            if continuous {
+                try? await Task.sleep(nanoseconds: 25_000_000_000)
+                await model.endJumpRope()
+            } else {
+                // The engine ends the session itself when the plan runs out.
+                for _ in 0..<600 {
+                    if case .liveJumpRope = model.phase {
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                    } else { break }
+                }
+            }
+            model.ropeConfig = saved
+            saved.save()
+            guard let item = model.debugPendingItem, let rope = item.metricsData?.intervals else {
+                log("rope FAIL — no pending item (phase \(String(describing: model.phase)))")
+                return
+            }
+            log("rope: type=\(item.workoutType) rounds=\(rope.roundsCompleted) jump=\(rope.jumpSeconds)s rest=\(rope.restSecondsTotal)s marks=\(rope.marks)")
+            log("rope: row=\(item.exercises?.first.map { "\($0.name) sets=\($0.sets ?? -1) seconds=\($0.seconds ?? -1) id=\($0.exercise ?? "nil")" } ?? "none") hrPoints=\(item.metricsData?.hrStream?.count ?? 0) estimate=\(rope.jumpsEstimated.map { String($0.total) } ?? "none (no motion sensor)")")
+            model.setManualJumps(321)
+            log("rope: manual jumps on item = \(model.debugPendingItem?.metricsData?.intervals?.jumps?.total ?? -1)")
+            if env["PITAYA_SMOKE_NOSAVE"] == "1" {
+                log("rope: NOSAVE — holding the summary")
+                return
+            }
+            await model.saveWorkout()
+            log("rope: saved — syncState=\(String(describing: model.syncState)) externalId=\(item.externalId)")
+            return
+        }
+
+        // VOICE LOG (2026-10-05). A freestyle session where each "|"-separated
+        // phrase goes through the real voice route as a transcript (the
+        // script has no microphone) and the real entry handling; then one
+        // undo, finish, and what the session would send. NOSAVE=1 stops
+        // before the sync.
+        if let phrases = env["PITAYA_SMOKE_VOICELOG"], model.phase == .home {
+            model.externalSourceOverride = "watch_smoke"
+            DoubleTapCoach.shared.coachShown = true
+            await model.refreshHistory()
+            await model.startWorkout(.freestyle, useRecorder: false)
+            for phrase in phrases.split(separator: "|").map(String.init) {
+                let ms = await model.debugVoiceEntry(transcript: phrase)
+                let last = model.voiceEntries.last
+                log("voice: \"\(phrase)\" → \(last?.status.rawValue ?? "?") \(last?.lines ?? []) in \(ms) ms")
+            }
+            if env["PITAYA_SMOKE_VOICE_UNDO"] == "1" {
+                model.undoLastVoiceEntry()
+                log("voice: undo → \(model.voiceEntries.count) entries left")
+            }
+            if env["PITAYA_SMOKE_VOICE_HOLD"] == "1" {
+                log("voice: holding on the live face")
+                return
+            }
+            await model.finishWorkout(.freestyle)
+            guard let item = model.debugPendingItem else {
+                log("voice FAIL — no pending item (phase \(String(describing: model.phase)))")
+                return
+            }
+            for row in item.exercises ?? [] {
+                log("voice row: \(row.name) id=\(row.exercise ?? "nil") sets=\(row.sets ?? -1) reps=\(row.reps ?? -1) kg=\(row.weightKg.map { String($0) } ?? "nil") sec=\(row.seconds ?? -1) vest=\(row.load.map { String($0.kg) } ?? "nil")")
+            }
+            log("voice: setLog=\(item.metricsData?.setLog?.count ?? 0) entries")
+            if env["PITAYA_SMOKE_NOSAVE"] == "1" {
+                log("voice: NOSAVE — holding the summary")
+                return
+            }
+            await model.saveWorkout()
+            log("voice: saved — syncState=\(String(describing: model.syncState)) externalId=\(item.externalId)")
             return
         }
 

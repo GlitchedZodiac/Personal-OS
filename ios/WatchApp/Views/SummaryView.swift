@@ -11,6 +11,7 @@ import SwiftUI
 struct SummaryView: View {
     @EnvironmentObject private var model: AppModel
     @State private var confirmDiscard = false
+    @State private var enteringJumps = false
     /// §06 fail shake: each failure adds three ±6 px cycles over 260 ms.
     @State private var failShakes = 0
 
@@ -29,6 +30,8 @@ struct SummaryView: View {
                 if let summary = model.summary {
                     contextLine(summary)
                     statsCard(summary)
+                    if summary.kind == .jumpRope { ropeCard(summary) }
+                    if summary.voiceEntryCount > 0 { voiceCard(summary) }
                     insightCards(summary)
                     tapeCard(summary)
                 }
@@ -76,6 +79,9 @@ struct SummaryView: View {
                 }
             }
             .padding(.horizontal, 6)
+        }
+        .sheet(isPresented: $enteringJumps) {
+            JumpCountPad(initial: model.manualJumps) { model.setManualJumps($0) }
         }
         .confirmationDialog(
             "Discard this workout?",
@@ -207,6 +213,13 @@ struct SummaryView: View {
                 )
                 fourthCell(summary, lastRun: lastRun)
             }
+            // 2026-10-05 (his call): steps on anything measured by distance.
+            if let steps = summary.stepCount, steps > 0 {
+                HStack(spacing: Theme.px(12)) {
+                    deltaCell(value: Fmt.grouped(Double(steps)), label: "STEPS", delta: nil)
+                    Spacer(minLength: 0).frame(maxWidth: .infinity)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Theme.px(16))
@@ -217,7 +230,21 @@ struct SummaryView: View {
 
     @ViewBuilder
     private func fourthCell(_ summary: WorkoutSummary, lastRun: LastRunStats?) -> some View {
-        if summary.totalVolumeKg > 0 {
+        if summary.kind == .jumpRope {
+            // Rounds are the hero on a rope session; continuous shows the
+            // time the rope was turning.
+            if let rounds = summary.roundsCompleted {
+                deltaCell(
+                    value: summary.plannedRounds.map { "\(rounds)/\($0)" } ?? "\(rounds)",
+                    label: "ROUNDS", delta: nil, color: Theme.accent
+                )
+            } else {
+                deltaCell(
+                    value: Fmt.clock(TimeInterval(summary.jumpSeconds ?? 0)),
+                    label: "JUMP TIME", delta: nil, color: Theme.accent
+                )
+            }
+        } else if summary.totalVolumeKg > 0 {
             // 1g: volume is the hero stat — accent value.
             deltaCell(
                 value: Fmt.grouped(summary.totalVolumeKg), label: "KG VOLUME",
@@ -530,9 +557,91 @@ struct SummaryView: View {
         switch pr.kind {
         case "weight":
             return "PR · \(pr.exerciseName) \(Fmt.kg(pr.value)) kg"
+        // Jump rope records (2026-10-05) are not kilograms — this used to
+        // print every unknown kind as "volume … kg".
+        case "rounds":
+            return "PR · \(pr.exerciseName) \(Int(pr.value)) rounds"
+        case "duration":
+            return "PR · longest jump \(Fmt.clock(pr.value))"
+        case "jumps":
+            return "PR · \(Fmt.grouped(pr.value)) jumps"
+        case "jumps_round":
+            return "PR · \(Fmt.grouped(pr.value)) jumps in a round"
         default:
             return "PR · \(pr.exerciseName) volume \(Fmt.grouped(pr.value)) kg"
         }
+    }
+
+    // MARK: - Jump rope (2026-10-05 — undesigned, in the stats card's grammar)
+
+    /// Jump time against the session, and his own jump count — the one
+    /// number typed rather than measured.
+    private func ropeCard(_ summary: WorkoutSummary) -> some View {
+        VStack(alignment: .leading, spacing: Theme.px(10)) {
+            HStack(spacing: Theme.px(12)) {
+                deltaCell(
+                    value: Fmt.clock(TimeInterval(summary.jumpSeconds ?? 0)),
+                    label: "JUMP TIME", delta: nil
+                )
+                deltaCell(
+                    value: model.manualJumps.map { Fmt.grouped(Double($0)) } ?? "––",
+                    label: "JUMPS", delta: nil,
+                    color: model.manualJumps == nil ? Theme.textMuted : Theme.textBright
+                )
+            }
+            Button {
+                enteringJumps = true
+            } label: {
+                Text(model.manualJumps == nil ? "Add jump count" : "Change jump count")
+                    .font(Theme.wText(7.5, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(maxWidth: .infinity)
+                    .pitayaTappable()
+                    .background(Theme.accentDim, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.px(16))
+        .padding(.vertical, Theme.px(14))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.px(18)))
+        .padding(.top, Theme.px(8))
+    }
+
+    /// What he said during the session, already built into the movement
+    /// list. Anything Pitaya was unsure of is asked about on the phone.
+    private func voiceCard(_ summary: WorkoutSummary) -> some View {
+        let entries = model.voiceEntries
+        let review = entries.filter { $0.status == .review }.count
+        let queued = entries.filter { $0.status == .queued }.count
+        return VStack(alignment: .leading, spacing: Theme.px(6)) {
+            Text("LOGGED BY VOICE · \(summary.voiceEntryCount)")
+                .font(Theme.wText(5.5, weight: .bold))
+                .kerning(1)
+                .foregroundStyle(Theme.textTertiary)
+            ForEach(entries.filter { $0.status == .ok || $0.status == .review }) { entry in
+                ForEach(Array(entry.lines.enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(Theme.wText(7.5, weight: .medium))
+                        .foregroundStyle(entry.status == .review ? Theme.prText : Theme.textPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            if review > 0 || queued > 0 {
+                Text([
+                    review > 0 ? "\(review) to check in Pitaya" : nil,
+                    queued > 0 ? "\(queued) waiting for signal" : nil,
+                ].compactMap { $0 }.joined(separator: " · "))
+                    .font(Theme.wText(6))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.px(16))
+        .padding(.vertical, Theme.px(14))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.px(18)))
+        .padding(.top, Theme.px(8))
     }
 }
 #endif

@@ -61,6 +61,16 @@ enum Glyphs {
     ]
     /// Freestyle pulse trace — Round 3 §09.
     static let freestyle = ["M3 13h3l2.2-5.4 3.3 10.8 2.3-7.2 1.4 1.8H21"]
+    /// Jump rope (2026-10-05) — NOT extracted: no design file has a rope.
+    /// Drawn at Michael's explicit ask inside the activity-icon grammar
+    /// (24×24, one stroke weight, round caps): two handles and the rope
+    /// hanging between them. Same three paths as the phone's RopeIcon
+    /// (components/pitaya-icons.tsx) — change them together.
+    static let jumpRope = [
+        "M5.6 4.4a1.4 1.4 0 0 1 2.8 0v3.4a1.4 1.4 0 0 1-2.8 0Z",
+        "M15.6 4.4a1.4 1.4 0 0 1 2.8 0v3.4a1.4 1.4 0 0 1-2.8 0Z",
+        "M7 9.2c0 6.2 1.7 11.3 5 11.3c3.3 0 5-5.1 5-11.3",
+    ]
     /// Trail bookmark — saved-trail rows + suggestions (Round 3 §09).
     static let trailBookmark = [
         "M6.5 3.5h11v17l-5.5-4.2L6.5 20.5Z",

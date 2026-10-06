@@ -5,7 +5,7 @@ import SwiftUI
 
 @main
 struct PitayaWatchApp: App {
-    @StateObject private var model = AppModel()
+    @StateObject private var model = AppModel(baseURL: Smoke.baseURL)
     /// Owns the scheduled background wake (queue drain + complication).
     @WKApplicationDelegateAdaptor(PitayaAppDelegate.self) private var delegate
     @Environment(\.scenePhase) private var scenePhase
@@ -47,6 +47,10 @@ struct RootView: View {
                 WorkoutListView()
             case .hikeMenu:
                 HikeMenuView()
+            case .jumpRopeSetup:
+                JumpRopeSetupView()
+            case .liveJumpRope:
+                JumpRopeLiveView()
             case .sequences(let discipline):
                 SequencesListView(discipline: discipline)
             case .sequenceDetail(let sequence):
