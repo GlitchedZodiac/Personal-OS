@@ -46,7 +46,15 @@ except Exception:
     pass
 PY
 )
-if [ -z "$DEVICE" ]; then echo "No paired Apple Watch found by devicectl"; exit 1; fi
+if [ -z "$DEVICE" ]; then
+  echo "This Mac has no pairing with the watch (it lapsed after 2026-08-28 and"
+  echo "the stale record was removed on 2026-10-05). Re-pair it once:"
+  echo "  1. Unlock the iPhone, wear and unlock the watch, same Wi-Fi as the Mac."
+  echo "  2. Xcode > Window > Devices and Simulators > select the watch (listed"
+  echo "     under the phone) > tap Trust on the watch."
+  echo "Then run this again."
+  exit 1
+fi
 
 for attempt in 1 2 3 4 5 6; do
   if xcrun devicectl device install app --device "$DEVICE" "$APP" >"$WORK/install.log" 2>&1; then
