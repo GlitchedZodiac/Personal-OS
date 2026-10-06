@@ -5,6 +5,15 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
+**WHERE THIS STANDS (2026-10-05, session closed on his word):** everything from the body
+composition work is on `main` and live — the data model, the RENPHO backfill, the new Body
+screen, and the report upload. **His decision: detailed RENPHO readings come in by report
+upload.** Weight keeps arriving on its own through Apple Health; the cloud pull
+(`lib/renpho-sync.ts`) stays built and switched off, and the second-account idea is parked,
+not pending. Next time this is picked up, start from: (1) his first real PDF upload — the
+reader has only seen a stand-in; (2) the body map's back view and artwork; (3) the pending
+stages listed under the Body screen round below.
+
 **Last updated:** 2026-10-05 (REPORT UPLOAD — his ask, in place of the second RENPHO
 account: "build a pdf upload companion… I give Pitaya the RENPHO report and it extracts
 everything." Body screen → **Add report** (in the composition card header, and as a prompt
