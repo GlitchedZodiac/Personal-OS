@@ -170,6 +170,37 @@ implements changes, the watch lane requests them.
   with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`. Never amend,
   never `--no-verify`.
 
+## Shipping native builds — TestFlight (his 2026-10-05 call)
+
+**Every change under `ios/**` reaches his iPhone, iPad and Apple Watch
+through TestFlight — never by pushing from the Mac.** His words: "I want
+ipad and all devices to go through test flight so I don't wait on a macbook
+sync." One archive carries all three (the watch app is embedded in the
+iPhone app; the iPad runs the same universal app):
+
+```bash
+ASC_KEY_ID=XZ64H3U47U ASC_ISSUER_ID=3f863989-7ac9-48a1-94a5-7547b50ded16 \
+  ios/scripts/testflight-upload.sh ios
+```
+
+- Run it from a tree that matches `main` (merge first, or merge right after
+  — `main` must always be what is on TestFlight). Apple picks the build
+  number. Processing takes 5–30 minutes; check it with
+  `ios/scripts/asc-api.mjs GET "/v1/builds?filter[app]=6806347708&sort=-uploadedDate&limit=2"`
+  (key `MSZT9NJJP4`). No review is involved — internal testing only.
+- He installs by opening TestFlight and tapping Update (or leaves automatic
+  updates on); the watch app follows the phone app.
+- **A watch or iPad change is not "shipped" until its build is VALID on
+  TestFlight.** From 28 Aug to 5 Oct 2026 watch work was merged and reported
+  as delivered while nothing reached the wrist: the direct-install job had
+  become a no-op and the Mac's pairing with the watch had lapsed. Say which
+  build number carries the change in the session report.
+- Builds expire after 90 days — upload at least quarterly even with nothing
+  new. The key files live in `~/.appstoreconnect/private_keys/`; never read
+  or print them. Details: `docs/apple-developer-setup.md`.
+- `ios/scripts/install-watch.sh` (direct install) is for debugging only and
+  needs the watch paired with the Mac in Xcode.
+
 ## Completion report
 
 End every session with:
