@@ -376,7 +376,20 @@ enum Smoke {
             }
             if env["PITAYA_SMOKE_VOICE_UNDO"] == "1" {
                 model.undoLastVoiceEntry()
-                log("voice: undo → \(model.voiceEntries.count) entries left")
+                log("voice: undo → \(model.countedVoiceEntries.count) counted of \(model.voiceEntries.count) kept")
+            }
+            // 2026-10-09: take back an EARLIER entry and put it back — the
+            // log screen's two buttons.
+            if env["PITAYA_SMOKE_VOICE_REMOVE"] == "1", let first = model.voiceEntries.first {
+                model.removeVoiceEntry(first.id)
+                log("voice: removed first → \(model.countedVoiceEntries.count) counted, status=\(model.voiceEntries.first?.status.rawValue ?? "gone")")
+                model.restoreVoiceEntry(first.id)
+                log("voice: put back → \(model.countedVoiceEntries.count) counted, status=\(model.voiceEntries.first?.status.rawValue ?? "gone")")
+            }
+            if env["PITAYA_SMOKE_VOICE_LOG"] == "1" {
+                model.debugShowVoiceLog = true
+                log("voice: holding with the log open")
+                return
             }
             if env["PITAYA_SMOKE_VOICE_HOLD"] == "1" {
                 log("voice: holding on the live face")
@@ -388,7 +401,7 @@ enum Smoke {
                 return
             }
             for row in item.exercises ?? [] {
-                log("voice row: \(row.name) id=\(row.exercise ?? "nil") sets=\(row.sets ?? -1) reps=\(row.reps ?? -1) kg=\(row.weightKg.map { String($0) } ?? "nil") sec=\(row.seconds ?? -1) vest=\(row.load.map { String($0.kg) } ?? "nil")")
+                log("voice row: \(row.name) id=\(row.exercise ?? "nil") sets=\(row.sets ?? -1) reps=\(row.reps ?? -1) kg=\(row.weightKg.map { String($0) } ?? "nil") x\(row.implements ?? 1) sec=\(row.seconds ?? -1) vest=\(row.load.map { String($0.kg) } ?? "nil")")
             }
             log("voice: setLog=\(item.metricsData?.setLog?.count ?? 0) entries")
             if env["PITAYA_SMOKE_NOSAVE"] == "1" {

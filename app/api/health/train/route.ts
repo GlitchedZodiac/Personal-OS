@@ -19,6 +19,7 @@ import { volumeTrendPct } from "@/lib/format-training";
 import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
 import { tonnageByMovement } from "@/lib/strength-history";
+import { weightLabel } from "@/lib/set-log";
 import { getMovementHistoriesCached } from "@/lib/strength-history-db";
 
 const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -264,7 +265,7 @@ export async function GET(request: NextRequest) {
                 ? `${sets} × ${clock(seconds)}`
                 : clock(seconds)
               : null,
-          weight ? `${weight} kg` : null,
+          weight ? weightLabel(weight, raw) : null,
           load?.type === "vest" && typeof load.kg === "number" ? `vest ${load.kg} kg` : null,
         ].filter(Boolean);
         const workSeconds = stepSeconds?.[i];

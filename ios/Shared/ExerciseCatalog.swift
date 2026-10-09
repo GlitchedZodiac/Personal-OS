@@ -1,6 +1,6 @@
 // GENERATED from lib/exercises.ts — do not edit by hand.
 // Regenerate with: node ios/scripts/gen-catalog.mjs
-// 48 exercises, categories: kettlebell, barbell, dumbbell, bodyweight, machine, cardio.
+// 49 exercises, categories: kettlebell, barbell, dumbbell, bodyweight, machine, cardio.
 
 import Foundation
 
@@ -43,6 +43,7 @@ public enum ExerciseCatalog {
         ExerciseDef(id: "kb-push-press", name: "Kettlebell Push Press", category: .kettlebell, aliases: ["push press", "envión"]),
         ExerciseDef(id: "kb-high-pull", name: "Kettlebell High Pull", category: .kettlebell, aliases: ["high pull", "high pulls"]),
         ExerciseDef(id: "kb-thruster", name: "Kettlebell Thruster", category: .kettlebell, aliases: ["thruster", "thrusters"]),
+        ExerciseDef(id: "kb-half-snatch", name: "Kettlebell Half Snatch", category: .kettlebell, aliases: ["half snatch", "half snatches"]),
         ExerciseDef(id: "bench-press", name: "Bench Press", category: .barbell, aliases: ["flat bench", "barbell bench press", "press de banca", "press banca"]),
         ExerciseDef(id: "incline-press", name: "Incline Press", category: .barbell, aliases: ["incline bench", "incline bench press", "press inclinado"]),
         ExerciseDef(id: "back-squat", name: "Squat", category: .barbell, aliases: ["barbell squat", "back squat", "squats", "sentadilla", "sentadillas"]),

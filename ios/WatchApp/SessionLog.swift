@@ -61,7 +61,14 @@ struct VoiceEntryState: Identifiable, Equatable, Sendable {
         case queued
         /// Recognised nothing usable.
         case failed
+        /// He took it back. Kept — greyed in the log, sent with the workout
+        /// marked "undone", counted nowhere — so the record of what was said
+        /// and what was made of it stays whole.
+        case undone
     }
+
+    /// Counts toward the workout.
+    var counted: Bool { status == .ok || status == .review }
 
     let id: String
     /// Elapsed seconds into the workout when he said it.
@@ -83,6 +90,19 @@ struct VoiceEntryState: Identifiable, Equatable, Sendable {
         case .queued: return ["Saved · adds when online"]
         case .failed: return ["Didn't catch that"]
         case .ok, .review: return parsed.map(\.display)
+        case .undone: return parsed.isEmpty ? ["Taken back"] : parsed.map(\.display)
+        }
+    }
+
+    /// Why the server was unsure, in words he can act on mid-set.
+    static func reasonText(_ reason: String?) -> String? {
+        switch reason {
+        case "new_exercise": return "new movement"
+        case "low_match": return "not sure which movement"
+        case "no_quantity": return "no reps or time heard"
+        case "ambiguous_weight": return "weight unclear"
+        case "unparsed": return "couldn't read it"
+        default: return nil
         }
     }
 }
@@ -116,6 +136,25 @@ enum SetLog {
                     status: "failed", name: "Voice entry",
                     transcript: entry.transcript
                 ))
+            case .undone:
+                // Taken back: sent as it was heard, marked so it counts for
+                // nothing (lib/set-log.ts countedEntries).
+                if entry.parsed.isEmpty {
+                    out.append(SetLogEntryPayload(
+                        id: entry.id, t: entry.t, at: entry.at, source: "voice",
+                        status: "undone", name: "Voice entry",
+                        transcript: entry.transcript
+                    ))
+                }
+                for (index, parsed) in entry.parsed.enumerated() {
+                    var undone = logEntry(
+                        id: index == 0 ? entry.id : "\(entry.id)#\(index + 1)",
+                        t: entry.t, at: entry.at, parsed: parsed,
+                        transcript: entry.transcript
+                    )
+                    undone.status = "undone"
+                    out.append(undone)
+                }
             }
         }
         return out
@@ -142,7 +181,8 @@ enum SetLog {
             id: id, t: t, at: at, source: "voice",
             status: parsed.needsReview ? "review" : "ok",
             name: parsed.name, exercise: parsed.exercise, reps: parsed.reps,
-            sets: parsed.sets, weightKg: parsed.weightKg, seconds: parsed.seconds,
+            sets: parsed.sets, weightKg: parsed.weightKg,
+            implements: parsed.implements == 2 ? 2 : nil, seconds: parsed.seconds,
             perSide: parsed.perSide, load: parsed.load, transcript: transcript,
             confidence: parsed.confidence, reason: parsed.reason
         )
@@ -187,6 +227,7 @@ enum SetLog {
             var reps: Int?
             var seconds: Int?
             var weightKg: Double?
+            var implements: Int?
             var perSide: Bool
             var load: EntryLoad?
         }
@@ -196,7 +237,8 @@ enum SetLog {
             let sets = max(entry.sets ?? 1, 1)
             if var last = rows.last,
                last.key == key, last.reps == entry.reps, last.seconds == entry.seconds,
-               last.weightKg == entry.weightKg, last.perSide == (entry.perSide ?? false),
+               last.weightKg == entry.weightKg, last.implements == entry.implements,
+               last.perSide == (entry.perSide ?? false),
                last.load?.kg == entry.load?.kg {
                 last.sets += sets
                 rows[rows.count - 1] = last
@@ -204,6 +246,7 @@ enum SetLog {
                 rows.append(Row(
                     key: key, name: entry.name, exercise: entry.exercise, sets: sets,
                     reps: entry.reps, seconds: entry.seconds, weightKg: entry.weightKg,
+                    implements: entry.implements,
                     perSide: entry.perSide ?? false, load: entry.load
                 ))
             }
@@ -212,7 +255,7 @@ enum SetLog {
             ExerciseEntry(
                 name: $0.name, sets: $0.sets, reps: $0.reps, weightKg: $0.weightKg,
                 seconds: $0.seconds, exercise: $0.exercise, load: $0.load,
-                perSide: $0.perSide ? true : nil
+                perSide: $0.perSide ? true : nil, implements: $0.implements
             )
         }
     }

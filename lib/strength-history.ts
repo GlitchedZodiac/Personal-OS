@@ -9,6 +9,7 @@
 
 import { foldExerciseName, normalizeExerciseName } from "@/lib/exercises";
 import type { RawExercise } from "@/lib/prs";
+import { implementsOf } from "@/lib/set-log";
 
 export interface MovementSession {
   workoutId: string;
@@ -47,7 +48,7 @@ function entryVolume(e: RawExercise): number {
   if (!Number.isFinite(weight) || weight <= 0) return 0;
   if (!Number.isFinite(reps) || reps <= 0) return 0;
   const sets = Number(e.sets);
-  return weight * reps * (Number.isFinite(sets) && sets > 0 ? sets : 1);
+  return weight * reps * (Number.isFinite(sets) && sets > 0 ? sets : 1) * implementsOf(e);
 }
 
 /// Build the whole per-movement map from workout rows (any order).

@@ -43,6 +43,7 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
   { id: "kb-push-press", name: "Kettlebell Push Press", category: "kettlebell", aliases: ["push press", "envión"] },
   { id: "kb-high-pull", name: "Kettlebell High Pull", category: "kettlebell", aliases: ["high pull", "high pulls"] },
   { id: "kb-thruster", name: "Kettlebell Thruster", category: "kettlebell", aliases: ["thruster", "thrusters"] },
+  { id: "kb-half-snatch", name: "Kettlebell Half Snatch", category: "kettlebell", aliases: ["half snatch", "half snatches"] },
 
   // ── Barbell / big lifts ───────────────────────────────────────────────
   { id: "bench-press", name: "Bench Press", category: "barbell", aliases: ["flat bench", "barbell bench press", "press de banca", "press banca"] },

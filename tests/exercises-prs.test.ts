@@ -6,7 +6,7 @@ import {
   findExerciseByExactName,
   slugifyExerciseName,
 } from "@/lib/exercises";
-import { extractPRCandidates } from "@/lib/prs";
+import { extractPRCandidates, sessionVolumeKg } from "@/lib/prs";
 
 describe("normalizeExerciseName", () => {
   it("maps kettlebell vocabulary from voice transcripts", () => {
@@ -149,5 +149,27 @@ describe("user-minted exercises in the shared index", () => {
     const weight = candidates.find((c) => c.kind === "weight");
     expect(weight?.exercise).toBe("one-arm-clean-squat-thruster");
     expect(weight?.value).toBe(20);
+  });
+});
+
+// 2026-10-09: two 16s are not a 32. The first voice-logged session summed
+// "16 kilograms on each side" and raised a 32 kg snatch record he never
+// lifted. weightKg is ONE implement; a pair doubles the tonnage only.
+describe("a pair of bells", () => {
+  const pair = [{ name: "Kettlebell Snatch", sets: 3, reps: 8, weightKg: 16, implements: 2 }];
+
+  it("the weight record is the bell, the volume is both of them", () => {
+    const candidates = extractPRCandidates(pair);
+    expect(candidates).toContainEqual(
+      expect.objectContaining({ exercise: "kb-snatch", kind: "weight", value: 16 })
+    );
+    expect(candidates).toContainEqual(
+      expect.objectContaining({ exercise: "kb-snatch", kind: "volume", value: 3 * 8 * 16 * 2 })
+    );
+  });
+
+  it("session tonnage counts both bells", () => {
+    expect(sessionVolumeKg(pair)).toBe(768);
+    expect(sessionVolumeKg([{ ...pair[0], implements: undefined }])).toBe(384);
   });
 });

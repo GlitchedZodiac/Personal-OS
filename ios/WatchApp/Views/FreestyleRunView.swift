@@ -154,13 +154,13 @@ struct FreestyleRunView: View {
                     .font(Theme.wText(5.5, weight: .bold))
                     .kerning(1)
                     .foregroundStyle(Theme.textTertiary)
-            } else if !model.voiceEntries.isEmpty {
-                // How much of the session he has already said.
-                Text("\(model.voiceEntries.count) LOGGED")
-                    .font(Theme.wText(5.5, weight: .bold))
-                    .kerning(1)
-                    .foregroundStyle(Theme.mint)
             }
+            // How much of the session he has already said — and the way in
+            // to read it back (2026-10-09: "a menu in the freestyle that
+            // shows the log so I can see how accurate it's been logging").
+            VoiceLogChip()
+                // Clear of the carousel's page dots on the right edge.
+                .padding(.trailing, 8)
         }
     }
 

@@ -19,6 +19,8 @@ import {
   formatJumpRopePR,
 } from "@/lib/jump-rope";
 import { mergeResync, withCanonicalIds } from "@/lib/workout-resync";
+import { isSetLog, type SetLogEntry } from "@/lib/set-log";
+import { linkVoiceClips } from "@/lib/voice-audit";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
 import {
   buildHeroMetrics,
@@ -102,6 +104,11 @@ export async function POST(request: NextRequest) {
     // Per-item PR results, keyed by externalId (or index when absent) so the
     // watch can celebrate server-confirmed records after sync.
     const prResults: Array<{ externalId: string | null; newPRs: NewPR[] }> = [];
+    const voiceLogs: Array<{
+      workoutLogId: string;
+      externalId: string | null;
+      setLog: SetLogEntry[];
+    }> = [];
 
     // Watch sends raw parallel streams (hrStream bpm + timeStream elapsed-s,
     // optional altitudeStream); the SERVER owns the analytics — same
@@ -338,6 +345,12 @@ export async function POST(request: NextRequest) {
         workoutId = entry.id;
       }
 
+      // The session's voice clips get tied to the row they ended up on.
+      const savedLog = (data.metricsData as { setLog?: unknown } | null)?.setLog;
+      if (isSetLog(savedLog)) {
+        voiceLogs.push({ workoutLogId: workoutId, externalId, setLog: savedLog });
+      }
+
       // Server-side PR detection — same engine as web logging, so wrist
       // sessions land in personal_records too. Never blocks the sync.
       try {
@@ -371,6 +384,7 @@ export async function POST(request: NextRequest) {
       }))
       .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
     after(async () => {
+      for (const log of voiceLogs) await linkVoiceClips(log);
       try {
         const timeZone = (await timeZonePromise) || "America/Bogota";
         if (newestSaved) {

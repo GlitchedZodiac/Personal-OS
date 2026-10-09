@@ -621,7 +621,7 @@ struct SummaryView: View {
                 .foregroundStyle(Theme.textTertiary)
             ForEach(entries.filter { $0.status == .ok || $0.status == .review }) { entry in
                 ForEach(Array(entry.lines.enumerated()), id: \.offset) { _, line in
-                    Text(line)
+                    Text(VoiceLogText.plain(line))
                         .font(Theme.wText(7.5, weight: .medium))
                         .foregroundStyle(entry.status == .review ? Theme.prText : Theme.textPrimary)
                         .lineLimit(2)

@@ -92,6 +92,8 @@ const vestOf = (e: Json) => {
       ? { load: { type: "vest" as const, kg: Math.round(kg * 10) / 10 } }
       : {}),
     ...(e.perSide === true ? { perSide: true } : {}),
+    // A pair of bells/dumbbells: weightKg stays the weight of ONE.
+    ...(e.implements === 2 ? { implements: 2 as const } : {}),
   };
 };
 
@@ -432,7 +434,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     def: {
       name: "log_workout",
       description:
-        "Log a completed workout. exercises entries: {name, sets?, reps?, seconds?, weightKg?, vestKg?, perSide?} — names normalize against the catalog; PRs detect automatically. For jump rope use workoutType 'jump_rope' with `rope` (the protocol) and no exercises — the movement row is built from it.",
+        "Log a completed workout. exercises entries: {name, sets?, reps?, seconds?, weightKg?, implements?, vestKg?, perSide?} — names normalize against the catalog; PRs detect automatically. weightKg is the weight of ONE implement: two 16 kg kettlebells is weightKg 16 with implements 2, never 32. For jump rope use workoutType 'jump_rope' with `rope` (the protocol) and no exercises — the movement row is built from it.",
       inputSchema: {
         type: "object",
         properties: {
@@ -473,6 +475,10 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
                 weightKg: { type: "number" },
                 vestKg: { type: "number", description: "Weighted vest worn for this movement, 1–40 kg" },
                 perSide: { type: "boolean" },
+                implements: {
+                  type: "number",
+                  description: "2 when the movement used a pair (two kettlebells or dumbbells); weightKg is then the weight of ONE of them",
+                },
               },
               required: ["name"],
             },
@@ -607,6 +613,10 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
                 weightKg: { type: "number" },
                 vestKg: { type: "number", description: "Weighted vest worn for this movement, 1–40 kg" },
                 perSide: { type: "boolean" },
+                implements: {
+                  type: "number",
+                  description: "2 when the movement used a pair (two kettlebells or dumbbells); weightKg is then the weight of ONE of them",
+                },
               },
               required: ["name"],
             },

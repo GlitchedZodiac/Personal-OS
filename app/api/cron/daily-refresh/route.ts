@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDateStringInTimeZone, getZonedDateParts } from "@/lib/timezone";
 import { getUserTimeZone } from "@/lib/server-timezone";
+import { pruneVoiceAudio } from "@/lib/voice-audit";
 
 const RUN_HOUR = 2;
 const RUN_WINDOW_MINUTES = 15;
@@ -107,6 +108,9 @@ export async function GET(request: NextRequest) {
         }),
       ]);
 
+    // Wrist voice recordings past their keep window (the text audit stays).
+    const voiceAudioPruned = await pruneVoiceAudio(now).catch(() => 0);
+
     const settingsData =
       (settingsRow?.data as Record<string, unknown> | null) ?? {};
     const existingCron =
@@ -146,6 +150,7 @@ export async function GET(request: NextRequest) {
       cleanup: {
         cacheDeleted: staleCacheDelete.count,
         remindersDeleted: staleReminderDelete.count,
+        voiceRecordingsPruned: voiceAudioPruned,
       },
     });
   } catch (error) {

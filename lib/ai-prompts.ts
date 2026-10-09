@@ -259,7 +259,15 @@ export const WORKOUT_LOG_FUNCTION = {
             name: { type: "string" as const, description: "Exercise name" },
             sets: { type: "number" as const, description: "Number of sets" },
             reps: { type: "number" as const, description: "Reps per set" },
-            weightKg: { type: "number" as const, description: "Weight in kg" },
+            weightKg: {
+              type: "number" as const,
+              description:
+                "Weight of ONE implement in kg. Two 16 kg kettlebells is 16 with implements 2 — never 32.",
+            },
+            implements: {
+              type: "number" as const,
+              description: "2 when a pair of bells/dumbbells was used; omit for one",
+            },
           },
           required: ["name"],
         },
@@ -936,7 +944,11 @@ const EDIT_WORKOUT_ENTRY = {
             sets: { type: "number" as const },
             reps: { type: "number" as const },
             seconds: { type: "number" as const },
-            weightKg: { type: "number" as const },
+            weightKg: {
+              type: "number" as const,
+              description: "Weight of ONE implement; a pair of 16s is 16 with implements 2",
+            },
+            implements: { type: "number" as const, description: "2 for a pair; omit for one" },
           },
           required: ["name"],
           additionalProperties: false,

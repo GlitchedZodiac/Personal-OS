@@ -186,6 +186,21 @@ export const REGISTRY: readonly DatasetSpec[] = [
     search: ["name", "slug"],
   },
   {
+    key: "voice_log_audit",
+    kind: "table",
+    summary: "Watch voice-log clips: what he said vs what was logged.",
+    model: "voiceClip",
+    // The recording lives on VoiceClipAudio, which is excluded outright.
+    fields: [
+      "id", "entryId", "createdAt", "workoutLogId", "workoutKind", "elapsedSeconds",
+      "transcript", "parser", "entries", "outcome", "audioSeconds", "appBuild",
+    ],
+    detailFields: ["rulesResult", "llmRaw", "context", "ms", "transcribeModel"],
+    dateField: "createdAt",
+    orderBy: { createdAt: "desc" },
+    search: ["transcript"],
+  },
+  {
     key: "workout_plans",
     kind: "table",
     summary: "Multi-day training programs and whether they are active.",
@@ -532,7 +547,7 @@ export function buildCatalog(): string {
 export const EXCLUDED_MODELS = [
   "financeVaultSecret", "integrationSecret", "stravaToken", "authCredential",
   "deviceSession", "pushSubscription", "pushDevice", "googleMailboxConnection",
-  "recordingSegment", "esvPassage", "chatMessage", "chatConversation", "aIConversation",
+  "recordingSegment", "voiceClipAudio", "esvPassage", "chatMessage", "chatConversation", "aIConversation",
   "aIInsightCache", "aIUsageEvent", "financeSignal", "financeRule",
   "financeLearningEvent", "transactionChangeLog", "financeReviewItem",
   "financeSource", "financePrioritySource", "financeDocument",

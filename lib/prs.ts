@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
 import { JUMP_ROPE_TYPE, jumpRopePRCandidates } from "@/lib/jump-rope";
+import { implementsOf } from "@/lib/set-log";
 
 // Personal-record detection for strength work — kettlebell-first, but any
 // exercise with a weight qualifies. Two record kinds keep it unambiguous:
@@ -62,7 +63,10 @@ export function extractPRCandidates(exercises: unknown): PRCandidate[] {
 
     const sets = toNum(raw.sets);
     const reps = toNum(raw.reps);
-    const volume = sets != null && reps != null ? sets * reps * weight : null;
+    // Tonnage counts both bells of a pair; the weight record below does not
+    // — two 16s are not a 32 (the false "32 kg snatch" record of 2026-10-08).
+    const volume =
+      sets != null && reps != null ? sets * reps * weight * implementsOf(raw) : null;
 
     const entry = best.get(def.id) ?? { name: def.name, weight: 0, volume: 0 };
     entry.weight = Math.max(entry.weight, weight);
@@ -104,7 +108,7 @@ export function sessionVolumeKg(exercises: unknown): number {
     const weight = toNum(raw.weightKg) ?? toNum(raw.weight);
     const reps = toNum(raw.reps);
     if (weight == null || reps == null) continue;
-    total += (toNum(raw.sets) ?? 1) * reps * weight;
+    total += (toNum(raw.sets) ?? 1) * reps * weight * implementsOf(raw);
   }
   return Math.round(total);
 }

@@ -71,11 +71,13 @@ public struct ExerciseEntry: Codable, Hashable, Sendable {
     public let exercise: String?
     public let load: EntryLoad?
     public let perSide: Bool?
+    /// 2 when he used a pair (two bells). `weightKg` is always ONE implement.
+    public let implements: Int?
 
     public init(
         name: String, sets: Int?, reps: Int?, weightKg: Double?,
         seconds: Int? = nil, exercise: String? = nil,
-        load: EntryLoad? = nil, perSide: Bool? = nil
+        load: EntryLoad? = nil, perSide: Bool? = nil, implements: Int? = nil
     ) {
         self.name = name
         self.sets = sets
@@ -85,10 +87,11 @@ public struct ExerciseEntry: Codable, Hashable, Sendable {
         self.exercise = exercise
         self.load = load
         self.perSide = perSide
+        self.implements = implements
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, sets, reps, weightKg, seconds, exercise, load, perSide
+        case name, sets, reps, weightKg, seconds, exercise, load, perSide, implements
     }
 
     // Web-written values are occasionally strings ("20") — accept both.
@@ -102,6 +105,7 @@ public struct ExerciseEntry: Codable, Hashable, Sendable {
         exercise = (try? c.decodeIfPresent(String.self, forKey: .exercise)) ?? nil
         load = (try? c.decodeIfPresent(EntryLoad.self, forKey: .load)) ?? nil
         perSide = (try? c.decodeIfPresent(Bool.self, forKey: .perSide)) ?? nil
+        implements = Self.flexibleInt(c, .implements)
     }
 
     private static func flexibleDouble(
@@ -662,6 +666,8 @@ public struct SetLogEntryPayload: Codable, Hashable, Identifiable, Sendable {
     public var reps: Int?
     public var sets: Int?
     public var weightKg: Double?
+    /// 2 when he used a pair. `weightKg` is always ONE implement.
+    public var implements: Int?
     public var seconds: Int?
     public var perSide: Bool?
     public var load: EntryLoad?
@@ -672,7 +678,8 @@ public struct SetLogEntryPayload: Codable, Hashable, Identifiable, Sendable {
     public init(
         id: String, t: Int, at: Date, source: String, status: String, name: String,
         exercise: String? = nil, reps: Int? = nil, sets: Int? = nil,
-        weightKg: Double? = nil, seconds: Int? = nil, perSide: Bool? = nil,
+        weightKg: Double? = nil, implements: Int? = nil,
+        seconds: Int? = nil, perSide: Bool? = nil,
         load: EntryLoad? = nil, transcript: String? = nil,
         confidence: Double? = nil, reason: String? = nil
     ) {
@@ -686,6 +693,7 @@ public struct SetLogEntryPayload: Codable, Hashable, Identifiable, Sendable {
         self.reps = reps
         self.sets = sets
         self.weightKg = weightKg
+        self.implements = implements
         self.seconds = seconds
         self.perSide = perSide
         self.load = load
@@ -823,18 +831,76 @@ public extension WorkoutSyncItem {
 
 // MARK: - Wrist voice logging (POST /api/mobile/voice/workout-entry)
 
+/// The entry logged just before a clip — lets "another 8" or "same again"
+/// mean something (lib/voice-entry-parser.ts VoicePrevious).
+public struct VoicePreviousPayload: Codable, Hashable, Sendable {
+    public let name: String
+    public let exercise: String?
+    public let reps: Int?
+    public let sets: Int?
+    public let seconds: Int?
+    public let weightKg: Double?
+    public let implements: Int?
+    public let perSide: Bool?
+    public let load: EntryLoad?
+
+    public init(_ entry: ParsedVoiceEntryPayload) {
+        name = entry.name
+        exercise = entry.exercise
+        reps = entry.reps
+        sets = entry.sets
+        seconds = entry.seconds
+        weightKg = entry.weightKg
+        implements = entry.implements
+        perSide = entry.perSide
+        load = entry.load
+    }
+}
+
+/// What the server is told about the session a clip belongs to. The parser
+/// uses `bells` and `previous`; the rest is for the audit trail
+/// (lib/voice-audit.ts), which keeps every clip with what was made of it.
+public struct VoiceEntryContext: Codable, Hashable, Sendable {
+    /// The session's id — the saved workout's externalId.
+    public let workoutId: String?
+    /// Elapsed seconds into the session when he spoke.
+    public let t: Int?
+    public let kind: String?
+    public let build: String?
+    /// Kettlebells on his rack (kg); empty rack = not sent.
+    public let bells: [Int]?
+    public let previous: VoicePreviousPayload?
+
+    public init(
+        workoutId: String?, t: Int?, kind: String?, build: String?,
+        bells: [Int]?, previous: VoicePreviousPayload?
+    ) {
+        self.workoutId = workoutId
+        self.t = t
+        self.kind = kind
+        self.build = build
+        self.bells = bells
+        self.previous = previous
+    }
+}
+
 public struct VoiceEntryRequest: Codable, Sendable {
     public let entryId: String
     public let audioBase64: String?
     public let mime: String?
     /// DEBUG smoke only — skips recognition server-side.
     public let transcript: String?
+    public let context: VoiceEntryContext?
 
-    public init(entryId: String, audioBase64: String?, mime: String? = "audio/m4a", transcript: String? = nil) {
+    public init(
+        entryId: String, audioBase64: String?, mime: String? = "audio/m4a",
+        transcript: String? = nil, context: VoiceEntryContext? = nil
+    ) {
         self.entryId = entryId
         self.audioBase64 = audioBase64
         self.mime = mime
         self.transcript = transcript
+        self.context = context
     }
 }
 
@@ -845,7 +911,10 @@ public struct ParsedVoiceEntryPayload: Codable, Hashable, Sendable {
     public let exercise: String?
     public let reps: Int?
     public let sets: Int?
+    /// Weight of ONE implement.
     public let weightKg: Double?
+    /// 2 when he used a pair ("16 kilos on each side").
+    public let implements: Int?
     public let seconds: Int?
     public let perSide: Bool?
     public let load: EntryLoad?

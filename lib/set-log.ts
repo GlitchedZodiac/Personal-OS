@@ -22,7 +22,10 @@ export interface SetLogEntry {
   exercise?: string;
   reps?: number;
   sets?: number;
+  /** Weight of ONE implement. */
   weightKg?: number;
+  /** 2 when he used a pair (two bells, "16 kilos on each side"). Absent = one. */
+  implements?: 2;
   seconds?: number;
   perSide?: boolean;
   load?: { type: "vest"; kg: number; assumed?: boolean };
@@ -40,13 +43,32 @@ export interface ComposedExercise {
   reps?: number;
   seconds?: number;
   weightKg?: number;
+  implements?: 2;
   perSide?: boolean;
   load?: { type: "vest"; kg: number; assumed?: boolean };
 }
 
+/**
+ * How many implements a row was done with. `weightKg` is always the weight
+ * of ONE — a pair of 16s is { weightKg: 16, implements: 2 }, the way he says
+ * it and the way a bell is labelled. Tonnage multiplies by this; a weight
+ * record does not (the record is the heaviest bell he has moved).
+ */
+export function implementsOf(row: unknown): 1 | 2 {
+  return row != null && typeof row === "object" && (row as { implements?: unknown }).implements === 2
+    ? 2
+    : 1;
+}
+
+/** "2×16 kg" for a pair, "16 kg" for one. */
+export function weightLabel(weightKg: number, row?: unknown): string {
+  const kg = Math.round(weightKg * 10) / 10;
+  return implementsOf(row) === 2 ? `2×${kg} kg` : `${kg} kg`;
+}
+
 const elapsed = (entry: SetLogEntry) => (Number.isFinite(entry.t) ? entry.t : 0);
 
-/** Entries that count toward the workout: status ok or review. */
+/** Entries that count toward the workout: status ok or review. An entry he took back on the wrist ("undone") stays in the log for the audit and counts for nothing. */
 export function countedEntries(log: SetLogEntry[]): SetLogEntry[] {
   return log.filter((entry) => entry.status === "ok" || entry.status === "review");
 }
@@ -78,6 +100,7 @@ function mergeKey(entry: SetLogEntry): string {
     entry.reps ?? "",
     entry.seconds ?? "",
     entry.weightKg ?? "",
+    entry.implements === 2 ? "pair" : "",
     entry.perSide ? "side" : "",
     entry.load ? entry.load.kg : "", // `assumed` is not part of the identity
   ].join("|");
@@ -108,6 +131,7 @@ export function composeExercises(log: SetLogEntry[]): ComposedExercise[] {
     if (entry.reps != null) row.reps = entry.reps;
     if (entry.seconds != null) row.seconds = entry.seconds;
     if (entry.weightKg != null) row.weightKg = entry.weightKg;
+    if (entry.implements === 2) row.implements = 2;
     if (entry.perSide) row.perSide = true;
     if (entry.load) {
       row.load = { type: "vest", kg: entry.load.kg };
