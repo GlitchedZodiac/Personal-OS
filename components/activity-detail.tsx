@@ -95,6 +95,8 @@ export interface ActivityDetailData {
     /// A worn vest — shown beside the weight, never added to it.
     load: VestLoad | null;
     perSide: boolean;
+    /// 2 = a pair of bells/dumbbells; weightKg is then the weight of ONE.
+    implements: number;
   }[];
   /// Jump rope (2026-10-05): interval analysis, this session's records and
   /// every session on the same protocol. Null on every other type.
@@ -106,6 +108,9 @@ export interface ActivityDetailData {
   /// The wrist's per-entry log (voice + taps), and the entries not counted.
   setLog: SetLogEntry[] | null;
   setLogPending: SetLogEntry[];
+  setLogUndone: SetLogEntry[];
+  /// Clip ids (set-log entry ids without the "#n") whose recording is kept.
+  recordedEntryIds: string[];
   setLogReviewedAt: string | null;
   lateEntryIds: string[];
   exercisesEditedAt: string | null;
@@ -176,6 +181,8 @@ type EditRow = {
   // used to vanish the moment a neighbouring row was corrected).
   load?: VestLoad | null;
   perSide?: boolean;
+  /** 2 = a pair of bells; the kg box holds the weight of ONE. */
+  implements?: number;
 };
 
 function MovementEditor({
@@ -198,6 +205,7 @@ function MovementEditor({
     seconds: e.seconds != null ? String(e.seconds) : "",
     load: e.load,
     perSide: e.perSide,
+    implements: e.implements,
   });
   const [rows, setRows] = useState<EditRow[]>([]);
 
@@ -237,6 +245,7 @@ function MovementEditor({
           : {}),
         ...(r.load ? { load: r.load } : {}),
         ...(r.perSide ? { perSide: true } : {}),
+        ...(r.implements === 2 ? { implements: 2 } : {}),
       }));
     if (exercises.length === 0) {
       toast.error("Name at least one movement");
@@ -272,7 +281,7 @@ function MovementEditor({
   return (
     <div className="mt-3 rounded-[18px] bg-white p-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">
       <div className="mb-2 text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
-        MOVEMENTS · SETS × REPS · SEC · KG
+        MOVEMENTS · SETS × REPS · SEC · KG · ×2 = A PAIR
       </div>
       <datalist id="pitaya-exercise-names">
         {names.map((n) => (
@@ -280,49 +289,73 @@ function MovementEditor({
         ))}
       </datalist>
       {rows.map((r, i) => (
-        <div key={i} className="mb-2 flex items-center gap-1.5">
+        // Two lines a movement since the ×2 toggle arrived (2026-10-09): on
+        // one line the name box was squeezed to two letters on a phone.
+        <div key={i} className="mb-3">
           <input
             list="pitaya-exercise-names"
             value={r.name}
             onChange={(e) => setField(i, "name", e.target.value)}
             placeholder="Movement"
-            className="min-w-0 flex-1 rounded-[10px] border border-[#E3E1E5] px-2.5 py-2 text-[13px]"
+            className="mb-1.5 w-full rounded-[10px] border border-[#E3E1E5] px-2.5 py-2 text-[13px]"
           />
+          <div className="flex items-center gap-1.5">
           <input
             value={r.sets}
             onChange={(e) => setField(i, "sets", e.target.value)}
             placeholder="sets"
             inputMode="numeric"
-            className="w-10 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
+            className="min-w-0 flex-1 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
           />
           <input
             value={r.reps}
             onChange={(e) => setField(i, "reps", e.target.value)}
             placeholder="reps"
             inputMode="numeric"
-            className="w-10 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
+            className="min-w-0 flex-1 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
           />
           <input
             value={r.seconds}
             onChange={(e) => setField(i, "seconds", e.target.value)}
             placeholder="sec"
             inputMode="numeric"
-            className="w-11 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
+            className="min-w-0 flex-1 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
           />
           <input
             value={r.weightKg}
             onChange={(e) => setField(i, "weightKg", e.target.value)}
             placeholder="kg"
             inputMode="decimal"
-            className="w-12 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
+            className="min-w-0 flex-1 rounded-[10px] border border-[#E3E1E5] px-1 py-2 text-center text-[13px] tabular-nums"
           />
+          {/* A pair of bells: the kg box stays the weight of ONE of them. */}
+          <button
+            type="button"
+            onClick={() =>
+              setRows((rs) =>
+                rs.map((row, j) =>
+                  j === i ? { ...row, implements: row.implements === 2 ? 1 : 2 } : row
+                )
+              )
+            }
+            aria-pressed={r.implements === 2}
+            aria-label={r.implements === 2 ? "A pair — tap for one" : "One — tap for a pair"}
+            className={`h-8 w-8 flex-none rounded-[10px] border text-[11.5px] font-semibold tabular-nums ${
+              r.implements === 2
+                ? "border-[#8C2F51] bg-[#F6E3EB] text-[#8C2F51]"
+                : "border-[#E3E1E5] bg-white text-[#B0AEB4]"
+            }`}
+          >
+            ×2
+          </button>
           <button
             onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
-            className="flex h-8 w-6 flex-none items-center justify-center rounded-full text-[#B4536F]"
+            className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[#B4536F]"
             aria-label="Remove row"
           >
             ×
           </button>
+          </div>
         </div>
       ))}
       <div className="mt-1 flex items-center justify-between">
@@ -1039,6 +1072,8 @@ export default function ActivityDetail({
             id={det.id}
             entries={det.setLog ?? []}
             pending={det.setLogPending}
+            undone={det.setLogUndone ?? []}
+            recorded={det.recordedEntryIds ?? []}
             exercises={det.exercises}
             lateEntryIds={det.lateEntryIds}
             reviewed={det.setLogReviewedAt != null || det.exercisesEditedAt != null}

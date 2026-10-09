@@ -1318,6 +1318,61 @@ model Sequence {
   @@map("sequences")
 }
 
+// ── Wrist voice logging: the audit trail (2026-10-09) ────────────────
+// His ask after the first real session: "store the audit trail of what it is
+// I log when I say it … so you can cross-reference it to what it actually
+// looked like and how it's stored." One row per clip the watch posts, written
+// whether or not the entry survives: what the recogniser heard, what each
+// parser made of it, what the wrist was shown, and — once the workout syncs —
+// what became of it. The parser is tuned from these rows, not from guesses.
+model VoiceClip {
+  id                String   @id @default(uuid())
+  // The watch's entry UUID — the same id the entry carries in the workout's
+  // metricsData.setLog ("<id>", "<id>#2" … for a clip naming several moves).
+  entryId           String?
+  createdAt         DateTime @default(now())
+  // Session context the watch sends with the clip.
+  workoutExternalId String? // the watch's session UUID = WorkoutLog.externalId once saved
+  workoutLogId      String? // filled at sync
+  workoutKind       String?
+  elapsedSeconds    Int?
+  appBuild          String?
+  // Recognition.
+  transcript        String
+  transcribeModel   String?
+  audioSeconds      Float?
+  audioSizeBytes    Int?
+  // Parsing: which parser answered, and what each one said.
+  parser            String // rules | llm | rules-fallback | none
+  rulesResult       Json? // { entries, confident, normalized }
+  llmRaw            String? // the model's raw JSON answer, when it was asked
+  entries           Json // final entries, exactly as the wrist received them
+  context           Json? // { bells, previous } — what the parser was told
+  ms                Json? // { transcribe, parse, total }
+  // What became of it, stamped when the workout arrives:
+  // ok | review | undone | failed | dropped (never reached the saved log).
+  outcome           String?
+  audio             VoiceClipAudio?
+
+  @@index([createdAt])
+  @@index([entryId])
+  @@index([workoutExternalId])
+  @@index([workoutLogId])
+  @@map("voice_clips")
+}
+
+// The recording itself, apart from the text so that reading the audit never
+// drags audio along. ~25 KB a clip (16 kHz mono AAC). Pruned after
+// VOICE_AUDIO_KEEP_DAYS by the daily cron; the text row is kept.
+model VoiceClipAudio {
+  clipId   String    @id
+  clip     VoiceClip @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  mimeType String
+  bytes    Bytes
+
+  @@map("voice_clip_audio")
+}
+
 model UserExercise {
   id        String   @id @default(uuid())
   slug      String   @unique // canonical id (slugified name) — joins the catalog id namespace

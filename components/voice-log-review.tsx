@@ -10,10 +10,15 @@
 // not in the vocabulary yet (offered as a new exercise — never dropped),
 // and an entry whose audio reached the server only after he had already
 // edited the list.
+//
+// 2026-10-09: each entry can be PLAYED BACK. The recording is kept with the
+// audit trail (lib/voice-audit.ts), so "is that what I said?" has an answer —
+// the first real session heard "sixteen" as "60" and nothing could prove it.
+// Entries he took back on the wrist are listed too, struck through.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { SetLogEntry } from "@/lib/set-log";
+import { weightLabel, type SetLogEntry } from "@/lib/set-log";
 
 const CATEGORIES = ["kettlebell", "bodyweight", "dumbbell", "barbell", "machine", "cardio", "other"];
 
@@ -26,6 +31,7 @@ type Row = {
   weightKg: number | null;
   load: { type: "vest"; kg: number; assumed?: boolean } | null;
   perSide: boolean;
+  implements?: number;
 };
 
 function clock(seconds: number) {
@@ -44,7 +50,7 @@ function entryLine(e: SetLogEntry) {
       : "";
   return [
     `${e.name}${dose ? ` ${dose}` : ""}`,
-    e.weightKg ? `${e.weightKg} kg` : null,
+    e.weightKg ? weightLabel(e.weightKg, e) : null,
     e.load ? `vest ${e.load.kg} kg${e.load.assumed ? " (assumed)" : ""}` : null,
   ]
     .filter(Boolean)
@@ -71,6 +77,39 @@ async function patchEntry(body: Record<string, unknown>) {
   }
 }
 
+/** Play what he actually said. One clip at a time; tap again to stop. */
+function PlayClip({ entryId }: { entryId: string }) {
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => () => audio.current?.pause(), []);
+  const toggle = () => {
+    if (playing) {
+      audio.current?.pause();
+      setPlaying(false);
+      return;
+    }
+    const el = new Audio(`/api/health/voice-audit/clip?entryId=${encodeURIComponent(entryId)}`);
+    audio.current = el;
+    el.onended = () => setPlaying(false);
+    el.onerror = () => {
+      setPlaying(false);
+      toast.error("Couldn't play that recording");
+    };
+    setPlaying(true);
+    el.play().catch(() => setPlaying(false));
+  };
+  return (
+    <button
+      onClick={toggle}
+      aria-label={playing ? "Stop the recording" : "Play what I said"}
+      className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-[#E3E1E5] bg-white px-2.5 py-1 text-[10.5px] font-semibold text-[#66646C] hover:bg-[#FAFAFA]"
+    >
+      <span aria-hidden className="text-[9px]">{playing ? "■" : "▶"}</span>
+      {playing ? "Stop" : "Hear it"}
+    </button>
+  );
+}
+
 function Badge({ text, tone }: { text: string; tone: "check" | "new" | "wait" | "late" }) {
   const c = {
     check: ["#FBF1DC", "#9A6B12"],
@@ -92,6 +131,8 @@ export function VoiceLogReview({
   id,
   entries,
   pending,
+  undone = [],
+  recorded = [],
   exercises,
   lateEntryIds,
   reviewed,
@@ -100,6 +141,10 @@ export function VoiceLogReview({
   id: string;
   entries: SetLogEntry[];
   pending: SetLogEntry[];
+  /** Entries he took back on the wrist. */
+  undone?: SetLogEntry[];
+  /** Clip ids whose recording is kept. */
+  recorded?: string[];
   exercises: Row[];
   lateEntryIds: string[];
   reviewed: boolean;
@@ -109,7 +154,12 @@ export function VoiceLogReview({
   const [category, setCategory] = useState<Record<string, string>>({});
 
   const voice = entries.filter((e) => e.source === "voice");
-  if (voice.length === 0 && pending.length === 0) return null;
+  const takenBack = undone.filter((e) => e.source === "voice");
+  if (voice.length === 0 && pending.length === 0 && takenBack.length === 0) return null;
+  const hasClip = new Set(recorded);
+  // One recording can hold several movements — offer it once, on the first.
+  const clipOf = (entryId: string) => entryId.split("#")[0];
+  const playable = (e: SetLogEntry) => hasClip.has(clipOf(e.id)) && e.id === clipOf(e.id);
 
   const late = new Set(lateEntryIds);
   // A movement is "new" while its row in the list still has no id.
@@ -175,6 +225,7 @@ export function VoiceLogReview({
               ...(r.weightKg != null ? { weightKg: r.weightKg } : {}),
               ...(r.load ? { load: r.load } : {}),
               ...(r.perSide ? { perSide: true } : {}),
+              ...(r.implements === 2 ? { implements: 2 } : {}),
             })),
             {
               name: e.name,
@@ -184,6 +235,7 @@ export function VoiceLogReview({
               ...(e.weightKg != null ? { weightKg: e.weightKg } : {}),
               ...(e.load ? { load: e.load } : {}),
               ...(e.perSide ? { perSide: true } : {}),
+              ...(e.implements === 2 ? { implements: 2 } : {}),
             },
           ],
         }),
@@ -230,6 +282,7 @@ export function VoiceLogReview({
                     ? ` · ${REASON[e.reason] ?? e.reason}`
                     : ""}
                 </div>
+                {playable(e) && <PlayClip entryId={e.id} />}
                 {isLate && (
                   <button
                     onClick={() => addLate(e)}
@@ -252,6 +305,25 @@ export function VoiceLogReview({
             </div>
           );
         })}
+        {takenBack.map((e) => (
+          <div key={e.id} className="flex items-start gap-2.5 opacity-70">
+            <div className="w-10 flex-none pt-0.5 text-[11px] text-muted-foreground tabular-nums">
+              {clock(e.t)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-semibold text-muted-foreground line-through">
+                {entryLine(e)}
+              </div>
+              {e.transcript && (
+                <div className="mt-0.5 text-[11px] leading-[1.4] text-muted-foreground">
+                  &ldquo;{e.transcript}&rdquo;
+                </div>
+              )}
+              {playable(e) && <PlayClip entryId={e.id} />}
+            </div>
+            <Badge text="TAKEN BACK" tone="wait" />
+          </div>
+        ))}
         {pending.map((e) => (
           <div key={e.id} className="flex items-start gap-2.5">
             <div className="w-10 flex-none pt-0.5 text-[11px] text-muted-foreground tabular-nums">

@@ -15,7 +15,7 @@ import {
   groupByProtocol,
   readIntervals,
 } from "@/lib/jump-rope";
-import { isSetLog, withGaps } from "@/lib/set-log";
+import { implementsOf, isSetLog, weightLabel, withGaps } from "@/lib/set-log";
 
 // GET ?id= — everything the activity detail screen shows (design 2026-08-11
 // rev): stats, per-movement segments with time-vs-last-run comparison,
@@ -25,6 +25,7 @@ type LoadedExercise = RawExercise & {
   seconds?: number | string;
   exercise?: string;
   perSide?: boolean;
+  implements?: number;
   load?: { type?: string; kg?: number; assumed?: boolean };
 };
 
@@ -53,7 +54,7 @@ function segSub(e: LoadedExercise): string {
       : null;
   const vest =
     e.load?.type === "vest" && typeof e.load.kg === "number" ? `vest ${e.load.kg} kg` : null;
-  return [dose, weight ? `${weight} kg` : null, vest].filter(Boolean).join(" · ");
+  return [dose, weight ? weightLabel(weight, e) : null, vest].filter(Boolean).join(" · ");
 }
 
 export async function GET(request: NextRequest) {
@@ -162,6 +163,17 @@ export async function GET(request: NextRequest) {
     // previous entry stamped on each — the review card reads this.
     const setLog = isSetLog(m.setLog) ? withGaps(m.setLog) : null;
     const rawLog = isSetLog(m.setLog) ? m.setLog : null;
+    // Which of those entries still have their recording (the audit trail,
+    // lib/voice-audit.ts) — the card offers playback only where one exists.
+    const clipRows = rawLog
+      ? await prisma.voiceClip.findMany({
+          where: { workoutLogId: w.id, audio: { isNot: null } },
+          select: { entryId: true },
+        })
+      : [];
+    const recordedEntryIds = clipRows
+      .map((c) => c.entryId)
+      .filter((v): v is string => typeof v === "string");
 
     // Display-side half of the freestyle-integrity guard: rows written by
     // pre-2026-08-28 watch builds can still carry a leaked trail — a
@@ -353,6 +365,7 @@ export async function GET(request: NextRequest) {
             ? { type: "vest" as const, kg: e.load.kg, ...(e.load.assumed ? { assumed: true } : {}) }
             : null,
         perSide: e.perSide === true,
+        implements: implementsOf(e),
       })),
       rope,
       ropeRecords,
@@ -362,6 +375,9 @@ export async function GET(request: NextRequest) {
       setLogPending: rawLog
         ? rawLog.filter((e) => e.status === "queued" || e.status === "failed")
         : [],
+      // Entries he took back on the wrist — kept for the record, counted nowhere.
+      setLogUndone: rawLog ? rawLog.filter((e) => e.status === "undone") : [],
+      recordedEntryIds,
       setLogReviewedAt: typeof m.setLogReviewedAt === "string" ? m.setLogReviewedAt : null,
       lateEntryIds: Array.isArray(m.lateEntryIds) ? m.lateEntryIds : [],
       exercisesEditedAt: m.exercisesEditedAt ?? null,

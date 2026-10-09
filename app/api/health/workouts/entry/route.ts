@@ -58,6 +58,7 @@ export async function PATCH(request: NextRequest) {
         weightKg?: unknown;
         load?: unknown;
         perSide?: unknown;
+        implements?: unknown;
       }[];
       packKg?: unknown;
       renormalize?: unknown;
@@ -189,6 +190,7 @@ export async function PATCH(request: NextRequest) {
             ...(numOrZero(e.weightKg) !== undefined ? { weightKg: numOrZero(e.weightKg) } : {}),
             ...(readLoad(e.load) ? { load: readLoad(e.load) } : {}),
             ...(e.perSide === true ? { perSide: true } : {}),
+            ...(e.implements === 2 ? { implements: 2 as const } : {}),
           };
         })
         .filter((e): e is NonNullable<typeof e> => e !== null);

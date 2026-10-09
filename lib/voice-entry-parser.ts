@@ -6,9 +6,13 @@
 //   - anything shaky is kept but flagged (needsReview + reason), never dropped
 //     and never padded with numbers that were not said.
 //
-// Pipeline: tokenize → fold number words (EN/ES) → split into movements →
-// peel quantities off each segment (per-side, vest, duration, weight, sets,
-// reps) → whatever words remain are the movement name → match the catalog.
+// Pipeline: tokenize → fold number words (EN/ES) → fold on/off intervals and
+// restatements ("which are…") → split into movements → peel quantities off
+// each segment (per-side, vest, interval, duration, weight, sets, reps) →
+// whatever words remain are the movement name → match the catalog.
+//
+// Weights are reported PER IMPLEMENT, as spoken: "two 16s" is weightKg 16 with
+// implements 2, never 32. Nothing here sums a pair.
 //
 // The catalog's own normalizer (lib/exercises.ts) is whole-word containment,
 // longest key first — it happily swallows "jump squats" into Squat. That pass
@@ -42,8 +46,10 @@ export interface ParsedVoiceEntry {
   reps?: number;
   /** Only when stated ("3 sets of…", "5 rounds of…", "3 by 10"). Absent otherwise — the composer treats absent as 1. */
   sets?: number;
-  /** TOTAL implement load in kg (count × each), rounded to 0.1. */
+  /** Weight of ONE implement in kg, as spoken, rounded to 0.1. Never a total — see `implements`. */
   weightKg?: number;
+  /** 2 when he used a pair — two bells/dumbbells, "double", "in each hand", "N kilos on each side". Absent = one implement. */
+  implements?: 2;
   /** Duration per set in seconds when stated ("30 second plank", "plank for one minute"). */
   seconds?: number;
   perSide?: boolean;
@@ -69,6 +75,23 @@ export interface VoiceParseResult {
 export interface VoiceParseOptions {
   /** Used when he says "with a vest" and no number. Default 5. */
   defaultVestKg?: number;
+  /** Kettlebells he owns, in kg, from the watch's rack. Absent/empty = unknown. */
+  bells?: number[];
+  /** The entry logged just before this clip in the same session, if any. */
+  previous?: VoicePrevious;
+}
+
+/** What a clip with no movement of its own ("another 8", "same again") refers back to. */
+export interface VoicePrevious {
+  name: string;
+  exercise?: string;
+  reps?: number;
+  sets?: number;
+  seconds?: number;
+  weightKg?: number;
+  implements?: 2;
+  perSide?: boolean;
+  load?: VoiceLoad;
 }
 
 type MatchedBy = ParsedVoiceEntry["matchedBy"];
@@ -87,6 +110,8 @@ const VEST_MIN_KG = 1;
 const VEST_MAX_KG = 40;
 const WEIGHT_MIN_KG = 1;
 const WEIGHT_MAX_KG = 400;
+/** Heaviest single kettlebell that is believable. Above it the number was most likely misheard ("sixteen" → "60"). */
+const KETTLEBELL_MAX_KG = 48;
 
 // Match tiers. Anything below CONFIDENT is a review-screen match.
 const SCORE_EXACT = 1;
@@ -116,7 +141,11 @@ const EACH = wordSet("each per every cada por");
 const SIDE = wordSet("side arm leg hand way lado brazo pierna mano");
 const BOTH_SIDES = wordSet("sides arms legs hands");
 const SIDE_LEAD = wordSet("on in for de en");
-const HAND = wordSet("hand mano");
+const HAND = wordSet("hand hands mano manos");
+/** Side words that, said of a WEIGHT, mean one implement per hand ("16 kilos each side"). Arm/leg/way stay reps per side. */
+const PAIR_SIDE = wordSet("side sides hand hands lado lados mano manos");
+/** "ON each side", "IN each hand" — where the weight is, as opposed to "per side". */
+const LOCATIVE = wordSet("on in en");
 const VEST = wordSet("vest vested chaleco");
 const VEST_PREP = wordSet("with wearing in using w con usando");
 const VEST_LINK = wordSet("of de at");
@@ -132,7 +161,20 @@ const EDGE_STOP = wordSet(
   "of de for with at the a an my on in and y then plus x times by rep reps set sets each per " +
     "did do doing done i just is was that this log another some more too to also again today now " +
     "so well we got have ive im thats its using wearing con el la un una por hice otra otro mas " +
-    "weighted once finished completed"
+    "weighted once finished completed last were"
+);
+/** Words for how a block was run, never the movement itself ("EMOMs", "intervals"). */
+const DESCRIPTOR = wordSet("emom emoms interval intervals");
+/** The token an "N on, M off" phrase is folded into. */
+const INTERVAL = "<interval>";
+/** Says "the same again" all by itself. */
+const REPEAT_CUE = wordSet("again same repeat ditto mismo misma igual");
+/** Says it only with something to count: "another SET", "ONE more", "otra VEZ". Alone ("More.") it is as likely noise. */
+const REPEAT_MORE = wordSet("another more otra otro mas");
+const REPEAT_UNIT = wordSet("set sets round rounds time vez serie ronda vuelta");
+/** What is left of a name once a repeat phrase is trimmed ("same THING", "did IT again", "same AS BEFORE"). */
+const REPEAT_NAME = wordSet(
+  "same thing it as before time repeat ditto exactly again but weight vez mismo misma igual lo"
 );
 // Sign-offs transcription invents over trailing silence — dropped without a flag.
 const COURTESY = wordSet("thank thanks you watching bye goodbye gracias adios");
@@ -279,6 +321,8 @@ const NON_NAME = new Set([
   ...GLOBAL,
   ...FILLER,
   ...EDGE_STOP,
+  ...DESCRIPTOR,
+  INTERVAL,
 ]);
 
 // ── Tokens ──────────────────────────────────────────────────────────────
@@ -293,6 +337,13 @@ interface Tok {
   heard?: boolean;
   /** Part of a vocabulary name ("clean AND press", "ONE arm swing") — grammar passes leave it alone. */
   lock?: boolean;
+  /** "30 seconds on, 30 seconds off", in seconds (t is INTERVAL). */
+  interval?: { work: number; rest: number };
+  /**
+   * A separator that says the next part is the SAME thing said another way
+   * ("which are", "that is", "aka") or a correction of it ("or rather").
+   */
+  restate?: "same" | "fix";
 }
 
 type NumTok = Tok & { n: number };
@@ -320,6 +371,12 @@ function tokenize(transcript: string): Tok[] {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[\u2018\u2019\u02bc`]/g, "'")
     .replace(/(\d+):(\d\d)(?!\d)/g, "$1 minute $2 seconds") // "1:30 plank"
+    .replace(/\bi\.\s?e\./g, " ie ") // "i.e." would otherwise read as two sentence breaks
+    .replace(/\ba\.\s?k\.\s?a\.?/g, " aka ")
+    // "30/30", "20/10" — work/rest. Small numbers ("5/3/1") are something else.
+    .replace(/(^|[^\d/.])(\d+)\s?\/\s?(\d+)(?![\d/.])/g, (whole, lead: string, a: string, b: string) =>
+      Number(a) >= 5 && Number(a) <= 600 && Number(b) >= 5 && Number(b) <= 600 ? `${lead}${a} on ${b} off` : whole
+    )
     .replace(/(\d)'s\b/g, "$1s") // "two 16's"
     .replace(/(\d),(\d{1,2})(?=\s*(?:kg|kilo|lb|libra|pound))/g, "$1.$2"); // "22,5 kilos"
   const pieces = text.match(/\d+(?:\.\d+)?[a-z]*|[a-z']+|[,;.!?:]|[@&\u00d7+]/g) ?? [];
@@ -388,6 +445,8 @@ interface VocabKey {
   key: string;
   words: string[];
   stems: string[];
+  /** Stems word for word — "clean and jerks" and "cleans and jerk" both read "clean and jerk". */
+  stemmed: string;
   /** Stems joined with no spaces — "push ups", "pushups" and "push up" all squash alike. */
   squashed: string;
   /** Stems sorted — "kettlebell front squat" equals "front squat kettlebell". */
@@ -413,7 +472,15 @@ function vocabulary(): VocabKey[] {
       seen.add(`${def.id}|${key}`);
       const words = key.split(" ");
       const stems = words.map(stem);
-      keys.push({ def, key, words, stems, squashed: stems.join(""), sorted: [...stems].sort().join(" ") });
+      keys.push({
+        def,
+        key,
+        words,
+        stems,
+        stemmed: stems.join(" "),
+        squashed: stems.join(""),
+        sorted: [...stems].sort().join(" "),
+      });
     }
   }
   // Multi-word names are protected inside a transcript. The two extras are
@@ -600,16 +667,108 @@ function refineNumbers(toks: Tok[]): Tok[] {
   return out;
 }
 
+interface IntervalPart {
+  n: number;
+  /** Seconds per unit said — 0 when no unit was said. */
+  unit: 0 | 1 | 60;
+  next: number;
+}
+
+/** "30 seconds on", "30 on", "1 minute off" — one half of a work/rest pattern. */
+function readIntervalPart(toks: Tok[], i: number, word: "on" | "off"): IntervalPart | null {
+  const amount = toks[i];
+  if (!isNum(amount) || amount.plural || amount.n <= 0) return null;
+  const unit = free(toks[i + 1], SECOND) ? 1 : free(toks[i + 1], MINUTE) ? 60 : 0;
+  const at = unit > 0 ? i + 2 : i + 1;
+  if (!isWord(toks[at], word)) return null;
+  return { n: amount.n, unit, next: at + 1 };
+}
+
+/**
+ * Work/rest patterns become one token before the clip is split, because the
+ * recogniser puts a comma in the middle of them ("30 second on, 30 second
+ * off"). A half with no unit takes the other half's; with none said at all
+ * they are seconds. "Every minute on the minute" is just the long way to say EMOM.
+ */
+function foldIntervals(toks: Tok[]): Tok[] {
+  const out: Tok[] = [];
+  let i = 0;
+  while (i < toks.length) {
+    // "every minute on the minute", or just "on the minute"
+    const every = isWord(toks[i], "every") && free(toks[i + 1], MINUTE) ? 2 : 0;
+    if (isWord(toks[i + every], "on") && isWord(toks[i + every + 1], "the") && free(toks[i + every + 2], MINUTE)) {
+      out.push({ t: "emom" });
+      i += every + 3;
+      continue;
+    }
+    const work = readIntervalPart(toks, i, "on");
+    if (work) {
+      let j = work.next;
+      if (toks[j]?.t === "," && toks[j].restate == null) j++;
+      if (isWord(toks[j], "and", "then", "y")) j++;
+      const rest = readIntervalPart(toks, j, "off");
+      if (rest) {
+        const workSeconds = Math.round(work.n * (work.unit || rest.unit || 1));
+        const restSeconds = Math.round(rest.n * (rest.unit || work.unit || 1));
+        if (workSeconds > 0 && restSeconds > 0) {
+          out.push({ t: INTERVAL, interval: { work: workSeconds, rest: restSeconds } });
+          i = rest.next;
+          continue;
+        }
+      }
+    }
+    out.push(toks[i]);
+    i++;
+  }
+  return out;
+}
+
+/** How many tokens at `i` say "the same thing, put another way" — and whether it is a correction. */
+function readRestatement(toks: Tok[], i: number): { length: number; kind: "same" | "fix" } | null {
+  const a = wordAt(toks, i);
+  const b = wordAt(toks, i + 1);
+  if (a == null) return null;
+  if (a === "which" && (b === "is" || b === "are" || b === "was" || b === "were")) return { length: 2, kind: "same" };
+  if (a === "that" && b === "is") return { length: 2, kind: "same" };
+  if (a === "also" && b === "known" && wordAt(toks, i + 2) === "as") return { length: 3, kind: "same" };
+  if ((a === "o" && b === "sea") || (a === "es" && b === "decir")) return { length: 2, kind: "same" };
+  if (a === "or" && b === "rather") return { length: 2, kind: "fix" };
+  if (a === "thats" || a === "aka" || a === "ie" || a === "meaning") return { length: 1, kind: "same" };
+  return null;
+}
+
+/** Restatement phrases become a separator that remembers what it was. */
+function markRestatements(toks: Tok[]): Tok[] {
+  const out: Tok[] = [];
+  for (let i = 0; i < toks.length; ) {
+    const hit = readRestatement(toks, i);
+    if (hit) {
+      out.push({ t: ",", restate: hit.kind });
+      i += hit.length;
+    } else {
+      out.push(toks[i]);
+      i++;
+    }
+  }
+  return out;
+}
+
 function normalizeTokens(transcript: string): Tok[] {
   const toks = rewriteMisheard(tokenize(transcript));
   lockVocabulary(toks);
-  return refineNumbers(foldNumberWords(toks));
+  return foldIntervals(markRestatements(refineNumbers(foldNumberWords(toks))));
 }
 
 /** "10 swings, 10 push ups" — numbers as digits, sentence breaks as commas. */
 const renderTokens = (toks: Tok[]): string =>
   toks
-    .map((tok) => (tok.n != null ? `${tok.n}${tok.plural ? "s" : ""}` : tok.t))
+    .map((tok) =>
+      tok.interval != null
+        ? `${tok.interval.work}s on ${tok.interval.rest}s off`
+        : tok.n != null
+          ? `${tok.n}${tok.plural ? "s" : ""}`
+          : tok.t
+    )
     .join(" ")
     .replace(/( ,)+/g, ",")
     .replace(/^[, ]+|[, ]+$/g, "");
@@ -621,7 +780,7 @@ interface SpokenWeight {
   count?: number;
   unit?: "kg" | "lb";
   implement?: ExerciseCategory | null;
-  /** Count was not said but implied by a plural ("with 16s") — total is a pair, flagged. */
+  /** Count was not said but implied by a plural ("with 16s") — read as a pair, flagged unless something confirms it. */
   pair?: boolean;
 }
 
@@ -634,8 +793,26 @@ interface Segment {
   rounds?: boolean;
   seconds?: number;
   perSide?: boolean;
-  /** "24 kilos in each hand" — said of the weight, so it is two implements, not reps per side. */
+  /** "24 kilos in each hand", "16 kilos each side" — said of the weight, so it is two implements, not reps per side. */
   eachHand?: boolean;
+  /** That phrase was a bare "each side" / "per side" (no hand word, no "on"/"in") — it loses to an explicit single. */
+  eachLoose?: boolean;
+  /** The whole fragment was a side phrase ("…, on each side") — how it reads depends on what it follows. */
+  sideOnly?: { loose: boolean };
+  /** The weight phrase ended the segment, so a side phrase after the comma is still about the weight. */
+  tailWeight?: boolean;
+  /** "double-handed", "double" in front of the movement: a pair unless a single was said outright. */
+  pairCue?: boolean;
+  /** "30 on, 30 off" — `seconds` holds the work half. */
+  interval?: { work: number; rest: number };
+  /** Said to be every minute on the minute. */
+  emom?: boolean;
+  /** Length of the whole interval/EMOM block in seconds ("for 10 minutes"). */
+  total?: number;
+  /** Introduced by "which are…", "or rather…": the same movement as the segment before it. */
+  restate?: "same" | "fix";
+  /** Leans on the previous entry ("another", "same again") — only read when the caller passed one. */
+  repeat?: boolean;
   vest?: VoiceLoad;
   weight?: SpokenWeight;
   /** "…all with a vest" — the load covers every movement in the clip. */
@@ -648,13 +825,30 @@ interface Segment {
   leadWord?: string;
 }
 
-function splitSegments(toks: Tok[]): Tok[][] {
-  const segments: Tok[][] = [[]];
+interface RawSegment {
+  toks: Tok[];
+  restate?: "same" | "fix";
+}
+
+function splitSegments(toks: Tok[]): RawSegment[] {
+  const segments: RawSegment[] = [];
+  let current: RawSegment = { toks: [] };
   for (const tok of toks) {
-    if (free(tok, SEPARATOR)) segments.push([]);
-    else segments[segments.length - 1].push(tok);
+    if (!free(tok, SEPARATOR)) {
+      current.toks.push(tok);
+      continue;
+    }
+    if (current.toks.length > 0) {
+      segments.push(current);
+      current = { toks: [] };
+    }
+    // The flag waits on the still-empty segment, so "…, which are, …" keeps it.
+    if (tok.restate) current.restate = tok.restate;
   }
-  return segments.filter((s) => s.length > 0).flatMap(splitRunOn);
+  if (current.toks.length > 0) segments.push(current);
+  return segments.flatMap((segment) =>
+    splitRunOn(segment.toks).map((piece, i): RawSegment => (i === 0 && segment.restate ? { toks: piece, restate: segment.restate } : { toks: piece }))
+  );
 }
 
 /**
@@ -682,25 +876,94 @@ function splitRunOn(seg: Tok[]): Tok[][] {
   return out;
 }
 
+/**
+ * Does the token at `j` end a weight phrase that the side phrase after it is
+ * about? A unit ("16 kilos"), the implement after it ("16 kilo kettlebells")
+ * or a plural ("16s") always. A bare number that only a preposition makes a
+ * weight ("with 16", "with the 20") only when the phrase says WHERE the
+ * weight is — "in each hand", "on each side" — because "with the 20 each
+ * side" is one bell, reps per side. A hand word also takes a bare implement
+ * ("a kettlebell in each hand").
+ */
+function endsWeight(t: Tok[], j: number, hand: boolean, loose: boolean): boolean {
+  let tok = t[j];
+  if (tok == null || tok.lock) return false;
+  if (unitOf(tok) != null) return true;
+  if (tok.n == null) {
+    if (RUSA.has(tok.t) && free(t[j - 1], IMPLEMENT)) tok = t[--j];
+    if (!IMPLEMENT.has(tok.t)) return false;
+    return hand || unitOf(t[j - 1]) != null || isNum(t[j - 1]);
+  }
+  if (tok.plural) return true;
+  if (loose) return false;
+  let p = j - 1;
+  const count = t[p];
+  if (isNum(count) && !count.plural && (count.n === 1 || count.n === 2)) p--;
+  while (free(t[p], ARTICLE)) p--;
+  return free(t[p], PREP);
+}
+
+/**
+ * A side phrase means one of two things, and where it sits decides which:
+ * straight after a WEIGHT it is one implement per hand ("16 kilograms on each
+ * side" — a pair); after the reps or the movement it is reps per side ("8
+ * snatches each side with a 20").
+ */
 function takePerSide(seg: Segment) {
   const t = seg.toks;
-  for (let i = 0; i < t.length - 1; i++) {
+  for (let i = 0; i < t.length - 1; ) {
     const a = t[i];
     const b = t[i + 1];
-    if (a.lock || b.lock || a.n != null || b.n != null) continue;
     const hit =
-      (EACH.has(a.t) && SIDE.has(b.t)) ||
-      (a.t === "both" && BOTH_SIDES.has(b.t)) ||
-      // "10 a side" — but not "a side plank".
-      (a.t === "a" && b.t === "side" && (isNum(t[i - 1]) || !(isNameish(t[i + 2]) || free(t[i + 2], IMPLEMENT))));
-    if (!hit) continue;
-    const lo = free(t[i - 1], SIDE_LEAD) ? i - 1 : i;
-    const ofWeight = HAND.has(b.t) && (unitOf(t[lo - 1]) != null || free(t[lo - 1], IMPLEMENT));
+      !a.lock &&
+      !b.lock &&
+      a.n == null &&
+      b.n == null &&
+      ((EACH.has(a.t) && SIDE.has(b.t)) ||
+        (a.t === "both" && BOTH_SIDES.has(b.t)) ||
+        // "10 a side", "16 kilos a side" — but not "a side plank".
+        (a.t === "a" &&
+          b.t === "side" &&
+          (isNum(t[i - 1]) || unitOf(t[i - 1]) != null || !(isNameish(t[i + 2]) || free(t[i + 2], IMPLEMENT)))));
+    if (!hit) {
+      i++;
+      continue;
+    }
+    const led = free(t[i - 1], SIDE_LEAD);
+    const lo = led ? i - 1 : i;
+    const hand = HAND.has(b.t);
+    const loose = !hand && !(led && LOCATIVE.has(t[i - 1].t));
+    const pairWord = PAIR_SIDE.has(b.t);
+    const whole = lo === 0 && i + 2 === t.length;
+    const ofWeight = pairWord && endsWeight(t, lo - 1, hand, loose);
     t.splice(lo, i + 2 - lo);
-    if (ofWeight) seg.eachHand = true;
-    else seg.perSide = true;
+    if (ofWeight) {
+      seg.eachHand = true;
+      if (loose) seg.eachLoose = true;
+    } else {
+      seg.perSide = true;
+      if (pairWord && whole) seg.sideOnly = { loose };
+    }
+    i = lo;
+  }
+}
+
+/**
+ * The side phrase was about the weight: two implements. The one exception is
+ * an explicit single with a bare "each side" ("with a 16 kilo kettlebell each
+ * side") — there the single stands, it is read as reps per side, and it is
+ * flagged, because the two cues disagree.
+ */
+function pairFromSide(seg: Segment, loose: boolean) {
+  const weight = seg.weight;
+  if (weight == null) return;
+  if (weight.count === 1 && loose) {
+    seg.perSide = true;
+    seg.ambiguous = true;
     return;
   }
+  seg.weight = { ...weight, count: 2 };
+  delete seg.weight.pair;
 }
 
 function takeGlobalMarker(seg: Segment) {
@@ -763,7 +1026,69 @@ function takeVest(seg: Segment, defaultKg: number) {
   }
 }
 
+/** A whole-block length: "for 10 minutes", "the last 10 minutes were", "10 minutes of". Removed from `t`. */
+function takeTotal(t: Tok[], allowSeconds: boolean): number | undefined {
+  let unit = t.findIndex((tok, i) => free(tok, MINUTE) && isNum(t[i - 1]));
+  let scale = 60;
+  if (unit < 0 && allowSeconds) {
+    unit = t.findIndex((tok, i) => free(tok, SECOND) && isNum(t[i - 1]));
+    scale = 1;
+  }
+  if (unit < 0) return undefined;
+  const amount = t[unit - 1];
+  if (!isNum(amount)) return undefined;
+  let lo = unit - 1;
+  let hi = unit;
+  while (lo > 0 && (free(t[lo - 1], DURATION_PREP) || isWord(t[lo - 1], "last", "the", "of", "a", "total"))) lo--;
+  while (free(t[hi + 1], OF) || isWord(t[hi + 1], "were", "was", "is", "are", "total", "long", "straight")) hi++;
+  t.splice(lo, hi - lo + 1);
+  const seconds = Math.round(amount.n * scale);
+  return seconds > 0 ? seconds : undefined;
+}
+
+/**
+ * Sets from a block length: total ÷ (work + rest), or one per minute for an
+ * EMOM. Stated sets/rounds win. An EMOM's minutes are rounds — they cover
+ * every movement in the clip ("5 pull-ups and 10 push-ups every minute on the
+ * minute for 10 minutes"); an on/off pattern belongs to its own movement.
+ */
+function settleInterval(seg: Segment) {
+  if (seg.total == null || seg.sets != null) return;
+  const cycle = seg.interval != null ? seg.interval.work + seg.interval.rest : seg.emom ? 60 : 0;
+  if (cycle <= 0) return;
+  const sets = Math.round(seg.total / cycle);
+  if (sets < 1) return;
+  seg.sets = sets;
+  if (seg.interval == null) seg.rounds = true;
+}
+
+/**
+ * "30 seconds on, 30 seconds off" (already one token) gives the seconds per
+ * set; with a block length it gives the sets too. "EMOM" with a block length
+ * is one set a minute. The words themselves never reach the movement name.
+ */
+function takeInterval(seg: Segment) {
+  const t = seg.toks;
+  for (let i = t.length - 1; i >= 0; i--) {
+    if (!free(t[i], DESCRIPTOR)) continue;
+    if (t[i].t.startsWith("emom")) seg.emom = true;
+    t.splice(i, 1);
+  }
+  const at = t.findIndex((tok) => tok.interval != null);
+  if (at >= 0) {
+    seg.interval = t[at].interval;
+    t.splice(at, 1);
+  }
+  if (seg.interval == null && !seg.emom) return;
+  // An EMOM's length is said in minutes; a seconds phrase next to it is the hold ("EMOM, 30 second plank").
+  const total = takeTotal(t, seg.interval != null);
+  if (total != null) seg.total = total;
+  if (seg.interval != null) seg.seconds = seg.interval.work;
+  settleInterval(seg);
+}
+
 function takeDuration(seg: Segment) {
+  if (seg.interval != null) return; // the work half already is the duration
   const t = seg.toks;
   let lo = -1;
   let hi = -1;
@@ -914,7 +1239,7 @@ function spanWeight(t: Tok[], each: number, end: number, unit: "kg" | "lb" | und
       break;
     }
   }
-  // A plural with no count ("with 16s", "20 kilo dumbbells") is a pair, flagged.
+  // A plural with no count ("with 16s", "20 kilo dumbbells") is a pair — a guess until something else says so.
   if ((eachTok.plural || pluralImplement) && weight.count == null) weight.pair = true;
   return { lo: i + 1, hi, weight };
 }
@@ -964,13 +1289,10 @@ function takeWeight(seg: Segment) {
     if (seg.eachHand) seg.perSide = true; // no weight after all — it was about the reps
     return;
   }
+  seg.tailWeight = hit.hi === seg.toks.length - 1;
   seg.toks.splice(hit.lo, hit.hi - hit.lo + 1);
   seg.weight = hit.weight;
-  if (seg.eachHand) {
-    seg.weight.count = 2;
-    delete seg.weight.pair;
-  }
-  if (seg.weight.pair) seg.ambiguous = true;
+  if (seg.eachHand) pairFromSide(seg, seg.eachLoose === true);
 }
 
 function takeSets(seg: Segment) {
@@ -1078,73 +1400,281 @@ function trimName(seg: Segment) {
   seg.toks = t.slice(lo, hi);
 }
 
-function parseSegment(toks: Tok[], defaultVestKg: number): Segment {
-  const seg: Segment = { toks: [...toks] };
+/**
+ * "double-handed" / "double" in front of the movement is how he says two
+ * bells. It comes off the name; whether it makes the weight a pair is settled
+ * in buildEntry (an explicit "a 24" / "one 24" still wins).
+ *  - "double-handed" is never part of a name, so it always comes off;
+ *  - a bare "double" only when what is left is a movement we know, so "double
+ *    unders" keeps its name;
+ *  - a locked "double" ("double front squat") is the name, and still a cue.
+ * "Two-handed", "single-hand", "one-arm" and "hand-to-hand" are other
+ * movements and are not touched.
+ */
+function takePairCue(seg: Segment) {
+  const t = seg.toks;
+  for (let i = 0; i < t.length; i++) {
+    if (t[i].n != null || t[i].t !== "double") continue;
+    if (t[i].lock) {
+      seg.pairCue = true;
+      continue;
+    }
+    const handed = isWord(t[i + 1], "handed", "hand");
+    const rest = [...t.slice(0, i), ...t.slice(i + (handed ? 2 : 1))];
+    if (!handed && (rest.length === 0 || matchSpokenExercise(rest.map((tok) => tok.t).join(" ")).def == null)) continue;
+    seg.toks = rest;
+    seg.pairCue = true;
+    return;
+  }
+}
+
+/**
+ * Only when the caller passed the previous entry. Marks a segment that leans
+ * on it ("same again", "another set"), and reads "one more" / "another one"
+ * as one more SET — nobody logs a single extra rep that way — by taking the
+ * 1 back out of the numbers. Whether the mark is used is decided later: it
+ * only matters when the clip names no movement.
+ */
+function takeRepeat(seg: Segment) {
+  const t = seg.toks;
+  const more = t.some((tok) => free(tok, REPEAT_MORE));
+  if (t.some((tok) => free(tok, REPEAT_CUE)) || (more && t.some((tok) => free(tok, REPEAT_UNIT)))) seg.repeat = true;
+  const numbers = t.filter(isNum);
+  if (!more || numbers.length !== 1 || numbers[0].n !== 1 || numbers[0].plural) return;
+  const grammarOnly = t.every(
+    (tok) => isNum(tok) || free(tok, FILLER) || (free(tok, EDGE_STOP) && !REPS.has(tok.t)) || isWord(tok, "time")
+  );
+  if (!grammarOnly) return;
+  t.splice(t.indexOf(numbers[0]), 1);
+  seg.repeat = true;
+}
+
+/** "same thing", "did it again", "same as before" — what is left is not a movement name. */
+function settleRepeat(seg: Segment) {
+  if (seg.repeat && seg.toks.length > 0 && seg.toks.every((tok) => free(tok, REPEAT_NAME))) seg.toks = [];
+}
+
+function parseSegment(raw: RawSegment, defaultVestKg: number, carry: boolean): Segment {
+  const seg: Segment = { toks: [...raw.toks] };
+  if (raw.restate) seg.restate = raw.restate;
+  if (carry) takeRepeat(seg);
   takeGlobalMarker(seg);
   takePerSide(seg);
   takeVest(seg, defaultVestKg);
+  takeInterval(seg);
   takeDuration(seg);
   takeWeight(seg);
   takeSets(seg);
   takeReps(seg);
   sanitize(seg);
   trimName(seg);
+  takePairCue(seg);
+  if (carry) settleRepeat(seg);
   return seg;
 }
 
 const hasLoad = (seg: Segment) => seg.weight != null || seg.vest != null;
 const hasAnything = (seg: Segment) =>
-  seg.reps != null || seg.seconds != null || seg.sets != null || hasLoad(seg) || seg.perSide === true;
+  seg.reps != null ||
+  seg.seconds != null ||
+  seg.sets != null ||
+  hasLoad(seg) ||
+  seg.perSide === true ||
+  seg.emom === true ||
+  seg.repeat === true;
+/**
+ * Is `length` — a plain duration — the whole-block time for `block`? Next to
+ * an on/off pattern, yes ("jump rope 30 on 30 off, for 10 minutes"). Next to
+ * a bare EMOM only when it is a fragment of its own and at least a minute:
+ * "EMOM, 10 minutes, 5 burpees", but not the hold in "30 second plank, EMOM".
+ */
+function blockTotal(block: Segment, length: Segment): boolean {
+  if (block.total != null || length.total != null || length.interval != null) return false;
+  if (length.seconds == null || length.reps != null) return false;
+  if (block.interval != null) return true;
+  return block.emom === true && length.toks.length === 0 && length.sets == null && length.seconds >= 60;
+}
 
 /** Fold a nameless fragment's fields into `into` when none of them collide. */
 function absorb(into: Segment, from: Segment): boolean {
+  // A plain duration next to an on/off pattern or an EMOM is the block's
+  // length ("jump rope 30 on 30 off, for 10 minutes"), not a second hold.
+  const totalFromFrom = blockTotal(into, from);
+  const totalFromInto = !totalFromFrom && blockTotal(from, into);
   const collides =
     (into.reps != null && from.reps != null) ||
-    (into.seconds != null && from.seconds != null) ||
+    (into.seconds != null && from.seconds != null && !totalFromFrom && !totalFromInto) ||
     (into.sets != null && from.sets != null) ||
     (into.weight != null && from.weight != null) ||
     (into.vest != null && from.vest != null);
   if (collides) return false;
+  if (totalFromFrom) {
+    into.total = from.seconds;
+  } else if (totalFromInto) {
+    into.total = into.seconds;
+    into.seconds = from.seconds;
+  } else {
+    into.seconds ??= from.seconds;
+  }
+  into.interval ??= from.interval;
+  into.total ??= from.total;
+  if (from.emom) into.emom = true;
   into.reps ??= from.reps;
-  into.seconds ??= from.seconds;
   into.sets ??= from.sets;
+  const tookWeight = into.weight == null && from.weight != null;
   into.weight ??= from.weight;
   into.vest ??= from.vest;
-  if (from.perSide) into.perSide = true;
+  if (from.perSide) {
+    // "…16 kilograms, on each side": the comma is the recogniser's, the phrase is still about the weight.
+    if (from.sideOnly != null && into.tailWeight && into.weight != null && !into.perSide) {
+      pairFromSide(into, from.sideOnly.loose);
+    } else {
+      into.perSide = true;
+    }
+  }
+  // The weight is still the last thing said only if this fragment was the weight.
+  into.tailWeight = tookWeight && from.tailWeight === true;
+  if (from.pairCue) into.pairCue = true;
   if (from.rounds) into.rounds = true;
   if (from.global) into.global = true;
   if (from.ambiguous) into.ambiguous = true;
   if (from.stray) into.stray = true;
+  if (from.repeat) into.repeat = true;
+  settleInterval(into);
   return true;
+}
+
+/** The segment's name as the matcher sees it (no reps context — only good for comparing two names). */
+const nameMatch = (seg: Segment): SpokenMatch =>
+  seg.toks.length > 0 ? matchSpokenExercise(seg.toks.map((tok) => tok.t).join(" ")) : NO_MATCH;
+
+/**
+ * "four long cycles, which are four clean and jerks with two 16s" is ONE
+ * entry said twice. The name is the one we know (the better match when both
+ * are known, the first when neither is); each quantity comes from whichever
+ * side said it. When the two sides disagree on a number, a correction ("or
+ * rather") takes the later one cleanly; a plain restatement keeps the first
+ * and is flagged, because one of them was misheard.
+ */
+function mergeRestatement(into: Segment, from: Segment) {
+  const fix = from.restate === "fix";
+  if (from.toks.length > 0) {
+    const before = nameMatch(into);
+    const after = nameMatch(from);
+    const takeLater =
+      into.toks.length === 0 ||
+      fix ||
+      (after.def != null && (before.def == null || after.score > before.score));
+    if (takeLater) {
+      into.toks = from.toks;
+      into.leadWord = from.leadWord;
+    }
+  }
+  const settle = <T>(first: T | undefined, later: T | undefined, same: (a: T, b: T) => boolean): T | undefined => {
+    if (first == null || later == null) return first ?? later;
+    if (same(first, later)) return first;
+    if (fix) return later;
+    into.stray = true;
+    return first;
+  };
+  const sameNumber = (a: number, b: number) => a === b;
+  into.reps = settle(into.reps, from.reps, sameNumber);
+  into.sets = settle(into.sets, from.sets, sameNumber);
+  into.seconds = settle(into.seconds, from.seconds, sameNumber);
+  into.weight = settle(
+    into.weight,
+    from.weight,
+    (a, b) => a.each === b.each && (a.unit ?? "kg") === (b.unit ?? "kg") && (a.count == null || b.count == null || a.count === b.count)
+  );
+  into.vest = settle(into.vest, from.vest, (a, b) => a.kg === b.kg);
+  for (const key of ["reps", "sets", "seconds", "weight", "vest"] as const) if (into[key] == null) delete into[key];
+  into.interval ??= from.interval;
+  into.total ??= from.total;
+  if (from.emom) into.emom = true;
+  if (from.perSide) into.perSide = true;
+  if (from.pairCue) into.pairCue = true;
+  if (from.rounds) into.rounds = true;
+  if (from.global) into.global = true;
+  if (from.ambiguous) into.ambiguous = true;
+  if (from.stray) into.stray = true;
+  settleInterval(into);
 }
 
 /**
  * A fragment with no movement of its own ("…and a 24 kilo kettlebell",
  * "…, each side", "5 rounds:") belongs to its neighbour. Then spread what was
  * said about the whole clip: rounds, a leading load, and "all/both with…".
+ *
+ * A quantity said BEFORE any movement ("Eight. Clean and press…", "The last
+ * 10 minutes were 30 on, 30 off… jumping rope") waits for the movement that
+ * follows it; if that movement brings its own, the fragment stands alone.
  */
 function mergeSegments(segments: Segment[]): Segment[] {
   const out: Segment[] = [];
   let lead: Segment | null = null;
+  let pending: Segment | null = null;
   let rounds: number | undefined;
   for (const seg of segments) {
     if (seg.rounds && seg.sets != null) rounds ??= seg.sets;
+    const said: Segment | null = out.length > 0 ? out[out.length - 1] : pending;
+    if (seg.restate && said != null) {
+      // Two movements we know to be different are not one thing said twice
+      // ("10 swings, that is 10 push-ups"): keep both, and do not vouch for the second.
+      const first = nameMatch(said).def;
+      const second = nameMatch(seg).def;
+      if (seg.restate === "same" && first != null && second != null && first.id !== second.id) {
+        seg.stray = true;
+        out.push(seg);
+        continue;
+      }
+      mergeRestatement(said, seg);
+      if (said === pending && said.toks.length > 0) {
+        out.push(said);
+        pending = null;
+      }
+      continue;
+    }
     if (seg.toks.length > 0) {
+      // What was said before the movement joins it; what the movement itself ended on is unchanged.
+      const tailWeight = seg.tailWeight;
+      if (pending != null && !absorb(seg, pending)) out.push(pending);
+      seg.tailWeight = tailWeight;
+      pending = null;
       out.push(seg);
       continue;
     }
     if (!hasAnything(seg)) continue;
     const prev = out[out.length - 1];
-    if (prev != null && absorb(prev, seg)) continue;
-    if (prev == null && seg.reps == null && seg.seconds == null) {
-      if (lead == null) lead = seg;
-      else absorb(lead, seg);
+    if (prev != null) {
+      if (!absorb(prev, seg)) out.push(seg); // a quantity with no movement — surfaces as "unparsed"
       continue;
     }
-    out.push(seg); // a quantity with no movement — surfaces as "unparsed"
+    // Nothing has been named yet.
+    const counts = seg.reps != null || seg.seconds != null;
+    // "EMOM, 10 minutes, …": the length belongs to the block said before it.
+    if (counts && lead != null && blockTotal(lead, seg) && absorb(lead, seg)) continue;
+    if (pending != null) {
+      // More about the count just said: "Eight. 16 kilograms on each side. …", "another 8, each side".
+      if (absorb(pending, seg)) continue;
+      if (counts) {
+        out.push(pending, seg); // two counts and no movement — both surface as "unparsed"
+        pending = null;
+        continue;
+      }
+    }
+    if (counts) {
+      pending = seg;
+    } else if (lead == null) {
+      lead = seg;
+    } else {
+      absorb(lead, seg);
+    }
   }
+  if (pending != null) out.push(pending);
   // Only a load or a set count was said — nothing to attach it to.
   if (out.length === 0) return lead != null ? [lead] : [];
+  // Rounds that only became known while merging ("5 burpees EMOM, 10 minutes").
+  rounds ??= out.find((seg) => seg.rounds && seg.sets != null)?.sets;
 
   const spread = (from: Segment) => {
     for (const seg of out) {
@@ -1157,7 +1687,11 @@ function mergeSegments(segments: Segment[]): Segment[] {
   };
   if (lead != null) {
     spread(lead);
-    for (const seg of out) seg.sets ??= lead.sets;
+    for (const seg of out) {
+      seg.sets ??= lead.sets;
+      if (lead.pairCue) seg.pairCue = true;
+      if (lead.repeat) seg.repeat = true;
+    }
   }
   for (const seg of out) if (seg.global) spread(seg);
   if (rounds != null) for (const seg of out) seg.sets ??= rounds;
@@ -1292,6 +1826,30 @@ function fuzzyMatch(folded: string): SpokenMatch | null {
   return null;
 }
 
+/** The name with its last word made singular ("clean and jerks" → "clean and jerk"), or null when nothing changes. */
+function singularLast(folded: string): string | null {
+  const words = folded.split(" ");
+  const last = words[words.length - 1];
+  const singular = stem(last);
+  if (singular === last) return null;
+  return [...words.slice(0, -1), singular].join(" ");
+}
+
+/**
+ * A plural is the same movement, not a guess: "jerks" is Jerk, "clean and
+ * jerks" is the alias "clean and jerk", "half snatches" is Half Snatch. Tried
+ * only when the name as said is not a key — first the usual way people
+ * pluralise (the last word), then every word ("cleans and jerks"). Word
+ * boundaries have to line up, so "dead lifts" is still a fuzzy match.
+ */
+function pluralExact(folded: string): ExerciseDef | null {
+  const singular = singularLast(folded);
+  const direct = singular != null ? findExerciseByExactName(singular) : null;
+  if (direct) return direct;
+  const stemmed = folded.split(" ").map(stem).join(" ");
+  return vocabulary().find((k) => k.stemmed === stemmed)?.def ?? null;
+}
+
 /** Fuzzy catalog match used by the parser; exported for tests and for the LLM path to reuse. */
 export function matchSpokenExercise(spoken: string): SpokenMatch {
   const folded = foldExerciseName(spoken);
@@ -1301,9 +1859,22 @@ export function matchSpokenExercise(spoken: string): SpokenMatch {
   if (exact) {
     return { def: exact, score: SCORE_EXACT, by: foldExerciseName(exact.name) === folded ? "exact" : "alias" };
   }
+  const plural = pluralExact(folded);
+  if (plural) {
+    const stems = (name: string) => name.split(" ").map(stem).join(" ");
+    return {
+      def: plural,
+      score: SCORE_EXACT,
+      by: stems(foldExerciseName(plural.name)) === stems(folded) ? "exact" : "alias",
+    };
+  }
 
+  // As said, then with the last word singular: "kettlebell jerks", "heavy half snatches".
+  const singular = singularLast(folded);
   const contained = containment(folded);
   if (contained?.clean) return { def: contained.def, score: SCORE_CONTAINS, by: "contains" };
+  const containedSingular = singular != null ? containment(singular) : null;
+  if (containedSingular?.clean) return { def: containedSingular.def, score: SCORE_CONTAINS, by: "contains" };
 
   const fuzzy = fuzzyMatch(folded);
   if (fuzzy) return fuzzy;
@@ -1374,23 +1945,37 @@ function displayName(words: string[]): string {
     .join(" ");
 }
 
+/** The movement a carried-over clip refers to: its id when that still resolves, else its name read exactly. */
+function carriedMatch(previous: VoicePrevious): SpokenMatch {
+  const byId = previous.exercise ? getExerciseById(previous.exercise) : null;
+  if (byId) return { def: byId, score: SCORE_EXACT, by: "exact" };
+  const byName = matchSpokenExercise(previous.name);
+  return byName.def != null && byName.score >= SCORE_EXACT ? byName : NO_MATCH;
+}
+
 /**
  * One segment → one entry, or null when there is nothing to log. `keepWeak`
  * is set once the clip is known to hold a real entry: from then on a leftover
  * fragment is surfaced for review rather than dropped, so a clip is never
  * called confident with part of it thrown away ("10 swings and bear crawls").
+ *
+ * `carry` is the previous entry, given only for a clip that names no movement
+ * at all ("another 8", "same again"): the segment is then that movement again,
+ * with whatever it did not restate taken from the previous entry.
  */
-function buildEntry(seg: Segment, keepWeak: boolean): ParsedVoiceEntry | null {
+function buildEntry(seg: Segment, keepWeak: boolean, carry?: VoicePrevious): ParsedVoiceEntry | null {
   let words = seg.toks.map((tok) => tok.t);
   const heard = seg.toks.some((tok) => tok.heard === true);
+  const carried = words.length === 0 ? carry : undefined;
   let reps = seg.reps;
+  let seconds = seg.seconds;
   let guessedReps = false;
   let match: SpokenMatch = NO_MATCH;
 
   if (words.length > 0) {
     // "for pull ups" → 4, "ate burpees" → 8: only where the rep count belongs,
     // only when nothing else supplies it, and only in front of a known movement.
-    if (reps == null && seg.seconds == null) {
+    if (reps == null && seconds == null) {
       const first = words[0];
       const spoken = seg.leadWord ?? (words.length > 1 && !seg.toks[0].lock && HOMOPHONE.has(first) ? first : undefined);
       const rest = seg.leadWord != null ? words : words.slice(1);
@@ -1404,9 +1989,22 @@ function buildEntry(seg: Segment, keepWeak: boolean): ParsedVoiceEntry | null {
     const resolved = resolveMovement(words, heard, reps != null, seg);
     match = resolved.match;
     words = resolved.words;
+  } else if (carried) {
+    match = carriedMatch(carried);
+    // "another 45" after a 45-second plank is seconds again, not 45 reps.
+    if (carried.seconds != null && carried.reps == null && reps != null && seconds == null) {
+      seconds = reps;
+      reps = undefined;
+    }
+    // Whatever he did not restate is the same as last time. A restated count
+    // replaces the old one outright unless the last entry carried both kinds.
+    if ((reps == null && seconds == null) || (carried.reps != null && carried.seconds != null)) {
+      reps ??= carried.reps;
+      seconds ??= carried.seconds;
+    }
   }
 
-  const hasQuantity = reps != null || seg.seconds != null;
+  const hasQuantity = reps != null || seconds != null;
   const hasNumbers = hasQuantity || seg.sets != null || hasLoad(seg);
   // No number and no solid match ("the plank is wet", "thanks for watching"):
   // chatter on its own, a fragment to review inside a real log.
@@ -1415,36 +2013,50 @@ function buildEntry(seg: Segment, keepWeak: boolean): ParsedVoiceEntry | null {
 
   let confidence: number;
   let reason: ParsedVoiceEntry["reason"];
-  if (words.length === 0) {
+  if (words.length === 0 && !carried) {
     confidence = 0.15;
     reason = "unparsed";
   } else if (match.def == null) {
     // A numbered unknown is a movement he has not minted yet. Without a
     // number, or when it reads like conversation, it is just unparsed.
-    const chatter = !hasNumbers || words.length > 6 || words.some((word) => CHATTER.has(word));
+    const chatter = !carried && (!hasNumbers || words.length > 6 || words.some((word) => CHATTER.has(word)));
     reason = chatter ? "unparsed" : "new_exercise";
     confidence = chatter ? 0.15 : 0.35;
   } else {
     const strong = match.score >= CONFIDENT && match.by !== "fuzzy";
-    confidence = !strong ? Math.min(match.score, 0.75) : match.by === "contains" ? 0.88 : 0.95;
+    confidence = !strong ? Math.min(match.score, 0.75) : match.by === "contains" ? 0.88 : carried ? 0.9 : 0.95;
     if (!strong) reason = "low_match";
     // "plank 45": a count on a timed hold is far more likely seconds whose unit
     // was not said. Keep the number as spoken, but do not vouch for it.
-    const unitlessHold = reps != null && seg.seconds == null && HOLD_NAME.test(match.def.name);
+    const unitlessHold = reps != null && seconds == null && HOLD_NAME.test(match.def.name);
     if (!hasQuantity || guessedReps || unitlessHold) {
       confidence = Math.min(confidence, 0.6);
       reason ??= "no_quantity";
     }
   }
 
-  // Total implement load. Out-of-range totals are dropped, not clamped.
+  // The weight of ONE implement, as spoken — a pair is `implements: 2`, never
+  // a sum. Out-of-range weights are dropped, not clamped.
   let weightKg: number | undefined;
+  let pair = false;
+  let saidCount: number | undefined;
   let ambiguous = seg.ambiguous === true;
   if (seg.weight != null) {
-    const count = seg.weight.count ?? (seg.weight.pair ? 2 : 1);
-    const total = round1(count * seg.weight.each * (seg.weight.unit === "lb" ? LB_TO_KG : 1));
-    if (total >= WEIGHT_MIN_KG && total <= WEIGHT_MAX_KG) weightKg = total;
-    else ambiguous = true;
+    // How many: said outright ("two 16s", "one 24", "in each hand"), else the
+    // "double-handed" cue, else what the previous entry used, else a plural's guess.
+    saidCount = seg.weight.count ?? (seg.pairCue ? 2 : undefined);
+    const count = saidCount ?? (carried?.implements === 2 ? 2 : undefined);
+    if (count == null && seg.weight.pair) ambiguous = true;
+    const each = round1(seg.weight.each * (seg.weight.unit === "lb" ? LB_TO_KG : 1));
+    if (each >= WEIGHT_MIN_KG && each <= WEIGHT_MAX_KG) {
+      weightKg = each;
+      pair = (count ?? (seg.weight.pair ? 2 : 1)) === 2;
+    } else {
+      ambiguous = true;
+    }
+  } else if (carried?.weightKg != null) {
+    weightKg = carried.weightKg;
+    pair = carried.implements === 2;
   }
   if (ambiguous) {
     confidence = Math.min(confidence, 0.7);
@@ -1456,7 +2068,7 @@ function buildEntry(seg: Segment, keepWeak: boolean): ParsedVoiceEntry | null {
   }
 
   const entry: ParsedVoiceEntry = {
-    name: match.def?.name ?? (words.length > 0 ? displayName(words) : ""),
+    name: match.def?.name ?? (words.length > 0 ? displayName(words) : (carried?.name ?? "")),
     confidence,
     needsReview: reason != null,
     matchedBy: match.def ? match.by : "none",
@@ -1465,16 +2077,83 @@ function buildEntry(seg: Segment, keepWeak: boolean): ParsedVoiceEntry | null {
   if (reps != null) entry.reps = reps;
   if (seg.sets != null) entry.sets = seg.sets;
   if (weightKg != null) entry.weightKg = weightKg;
-  if (seg.seconds != null) entry.seconds = seg.seconds;
-  if (seg.perSide) entry.perSide = true;
-  if (seg.vest) entry.load = { ...seg.vest };
+  if (weightKg != null && pair) entry.implements = 2;
+  if (seconds != null) entry.seconds = seconds;
+  if (seg.perSide || carried?.perSide) entry.perSide = true;
+  const vest = seg.vest ?? carried?.load;
+  if (vest) entry.load = { ...vest };
   if (seg.weight != null) {
     entry.spoken = { each: seg.weight.each };
     if (seg.weight.unit) entry.spoken.unit = seg.weight.unit;
-    if (seg.weight.count != null) entry.spoken.count = seg.weight.count;
+    if (saidCount != null) entry.spoken.count = saidCount;
   }
   if (reason) entry.reason = reason;
   return entry;
+}
+
+const positive = (value: unknown, max: number): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) && value > 0 && value <= max ? value : undefined;
+
+/** The caller's previous entry, with anything unusable left out. Null when there is nothing to refer back to. */
+function cleanPrevious(previous: VoicePrevious | undefined): VoicePrevious | null {
+  if (previous == null || typeof previous !== "object") return null;
+  const name = typeof previous.name === "string" ? previous.name.trim() : "";
+  if (!name) return null;
+  const out: VoicePrevious = { name };
+  if (typeof previous.exercise === "string" && previous.exercise) out.exercise = previous.exercise;
+  const reps = positive(previous.reps, 5000);
+  const sets = positive(previous.sets, 100);
+  const seconds = positive(previous.seconds, 86400);
+  const weightKg = positive(previous.weightKg, WEIGHT_MAX_KG);
+  if (reps != null) out.reps = Math.round(reps);
+  if (sets != null) out.sets = Math.round(sets);
+  if (seconds != null) out.seconds = Math.round(seconds);
+  if (weightKg != null) out.weightKg = round1(weightKg);
+  if (weightKg != null && previous.implements === 2) out.implements = 2;
+  if (previous.perSide === true) out.perSide = true;
+  const vestKg = previous.load?.type === "vest" ? positive(previous.load.kg, VEST_MAX_KG) : undefined;
+  if (vestKg != null) {
+    out.load = { type: "vest", kg: round1(vestKg) };
+    if (previous.load?.assumed) out.load.assumed = true;
+  }
+  return out;
+}
+
+const cleanBells = (bells: unknown): number[] =>
+  Array.isArray(bells) ? bells.filter((kg): kg is number => typeof kg === "number" && Number.isFinite(kg) && kg > 0) : [];
+
+/**
+ * Could this be a real kettlebell? Asked of an entry matched to a kettlebell
+ * movement, or one where he named the implement as a kettlebell. Not if one
+ * bell is over 48 kg, and not if it is a size he does not own. A pound figure
+ * gets a little slack — a "35 pound" bell is his 16.
+ */
+function implausibleBell(entry: ParsedVoiceEntry, bells: number[], saidKettlebell: boolean): boolean {
+  const kg = entry.weightKg;
+  if (kg == null) return false;
+  const kettlebell =
+    saidKettlebell || (entry.exercise != null && getExerciseById(entry.exercise)?.category === "kettlebell");
+  if (!kettlebell) return false;
+  if (kg > KETTLEBELL_MAX_KG) return true;
+  if (bells.length === 0) return false;
+  const slack = entry.spoken?.unit === "lb" ? 0.3 : 0.05;
+  return !bells.some((bell) => Math.abs(bell - kg) <= slack);
+}
+
+/**
+ * Flag an unbelievable kettlebell weight. The number is NEVER changed — "60
+ * kilograms" was very likely "sixteen", but what was heard is what is shown,
+ * with a "?" so he fixes it himself.
+ */
+function checkBell(entry: ParsedVoiceEntry, bells: number[], saidKettlebell: boolean): ParsedVoiceEntry {
+  if (!implausibleBell(entry, bells, saidKettlebell)) return entry;
+  return {
+    ...entry,
+    needsReview: true,
+    // A doubtful name match with an impossible weight is, first of all, a weight to check.
+    reason: entry.reason == null || entry.reason === "low_match" ? "ambiguous_weight" : entry.reason,
+    confidence: Math.min(entry.confidence, 0.6),
+  };
 }
 
 export function parseVoiceEntries(transcript: string, opts: VoiceParseOptions = {}): VoiceParseResult {
@@ -1482,14 +2161,25 @@ export function parseVoiceEntries(transcript: string, opts: VoiceParseOptions = 
     opts.defaultVestKg != null && Number.isFinite(opts.defaultVestKg) && opts.defaultVestKg > 0
       ? opts.defaultVestKg
       : DEFAULT_VEST_KG;
+  const bells = cleanBells(opts.bells);
+  const previous = cleanPrevious(opts.previous);
   const toks = normalizeTokens(typeof transcript === "string" ? transcript : "");
-  const segments = splitSegments(toks).map((seg) => parseSegment(seg, defaultVestKg));
+  const segments = splitSegments(toks).map((seg) => parseSegment(seg, defaultVestKg, previous != null));
   const merged = mergeSegments(segments);
-  const logged = merged.some((seg) => buildEntry(seg, false) != null);
+  // Carry-over: the clip names no movement at all, so what it does say — a
+  // count, "another", "same again" — is about the entry before it.
+  const carries = (seg: Segment) =>
+    previous != null &&
+    seg.toks.length === 0 &&
+    (seg.reps != null || seg.seconds != null || seg.sets != null || seg.repeat === true);
+  const carry = previous != null && merged.length > 0 && merged.every((seg) => seg.toks.length === 0) ? previous : null;
+  const build = (seg: Segment, keepWeak: boolean) =>
+    buildEntry(seg, keepWeak, carry != null && carries(seg) ? carry : undefined);
+  const logged = merged.some((seg) => build(seg, false) != null);
   const entries: ParsedVoiceEntry[] = [];
   for (const seg of merged) {
-    const entry = buildEntry(seg, logged);
-    if (entry) entries.push(entry);
+    const entry = build(seg, logged);
+    if (entry) entries.push(checkBell(entry, bells, seg.weight?.implement === "kettlebell"));
   }
   return {
     entries,
@@ -1507,7 +2197,7 @@ function clock(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-/** One short line for the watch: "KB Swing ×10 · 24 kg", "Push-Up 3×10", "Plank 45s", "Squat ×10 · vest 5 kg", "? Bear Crawl ×10". */
+/** One short line for the watch: "KB Swing ×10 · 24 kg", "Clean and Press ×6 · 2×16 kg", "Push-Up 3×10", "Plank 45s", "Squat ×10 · vest 5 kg", "? Bear Crawl ×10". */
 export function voiceDisplayLine(entry: ParsedVoiceEntry): string {
   const name = entry.name.replace(/^One-Arm Kettlebell\b/, "One-Arm KB").replace(/^Kettlebell /, "KB ");
   const sets = entry.sets != null && entry.sets > 1 ? entry.sets : null;
@@ -1521,7 +2211,7 @@ export function voiceDisplayLine(entry: ParsedVoiceEntry): string {
   if (parts.length === 0 && sets) parts.push(`${sets} sets`);
 
   const chunks = [[name, ...parts].filter((part) => part.length > 0).join(" ")];
-  if (entry.weightKg != null) chunks.push(`${trimKg(entry.weightKg)} kg`);
+  if (entry.weightKg != null) chunks.push(`${entry.implements === 2 ? "2×" : ""}${trimKg(entry.weightKg)} kg`);
   if (entry.load) chunks.push(`vest ${trimKg(entry.load.kg)} kg`);
   const line = chunks.filter((chunk) => chunk.length > 0).join(" · ");
   return entry.needsReview ? `? ${line}` : line;
@@ -1532,13 +2222,20 @@ export function voiceDisplayLine(entry: ParsedVoiceEntry): string {
  * wrist is shown anything:
  *  - a fragment with no movement name ("another 10", "with a vest") is not
  *    an entry — there is nothing to show or to log;
+ *  - a kettlebell weight that cannot be right — one bell over 48 kg, or a
+ *    size missing from his rack when the rack is known — is flagged, with
+ *    the number left exactly as heard;
  *  - in a clip naming several movements, an implement weight that landed on
  *    a bodyweight one ("8 swings, 8 push-ups with the 20") most likely
  *    belonged to its neighbour, so it is kept but flagged rather than
  *    trusted.
  */
-export function finalizeVoiceEntries(entries: ParsedVoiceEntry[]): ParsedVoiceEntry[] {
-  const named = entries.filter((e) => e.name.trim().length > 0);
+export function finalizeVoiceEntries(
+  entries: ParsedVoiceEntry[],
+  opts: { bells?: number[] } = {}
+): ParsedVoiceEntry[] {
+  const bells = cleanBells(opts.bells);
+  const named = entries.filter((e) => e.name.trim().length > 0).map((e) => checkBell(e, bells, false));
   if (named.length < 2) return named;
   return named.map((e) => {
     if (e.weightKg == null || !e.exercise || e.needsReview) return e;

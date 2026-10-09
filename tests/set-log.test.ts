@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   composeExercises,
   countedEntries,
+  implementsOf,
   isSetLog,
+  weightLabel,
   withGaps,
   type SetLogEntry,
 } from "@/lib/set-log";
@@ -228,5 +230,56 @@ describe("isSetLog", () => {
     ["a composed exercises list", [{ name: "Kettlebell Swing", sets: 3, reps: 10 }]],
   ])("rejects %s", (_label, value) => {
     expect(isSetLog(value)).toBe(false);
+  });
+});
+
+// 2026-10-09: a pair of bells is { weightKg: 16, implements: 2 } — the weight
+// of ONE, the way he says it. The first real session stored "16 kilograms on
+// each side" as 32 kg and raised a "32 kg snatch" record that never happened.
+describe("pairs", () => {
+  it("implementsOf reads 2 only from an explicit pair", () => {
+    expect(implementsOf({ implements: 2 })).toBe(2);
+    expect(implementsOf({ implements: 1 })).toBe(1);
+    expect(implementsOf({})).toBe(1);
+    expect(implementsOf(null)).toBe(1);
+    expect(implementsOf({ implements: "2" })).toBe(1);
+  });
+
+  it("weightLabel says a pair the way a rack is labelled", () => {
+    expect(weightLabel(16, { implements: 2 })).toBe("2×16 kg");
+    expect(weightLabel(24)).toBe("24 kg");
+    expect(weightLabel(22.5, { implements: 2 })).toBe("2×22.5 kg");
+  });
+
+  it("carries the pair onto the composed row", () => {
+    const rows = composeExercises([entry(10, { reps: 8, weightKg: 16, implements: 2 })]);
+    expect(rows).toEqual([
+      { name: "Kettlebell Swing", exercise: "kb-swing", sets: 1, reps: 8, weightKg: 16, implements: 2 },
+    ]);
+  });
+
+  it("one 16 and a pair of 16s are different rows", () => {
+    const rows = composeExercises([
+      entry(10, { reps: 8, weightKg: 16 }),
+      entry(20, { reps: 8, weightKg: 16, implements: 2 }),
+      entry(30, { reps: 8, weightKg: 16, implements: 2 }),
+    ]);
+    expect(rows.map((r) => [r.sets, r.implements ?? 1])).toEqual([
+      [1, 1],
+      [2, 2],
+    ]);
+  });
+
+  it("an entry taken back stays in the log and out of the workout", () => {
+    const log = [
+      entry(10, { reps: 8 }),
+      entry(20, { reps: 8, status: "undone", transcript: "eight swings" }),
+      entry(30, { reps: 8 }),
+    ];
+    expect(composeExercises(log)).toEqual([
+      { name: "Kettlebell Swing", exercise: "kb-swing", sets: 2, reps: 8 },
+    ]);
+    // …and the gap is measured between the two that count.
+    expect(withGaps(log).map((e) => e.gapSeconds)).toEqual([undefined, 20]);
   });
 });

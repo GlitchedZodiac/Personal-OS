@@ -6,6 +6,7 @@ import {
 } from "@/lib/body-measurements";
 import { addDaysToDateString, getDateStringInTimeZone } from "@/lib/timezone";
 import type { HealthExportPayload } from "@/lib/health-export";
+import { implementsOf } from "@/lib/set-log";
 
 // Spreadsheet projections over an already-built export payload. This layer
 // never touches Prisma — buildHealthExport() has already resolved the range,
@@ -218,7 +219,7 @@ function workoutSetRows(payload: HealthExportPayload): CsvValue[][] {
           str(row.id), date, time, str(row.workoutType), sequenceName,
           str(entry.name), setNumber, reps, weightKg,
           typeof reps === "number" && typeof weightKg === "number"
-            ? reps * weightKg
+            ? reps * weightKg * implementsOf(entry)
             : null,
           // Honesty column: entries arrive as {sets × reps × weight} groups
           // (the watch aggregates per-set logs before sync), so rows are a
