@@ -246,6 +246,19 @@ public final class AppModel: ObservableObject {
     // entry currently flashed on the live screen.
     let voice = VoiceLogger()
     @Published private(set) var voiceEntries: [VoiceEntryState] = []
+    /// This session's id, minted at Start and saved as the workout's
+    /// externalId — so every clip he records can be tied to the workout it
+    /// belongs to in the audit trail, whether or not the entry survives.
+    private var liveSessionId = UUID().uuidString
+    /// The id of the last workout actually saved; a session id is never
+    /// reused for a second workout (that would overwrite the first).
+    private var usedSessionId: String?
+    /// Entries that count toward the workout (not taken back, not failed).
+    var countedVoiceEntries: [VoiceEntryState] { voiceEntries.filter(\.counted) }
+    #if DEBUG
+    /// Smoke-only: opens the voice log sheet (there is no finger to tap the chip).
+    @Published var debugShowVoiceLog = false
+    #endif
     @Published private(set) var voiceFlash: VoiceEntryState?
     private var voiceFlashTask: Task<Void, Never>?
     private var voiceRetryTask: Task<Void, Never>?
@@ -773,6 +786,7 @@ public final class AppModel: ObservableObject {
         recorder.hrZones = zones
         await runCountdown()
         workoutStartedAt = Date()
+        liveSessionId = UUID().uuidString
         do {
             try await recorder.start(
                 activityType: kind.activityType, outdoor: kind.isOutdoor,
@@ -874,7 +888,7 @@ public final class AppModel: ObservableObject {
         let covered = totals?.distanceMeters ?? 0
         // Smokes are exempt via their existing marker — a 65 s scripted walk
         // must still reach save.
-        if elapsed < 240, loggedSets.isEmpty, voiceEntries.isEmpty, covered < 150,
+        if elapsed < 240, loggedSets.isEmpty, countedVoiceEntries.isEmpty, covered < 150,
            externalSourceOverride == nil {
             recoveryTask?.cancel()
             recoveryTask = nil
@@ -1000,6 +1014,7 @@ public final class AppModel: ObservableObject {
             await runCountdown()
         }
         workoutStartedAt = Date()
+        liveSessionId = UUID().uuidString
         circuitStepMark = Date()
 
         if useRecorder {
@@ -1362,7 +1377,9 @@ public final class AppModel: ObservableObject {
             setLog: setLog
         )
 
+        if liveSessionId == usedSessionId { liveSessionId = UUID().uuidString }
         pendingItem = WorkoutSyncItem(
+            externalId: liveSessionId,
             externalSource: externalSourceOverride ?? "app_watch",
             startedAt: started,
             endedAt: ended,
@@ -1411,6 +1428,7 @@ public final class AppModel: ObservableObject {
         }
         pendingItem = nil
         lastSavedItem = item
+        usedSessionId = item.externalId
         // Clips recorded out of range are still owed to this workout: put
         // the item on disk with them, so they can be added whenever the
         // audio finally uploads — even after the app has been closed.
@@ -1743,7 +1761,10 @@ public final class AppModel: ObservableObject {
         let started = Date()
         do {
             let response = try await api.postVoiceEntry(
-                VoiceEntryRequest(entryId: entry.id, audioBase64: nil, transcript: transcript),
+                VoiceEntryRequest(
+                    entryId: entry.id, audioBase64: nil, transcript: transcript,
+                    context: voiceContext(for: entry.id, t: entry.t)
+                ),
                 timeout: 20
             )
             landVoiceResponse(id: entry.id, response: response)
@@ -2269,8 +2290,12 @@ public final class AppModel: ObservableObject {
             return
         }
         do {
+            let t = voiceEntries.first { $0.id == id }?.t
             let response = try await api.postVoiceEntry(
-                VoiceEntryRequest(entryId: id, audioBase64: data.base64EncodedString()),
+                VoiceEntryRequest(
+                    entryId: id, audioBase64: data.base64EncodedString(),
+                    context: voiceContext(for: id, t: t)
+                ),
                 timeout: timeout
             )
             try? FileManager.default.removeItem(at: url)
@@ -2353,12 +2378,63 @@ public final class AppModel: ObservableObject {
 
     /// One tap takes back the last thing he said.
     public func undoLastVoiceEntry() {
-        guard let last = voiceEntries.popLast() else { return }
-        VoicePendingStore.deleteAudio(last.audioFile)
-        voiceFlashTask?.cancel()
-        voiceFlash = nil
+        guard let last = voiceEntries.last(where: { $0.status != .undone }) else { return }
+        removeVoiceEntry(last.id)
+    }
+
+    /// Take back any entry, from the banner's Undo or the log screen. It is
+    /// greyed, not deleted: the workout stops counting it, and the record of
+    /// what he said and what was made of it stays whole.
+    public func removeVoiceEntry(_ id: String) {
+        guard let entry = voiceEntries.first(where: { $0.id == id }),
+              entry.status != .undone else { return }
+        if entry.parsed.isEmpty {
+            // Nothing was understood (or it never uploaded): no record worth
+            // keeping, and a queued clip must not resolve later.
+            VoicePendingStore.deleteAudio(entry.audioFile)
+            voiceEntries.removeAll { $0.id == id }
+        } else {
+            _ = updateVoiceEntry(id) { $0.status = .undone }
+        }
+        if voiceFlash?.id == id {
+            voiceFlashTask?.cancel()
+            voiceFlash = nil
+        }
         Haptics.key(.click)
         markActivity()
+    }
+
+    /// Changed his mind: the entry counts again, as it was.
+    public func restoreVoiceEntry(_ id: String) {
+        _ = updateVoiceEntry(id) {
+            guard $0.status == .undone else { return }
+            $0.status = $0.parsed.contains { $0.needsReview } ? .review : .ok
+        }
+        Haptics.key(.click)
+        markActivity()
+    }
+
+    /// What the server is told about the session a clip belongs to: the
+    /// bells on his rack and the entry before this one (so "another 8" can
+    /// mean something), plus where in which workout he said it.
+    private func voiceContext(for id: String, t: Int?) -> VoiceEntryContext {
+        let before = voiceEntries.prefix { $0.id != id }
+        let previous = before.last(where: \.counted)?.parsed.last
+        let kind: String? = {
+            if case .live(let kind) = phase { return kind.workoutTypeString }
+            return nil
+        }()
+        let bells = WatchPrefs.shared.ownedBells.sorted()
+        return VoiceEntryContext(
+            workoutId: liveSessionId, t: t, kind: kind,
+            // Scripted smoke sessions mark their clips so the audit trail
+            // can be swept clean of them afterwards.
+            build: externalSourceOverride != nil
+                ? "smoke"
+                : Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+            bells: bells.isEmpty ? nil : bells,
+            previous: previous.map(VoicePreviousPayload.init)
+        )
     }
 
     public func dismissVoiceFlash() {
@@ -2407,7 +2483,15 @@ public final class AppModel: ObservableObject {
                 do {
                     let response = try await api.postVoiceEntry(
                         VoiceEntryRequest(
-                            entryId: clip.entryId, audioBase64: data.base64EncodedString()
+                            entryId: clip.entryId, audioBase64: data.base64EncodedString(),
+                            context: VoiceEntryContext(
+                                workoutId: pending.item.externalId,
+                                t: log.first { $0.id == clip.entryId }?.t,
+                                kind: pending.item.workoutType,
+                                build: Bundle.main.object(
+                                    forInfoDictionaryKey: "CFBundleVersion") as? String,
+                                bells: nil, previous: nil
+                            )
                         ),
                         timeout: 20
                     )

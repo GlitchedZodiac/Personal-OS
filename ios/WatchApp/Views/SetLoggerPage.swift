@@ -41,6 +41,7 @@ struct SetLoggerPage: View {
             // 2026-10-05: say the set instead of dialling it ("10 presses
             // with one 24 kilo"). Double Tap stays on Log — this is a tap.
             Spacer(minLength: 0)
+            VoiceLogChip(always: false)
             VoiceMicButton(voice: model.voice, diameter: 34)
             }
             // Clear of the carousel's page dots on the right edge.
