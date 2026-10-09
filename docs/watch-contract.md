@@ -207,6 +207,55 @@ were not on the row at the edit come back flagged in
 `metricsData.lateEntryIds` for the phone to offer. A stored `hrrDelta` or a
 phone-typed `intervals.jumps` is never erased by a re-send that lacks it.
 
+## Voice logging round 2 (2026-10-09 — after his first real session)
+
+Additive again, with ONE meaning change, marked ⚠.
+
+**⚠ `weightKg` is the weight of ONE implement; `implements: 2` marks a
+pair.** Build 3's parser summed pairs ("16 kilograms on each side" → 32 kg),
+which raised records for weights he never lifted. From this round a pair of
+16s is `{ weightKg: 16, implements: 2 }` on parsed entries, set-log entries
+and exercise rows alike (`implements` is absent for one implement — never
+send `1`). Tonnage multiplies by it (`lib/prs.ts`, `lib/strength-history.ts`);
+a weight record does not. The wrist's display line reads `2×16 kg` — it is
+the server's `display` string, so a build that ignores `implements` still
+shows the right text but must pass the key through to `setLog`/`exercises`
+or the pair is lost at save.
+
+**Request `context`** (optional) on `POST /api/mobile/voice/workout-entry`:
+`{ workoutId, t, kind, build, bells, previous }`.
+- `workoutId` — the session's id. The watch mints it at Start and saves the
+  workout with it as `externalId`, so a clip can be tied to its workout
+  whether or not the entry survives.
+- `t` elapsed seconds, `kind` the workoutType, `build` CFBundleVersion.
+- `bells` — the rack (`WatchPrefs.ownedBells`, kg; omit when empty). A
+  kettlebell weight outside it is flagged `ambiguous_weight`, and the
+  recogniser is told the weights his bells come in ("sixteen" was heard as
+  "60" on 8 Oct).
+- `previous` — the last counted entry `{ name, exercise?, reps?, sets?,
+  seconds?, weightKg?, implements?, perSide?, load? }`, so "another 8" or
+  "same again" resolves to it.
+
+**Set-log `status: "undone"`** — an entry taken back on the wrist is now SENT,
+marked undone, instead of being dropped. `countedEntries` ignores it; the
+phone lists it struck through. (A clip that was never understood is still
+simply removed.)
+
+**The audit trail** (`voice_clips` + `voice_clip_audio`, `lib/voice-audit.ts`)
+— written by the server after every clip, nothing for the watch to do: the
+recording (kept 180 days), transcript, which parser answered, the rule
+parser's full result, the model's raw answer, the entries exactly as shown,
+timings and the `context`. At sync each clip is tied to its workout and
+stamped with its outcome (`ok | review | undone | failed | dropped`).
+Read it at `GET /api/health/voice-audit?workoutId=` (cookie), play a clip at
+`/api/health/voice-audit/clip?entryId=`, or ask the assistant for the
+`voice_log_audit` dataset.
+
+**On the wrist:** a `LOG ›` chip in the Freestyle header (and beside the mic
+on the strength logger once something is logged) opens the session's log —
+each entry with the words as heard, a CHECK tag with the reason in words
+instead of a bare "?", and Remove / Put back on any entry.
+
 ## Companion contract (added 2026-08-12 — main lane LIVE, build against it)
 
 Everything the iOS companion needs from the server exists now.
