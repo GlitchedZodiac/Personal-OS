@@ -1,0 +1,76 @@
+# TestFlight without the Mac (2026-10-17, his ask: "how can I get you to
+# push to TestFlight automatically?"). A session on his Mac could upload and
+# a cloud session could not, so whether a watch change reached his wrist
+# depended on where the session ran. This runs the same script on GitHub's
+# Mac runner instead:
+#
+#   - every merge to main that touches ios/**  (main = what is on TestFlight)
+#   - every two months, so the build never reaches TestFlight's 90-day expiry
+#   - by hand: Actions → TestFlight → Run workflow (works from the phone)
+#
+# Secrets, set once (Settings → Secrets and variables → Actions):
+#   ASC_KEY_P8  the full text of an App Store Connect API key's .p8 file,
+#               BEGIN/END lines included.
+#   ASC_KEY_ID  that key's id. Optional: without it, the Mac's key
+#               (XZ64H3U47U, the one CLAUDE.md names) is assumed. A key made
+#               from the phone has its own id, and setting this is all that
+#               changes. The issuer id is the team's and the same for every key.
+#
+# No pull_request trigger on purpose: a fork's PR must never run with the key.
+
+name: TestFlight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+  schedule:
+    - cron: "17 14 1 */2 *" # 14:17 UTC on the 1st, every other month
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID || 'XZ64H3U47U' }}
+      ASC_ISSUER_ID: 3f863989-7ac9-48a1-94a5-7547b50ded16
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the newest released Xcode on the runner
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|release_candidate|_rc' | sort -V | tail -1)"
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Install the App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          if [ -z "$ASC_KEY_P8" ]; then
+            echo "::error::Secret ASC_KEY_P8 is not set — Settings → Secrets and variables → Actions → New repository secret."
+            exit 1
+          fi
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s\n' "$ASC_KEY_P8" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+      # One archive carries the iPhone app, the iPad build and the embedded
+      # watch app (CLAUDE.md § Shipping native builds). Apple picks the build
+      # number; processing takes 5–30 minutes after this step ends.
+      - name: Archive and upload to TestFlight
+        run: ios/scripts/testflight-upload.sh ios
+
+      - name: Remove the key
+        if: always()
+        run: rm -rf ~/.appstoreconnect
