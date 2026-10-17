@@ -60,7 +60,10 @@ const SCHEMA = {
             type: ["string", "null"],
             description: "An id from the vocabulary list when it is clearly that movement, else null.",
           },
-          reps: { type: ["number", "null"] },
+          reps: {
+            type: ["number", "null"],
+            description: "Reps per set as said; for a range (\"6 to 8\") the low end. Null if no count was said.",
+          },
           sets: {
             type: ["number", "null"],
             description: "Only if he said sets or rounds, or an interval block gives them (total time / (on + off)).",
@@ -187,11 +190,14 @@ export function entryFromLLM(raw: LLMEntry, defaultVestKg: number): ParsedVoiceE
     }
   }
 
+  // Same rule as the parser: sets at a weight are a whole log line ("3 sets
+  // to failure at 90 pounds") — reps he did not say stay absent, unflagged.
+  const setsAtWeight = sets != null && entry.weightKg != null;
   if (!def) {
     entry.needsReview = true;
     entry.reason = "new_exercise";
     entry.confidence = 0.35;
-  } else if (reps == null && seconds == null) {
+  } else if (reps == null && seconds == null && !setsAtWeight) {
     entry.needsReview = true;
     entry.reason = entry.reason ?? "no_quantity";
     entry.confidence = 0.5;
@@ -216,7 +222,7 @@ function vocabulary(): string {
     .join("\n");
 }
 
-const SYSTEM = `You turn one short spoken workout note into structured entries. The speaker is mid-workout on an Apple Watch, in English or Spanish; the text is a speech transcript and may contain mis-hearings. He trains mostly with kettlebells.
+const SYSTEM = `You turn one short spoken workout note into structured entries. The speaker is mid-workout on an Apple Watch, in English or Spanish; the text is a speech transcript and may contain mis-hearings. He trains mostly with kettlebells, and sometimes in a gym on machines and dumbbells, usually in pounds.
 
 The user message has a "Transcript:" line, and sometimes two lines of context before it:
 - "Previous entry:" — the entry he logged just before this one, as JSON in the same fields you answer with.
@@ -228,6 +234,9 @@ Rules:
 - A restatement is ONE entry, not two: "four long cycles, which are four clean and jerks" (also "that is", "aka", "meaning", "or rather") names the same thing twice. Use the name that is in the vocabulary.
 - "Long cycle" is the kettlebell clean and jerk.
 - A number alone in front ("Eight. Clean and press…") is the reps of the movement that follows.
+- A rep range ("six to eight reps", "8-10", "about five to seven") is reps = the LOW end. A range is not a guess: it does not make sure false.
+- "To failure" (also "till failure", "al fallo") says how the sets were run — never part of spokenName, never a number. "Three sets … with 55 pounds" and no rep count is sets 3, the weight, reps null; that is not a guess either.
+- A bench angle ("45 degree incline") is not a number to report; a word the transcript doubled ("rear rear deltoid") is said once.
 - Weight: weightEach is the weight of ONE implement exactly as spoken; weightCount is how many, 1 or 2. Never multiply, never give a total.
   - "one 24", "a 24" → count 1. "two 16s", "double 16s", "a pair of 20s", "two 16 kilogram kettlebells" → count 2.
   - "Double-handed" / "double" in front of a movement means two bells, one in each hand: count 2 unless he also says a single ("a 24", "one 24"). Leave "double-handed" out of spokenName.

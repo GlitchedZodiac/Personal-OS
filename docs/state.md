@@ -5,6 +5,60 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
+**Apple Health daily activity + the "?" on his 16 Oct gym session (2026-10-17, main lane; no `ios/**` change, so no TestFlight build).**
+
+**His two asks:** (1) the Apple Health import as specified (table, bearer-token ingest, morning + weekly reports, MCP, Shortcut guide, tests) plus "a nightly pull from health… pull the last 6 months"; (2) "I'm still getting the question marks… I haven't updated my app."
+
+**The "?" — two causes, one his tap and one ours:**
+- **His watch is still on the pre-build-4 app.** All four 16 Oct clips arrived with `appBuild: null` and no session context, which only the old app sends. Build 4 (VALID since 9 Oct) has never been installed from TestFlight. That is a tap in TestFlight, and nothing a cloud session can push.
+- **The server flagged all four anyway, and build 4 would have shown them as CHECK.** The machines and dumbbells were not in the catalog (`new_exercise`). "Six to eight reps", "8 to 10" and "five to seven" were read as a weight plus reps, and "to failure" became a movement called "Failure". "45 degree incline" was read as 45 reps. "Rear rear deltoid" kept the recogniser's doubled word. "3 sets … with 55 pounds" was flagged `no_quantity` for having no reps.
+- **Fixed on the server** (live on deploy; no app update needed, because the wrist shows the line the server composes). In `lib/voice-entry-parser.ts` and `lib/voice-entry-llm.ts`: a rep range stores its LOW end and is not flagged; "to/till failure" and hedges ("roughly", "about") are dropped; a bench angle is set aside; a doubled word collapses; sets at a stated weight with a confident movement are not flagged and reps stay absent. A weight is never read as a range. `lib/exercises.ts` adds 10 gym movements and more machine aliases. Incline Dumbbell Bench Press reuses his own movement's id, and `allExercises()` lists it once. His four transcripts are fixtures: the rules alone now settle all four, so the model is never called. 1,368 → 1,514 tests (79 voice).
+- **False records from that session:** the dual-axis machine press was filed as the barbell "Overhead Press", which raised a 40.8 kg weight record (up from his real 20) and a volume record. See "Data" below.
+
+**Apple Health import (the spec, built as asked):**
+- **`daily_activity`** (migration `20261017160000_daily_activity`, additive; snake_case columns as specified): `date` is unique YYYY-MM-DD, plus `steps`, `active_energy_kcal`, `resting_energy_kcal`, `walking_running_distance_km`, `source` (phone | watch | mixed) and `received_at`.
+- **`POST /api/health/daily`** (`lib/daily-activity.ts`, route).
+  - Auth is `Authorization: Bearer HEALTH_INGEST_TOKEN`, compared in constant time. It fails closed when the variable is unset or shorter than 16 characters.
+  - **Allowlisted in `proxy.ts` by EXACT path.** A prefix entry would also have opened `/api/health/daily-log` and `/api/health/daily-brief`; `tests/proxy.test.ts` pins this.
+  - The body is an array of days, or `{days:[…]}`, at most 400. Each day is upserted by date.
+  - Numbers may be text (Shortcuts sends text), including a decimal comma. Distance in km, mi or m is stored as km. Unknown keys are ignored. A bad day is rejected on its own and listed in `rejected`.
+  - **A day with every metric empty or zero is never written**: that is a run on a locked iPhone, and it would otherwise overwrite a good day with zeros. Such days come back as `skippedEmpty`.
+  - Returns `{upserted, dates, skippedEmpty, rejected}`.
+  - It is a heartbeat source (`health_shortcut`): two days of silence raises a system alert with Shortcut-specific advice.
+- **Reports** (`lib/activity-summary.ts` pure, `lib/activity-reports.ts`, `GET /api/health/activity`).
+  - Morning: yesterday (Central) against the 7 days BEFORE it and the same weekday last week.
+  - Weekly (Mon–Sun): bars, totals, daily average, best and lowest day by steps, and week-over-week on daily averages.
+  - Missing days are excluded, never counted as zero.
+- **Screen:** `/health/activity`, plus an Activity row on Today above the Sunday Report. NO DESIGN SLICE: built from the Sunday Report's card language; filed.
+- **Pushes** go through `notify()` from the hourly sweep. Category `activityReport` has its own switch, Settings → Notifications → "Steps & calories", on by default.
+  - Morning: the first sweep after 07:00 Central once yesterday has arrived. It retries until noon.
+  - Weekly: the first sweep after 19:00 Sunday, before quiet hours, with a Monday-morning catch-up.
+  - Each is sent once (dedupeKey).
+  - Reminder: the TestFlight shell still cannot receive web push (2026-10-05 finding), so these reach Safari-installed Pitaya or the Mac.
+- **MCP / chat:** a new `query_data` dataset, `daily_activity`, takes `from`/`to`/`days` (up to 400 rows). The registry gained `dateIsDayString` so a text date column filters as text. `daily_health` also got its missing `dateField`, because `days` had not been filtering it.
+- **`SHORTCUT_SETUP.md`** (repo root) covers:
+  - the token and a curl test;
+  - the exact actions: an 8-day loop, Group By Day for each metric, every value quoted, Get Contents of URL;
+  - the 10 pm Time of Day automation, and the "App is opened → Pitaya" backup (an opened app means an unlocked phone);
+  - the locked-phone caveat;
+  - the 185-day backfill.
+- **Env:** `HEALTH_INGEST_TOKEN` (Vercel, Production). Nothing else.
+
+**Why a Shortcut when the companion already pushes HealthKit:** `daily_health_snapshots` exists (the companion app). On prod it holds 58 days with gaps, partial days, two rows on travel days (keyed by timezone), and no resting energy. Changing what the companion sends would need a native build. The Shortcut needs none, and it re-sends a week every night. Both tables are left in place; filed.
+
+**Verified:**
+- 1,514 tests (146 new: 79 voice, 67 import, reports and proxy), tsc, lint clean on every touched file (the repo's 20 pre-existing lint errors are in untouched files), and `npm run build`.
+- **Self-smoke on a throwaway local Postgres:** all 38 migrations applied from zero with no schema drift. Then against the dev server:
+  - Pushes: no token or a wrong one gets 401. A 185-day Shortcut-style backfill (text numbers, decimal commas, device names) upserted 185 in 0.7 s. The nightly 8-day re-send kept 185 rows, with the same ids and the newer value. A locked-phone run upserted 0 and left the data untouched. A bad day riding with good ones was rejected alone, and non-JSON got 400. `daily-log` and `daily-brief` still return 401.
+  - Reports: `/api/health/activity`, read with a minted cookie, matched an independent SQL computation to the step.
+  - MCP: `query_data daily_activity` over `/api/mcp`, with a throwaway device token, returned the range.
+  - Sweep: the cron sweep at 11:18 Central wrote yesterday's push once ("Yesterday · 3,291 steps · ↓ 38% vs 7-day avg…"), and the second sweep returned "already sent".
+  - Screen: the Activity screen and the Today row were driven in Chromium at 375 px, including day and week navigation and the push's deep link, with no console errors and no horizontal scroll.
+- **Self-smoke caught/fixed:** the hero read "from mixed", and the week box read "↓ 8% vs steps".
+- **NOT verified:** the Shortcut itself (needs his iPhone: Group By Day de-duplication, the locale's number text, run time for 185 days), a real push on a device, and production (needs his token).
+
+---
+
 **Voice logging round 2 — the audit trail, the on-wrist log, and "two 16s are not a 32" (2026-10-09, after his first real voice session; web AND watch in one session, parity checked: `git log origin/main..origin/claude/watch-app -- ios/` empty). TestFlight build 4.**
 
 **What his 8 Oct freestyle showed** (39 min, 9 clips → 12 entries; the watch IS on the new build — the session carried a `setLog`). The recogniser was word-accurate on 8 of 9 clips; the logging was not:

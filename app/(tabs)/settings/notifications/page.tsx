@@ -33,6 +33,7 @@ type CategoryKey =
   | "systemAlerts"
   | "prCelebration"
   | "weeklyReport"
+  | "activityReports"
   | "spiritHomework";
 
 interface Prefs extends Record<CategoryKey, boolean> {
@@ -73,6 +74,11 @@ const SENDERS: Array<{ key: CategoryKey; label: string; note: string }> = [
     key: "weeklyReport",
     label: "Weekly report ready",
     note: "When the Sunday report is written up.",
+  },
+  {
+    key: "activityReports",
+    label: "Steps & calories",
+    note: "Yesterday's steps, calories and distance around 7am Central; the week's on Sunday evening. Needs the Health Shortcut.",
   },
   {
     key: "spiritHomework",

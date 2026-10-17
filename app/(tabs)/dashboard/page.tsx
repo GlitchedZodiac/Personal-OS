@@ -9,6 +9,7 @@ import { formatTonnage, netVsTargetLabel } from "@/lib/format-training";
 import { useDataLoggedListener } from "@/components/use-data-logged";
 import { SheetPortal } from "@/components/sheet-portal";
 import { MacroTargetsSheet } from "@/components/macro-targets-sheet";
+import { ActivityRow } from "@/components/activity-row";
 import {
   getOrCreateMicrophoneStream,
   deactivateMicrophoneStream,
@@ -699,6 +700,9 @@ export default function TodayPage() {
           })}
         </div>
       </div>
+
+      {/* Activity — Apple Health steps & calories (2026-10-17) */}
+      <ActivityRow />
 
       {/* Sunday Report */}
       <div className="mt-3 flex items-center justify-between rounded-[16px] bg-card p-3.5 px-4 shadow-[0_2px_12px_rgba(35,34,39,0.06)]">

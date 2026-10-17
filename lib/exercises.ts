@@ -73,14 +73,33 @@ export const EXERCISE_CATALOG: ExerciseDef[] = [
   { id: "crunch", name: "Crunch", category: "bodyweight", aliases: ["crunches", "abdominales", "sit up", "sit ups", "situps"] },
 
   // ── Machine / cable ───────────────────────────────────────────────────
-  { id: "lat-pulldown", name: "Lat Pulldown", category: "machine", aliases: ["pulldown", "jalón al pecho", "jalon"] },
-  { id: "seated-row", name: "Seated Row", category: "machine", aliases: ["cable row", "remo sentado"] },
-  { id: "leg-press", name: "Leg Press", category: "machine", aliases: ["prensa", "prensa de piernas"] },
-  { id: "leg-curl", name: "Leg Curl", category: "machine", aliases: ["hamstring curl", "curl femoral"] },
-  { id: "leg-extension", name: "Leg Extension", category: "machine", aliases: ["extensiones de pierna"] },
+  { id: "lat-pulldown", name: "Lat Pulldown", category: "machine", aliases: ["pulldown", "lat pull down", "pull down", "jalón al pecho", "jalon"] },
+  { id: "seated-row", name: "Seated Row", category: "machine", aliases: ["cable row", "seated cable row", "cable seated row", "machine row", "low row", "remo sentado"] },
+  { id: "leg-press", name: "Leg Press", category: "machine", aliases: ["leg press machine", "prensa", "prensa de piernas"] },
+  { id: "leg-curl", name: "Leg Curl", category: "machine", aliases: ["hamstring curl", "lying leg curl", "seated leg curl", "curl femoral"] },
+  { id: "leg-extension", name: "Leg Extension", category: "machine", aliases: ["quad extension", "leg extension machine", "extensiones de pierna"] },
   { id: "calf-raise", name: "Calf Raise", category: "machine", aliases: ["calf raises", "elevación de talones", "pantorrillas"] },
   { id: "cable-fly", name: "Cable Fly", category: "machine", aliases: ["cable crossover", "cruce de poleas"] },
   { id: "face-pull", name: "Face Pull", category: "machine", aliases: ["face pulls"] },
+
+  // ── Gym: dumbbell + machine (2026-10-17, after his first gym session) ──
+  // Grouped here rather than filed by category: the recogniser hint lists
+  // names in this order and stops at ~800 characters, so new rows sit past
+  // the cut instead of pushing his kettlebell names out of it.
+  // A bare "dumbbell press" stays unknown on purpose — bench or shoulder?
+  { id: "dumbbell-bench-press", name: "Dumbbell Bench Press", category: "dumbbell", aliases: ["flat dumbbell press", "flat dumbbell bench press", "flat dumbbell bench", "dumbbell bench", "db bench press", "db bench", "flat db press", "press de banca con mancuernas"] },
+  // Same id as the movement he minted on 16 Oct, so his history stays on one id.
+  { id: "incline-dumbbell-bench-press", name: "Incline Dumbbell Bench Press", category: "dumbbell", aliases: ["incline dumbbell press", "incline dumbbell bench", "incline db press", "incline db bench press", "press inclinado con mancuernas"] },
+  // "Dual axis" is the shoulder-press machine's own name on the gym floor.
+  { id: "machine-shoulder-press", name: "Machine Shoulder Press", category: "machine", aliases: ["dual axis overhead press", "dual axis shoulder press", "dual axis press", "machine overhead press", "shoulder press machine", "overhead press machine", "press de hombro en maquina"] },
+  // Not "chest press" — that name is his own (a dumbbell movement he minted).
+  { id: "machine-chest-press", name: "Machine Chest Press", category: "machine", aliases: ["chest press machine", "seated chest press", "machine bench press", "press de pecho en maquina"] },
+  { id: "pec-deck", name: "Pec Deck", category: "machine", aliases: ["pec deck fly", "pec deck machine", "pec fly", "machine fly", "machine chest fly", "chest fly machine", "butterfly machine", "mariposa"] },
+  { id: "rear-delt-fly", name: "Rear Delt Fly", category: "machine", aliases: ["rear delt", "rear delts", "rear deltoid", "rear deltoids", "rear delt flyes", "rear deltoid fly", "rear delt machine", "rear deltoid machine", "reverse fly", "reverse flyes", "reverse pec deck", "reverse pec fly", "rear fly", "deltoides posterior"] },
+  { id: "tricep-pushdown", name: "Tricep Pushdown", category: "machine", aliases: ["triceps pushdown", "tricep push down", "rope pushdown", "cable pushdown", "tricep rope pushdown"] },
+  { id: "hack-squat", name: "Hack Squat", category: "machine", aliases: ["hack squat machine", "sentadilla hack"] },
+  { id: "hip-abduction", name: "Hip Abduction", category: "machine", aliases: ["abductor", "abductors", "hip abductor", "abductor machine", "abduction machine"] },
+  { id: "hip-adduction", name: "Hip Adduction", category: "machine", aliases: ["adductor", "adductors", "hip adductor", "adductor machine", "adduction machine"] },
 
   // ── Cardio ────────────────────────────────────────────────────────────
   // Jump rope is a workout type of its own (lib/jump-rope.ts); the catalog
@@ -127,9 +146,13 @@ export function getCustomExercises(): ExerciseDef[] {
   return customExercises;
 }
 
-/** Full vocabulary — catalog plus user-minted movements (for pickers). */
+/**
+ * Full vocabulary — catalog plus user-minted movements (for pickers). A custom
+ * the catalog has since taken over (same id) is listed once, as the catalog's.
+ */
 export function allExercises(): ExerciseDef[] {
-  return [...EXERCISE_CATALOG, ...customExercises];
+  const builtIn = new Set(EXERCISE_CATALOG.map((e) => e.id));
+  return [...EXERCISE_CATALOG, ...customExercises.filter((e) => !builtIn.has(e.id))];
 }
 
 let index: IndexEntry[] | null = null;

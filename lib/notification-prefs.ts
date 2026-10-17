@@ -23,6 +23,8 @@ export interface CategoryPrefs {
   weighIn: boolean;
   /** a data pipeline has been failing or silent for days */
   systemAlerts: boolean;
+  /** yesterday's steps and calories at 7 am Central; the week on Sunday evening */
+  activityReports: boolean;
 }
 
 export interface NotificationPrefs extends CategoryPrefs {
@@ -48,6 +50,7 @@ export const CATEGORY_KEYS = [
   "weeklyReport",
   "weighIn",
   "systemAlerts",
+  "activityReports",
 ] as const satisfies ReadonlyArray<keyof CategoryPrefs>;
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -58,6 +61,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   weeklyReport: true,
   weighIn: true,
   systemAlerts: true,
+  activityReports: true,
   quietHoursEnabled: true,
   quietStart: DEFAULT_QUIET_START,
   quietEnd: DEFAULT_QUIET_END,

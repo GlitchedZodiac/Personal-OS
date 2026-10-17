@@ -122,7 +122,7 @@ function buildWhere(
   // Date window. `dateField` may be a DateTime column or a "YYYY-MM-DD"
   // string column (localDate); both are handled.
   if (spec.dateField) {
-    const isStringDay = spec.dateField === "localDate";
+    const isStringDay = spec.dateIsDayString || spec.dateField === "localDate";
     let fromDay = isIsoDay(args.from) ? args.from : null;
     let toDay = isIsoDay(args.to) ? args.to : null;
     if (!fromDay && !toDay && args.days != null) {
@@ -235,6 +235,7 @@ async function buildDigest() {
     ["workoutLog", "recent_workouts"],
     ["waterLog", "water"],
     ["dailyHealthSnapshot", "daily_health"],
+    ["dailyActivity", "daily_activity"],
     ["todo", "todos"],
     ["journalEntry", "journal"],
     ["habitCheck", "habits"],

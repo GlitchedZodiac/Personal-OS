@@ -101,6 +101,14 @@ export interface SyncAlert {
  * A source that has never once succeeded is not "broken", it is not set up
  * yet, and says nothing.
  */
+/** What to do about a heartbeat source that has gone quiet. */
+const STALLED_FIX_DEFAULT = "Open Pitaya on your iPhone to restart it.";
+const STALLED_FIX: Record<string, string> = {
+  // The nightly Shortcut (SHORTCUT_SETUP.md) — the app has nothing to restart.
+  health_shortcut:
+    "Check the Health Shortcut automation on your iPhone (Shortcuts → Automation), or run it once by hand.",
+};
+
 export function syncAlertFor(state: SyncState, now: Date): SyncAlert | null {
   const failing = state.failingSince !== null;
   const since = failing
@@ -129,7 +137,7 @@ export function syncAlertFor(state: SyncState, now: Date): SyncAlert | null {
   return {
     source: state.source,
     title: `${state.label} hasn't synced`,
-    body: `Nothing has arrived for ${days} days. Open Pitaya on your iPhone to restart it.`,
+    body: `Nothing has arrived for ${days} days. ${STALLED_FIX[state.source] ?? STALLED_FIX_DEFAULT}`,
     dedupeKey,
   };
 }

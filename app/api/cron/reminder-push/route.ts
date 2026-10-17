@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
       expired: result.reminders.expired,
       flushed: result.flushed,
       alerts: result.alerts,
+      activity: result.activity,
     });
   } catch (error) {
     console.error("Notification sweep error:", error);
