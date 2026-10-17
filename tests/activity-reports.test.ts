@@ -13,6 +13,12 @@ let prefs = { activityReports: true };
 vi.mock("@/lib/notification-prefs", () => ({ getNotificationPrefs: vi.fn(async () => prefs) }));
 
 let rows: { date: string; steps: number }[] = [];
+let snapshots: {
+  localDate: string;
+  steps: number;
+  activeEnergyKcal: number | null;
+  walkingRunningDistanceMeters: number | null;
+}[] = [];
 const sentKeys = new Set<string>();
 
 vi.mock("@/lib/prisma", () => ({
@@ -31,6 +37,8 @@ vi.mock("@/lib/prisma", () => ({
           }))
       ),
     },
+    // The iPhone app's own push fills days the Shortcut has not sent; none here.
+    dailyHealthSnapshot: { findMany: vi.fn(async () => snapshots) },
     notificationLog: {
       findUnique: vi.fn(async ({ where }: { where: { dedupeKey: string } }) =>
         sentKeys.has(where.dedupeKey) ? { id: "n1" } : null
@@ -51,6 +59,7 @@ beforeEach(() => {
   notify.mockClear();
   sentKeys.clear();
   prefs = { activityReports: true };
+  snapshots = [];
   rows = Array.from({ length: 14 }, (_, i) => ({
     date: `2026-10-${String(5 + i).padStart(2, "0")}`, // Mon 5 … Sun 18 Oct
     steps: 7000 + i * 100,
@@ -89,6 +98,16 @@ describe("morning report", () => {
     const out = await sendActivityReports(central("2026-10-17", 8));
     expect(out.morning).toBe("no data for 2026-10-16 yet");
     expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("uses the iPhone app's own sync when the Shortcut has not sent the day", async () => {
+    rows = rows.filter((r) => r.date !== "2026-10-16");
+    snapshots = [
+      { localDate: "2026-10-16", steps: 4321, activeEnergyKcal: 210, walkingRunningDistanceMeters: 3100 },
+    ];
+    const out = await sendActivityReports(central("2026-10-17", 7));
+    expect(out.morning).toBe("sent");
+    expect(notify.mock.calls[0][0].title).toBe("Yesterday · 4,321 steps");
   });
 
   it("is sent once", async () => {

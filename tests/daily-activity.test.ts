@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_DAYS_PER_REQUEST,
+  buildUpsertStatements,
   classifySource,
   isCalendarDay,
   isIngestAuthorized,
@@ -124,6 +125,7 @@ describe("parseActivityPayload", () => {
         restingEnergyKcal: 1890,
         walkingRunningDistanceKm: 6.424,
         source: "mixed",
+        fields: ["steps", "activeEnergyKcal", "restingEnergyKcal", "walkingRunningDistanceKm", "source"],
       },
     ]);
   });
@@ -137,7 +139,7 @@ describe("parseActivityPayload", () => {
     const { days, rejected } = parse([{ ...day, heartRate: 70, note: "hi", nested: { a: 1 } }]);
     expect(rejected).toEqual([]);
     expect(Object.keys(days[0]).sort()).toEqual(
-      ["activeEnergyKcal", "date", "restingEnergyKcal", "source", "steps", "walkingRunningDistanceKm"]
+      ["activeEnergyKcal", "date", "fields", "restingEnergyKcal", "source", "steps", "walkingRunningDistanceKm"]
     );
   });
 
@@ -209,13 +211,74 @@ describe("parseActivityPayload", () => {
     }
   });
 
+  it("records which fields a day carried — absent is not the same as empty", () => {
+    const { days } = parse([
+      { date: "2026-10-14", steps: "5000" },
+      { date: "2026-10-15", walking_running_distance_mi: "2", sources: "Michael's iPhone" },
+      { date: "2026-10-16", steps: "5000", resting_energy_kcal: "" },
+    ]);
+    expect(days.map((d) => d.fields)).toEqual([
+      ["steps"],
+      ["walkingRunningDistanceKm", "source"],
+      ["steps", "restingEnergyKcal"],
+    ]);
+  });
+
   it("takes a six-month backfill but not an unbounded one", () => {
     const backfill = Array.from({ length: 185 }, (_, i) => {
       const d = new Date(Date.UTC(2026, 9, 17 - i));
       return { date: d.toISOString().slice(0, 10), steps: 1000 + i };
     });
     expect(parse(backfill).days).toHaveLength(185);
+    const decade = Array.from({ length: 3650 }, (_, i) => ({
+      date: new Date(Date.UTC(2016, 9, 18 + i)).toISOString().slice(0, 10),
+      steps: "1",
+    }));
+    expect(parse(decade).days).toHaveLength(3650);
     const tooMany = Array.from({ length: MAX_DAYS_PER_REQUEST + 1 }, () => day);
     expect(parseActivityPayload(tooMany, NOW).ok).toBe(false);
+  });
+});
+
+describe("buildUpsertStatements", () => {
+  const at = new Date("2026-10-17T22:05:00Z");
+
+  it("writes one statement per set of fields, never a column that was not sent", () => {
+    const { days } = parse([
+      { date: "2026-10-14", steps: "5000" },
+      { date: "2026-10-15", steps: "6000" },
+      { date: "2026-10-16", steps: "7000", active_energy_kcal: "300" },
+    ]);
+    const stmts = buildUpsertStatements(days, at);
+    expect(stmts).toHaveLength(2);
+
+    const [stepsOnly, both] = stmts;
+    expect(stepsOnly.dates).toEqual(["2026-10-14", "2026-10-15"]);
+    expect(stepsOnly.sql).toContain('("id", "date", "steps", "received_at")');
+    expect(stepsOnly.sql).toContain('ON CONFLICT ("date") DO UPDATE SET "steps" = EXCLUDED."steps", "received_at"');
+    expect(stepsOnly.sql).not.toContain("active_energy_kcal");
+    expect(stepsOnly.params).toEqual([["2026-10-14", "2026-10-15"], [5000, 6000], "2026-10-17T22:05:00.000Z"]);
+
+    expect(both.sql).toContain('"steps", "active_energy_kcal", "received_at"');
+    expect(both.params).toEqual([["2026-10-16"], [7000], [300], "2026-10-17T22:05:00.000Z"]);
+  });
+
+  it("types every array and stores received_at as UTC", () => {
+    const { days } = parse([
+      {
+        date: "2026-10-16",
+        steps: 8123,
+        active_energy_kcal: 512,
+        resting_energy_kcal: 1890,
+        walking_running_distance_km: 6.4,
+        source: "mixed",
+      },
+    ]);
+    const [stmt] = buildUpsertStatements(days, at);
+    expect(stmt.sql).toContain(
+      "unnest($1::text[], $2::int4[], $3::float8[], $4::float8[], $5::float8[], $6::text[])"
+    );
+    expect(stmt.sql).toContain("($7::timestamptz AT TIME ZONE 'UTC')");
+    expect(stmt.params).toHaveLength(7);
   });
 });

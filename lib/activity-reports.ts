@@ -19,6 +19,7 @@ import {
   morningNotification,
   weeklyNotification,
 } from "@/lib/activity-summary";
+import { buildActivityHistory, mergeActivitySources } from "@/lib/activity-history";
 import { ACTIVITY_TIME_ZONE } from "@/lib/daily-activity";
 import { getNotificationPrefs } from "@/lib/notification-prefs";
 import { notify } from "@/lib/notify";
@@ -30,20 +31,38 @@ import {
   getWeekStartDateString,
 } from "@/lib/timezone";
 
+/**
+ * The Shortcut's days, with the iPhone app's own Health push filling any day
+ * the Shortcut has not sent (lib/activity-history.ts mergeActivitySources).
+ * Until he builds the Shortcut, the app's days are all there is.
+ */
 export async function loadActivityRows(from: string, to: string): Promise<ActivityRow[]> {
-  return prisma.dailyActivity.findMany({
-    where: { date: { gte: from, lte: to } },
-    orderBy: { date: "asc" },
-    select: {
-      date: true,
-      steps: true,
-      activeEnergyKcal: true,
-      restingEnergyKcal: true,
-      walkingRunningDistanceKm: true,
-      source: true,
-      receivedAt: true,
-    },
-  });
+  const [shortcut, snapshots] = await Promise.all([
+    prisma.dailyActivity.findMany({
+      where: { date: { gte: from, lte: to } },
+      orderBy: { date: "asc" },
+      select: {
+        date: true,
+        steps: true,
+        activeEnergyKcal: true,
+        restingEnergyKcal: true,
+        walkingRunningDistanceKm: true,
+        source: true,
+        receivedAt: true,
+      },
+    }),
+    prisma.dailyHealthSnapshot.findMany({
+      where: { localDate: { gte: from, lte: to } },
+      select: { localDate: true, steps: true, activeEnergyKcal: true, walkingRunningDistanceMeters: true },
+    }),
+  ]);
+  return mergeActivitySources(shortcut, snapshots);
+}
+
+/** Everything since the first day either source holds, through yesterday. */
+export async function getActivityHistory(today: string = activityToday()) {
+  const rows = await loadActivityRows("2014-09-01", today);
+  return buildActivityHistory(rows, today);
 }
 
 /** "Today" for these reports is always Central time — his call. */

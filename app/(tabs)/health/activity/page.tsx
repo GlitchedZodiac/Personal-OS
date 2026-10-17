@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ActivityHistoryView } from "@/components/activity-history";
 import type { ActivityMetric, MorningReport, WeeklyReport } from "@/lib/activity-summary";
 
 // Activity — Apple Health steps and calories from the nightly Shortcut
@@ -172,9 +173,10 @@ function ActivityScreen() {
             WAITING FOR THE SHORTCUT
           </div>
           <div className="mt-2 text-[13.5px] leading-[1.6] text-foreground">
-            Nothing has arrived from Apple Health yet. Build the Health Shortcut on your
-            iPhone (SHORTCUT_SETUP.md in the repo) and run it once — the last six months
-            fill in, then it keeps itself up to date every night.
+            Nothing has arrived from the Health Shortcut yet, so what you see is the
+            iPhone app&apos;s own sync — it only runs while the app is open. Build the
+            Health Shortcut (SHORTCUT_SETUP.md in the repo) and run the History part
+            once: every day Health has comes in, then it stays current every night.
           </div>
         </div>
       )}
@@ -411,6 +413,8 @@ function ActivityScreen() {
           </div>
         </div>
       )}
+
+      <ActivityHistoryView />
 
       {data?.lastPush && (
         <div className="mt-4 text-center text-[11px] text-muted-foreground">
