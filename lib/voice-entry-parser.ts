@@ -6,10 +6,11 @@
 //   - anything shaky is kept but flagged (needsReview + reason), never dropped
 //     and never padded with numbers that were not said.
 //
-// Pipeline: tokenize → fold number words (EN/ES) → fold on/off intervals and
-// restatements ("which are…") → split into movements → peel quantities off
-// each segment (per-side, vest, interval, duration, weight, sets, reps) →
-// whatever words remain are the movement name → match the catalog.
+// Pipeline: tokenize → fold number words (EN/ES), rep ranges and bench angles
+// → fold on/off intervals and restatements ("which are…") → split into
+// movements → peel quantities off each segment ("to failure" and hedges,
+// per-side, vest, interval, duration, weight, sets, reps) → whatever words
+// remain are the movement name → match the catalog.
 //
 // Weights are reported PER IMPLEMENT, as spoken: "two 16s" is weightKg 16 with
 // implements 2, never 32. Nothing here sums a pair.
@@ -66,7 +67,10 @@ export interface ParsedVoiceEntry {
 
 export interface VoiceParseResult {
   entries: ParsedVoiceEntry[];
-  /** True only when every entry is matched with high confidence and has a quantity — the caller skips the LLM. */
+  /**
+   * True only when every entry is matched with high confidence and has a
+   * quantity — reps, a time, or sets at a stated weight — so the caller skips the LLM.
+   */
   confident: boolean;
   /** The folded transcript the parser actually worked on. */
   normalized: string;
@@ -165,8 +169,18 @@ const EDGE_STOP = wordSet(
 );
 /** Words for how a block was run, never the movement itself ("EMOMs", "intervals"). */
 const DESCRIPTOR = wordSet("emom emoms interval intervals");
+/** "To failure", "hasta el fallo" — how the sets were run: never a name, never a number. */
+const FAILURE = wordSet("failure fallo");
+const FAILURE_LEAD = wordSet("to till til until hasta al el");
+/** A hedge in front of a count ("roughly 8", "about 5 to 7"): the number stands, the word goes. */
+const HEDGE = wordSet("about around roughly approximately approx maybe like almost nearly unos unas aproximadamente casi");
+/** Joins the two ends of a rep range: "6 to 8", "8 through 10", "de 8 a 10" ("8-10" is read as "8 to 10"). */
+const RANGE_LINK = wordSet("to through thru a");
+const ANGLE = wordSet("degree degrees deg grado grados");
 /** The token an "N on, M off" phrase is folded into. */
 const INTERVAL = "<interval>";
+/** The token a bench angle ("45 degree incline") is folded into — setup, not a quantity, not a name. */
+const ANGLE_TOKEN = "<angle>";
 /** Says "the same again" all by itself. */
 const REPEAT_CUE = wordSet("again same repeat ditto mismo misma igual");
 /** Says it only with something to count: "another SET", "ONE more", "otra VEZ". Alone ("More.") it is as likely noise. */
@@ -323,6 +337,7 @@ const NON_NAME = new Set([
   ...EDGE_STOP,
   ...DESCRIPTOR,
   INTERVAL,
+  ANGLE_TOKEN,
 ]);
 
 // ── Tokens ──────────────────────────────────────────────────────────────
@@ -339,6 +354,10 @@ interface Tok {
   lock?: boolean;
   /** "30 seconds on, 30 seconds off", in seconds (t is INTERVAL). */
   interval?: { work: number; rest: number };
+  /** The high end of a rep range ("6 to 8") — `n` is the low end, and the low end is what is logged. */
+  upTo?: number;
+  /** A bench angle in degrees (t is ANGLE_TOKEN). */
+  angle?: number;
   /**
    * A separator that says the next part is the SAME thing said another way
    * ("which are", "that is", "aka") or a correction of it ("or rather").
@@ -376,6 +395,10 @@ function tokenize(transcript: string): Tok[] {
     // "30/30", "20/10" — work/rest. Small numbers ("5/3/1") are something else.
     .replace(/(^|[^\d/.])(\d+)\s?\/\s?(\d+)(?![\d/.])/g, (whole, lead: string, a: string, b: string) =>
       Number(a) >= 5 && Number(a) <= 600 && Number(b) >= 5 && Number(b) <= 600 ? `${lead}${a} on ${b} off` : whole
+    )
+    // "8-10 reps" is a range; "5-3-1" and "22.5-24" are left alone.
+    .replace(/(?<![\d.\-\u2013])(\d+)\s?[-\u2013]\s?(\d+)(?![\d.\-\u2013])/g, (whole, a: string, b: string) =>
+      Number(a) < Number(b) ? `${a} to ${b}` : whole
     )
     .replace(/(\d)'s\b/g, "$1s") // "two 16's"
     .replace(/(\d),(\d{1,2})(?=\s*(?:kg|kilo|lb|libra|pound))/g, "$1.$2"); // "22,5 kilos"
@@ -607,7 +630,44 @@ function foldNumberWords(toks: Tok[]): Tok[] {
   return out;
 }
 
-/** Decimals ("22 point 5"), halves ("and a half") and a few joins that must happen before splitting. */
+const isCount = (tok: Tok | undefined): tok is NumTok =>
+  isNum(tok) && !tok.plural && Number.isInteger(tok.n) && tok.n >= 1;
+
+/** "to failure", "till failure", "hasta el fallo", or a bare "failure", starting at `j`. */
+function failureAt(toks: Tok[], j: number): boolean {
+  let k = j;
+  while (k < j + 2 && free(toks[k], FAILURE_LEAD)) k++;
+  return free(toks[k], FAILURE);
+}
+
+/**
+ * The high end of a range from `low` to `high` (the words after it start at
+ * `j`), or undefined when the pair is not plainly one count. It has to be
+ * followed by what a count is followed by — "reps", "sets", "seconds",
+ * "times", "each side", "with…", the movement, "to failure" — or be hedged
+ * ("about 5 to 7"). A weight is never a range: "16 to 20 kilos", "with the 16
+ * to 20" and a bare "swings, 20 to 24" (bells?) keep both numbers, as before.
+ */
+function rangeHigh(low: Tok | undefined, high: Tok | undefined, toks: Tok[], j: number, before: Tok | undefined): number | undefined {
+  if (!isCount(low) || !isCount(high) || high.n <= low.n || high.n > 100) return undefined;
+  const after = toks[j];
+  if (free(before, PREP) || free(before, ARTICLE) || unitOf(after) != null) return undefined;
+  const countFollows =
+    free(after, REPS) ||
+    free(after, SETS) ||
+    free(after, ROUNDS) ||
+    free(after, SECOND) ||
+    free(after, MINUTE) ||
+    isWord(after, "times", "veces") ||
+    free(after, EACH) ||
+    free(after, PREP) ||
+    isNameish(after) ||
+    free(after, IMPLEMENT) ||
+    failureAt(toks, j);
+  return countFollows || free(before, HEDGE) ? high.n : undefined;
+}
+
+/** Decimals ("22 point 5"), halves ("and a half"), rep ranges, angles and a few joins that must happen before splitting. */
 function refineNumbers(toks: Tok[]): Tok[] {
   const out: Tok[] = [];
   for (let i = 0; i < toks.length; i++) {
@@ -617,6 +677,31 @@ function refineNumbers(toks: Tok[]): Tok[] {
     if (isWord(tok, "point") && isNum(prev) && Number.isInteger(prev.n) && isNum(fraction) && Number.isInteger(fraction.n)) {
       prev.n = Number(`${prev.n}.${fraction.n}`);
       i++;
+      continue;
+    }
+    // "6 to 8 reps", "five to seven", "between 8 and 10": a range is ONE count
+    // (reps mostly; sets or seconds the same way), and the LOW end is what is
+    // logged — never more than he is sure he did, so a range can never raise a
+    // false record. A range is not a doubt: it is not flagged for being one.
+    if (free(tok, RANGE_LINK) && isNum(prev)) {
+      const high = rangeHigh(prev, toks[i + 1], toks, i + 2, out[out.length - 2]);
+      if (high != null) {
+        prev.upTo = high;
+        i++;
+        continue;
+      }
+    }
+    if (isWord(tok, "between", "entre") && isWord(toks[i + 2], "and", "y")) {
+      const high = rangeHigh(toks[i + 1], toks[i + 3], toks, i + 4, prev);
+      if (high != null) {
+        out.push({ ...toks[i + 1], upTo: high });
+        i += 3;
+        continue;
+      }
+    }
+    // "45 degree incline" — the bench angle is setup, not a count and not the name.
+    if (free(tok, ANGLE) && isNum(prev) && !prev.plural) {
+      out[out.length - 1] = { t: ANGLE_TOKEN, angle: prev.n };
       continue;
     }
     // "and a half" / "y medio": add to the number, or to the number in front of its unit.
@@ -765,9 +850,11 @@ const renderTokens = (toks: Tok[]): string =>
     .map((tok) =>
       tok.interval != null
         ? `${tok.interval.work}s on ${tok.interval.rest}s off`
-        : tok.n != null
-          ? `${tok.n}${tok.plural ? "s" : ""}`
-          : tok.t
+        : tok.angle != null
+          ? `${tok.angle} degree`
+          : tok.n != null
+            ? `${tok.n}${tok.plural ? "s" : ""}${tok.upTo != null ? ` to ${tok.upTo}` : ""}`
+            : tok.t
     )
     .join(" ")
     .replace(/( ,)+/g, ",")
@@ -964,6 +1051,25 @@ function pairFromSide(seg: Segment, loose: boolean) {
   }
   seg.weight = { ...weight, count: 2 };
   delete seg.weight.pair;
+}
+
+/**
+ * "…to failure", "roughly 8", "about 5 to 7": how the sets were run, and how
+ * sure he is of the count. Neither is part of a movement name — left in, they
+ * became entries of their own ("Roughly to to Failure") — and the number stays.
+ */
+function takeEffort(seg: Segment) {
+  const t = seg.toks;
+  for (let i = t.length - 1; i >= 0; i--) {
+    if (free(t[i], FAILURE)) {
+      let lo = i;
+      while (free(t[lo - 1], FAILURE_LEAD)) lo--;
+      t.splice(lo, i - lo + 1);
+      i = lo;
+    } else if (free(t[i], HEDGE) && isNum(t[i + 1])) {
+      t.splice(i, 1);
+    }
+  }
 }
 
 function takeGlobalMarker(seg: Segment) {
@@ -1388,9 +1494,22 @@ function sanitize(seg: Segment) {
   }
 }
 
-/** Strip filler and connective words from the edges; names keep their inner words ("clean and press"). */
+/**
+ * Strip filler and connective words from the edges; names keep their inner
+ * words ("clean and press"). A word the recogniser doubled ("rear rear
+ * deltoid") is said once.
+ */
 function trimName(seg: Segment) {
-  const t = seg.toks.filter((tok) => !free(tok, FILLER));
+  const t: Tok[] = [];
+  for (const tok of seg.toks) {
+    if (free(tok, FILLER) || tok.t === ANGLE_TOKEN) continue;
+    const last = t[t.length - 1];
+    if (last != null && last.n == null && tok.n == null && last.t === tok.t) {
+      if (tok.lock) t[t.length - 1] = { ...last, lock: true };
+      continue;
+    }
+    t.push(tok);
+  }
   let lo = 0;
   let hi = t.length;
   while (lo < hi && free(t[lo], EDGE_STOP)) lo++;
@@ -1458,6 +1577,7 @@ function parseSegment(raw: RawSegment, defaultVestKg: number, carry: boolean): S
   const seg: Segment = { toks: [...raw.toks] };
   if (raw.restate) seg.restate = raw.restate;
   if (carry) takeRepeat(seg);
+  takeEffort(seg);
   takeGlobalMarker(seg);
   takePerSide(seg);
   takeVest(seg, defaultVestKg);
@@ -1850,9 +1970,15 @@ function pluralExact(folded: string): ExerciseDef | null {
   return vocabulary().find((k) => k.stemmed === stemmed)?.def ?? null;
 }
 
-/** Fuzzy catalog match used by the parser; exported for tests and for the LLM path to reuse. */
+/**
+ * Fuzzy catalog match used by the parser; exported for tests and for the LLM
+ * path to reuse. A doubled word ("rear rear deltoid") is read once.
+ */
 export function matchSpokenExercise(spoken: string): SpokenMatch {
-  const folded = foldExerciseName(spoken);
+  const folded = foldExerciseName(spoken)
+    .split(" ")
+    .filter((word, i, words) => i === 0 || word !== words[i - 1])
+    .join(" ");
   if (!folded) return NO_MATCH;
 
   const exact = findExerciseByExactName(folded);
@@ -2006,6 +2132,11 @@ function buildEntry(seg: Segment, keepWeak: boolean, carry?: VoicePrevious): Par
 
   const hasQuantity = reps != null || seconds != null;
   const hasNumbers = hasQuantity || seg.sets != null || hasLoad(seg);
+  // "3 sets … with 55 pounds", "3 sets to failure at 90 pounds": sets at a
+  // weight are a whole log line. Reps he did not say stay absent (never
+  // guessed), and on their own they are not a reason to ask. Sets with no
+  // weight ("3 sets of swings") still are.
+  const setsAtWeight = !hasQuantity && seg.sets != null && seg.weight != null;
   // No number and no solid match ("the plank is wet", "thanks for watching"):
   // chatter on its own, a fragment to review inside a real log.
   const weak = !hasNumbers && (match.def == null || match.score < SCORE_MISHEARD);
@@ -2029,7 +2160,7 @@ function buildEntry(seg: Segment, keepWeak: boolean, carry?: VoicePrevious): Par
     // "plank 45": a count on a timed hold is far more likely seconds whose unit
     // was not said. Keep the number as spoken, but do not vouch for it.
     const unitlessHold = reps != null && seconds == null && HOLD_NAME.test(match.def.name);
-    if (!hasQuantity || guessedReps || unitlessHold) {
+    if ((!hasQuantity && !setsAtWeight) || guessedReps || unitlessHold) {
       confidence = Math.min(confidence, 0.6);
       reason ??= "no_quantity";
     }

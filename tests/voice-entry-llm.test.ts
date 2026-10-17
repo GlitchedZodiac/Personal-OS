@@ -216,6 +216,52 @@ describe("entryFromLLM — weight is one implement, a pair is `implements`", () 
   });
 });
 
+describe("entryFromLLM — sets at a weight, and his 16 Oct gym clips", () => {
+  it("sets at a weight with no rep count are a whole entry; without the weight they still ask", () => {
+    const pressed = entryFromLLM(
+      said({ spokenName: "incline dumbbell press", catalogId: "incline-dumbbell-bench-press", reps: null, sets: 3, weightEach: 55, weightCount: 2, weightUnit: "lb" }),
+      5
+    );
+    expect(pressed).toMatchObject({ exercise: "incline-dumbbell-bench-press", sets: 3, weightKg: 24.9, implements: 2, needsReview: false });
+    expect(pressed).not.toHaveProperty("reps");
+    expect(entryFromLLM(said({ reps: null, sets: 3 }), 5)).toMatchObject({ needsReview: true, reason: "no_quantity" });
+    expect(entryFromLLM(said({ reps: null, weightEach: 24, weightUnit: "kg" }), 5)).toMatchObject({
+      needsReview: true,
+      reason: "no_quantity",
+    });
+  });
+
+  // The model's answers exactly as the audit stored them (voice_clips.llmRaw).
+  it.each<[string, Partial<ModelEntry>, Record<string, unknown>]>([
+    [
+      "45 degree incline dumbbell press — sure, and now nothing is missing",
+      { spokenName: "45 degree incline dumbbell press", catalogId: "incline-dumbbell-bench-press", reps: null, sets: 3, weightEach: 55, weightCount: 2, weightUnit: "lb", sure: true },
+      { exercise: "incline-dumbbell-bench-press", sets: 3, weightKg: 24.9, implements: 2, needsReview: false },
+    ],
+    [
+      "rear rear deltoid — the doubled word resolves; the model's own doubt still shows",
+      { spokenName: "rear rear deltoid", catalogId: null, reps: null, sets: 3, weightEach: 60, weightUnit: "lb", sure: false },
+      { name: "Rear Delt Fly", exercise: "rear-delt-fly", sets: 3, weightKg: 27.2, needsReview: true, reason: "low_match" },
+    ],
+    [
+      "flat dumbbell press — known now; the model's own doubt still shows",
+      { spokenName: "flat dumbbell press", catalogId: null, reps: null, sets: 3, weightEach: 50, weightCount: 2, weightUnit: "lb", sure: false },
+      { exercise: "dumbbell-bench-press", sets: 3, weightKg: 22.7, implements: 2, needsReview: true, reason: "low_match" },
+    ],
+    [
+      "dual axis overhead press — the model's barbell id disagrees with the name, so it is asked",
+      { spokenName: "Dual axis overhead press", catalogId: "overhead-press", reps: 6, sets: 3, weightEach: 90, weightUnit: "lb", sure: false },
+      { exercise: "overhead-press", reps: 6, sets: 3, weightKg: 40.8, needsReview: true, reason: "low_match" },
+    ],
+  ])("%s", (_case, fields, expected) => {
+    setCustomExercises([{ id: "incline-dumbbell-bench-press", name: "Incline Dumbbell Bench Press", category: "dumbbell", aliases: [] }]);
+    const entry = entryFromLLM(said(fields), 5);
+    expect(entry).toMatchObject(expected);
+    // Pounds on a machine or a dumbbell never read as a kettlebell off his rack.
+    expect(finalizeVoiceEntries([entry!], { bells: [12, 16, 20, 24] })[0].reason).toBe(entry!.reason);
+  });
+});
+
 describe("buildVoiceEntryPrompt", () => {
   it("is just the transcript line when there is no context", () => {
     expect(buildVoiceEntryPrompt("another 8")).toBe("Transcript: another 8");
@@ -346,6 +392,14 @@ describe("parseVoiceEntriesWithLLM (model stubbed)", () => {
       "Never multiply",
       "kb-half-snatch: Kettlebell Half Snatch",
       "kettlebell-clean-and-jerk: Kettlebell Clean and Jerk",
+      // 2026-10-17, the gym session
+      "LOW end",
+      "To failure",
+      "reps null",
+      "bench angle",
+      "machines and dumbbells",
+      "rear-delt-fly: Rear Delt Fly",
+      "machine-shoulder-press: Machine Shoulder Press",
     ]) {
       expect(system).toContain(needle);
     }

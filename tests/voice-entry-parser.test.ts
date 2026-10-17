@@ -1928,3 +1928,247 @@ describe("carry-over from the previous entry", () => {
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// 2026-10-17 — after his first gym session on the watch (16 Oct: machines
+// and dumbbells, weights in pounds). All four clips came back with a "?".
+// The rules settled none of them: rep ranges were read as reps plus a bare
+// weight, "to failure" and "roughly"/"about" became movements of their own,
+// "45 degree" was read as 45 reps, the catalog had none of the four movements,
+// and three sets at a weight with no rep count was flagged no_quantity.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** His own movements on 16 Oct, as stored — "Incline Dumbbell Bench Press" was minted mid-session. */
+const HIS_GYM_CUSTOMS = [
+  { id: "incline-dumbbell-bench-press", name: "Incline Dumbbell Bench Press", category: "dumbbell" as const, aliases: [] },
+  { id: "chest-press", name: "Chest Press", category: "dumbbell" as const, aliases: [] },
+  { id: "dumbbell-row", name: "Dumbbell Row", category: "dumbbell" as const, aliases: [] },
+  { id: "strict-dumbbell-overhead-press", name: "Strict Dumbbell Overhead Press", category: "dumbbell" as const, aliases: [] },
+];
+
+describe("the four clips from his 16 Oct gym session, verbatim", () => {
+  const G1 = "Dual axis overhead press, three sets, ninety pounds to failure, six to eight reps.";
+  const G2 = "Three sets of rear rear deltoid, 60 pounds, roughly 8 to 10 reps to failure.";
+  const G3 = "Three sets, 45 degree incline dumbbell press with 55 pounds on each side.";
+  const G4 = "I did three sets of flat dumbbell presses, 50 pounds each side, about five to seven to failure.";
+
+  beforeEach(() => setCustomExercises(HIS_GYM_CUSTOMS));
+
+  it.each<[string, string, Partial<ReturnType<typeof row>>, ParsedVoiceEntry["spoken"], string]>([
+    [
+      G1,
+      "Machine Shoulder Press",
+      { exercise: "machine-shoulder-press", sets: 3, reps: 6, weightKg: 40.8 },
+      { each: 90, unit: "lb" },
+      "Machine Shoulder Press 3×6 · 40.8 kg",
+    ],
+    [
+      G2,
+      "Rear Delt Fly",
+      { exercise: "rear-delt-fly", sets: 3, reps: 8, weightKg: 27.2 },
+      { each: 60, unit: "lb" },
+      "Rear Delt Fly 3×8 · 27.2 kg",
+    ],
+    [
+      G3,
+      "Incline Dumbbell Bench Press",
+      { exercise: "incline-dumbbell-bench-press", sets: 3, weightKg: 24.9, implements: 2 },
+      { each: 55, unit: "lb", count: 2 },
+      "Incline Dumbbell Bench Press 3 sets · 2×24.9 kg",
+    ],
+    [
+      G4,
+      "Dumbbell Bench Press",
+      { exercise: "dumbbell-bench-press", sets: 3, reps: 5, weightKg: 22.7, implements: 2 },
+      { each: 50, unit: "lb", count: 2 },
+      "Dumbbell Bench Press 3×5 · 2×22.7 kg",
+    ],
+  ])("%s → one confident entry, %s", (said, name, fields, spoken, line) => {
+    // His rack is passed, as the watch does: pounds on a machine or a dumbbell are not a kettlebell.
+    const result = parseVoiceEntries(said, { bells: RACK });
+    expect(result.entries.map(row)).toEqual([{ ...fields, needsReview: false }]);
+    expect(result.entries[0]).toMatchObject({ name, spoken, matchedBy: "alias" });
+    expect(result.entries[0].confidence).toBeGreaterThanOrEqual(0.85);
+    expect(result.confident).toBe(true);
+    expect(voiceDisplayLine(result.entries[0])).toBe(line);
+    // The last look agrees — nothing flagged, nothing dropped.
+    expect(finalizeVoiceEntries(result.entries, { bells: RACK }).map(row)).toEqual(result.entries.map(row));
+  });
+
+  it("the rep ranges keep their low end, and the transcript still says the range", () => {
+    expect(parseVoiceEntries(G1).normalized).toBe("dual axis overhead press, 3 sets, 90 pounds to failure, 6 to 8 reps");
+    expect(parseVoiceEntries(G2).normalized).toBe("3 sets of rear rear deltoid, 60 pounds, roughly 8 to 10 reps to failure");
+    expect(parseVoiceEntries(G4).normalized).toBe(
+      "i did 3 sets of flat dumbbell presses, 50 pounds each side, about 5 to 7 to failure"
+    );
+  });
+
+  it("the catalog alone (no customs) reads all four the same way", () => {
+    setCustomExercises([]);
+    for (const said of [G1, G2, G3, G4]) expect(parseVoiceEntries(said, { bells: RACK }).confident).toBe(true);
+    expect(only(G3).exercise).toBe("incline-dumbbell-bench-press");
+  });
+
+  it("his own 'Chest Press' is still his — the machine is a different name", () => {
+    expect(only("3 sets of 10 chest press with 40 pounds")).toMatchObject({ exercise: "chest-press", needsReview: false });
+    expect(only("3 sets of 10 chest press machine, 100 pounds")).toMatchObject({ exercise: "machine-chest-press" });
+  });
+});
+
+describe("rep ranges — the low end is logged, and a range is not a doubt", () => {
+  it.each<[string, Partial<ParsedVoiceEntry>]>([
+    ["6 to 8 swings", { exercise: "kb-swing", reps: 6 }],
+    ["six to eight reps of swings", { exercise: "kb-swing", reps: 6 }],
+    ["swings, 8 to 10 reps", { exercise: "kb-swing", reps: 8 }],
+    ["8-10 swings", { exercise: "kb-swing", reps: 8 }],
+    ["8–10 swings", { exercise: "kb-swing", reps: 8 }],
+    ["8 through 10 swings", { exercise: "kb-swing", reps: 8 }],
+    ["between 8 and 10 swings", { exercise: "kb-swing", reps: 8 }],
+    ["swings, about 8 to 10", { exercise: "kb-swing", reps: 8 }],
+    ["3 x 8 to 10 swings", { exercise: "kb-swing", sets: 3, reps: 8 }],
+    ["swings 8 to 10 with the 24", { exercise: "kb-swing", reps: 8, weightKg: 24 }],
+    ["8 to 10 swings each side", { exercise: "kb-swing", reps: 8, perSide: true }],
+    ["10 to 12 push ups to failure", { exercise: "push-up", reps: 10 }],
+    ["2 to 3 sets of 10 swings", { exercise: "kb-swing", sets: 2, reps: 10 }],
+    ["plank 30 to 45 seconds", { exercise: "plank", seconds: 30 }],
+    ["de 8 a 10 repeticiones de sentadillas", { exercise: "back-squat", reps: 8 }],
+  ])("%s", (said, expected) => {
+    const result = parseVoiceEntries(said);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject({ ...expected, needsReview: false });
+    expect(result.confident).toBe(true);
+  });
+
+  it("a weight is never a range — both numbers stay, flagged, as before", () => {
+    expect(only("10 swings with 16 to 20 kilos")).toMatchObject({ reps: 10, needsReview: true });
+    // No unit, no "reps", nothing after: twenty swings with a 24, or 20-to-24 swings? Asked, not guessed.
+    expect(only("swings, 20 to 24")).toMatchObject({ reps: 20, weightKg: 24, reason: "ambiguous_weight" });
+  });
+
+  it("descending numbers and decimals are not ranges", () => {
+    expect(parseVoiceEntries("5-3-1 deadlifts").normalized).toBe("5 3 1 deadlifts");
+    expect(parseVoiceEntries("10 swings 22.5-24").normalized).toBe("10 swings 22.5 24");
+  });
+});
+
+describe("'to failure', hedges, bench angles and doubled words are never the movement", () => {
+  it.each<[string, Partial<ParsedVoiceEntry>]>([
+    ["10 push ups to failure", { exercise: "push-up", reps: 10 }],
+    ["10 push ups till failure", { exercise: "push-up", reps: 10 }],
+    ["swings to failure, 15 reps", { exercise: "kb-swing", reps: 15 }],
+    ["diez flexiones hasta el fallo", { exercise: "push-up", reps: 10 }],
+    ["roughly 10 swings", { exercise: "kb-swing", reps: 10 }],
+    ["about 10 swings", { exercise: "kb-swing", reps: 10 }],
+    ["I did like 10 swings", { exercise: "kb-swing", reps: 10 }],
+    ["30 degree incline dumbbell press, 3 sets of 10 with 40 pounds", { exercise: "incline-dumbbell-bench-press", sets: 3, reps: 10 }],
+    ["3 sets of 10 incline dumbbell press at 45 degrees, 40 pounds", { exercise: "incline-dumbbell-bench-press", sets: 3, reps: 10 }],
+    ["10 swings swings", { exercise: "kb-swing", reps: 10 }],
+  ])("%s", (said, expected) => {
+    const result = parseVoiceEntries(said);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject({ ...expected, needsReview: false });
+    expect(result.confident).toBe(true);
+  });
+
+  it("a hedge is only dropped in front of a number", () => {
+    expect(only("around the world 10 reps")).toMatchObject({ name: "Around the World", reason: "new_exercise" });
+  });
+
+  it("a doubled word is read once by the matcher too (the model path uses it)", () => {
+    expect(matchSpokenExercise("rear rear deltoid")).toMatchObject({ def: { id: "rear-delt-fly" }, score: 1, by: "alias" });
+    expect(only("10 bear bear crawls")).toMatchObject({ name: "Bear Crawl", reason: "new_exercise" });
+  });
+});
+
+describe("sets at a weight with no rep count", () => {
+  it("is a whole log line — reps stay absent, nothing is flagged", () => {
+    const entry = only("3 sets of swings with the 24");
+    expect(row(entry)).toEqual({ exercise: "kb-swing", sets: 3, weightKg: 24, needsReview: false });
+    expect(voiceDisplayLine(entry)).toBe("KB Swing 3 sets · 24 kg");
+  });
+
+  it.each<[string, ParsedVoiceEntry["reason"]]>([
+    ["3 sets of swings", "no_quantity"], // no weight: still asks
+    ["3 sets of curls to failure", "no_quantity"],
+    ["swings with the 24", "no_quantity"], // no sets either
+    ["3 sets of swings with a 500 kilo kettlebell", "ambiguous_weight"],
+    ["3 sets of dumbbell presses with 50 pounds", "new_exercise"], // bench or shoulder? still his call
+  ])("still flagged: %s (%s)", (said, reason) => {
+    const result = parseVoiceEntries(said);
+    expect(result.entries[0]).toMatchObject({ needsReview: true, reason });
+    expect(result.confident).toBe(false);
+  });
+
+  it("a kettlebell weight off his rack is still flagged, in pounds or kilos", () => {
+    expect(only("3 sets of goblet squats, 60 pounds", { bells: RACK })).toMatchObject({
+      weightKg: 27.2,
+      needsReview: true,
+      reason: "ambiguous_weight",
+    });
+  });
+});
+
+describe("gym vocabulary (machines and dumbbells)", () => {
+  it.each<[string, string]>([
+    ["dual axis overhead press", "machine-shoulder-press"],
+    ["shoulder press machine", "machine-shoulder-press"],
+    ["machine shoulder press", "machine-shoulder-press"],
+    ["chest press machine", "machine-chest-press"],
+    ["seated chest press", "machine-chest-press"],
+    ["pec deck", "pec-deck"],
+    ["pec fly", "pec-deck"],
+    ["rear delt", "rear-delt-fly"],
+    ["rear deltoid", "rear-delt-fly"],
+    ["reverse flies", "rear-delt-fly"],
+    ["reverse pec deck", "rear-delt-fly"],
+    ["flat dumbbell press", "dumbbell-bench-press"],
+    ["dumbbell bench press", "dumbbell-bench-press"],
+    ["incline dumbbell press", "incline-dumbbell-bench-press"],
+    ["lat pulldowns", "lat-pulldown"],
+    ["lat pull down", "lat-pulldown"],
+    ["seated cable rows", "seated-row"],
+    ["leg extensions", "leg-extension"],
+    ["lying leg curl", "leg-curl"],
+    ["leg press", "leg-press"],
+    ["tricep pushdowns", "tricep-pushdown"],
+    ["hack squat", "hack-squat"],
+    ["hip abduction", "hip-abduction"],
+    ["adductor machine", "hip-adduction"],
+  ])("%s → %s, exact", (spoken, id) => {
+    const match = matchSpokenExercise(spoken);
+    expect(match.def?.id).toBe(id);
+    expect(match.score).toBe(1);
+  });
+
+  it.each<[string, Partial<ParsedVoiceEntry>]>([
+    ["leg press, 3 sets of 10 at 200 pounds", { exercise: "leg-press", sets: 3, reps: 10, weightKg: 90.7 }],
+    ["lat pull down 3 sets of 12 at 100 pounds", { exercise: "lat-pulldown", sets: 3, reps: 12, weightKg: 45.4 }],
+    ["seated cable rows 3 by 12, 120 pounds", { exercise: "seated-row", sets: 3, reps: 12, weightKg: 54.4 }],
+    ["pec deck 3 sets 12 reps 80 pounds", { exercise: "pec-deck", sets: 3, reps: 12, weightKg: 36.3 }],
+    ["reverse flies, 3 sets of 15 with 40 pounds", { exercise: "rear-delt-fly", sets: 3, reps: 15, weightKg: 18.1 }],
+  ])("%s — confident with his rack known", (said, expected) => {
+    const result = parseVoiceEntries(said, { bells: RACK });
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject({ ...expected, needsReview: false });
+    expect(result.confident).toBe(true);
+  });
+
+  it("no catalog name or alias belongs to two movements", async () => {
+    const { EXERCISE_CATALOG, foldExerciseName } = await import("@/lib/exercises");
+    const owner = new Map<string, string>();
+    for (const def of EXERCISE_CATALOG) {
+      for (const key of [def.name, ...def.aliases].map(foldExerciseName)) {
+        expect(owner.get(key) ?? def.id, `"${key}"`).toBe(def.id);
+        owner.set(key, def.id);
+      }
+    }
+  });
+
+  it("a movement he minted that the catalog now carries is listed once", async () => {
+    const { allExercises } = await import("@/lib/exercises");
+    setCustomExercises(HIS_GYM_CUSTOMS);
+    const ids = allExercises().map((e) => e.id);
+    expect(ids.filter((id) => id === "incline-dumbbell-bench-press")).toHaveLength(1);
+    expect(ids).toContain("chest-press");
+  });
+});
