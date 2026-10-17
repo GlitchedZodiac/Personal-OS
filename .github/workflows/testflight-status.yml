@@ -1,0 +1,98 @@
+# Has TestFlight finished with the upload? (2026-10-17)
+#
+# CLAUDE.md: a native change is not shipped until its build is VALID on
+# TestFlight. The TestFlight workflow ends when Apple has the file, and
+# processing takes another 5–30 minutes. A cloud session has no key to ask
+# Apple, so "shipped, build N" could not be said from one. This job asks Apple
+# instead:
+#
+#   - after every successful TestFlight run, it waits for that upload;
+#   - by hand (Actions → TestFlight status → Run workflow), it reports the
+#     newest build.
+#
+# It prints the build number TestFlight shows on the phone as "0.1.0 (N)".
+# It runs on Linux because a Mac minute costs ten Linux ones, and the wait is
+# mostly sleeping. Same secrets as testflight.yml.
+
+name: TestFlight status
+
+on:
+  workflow_run:
+    workflows: [TestFlight]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID || 'XZ64H3U47U' }}
+      ASC_ISSUER_ID: 3f863989-7ac9-48a1-94a5-7547b50ded16
+      APP_ID: "6806347708"
+      # Empty on a manual run: then the newest build is the one reported.
+      UPLOADED_AFTER: ${{ github.event.workflow_run.run_started_at }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          if [ -z "$ASC_KEY_P8" ]; then
+            echo "::error::Secret ASC_KEY_P8 is not set — Settings → Secrets and variables → Actions → New repository secret."
+            exit 1
+          fi
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s\n' "$ASC_KEY_P8" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+      - name: Wait for the build to be ready
+        run: |
+          query="/v1/builds?filter[app]=${APP_ID}&sort=-uploadedDate&limit=1&fields[builds]=version,uploadedDate,processingState,expirationDate"
+          since=0
+          [ -n "$UPLOADED_AFTER" ] && since=$(date -d "$UPLOADED_AFTER" +%s)
+
+          # 80 checks, 30 s apart: 40 minutes, past Apple's slowest.
+          for attempt in $(seq 1 80); do
+            if ! out=$(node ios/scripts/asc-api.mjs GET "$query"); then
+              echo "::error::App Store Connect refused the request:"
+              echo "$out"
+              exit 1
+            fi
+            build=$(echo "$out" | tail -n +2 | jq -c '.data[0].attributes // empty')
+            if [ -z "$build" ]; then
+              echo "No builds listed yet."
+            else
+              number=$(echo "$build" | jq -r .version)
+              state=$(echo "$build" | jq -r .processingState)
+              uploaded=$(echo "$build" | jq -r .uploadedDate)
+              if [ "$(date -d "$uploaded" +%s)" -lt "$since" ]; then
+                echo "Newest build is still $number (uploaded $uploaded), from before this run."
+              else
+                case "$state" in
+                  VALID)
+                    line="Build $number is ready on TestFlight (uploaded $uploaded, expires $(echo "$build" | jq -r .expirationDate))."
+                    echo "$line"
+                    echo "$line" >> "$GITHUB_STEP_SUMMARY"
+                    exit 0 ;;
+                  INVALID|FAILED)
+                    echo "::error::Build $number was rejected in processing ($state). App Store Connect → TestFlight shows why."
+                    exit 1 ;;
+                  *)
+                    echo "Build $number: $state" ;;
+                esac
+              fi
+            fi
+            sleep 30
+          done
+          echo "::error::Not ready after 40 minutes. App Store Connect → TestFlight shows where it is."
+          exit 1
+
+      - name: Remove the key
+        if: always()
+        run: rm -rf ~/.appstoreconnect

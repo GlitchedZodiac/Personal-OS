@@ -189,8 +189,11 @@ ASC_KEY_ID=XZ64H3U47U ASC_ISSUER_ID=3f863989-7ac9-48a1-94a5-7547b50ded16 \
   demand (Actions → TestFlight → Run workflow). It needs the repository
   secret `ASC_KEY_P8` (a `.p8` key's text), plus `ASC_KEY_ID` when that key
   is not the Mac's `XZ64H3U47U`. Both can be set from the phone. A cloud session has no Mac
-  and no key, so for it the merge IS the upload; check the workflow run, then
-  the build, before calling a native change shipped.
+  and no key, so for it the merge IS the upload. Before calling a native
+  change shipped, check the TestFlight run, then the **TestFlight status** run
+  it starts (`.github/workflows/testflight-status.yml`). That run waits for
+  Apple's processing and names the build number, or fails if the build is
+  rejected.
 - Run it from a tree that matches `main` (merge first, or merge right after
   — `main` must always be what is on TestFlight). Apple picks the build
   number. Processing takes 5–30 minutes; check it with

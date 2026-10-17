@@ -23,6 +23,8 @@ His question: "why do I need the shortcut? shouldn't it be able to auto sync". Y
 - **Web copy:** it points at the app, not the Shortcut. `SHORTCUT_SETUP.md` is marked optional.
 - **CI:** `.github/workflows/ios-build.yml` compiles the app for the simulator, unsigned and with no secrets, on every PR touching `ios/**`. Cloud sessions have no Xcode.
 - **TestFlight from GitHub works.** The first run (dispatch, 2026-10-17 20:57) archived and uploaded in about 4 minutes with his existing key `XZ64H3U47U` as the `ASC_KEY_P8` secret. It was the same code as build 4.
+- **The merge uploaded the new app with no one at the Mac.** Merging PR #40 (e2e10db) started TestFlight run 2. It signed the archive with the background-delivery entitlement and finished uploading at 21:25 UTC, 5 minutes after the merge.
+- **`.github/workflows/testflight-status.yml` (new).** It runs after every successful TestFlight run, or by hand. On a Linux runner it waits until Apple has processed that upload, then prints its build number, or fails if Apple rejected it. Before this, a cloud session had no way to see whether a build was VALID.
 - **His 16 Oct gym session was corrected** (his "go … everything"), via MCP `edit_workout`:
   - Machine Shoulder Press 3×6 @ 40.8 kg (90 lb);
   - Rear Delt Fly 3×8 @ 27.2 kg;
