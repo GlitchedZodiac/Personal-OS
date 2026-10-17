@@ -20,7 +20,7 @@ import {
   weeklyNotification,
 } from "@/lib/activity-summary";
 import { buildActivityHistory, mergeActivitySources } from "@/lib/activity-history";
-import { ACTIVITY_TIME_ZONE } from "@/lib/daily-activity";
+import { ACTIVITY_TIME_ZONE, type ActivityDay, buildUpsertStatements } from "@/lib/daily-activity";
 import { getNotificationPrefs } from "@/lib/notification-prefs";
 import { notify } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
@@ -63,6 +63,18 @@ export async function loadActivityRows(from: string, to: string): Promise<Activi
 export async function getActivityHistory(today: string = activityToday()) {
   const rows = await loadActivityRows("2014-09-01", today);
   return buildActivityHistory(rows, today);
+}
+
+/**
+ * Writes parsed days to daily_activity — one INSERT … ON CONFLICT per set of
+ * fields sent (lib/daily-activity.ts), so a key a push left out is never
+ * touched. Shared by the Shortcut's route and the iPhone app's.
+ */
+export async function writeActivityDays(days: ActivityDay[], receivedAt: Date = new Date()): Promise<void> {
+  if (days.length === 0) return;
+  await prisma.$transaction(
+    buildUpsertStatements(days, receivedAt).map((stmt) => prisma.$executeRawUnsafe(stmt.sql, ...stmt.params))
+  );
 }
 
 /** "Today" for these reports is always Central time — his call. */

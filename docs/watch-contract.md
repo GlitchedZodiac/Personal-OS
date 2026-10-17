@@ -256,6 +256,19 @@ on the strength logger once something is logged) opens the session's log —
 each entry with the words as heard, a CHECK tag with the reason in words
 instead of a bare "?", and Remove / Put back on any entry.
 
+## Daily activity from the iPhone app (2026-10-17 — LIVE, additive)
+
+`POST /api/mobile/health/activity`, bearer device session.
+- Body: `{ "days": [ { "date": "YYYY-MM-DD", "steps": Int?, "active_energy_kcal": Double?, "resting_energy_kcal": Double?, "walking_running_distance_km": Double? } ] }`, at most 7,500 days.
+- Each day is upserted into `daily_activity` by date. **A key left out is left alone; a key sent as null clears it.** The Swift payload omits nil fields.
+- Days with every metric empty or zero are skipped. That is a locked-phone read, and it never overwrites a good day.
+- Response: `{ upserted, skipped, rejected, firstDate, lastDate }`.
+- Sender: `HealthSyncManager.syncActivity()` (ios/iPhone/HealthStore.swift).
+  - The totals come from `HKStatisticsCollectionQuery` (de-duplicated across iPhone and Watch).
+  - Every sync sends the last 8 days.
+  - The whole history goes once, foreground only, 15 years back, in chunks of 1,000 days, behind the flag `health.activityHistory.v1`. "Re-import full history" clears that flag.
+- Same day rules as the Shortcut's `/api/health/daily` (lib/daily-activity.ts). The daily snapshot route is unchanged and still carries sleep, HRV, resting HR and weigh-ins.
+
 ## Companion contract (added 2026-08-12 — main lane LIVE, build against it)
 
 Everything the iOS companion needs from the server exists now.

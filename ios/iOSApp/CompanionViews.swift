@@ -157,12 +157,14 @@ struct CompanionSettingsView: View {
                         // Body composition was added to readTypes on
                         // 2026-08-26; an already-connected install has to be
                         // asked again or the new types stay unread forever.
-                        Label("Connected — body composition not yet allowed",
+                        // 2026-10-17: resting energy joined; the copy names
+                        // what each newer type is for rather than one of them.
+                        Label("Connected — new Health data not yet allowed",
                               systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
-                        Text("Your scale writes body fat, BMI and lean mass into Apple Health. Pitaya needs permission to read them.")
+                        Text("Pitaya now also reads resting energy (for your activity history) and your scale's body fat, BMI and lean mass. Allow them once.")
                             .font(.footnote).foregroundStyle(.secondary)
-                        Button("Allow body composition") {
+                        Button("Allow new Health data") {
                             Task { await model.health.requestAccess() }
                         }
                         healthDiagnostics

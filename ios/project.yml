@@ -76,6 +76,10 @@ targets:
       path: iOSApp/PersonalOS.entitlements
       properties:
         com.apple.developer.healthkit: true
+        # 2026-10-17: signable now the team is paid (it was left out on the
+        # free team, which cannot sign it). Lets HealthKit wake the app to
+        # sync instead of syncing only when he opens it.
+        com.apple.developer.healthkit.background-delivery: true
         # §09 2f: the phone widgets read the companion's bearer session.
         keychain-access-groups:
           - $(AppIdentifierPrefix)net.blacksheepglobal.pitaya.shared

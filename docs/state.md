@@ -5,6 +5,40 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
+**The iPhone app syncs Health activity by itself, and TestFlight builds come from GitHub (2026-10-17, evening). Web AND `ios/**` in one session on his word ("go and do everything you possibly can"); parity checked first: `git log origin/main..origin/claude/watch-app -- ios/` is empty.**
+
+His question: "why do I need the shortcut? shouldn't it be able to auto sync". Yes, it should have, and there were three reasons it didn't:
+- **No background sync.** `com.apple.developer.healthkit.background-delivery` was never in the entitlements, because the free team could not sign it. So background delivery always failed, and the app synced only while open.
+- **Today and yesterday only.** Each sync posted those two days, so a missed day stayed missing.
+- **No resting energy, and no history.**
+
+**Shipped:**
+- **iPhone app:**
+  - The background-delivery entitlement is in `PersonalOS.entitlements` and `project.yml`.
+  - `HealthSyncManager.syncActivity()` reads per-day totals with `HKStatisticsCollectionQuery` (`ActivityReader`, de-duplicated across iPhone and Watch) and sends the last 8 days on every sync.
+  - The whole history goes once, in the foreground: 15 years, 1,000-day chunks, flag `health.activityHistory.v1`.
+  - It sends to the new **`POST /api/mobile/health/activity`** (device-session bearer, same day rules as the Shortcut route, contract in `docs/watch-contract.md`).
+  - Resting energy (`basalEnergyBurned`) joined readTypes, and `requestedTypesVersion` went to 4. His app shows "Connected — new Health data not yet allowed" until he taps **Allow new Health data**; steps, active kcal and km sync either way.
+- **Server:** `writeActivityDays` (lib/activity-reports.ts) is now shared by both routes.
+- **Web copy:** it points at the app, not the Shortcut. `SHORTCUT_SETUP.md` is marked optional.
+- **CI:** `.github/workflows/ios-build.yml` compiles the app for the simulator, unsigned and with no secrets, on every PR touching `ios/**`. Cloud sessions have no Xcode.
+- **TestFlight from GitHub works.** The first run (dispatch, 2026-10-17 20:57) archived and uploaded in about 4 minutes with his existing key `XZ64H3U47U` as the `ASC_KEY_P8` secret. It was the same code as build 4.
+- **His 16 Oct gym session was corrected** (his "go … everything"), via MCP `edit_workout`:
+  - Machine Shoulder Press 3×6 @ 40.8 kg (90 lb);
+  - Rear Delt Fly 3×8 @ 27.2 kg;
+  - Incline Dumbbell Bench Press 3 sets @ 2×24.9 kg;
+  - Dumbbell Bench Press 3×5 @ 2×22.7 kg.
+
+  The false Overhead Press records (40.8 kg weight, 734 volume) are gone. The records rebuilt as first records for the machine and dumbbell movements. `exercisesEditedAt` is stamped, so a watch re-send cannot undo it. Undo: `edit_workout` back to the four rows listed in this file's previous entry.
+
+**Verified:**
+- 1,541 tests (+5 for the route), tsc, lint, `npm run build`.
+- The mobile route on the local Postgres with a device token: 401 without one; 8 days in the app's exact encoding stored, with omitted metrics left empty.
+- Swift is checked by the PR build job, because nothing here can compile it.
+- **NOT verified:** on his phone, the history import, background wakes (iOS decides when, at most hourly, and only after unlock) and the permission prompt. The checklist covers them.
+
+---
+
 **Steps history over everything Health has (2026-10-17, later the same day; his ask: "a general view for steps — days, weeks, months, all time and trends … pull from ever … I can't find anything like that in my app").** Why he could not find anything: the Activity screen read only the Shortcut's table, which was empty.
 - **Fallback:** `loadActivityRows` (lib/activity-reports.ts) now fills any day the Shortcut has not sent from the iPhone app's own push (`daily_health_snapshots`, via `mergeActivitySources`). A travel day with two timezone rows keeps the fuller one. Days are marked `origin: app`, and the screen says they may be partial. The morning and weekly pushes use the same merged rows.
 - **History** (`lib/activity-history.ts` pure, `GET /api/health/activity/history`, `components/activity-history.tsx` on /health/activity):

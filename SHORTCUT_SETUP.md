@@ -1,5 +1,10 @@
 # Apple Health → Pitaya: the nightly Shortcut
 
+> **Optional since 2026-10-17.** The Pitaya iPhone app now does all of this
+> itself. It sends the last 8 days on every sync, in the background, and
+> your whole history once. Update it from TestFlight, open it, and allow the
+> new Health data when it asks. Keep this Shortcut only as a backup.
+
 An iPhone Shortcut reads your daily **Steps, Active Energy, Resting Energy and
 Walking + Running Distance** from Apple Health and sends them to Pitaya. Each
 run sends the **last 8 days** (today plus the 7 before it), so a night the

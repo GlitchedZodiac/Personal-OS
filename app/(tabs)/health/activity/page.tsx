@@ -170,13 +170,13 @@ function ActivityScreen() {
       {data && data.totalDays === 0 && (
         <div className="mt-4 rounded-[18px] bg-accent p-[18px]">
           <div className="text-[10.5px] font-bold tracking-[0.18em] text-[#8C2F51]">
-            WAITING FOR THE SHORTCUT
+            WAITING FOR APPLE HEALTH
           </div>
           <div className="mt-2 text-[13.5px] leading-[1.6] text-foreground">
-            Nothing has arrived from the Health Shortcut yet, so what you see is the
-            iPhone app&apos;s own sync — it only runs while the app is open. Build the
-            Health Shortcut (SHORTCUT_SETUP.md in the repo) and run the History part
-            once: every day Health has comes in, then it stays current every night.
+            Your full Apple Health history hasn&apos;t arrived yet, so what you see is
+            the older, partial sync. Update Pitaya from TestFlight and open it on your
+            iPhone once: it imports every day Health has, then keeps itself current
+            in the background.
           </div>
         </div>
       )}
