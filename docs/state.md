@@ -5,6 +5,32 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
+**Steps history over everything Health has (2026-10-17, later the same day; his ask: "a general view for steps — days, weeks, months, all time and trends … pull from ever … I can't find anything like that in my app").** Why he could not find anything: the Activity screen read only the Shortcut's table, which was empty.
+- **Fallback:** `loadActivityRows` (lib/activity-reports.ts) now fills any day the Shortcut has not sent from the iPhone app's own push (`daily_health_snapshots`, via `mergeActivitySources`). A travel day with two timezone rows keeps the fuller one. Days are marked `origin: app`, and the screen says they may be partial. The morning and weekly pushes use the same merged rows.
+- **History** (`lib/activity-history.ts` pure, `GET /api/health/activity/history`, `components/activity-history.tsx` on /health/activity):
+  - steps, active kcal or km, by 30 days, 26 weeks, 24 months or every year;
+  - each bar is the daily average over the days that arrived; tap a bar for avg, total and days in;
+  - trends: daily average over 7, 30, 90 and 365 days vs the period before;
+  - all time: total, average, best day, best week (4+ days) and best month (15+), 10k days, streaks (a missing day breaks one), steps by weekday.
+  - Everything runs through yesterday, so today's partial count never counts.
+  - Train has a "Steps & calories history" button now.
+- **Ingest:** a key left out is not written, while a key sent empty clears it. `buildUpsertStatements` writes one `INSERT … ON CONFLICT` per set of fields. The cap is now 7,500 days per push.
+- **SHORTCUT_SETUP.md §5:** the History Shortcut replaces the 185-day backfill. It runs one Group-By-Day query per metric over `DaysBack` (3,650 = 10 years), loops the results into a list, and makes four posts.
+- NO DESIGN SLICE (filed with the Activity screen).
+
+**Verified:**
+- 1,536 tests (+22), tsc, lint clean on touched files, `npm run build`.
+- On the local Postgres:
+  - App-only rows gave 9 days, with the travel day kept at 5,072 and the trends correct.
+  - Four Shortcut-style pushes covering 2023-01-01 → 2026-10-16 (1,385 days each; text numbers, decimal commas, miles) took 0.07–0.17 s each. Each one filled only its own column.
+  - Two days with negative kcal (from my test data) were rejected.
+  - History matched SQL exactly: yearly averages, 7-day trend +6%, lifetime 9,745,870, best day, 203 days at 10k.
+- Driven at 375 px in Chromium: every range, a tapped bar, the metric switch, the Train link. No console errors, no horizontal scroll.
+- **Self-smoke caught/fixed:** month labels read as dates ("Sep 26"), so they now read "Sep '26", and record dates carry the full year.
+- **NOT verified:** the History Shortcut on his iPhone (how long Shortcuts takes to loop 3,650 grouped samples), and prod.
+
+---
+
 **TestFlight from GitHub (2026-10-17, same session, his ask: "how can I get you to push to TestFlight automatically? You do it sometimes but not other times").** The answer to "sometimes": sessions on his Mac had Xcode and the App Store Connect key, and cloud sessions have neither. `.github/workflows/testflight.yml` now runs `ios/scripts/testflight-upload.sh ios` on GitHub's `macos-26` runner. It fires on a push to `main` touching `ios/**`, on the 1st of every other month (the 90-day expiry) and by hand. The only secret is `ASC_KEY_P8`. There is no `pull_request` trigger, so a fork can never run with the key. **NOT RUN YET:** it cannot be exercised before he adds the secret from his Mac. Expect one iteration on the first run. The likely snags:
 - the `macos-26` label (fall back to `macos-15`);
 - a fresh runner needing the API key to be allowed cloud-managed distribution certificates (Admin role);

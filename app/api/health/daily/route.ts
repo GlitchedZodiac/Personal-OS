@@ -1,5 +1,5 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { isIngestAuthorized, parseActivityPayload } from "@/lib/daily-activity";
+import { buildUpsertStatements, isIngestAuthorized, parseActivityPayload } from "@/lib/daily-activity";
 import { recordSync } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 
@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 // entry would have opened /api/health/daily-log and /daily-brief too.
 //
 // Body: an array of days. Each day is upserted by date, so the Shortcut can
-// re-send the last week every night (and a 6-month backfill once) without
+// re-send the last week every night (and its whole history once) without
 // ever creating a duplicate. Days with nothing in them — the locked-phone
 // run — are skipped, never written over good data. See lib/daily-activity.ts.
 
@@ -50,13 +50,12 @@ export async function POST(request: NextRequest) {
   try {
     const receivedAt = new Date();
     if (days.length > 0) {
+      // One statement per set of fields sent (lib/daily-activity.ts): a key
+      // the Shortcut left out is never written, so a history push of one
+      // metric cannot wipe the others.
       await prisma.$transaction(
-        days.map(({ date, ...metrics }) =>
-          prisma.dailyActivity.upsert({
-            where: { date },
-            create: { date, ...metrics, receivedAt },
-            update: { ...metrics, receivedAt },
-          })
+        buildUpsertStatements(days, receivedAt).map((stmt) =>
+          prisma.$executeRawUnsafe(stmt.sql, ...stmt.params)
         )
       );
       // Only a push that carried data counts as the pipeline being alive: a
