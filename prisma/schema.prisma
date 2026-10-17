@@ -426,6 +426,27 @@ model DailyHealthSnapshot {
   @@map("daily_health_snapshots")
 }
 
+// One row per day of Apple Health activity, pushed by his iPhone Shortcut
+// (2026-10-17, POST /api/health/daily). The Shortcut re-sends the last 7
+// days every night, so a missed night heals itself: a re-sent day
+// OVERWRITES its row, never adds one. Separate from daily_health_snapshots
+// (the companion app's push, keyed by date + timezone + source) on purpose —
+// this table has exactly one row per calendar day, which is what the
+// morning and weekly reports average over. Columns are snake_case because
+// the Shortcut's JSON keys are; see SHORTCUT_SETUP.md.
+model DailyActivity {
+  id                       String   @id @default(uuid())
+  date                     String   @unique // YYYY-MM-DD, the phone's local day (America/Chicago)
+  steps                    Int?
+  activeEnergyKcal         Float?   @map("active_energy_kcal")
+  restingEnergyKcal        Float?   @map("resting_energy_kcal")
+  walkingRunningDistanceKm Float?   @map("walking_running_distance_km")
+  source                   String? // phone | watch | mixed
+  receivedAt               DateTime @default(now()) @map("received_at")
+
+  @@map("daily_activity")
+}
+
 model PushDevice {
   id         String   @id @default(uuid())
   token      String   @unique // APNs device token (hex)

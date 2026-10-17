@@ -38,6 +38,7 @@ export type NotificationCategory =
   | "prCelebration"
   | "weeklyReport"
   | "spiritHomework"
+  | "activityReport"
   | "test";
 
 /** Which switch governs each category. `test` has none — he just asked for it. */
@@ -49,6 +50,7 @@ const CATEGORY_GATE: Record<NotificationCategory, keyof CategoryPrefs | null> = 
   prCelebration: "prCelebration",
   weeklyReport: "weeklyReport",
   spiritHomework: "spiritHomework",
+  activityReport: "activityReports",
   test: null,
 };
 
@@ -445,6 +447,7 @@ export interface SweepResult {
   reminders: Awaited<ReturnType<typeof deliverDueReminders>>;
   flushed: number;
   alerts: number;
+  activity?: { morning: string; weekly: string };
 }
 
 /**
@@ -462,15 +465,24 @@ export async function runNotificationSweep(opts: {
   const reminders = await deliverDueReminders({ now, canShowLocally: opts.canShowLocally });
   const flushed = await flushHeld(now);
   let alerts = 0;
+  let activity: SweepResult["activity"];
   if (opts.full) {
     alerts = await checkSyncHealth(now);
+    // Yesterday's and the week's activity reports (2026-10-17). Imported
+    // here, not at the top: lib/activity-reports.ts sends through notify().
+    try {
+      const { sendActivityReports } = await import("@/lib/activity-reports");
+      activity = await sendActivityReports(now);
+    } catch (error) {
+      console.warn("Activity reports failed:", (error as Error)?.message);
+    }
     // The log is a record, not an archive: ninety days is plenty to answer
     // "did that reminder go out?".
     await prisma.notificationLog
       .deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - LOG_KEEP_MS) } } })
       .catch(() => {});
   }
-  return { reminders, flushed, alerts };
+  return { reminders, flushed, alerts, activity };
 }
 
 // Vercel's Hobby crons run once a day each, so the scheduled sweep is hourly

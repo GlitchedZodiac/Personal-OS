@@ -15,7 +15,12 @@ import { isAuthenticatedRequest } from "@/lib/auth";
  *  - /api/oauth/register    rotating refresh token; register is policy-gated.
  *                           (/api/oauth/approve is NOT here — cookie-gated.)
  *  - OAuth callbacks      arrive from Strava/Google without our cookie
+ *  - /api/health/daily    iPhone Shortcut — verifies HEALTH_INGEST_TOKEN.
+ *                           EXACT match only: as a prefix it would also open
+ *                           /api/health/daily-log and /api/health/daily-brief.
  */
+const PUBLIC_API_EXACT = ["/api/health/daily"];
+
 const PUBLIC_API_PREFIXES = [
   "/api/auth",
   "/api/cron/",
@@ -30,9 +35,11 @@ const PUBLIC_API_PREFIXES = [
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const isPublic = PUBLIC_API_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(prefix)
-  );
+  const isPublic =
+    PUBLIC_API_EXACT.includes(pathname) ||
+    PUBLIC_API_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(prefix)
+    );
   if (isPublic) {
     return NextResponse.next();
   }

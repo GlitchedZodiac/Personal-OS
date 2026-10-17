@@ -32,6 +32,8 @@ export interface DatasetSpec {
   detailFields?: readonly string[];
   /** Column that `from`/`to`/`days` filter on. */
   dateField?: string;
+  /** `dateField` holds "YYYY-MM-DD" text rather than a timestamp. */
+  dateIsDayString?: boolean;
   orderBy?: Record<string, "asc" | "desc">;
   /** Columns `q` does a case-insensitive contains over. */
   search?: readonly string[];
@@ -153,7 +155,27 @@ export const REGISTRY: readonly DatasetSpec[] = [
       "sleepDeepMinutes", "sleepRemMinutes", "hrvMs",
       "respiratoryRateBrpm", "wristTempC", "vo2Max", "spo2Pct", "source",
     ],
+    dateField: "localDate",
     orderBy: { localDate: "desc" },
+  },
+  {
+    // The Health Shortcut's push (2026-10-17): one row per Central-time day,
+    // re-sent nightly for the last week, backfilled six months. The table the
+    // morning and weekly activity reports read — prefer it for steps/kcal.
+    key: "daily_activity",
+    kind: "table",
+    summary:
+      "Steps, active + resting kcal, walk/run km per day (Health Shortcut).",
+    model: "dailyActivity",
+    fields: [
+      "id", "date", "steps", "activeEnergyKcal", "restingEnergyKcal",
+      "walkingRunningDistanceKm", "source", "receivedAt",
+    ],
+    dateField: "date",
+    dateIsDayString: true,
+    orderBy: { date: "desc" },
+    defaultLimit: 31,
+    maxLimit: 400,
   },
   {
     key: "water",
