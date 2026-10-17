@@ -344,11 +344,13 @@ export function ActivityHistoryView() {
         )}
 
         <div className="mt-3.5 text-[10.5px] leading-[1.5] text-muted-foreground">
+          {/* "shortcut" = daily_activity (the iPhone app's full sync or the
+              Shortcut); "app" = the older day-snapshot sync, which could be partial. */}
           {data.origins.app > 0 && data.origins.shortcut === 0
-            ? `These ${data.origins.app} days come from the iPhone app's own Health sync, which only runs when the app is open — some days are partial. Run the Health History Shortcut once to bring in every day Health has.`
+            ? `These ${data.origins.app} days come from Pitaya's older Health sync, which only ran while the app was open — some days are partial. Open the updated iPhone app once to bring in every day Health has.`
             : data.origins.app > 0
-              ? `${data.origins.shortcut} days from the Health Shortcut; ${data.origins.app} filled in from the iPhone app's sync (may be partial).`
-              : `${data.origins.shortcut} days from the Health Shortcut.`}
+              ? `${data.origins.shortcut} days synced from Apple Health; ${data.origins.app} filled in from the older, possibly partial sync.`
+              : `${data.origins.shortcut} days synced from Apple Health.`}
         </div>
       </div>
     </>

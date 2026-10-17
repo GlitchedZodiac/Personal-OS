@@ -1,7 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { buildUpsertStatements, isIngestAuthorized, parseActivityPayload } from "@/lib/daily-activity";
+import { writeActivityDays } from "@/lib/activity-reports";
+import { isIngestAuthorized, parseActivityPayload } from "@/lib/daily-activity";
 import { recordSync } from "@/lib/notify";
-import { prisma } from "@/lib/prisma";
 
 // POST — his iPhone Shortcut's nightly Apple Health push (2026-10-17;
 // SHORTCUT_SETUP.md). Self-authenticating: `Authorization: Bearer
@@ -48,16 +48,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const receivedAt = new Date();
     if (days.length > 0) {
-      // One statement per set of fields sent (lib/daily-activity.ts): a key
-      // the Shortcut left out is never written, so a history push of one
-      // metric cannot wipe the others.
-      await prisma.$transaction(
-        buildUpsertStatements(days, receivedAt).map((stmt) =>
-          prisma.$executeRawUnsafe(stmt.sql, ...stmt.params)
-        )
-      );
+      // A key the Shortcut left out is never written, so a history push of
+      // one metric cannot wipe the others.
+      await writeActivityDays(days);
       // Only a push that carried data counts as the pipeline being alive: a
       // locked-phone run that sent nothing must not keep the alert quiet.
       after(() => recordSync(SYNC_SOURCE, { ok: true, label: SYNC_LABEL, heartbeat: true }));

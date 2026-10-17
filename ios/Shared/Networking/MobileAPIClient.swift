@@ -219,6 +219,19 @@ public actor MobileAPIClient {
         )
     }
 
+    /// Per-day activity totals (2026-10-17): the last 8 days on every sync
+    /// and, once, the whole history in chunks. Re-sending a day overwrites it,
+    /// so a day this phone missed is filled in by the next sync.
+    @discardableResult
+    public func postActivityDays(
+        _ days: [ActivityDayPayload]
+    ) async throws -> ActivityDaysResponse {
+        try await send(
+            path: "/api/mobile/health/activity", method: "POST",
+            body: ActivityDaysRequest(days: days), authorized: true, timeout: 60
+        )
+    }
+
     // MARK: - Wrist voice logging (2026-10-05)
 
     /// One spoken entry: audio up, parsed movement(s) back. The deadline is

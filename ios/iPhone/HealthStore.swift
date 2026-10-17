@@ -9,6 +9,7 @@
 #if os(iOS)
 import Foundation
 import HealthKit
+import UIKit
 
 @MainActor
 public final class HealthSyncManager: ObservableObject {
@@ -34,7 +35,8 @@ public final class HealthSyncManager: ObservableObject {
     @Published public private(set) var backgroundDeliveryNote: String?
 
     /// Bump when readTypes grows, so an existing install re-prompts.
-    private static let requestedTypesVersion = 3
+    /// 4 (2026-10-17): resting energy, for the activity history.
+    private static let requestedTypesVersion = 4
     private static let versionKey = "health.requestedTypes.version"
 
     private let store = HKHealthStore()
@@ -79,6 +81,9 @@ public final class HealthSyncManager: ObservableObject {
             HKQuantityType(.appleSleepingWristTemperature),
             HKQuantityType(.vo2Max),
             HKQuantityType(.oxygenSaturation),
+            // Added 2026-10-17: resting (basal) energy, the fourth number in
+            // the daily activity history beside steps, active kcal and km.
+            HKQuantityType(.basalEnergyBurned),
         ])
     }
 
@@ -182,15 +187,15 @@ public final class HealthSyncManager: ObservableObject {
                 guard !ok, let error else { return }
                 Task { @MainActor in
                     // This error was discarded with `{ _, _ in }` and the
-                    // failure was invisible. It fails because
-                    // com.apple.developer.healthkit.background-delivery is not
-                    // in the entitlements — and a FREE personal team cannot
-                    // sign it (same block as APNs and app groups). Do NOT add
-                    // it to project.yml: an unsignable entitlement breaks
-                    // provisioning outright.
+                    // failure was invisible. Until 2026-10-17 it always failed:
+                    // com.apple.developer.healthkit.background-delivery was
+                    // left out of the entitlements because the FREE personal
+                    // team could not sign it. The paid team can, and it is in
+                    // PersonalOS.entitlements now — so this note appearing
+                    // again means the signing lost it.
                     self?.backgroundDeliveryNote =
-                        "Background sync needs the paid Apple Developer Program. "
-                        + "Pitaya syncs every time you open it. (\(error.localizedDescription))"
+                        "Background sync is not active, so Pitaya syncs when you open it. "
+                        + "(\(error.localizedDescription))"
                 }
             }
         }
@@ -249,9 +254,12 @@ public final class HealthSyncManager: ObservableObject {
             // last week arrives here even though no day-window would find it.
             let drained = await drainWeighIns()
 
+            // Steps, active + resting kcal, distance per day (2026-10-17).
+            let activity = await syncActivity()
+
             lastSyncAt = Date()
             lastError = nil
-            lastResult = drained.isEmpty ? today : "\(today) · \(drained)"
+            lastResult = [today, drained, activity].filter { !$0.isEmpty }.joined(separator: " · ")
         } catch {
             lastError = "Sync failed: \(error.localizedDescription)"
         }
@@ -316,12 +324,71 @@ public final class HealthSyncManager: ObservableObject {
         return parts.joined(separator: " · ")
     }
 
-    /// Clears anchors + the backfill marker and re-reads everything. Safe: the
-    /// server's near-twin rule absorbs it all as merges or duplicates.
+    /// Clears anchors + the backfill markers and re-reads everything. Safe:
+    /// the server's near-twin rule absorbs the weigh-ins as merges or
+    /// duplicates, and activity days are upserted by date.
     public func rerunBackfill() async {
         HealthAnchorStore.reset()
+        UserDefaults.standard.removeObject(forKey: Self.activityHistoryKey)
         backfill = .idle
         await syncNow()
+    }
+
+    // MARK: - Daily activity (2026-10-17)
+
+    /// Set once the whole activity history has been sent.
+    private static let activityHistoryKey = "health.activityHistory.v1"
+    /// How far back the one-time history read looks. Days before his first
+    /// iPhone simply come back empty.
+    private static let activityHistoryYears = 15
+    /// Days per POST: a decade of history is ~3,650 days.
+    private static let activityChunk = 1_000
+
+    /// The last 8 days on every sync — so a day this phone never synced (it
+    /// was off, or iOS never woke the app) is filled in by the next one — and
+    /// the whole history once, in the foreground only: a background wake has
+    /// seconds, and a history read that is cut short is simply retried.
+    private func syncActivity() async -> String {
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: Date())
+        guard let recentStart = calendar.date(byAdding: .day, value: -7, to: todayStart) else { return "" }
+
+        var parts: [String] = []
+        do {
+            let recent = try await ActivityReader.days(store: store, from: recentStart, to: Date())
+            let sent = try await postActivity(recent)
+            parts.append("\(sent) days of activity")
+        } catch {
+            lastError = "Activity sync failed: \(error.localizedDescription)"
+            return ""
+        }
+
+        let historyDone = UserDefaults.standard.object(forKey: Self.activityHistoryKey) != nil
+        if !historyDone, UIApplication.shared.applicationState == .active {
+            do {
+                let from = calendar.date(
+                    byAdding: .year, value: -Self.activityHistoryYears, to: recentStart
+                ) ?? recentStart
+                let history = try await ActivityReader.days(store: store, from: from, to: recentStart)
+                let sent = try await postActivity(history)
+                UserDefaults.standard.set(Date(), forKey: Self.activityHistoryKey)
+                parts.append("\(sent) days of history imported")
+            } catch {
+                lastError = "Activity history import failed: \(error.localizedDescription)"
+            }
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func postActivity(_ days: [ActivityDayPayload]) async throws -> Int {
+        var upserted = 0
+        var start = 0
+        while start < days.count {
+            let chunk = Array(days[start..<min(start + Self.activityChunk, days.count)])
+            upserted += try await api.postActivityDays(chunk).upserted ?? 0
+            start += Self.activityChunk
+        }
+        return upserted
     }
 
     private func postSnapshot(daysAgo: Int) async throws -> String {
@@ -563,6 +630,85 @@ public final class HealthSyncManager: ObservableObject {
             ) { _, samples, _ in
                 let sample = samples?.first as? HKQuantitySample
                 continuation.resume(returning: sample?.quantity.doubleValue(for: unit))
+            }
+            store.execute(query)
+        }
+    }
+}
+
+// MARK: - Activity totals per day
+
+/// Per-day sums of the four activity metrics, read with
+/// HKStatisticsCollectionQuery: the same de-duplicated totals the Health app
+/// shows (a plain sum of samples would count a step twice when the iPhone
+/// and the Watch both recorded it). One query per metric, whatever the range.
+enum ActivityReader {
+    static func days(store: HKHealthStore, from start: Date, to end: Date) async throws -> [ActivityDayPayload] {
+        let calendar = Calendar.current
+        let anchor = calendar.startOfDay(for: start)
+        guard anchor < end else { return [] }
+
+        let steps = try await totals(store, .stepCount, .count(), anchor, end)
+        let active = try await totals(store, .activeEnergyBurned, .kilocalorie(), anchor, end)
+        // Unread until he allows the new type: HealthKit then answers with no
+        // data rather than an error, and the column is simply left out.
+        let resting = try await totals(store, .basalEnergyBurned, .kilocalorie(), anchor, end)
+        let distance = try await totals(store, .distanceWalkingRunning, .meterUnit(with: .kilo), anchor, end)
+
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        let trim = { (value: Double, scale: Double) -> Double in
+            (value * scale).rounded() / scale
+        }
+        let allDays = Set(steps.keys).union(active.keys).union(resting.keys).union(distance.keys).sorted()
+        return allDays.map { day in
+            ActivityDayPayload(
+                date: formatter.string(from: day),
+                steps: steps[day].map { Int($0.rounded()) },
+                activeEnergyKcal: active[day].map { trim($0, 10) },
+                restingEnergyKcal: resting[day].map { trim($0, 10) },
+                walkingRunningDistanceKm: distance[day].map { trim($0, 1000) }
+            )
+        }
+    }
+
+    /// Start of each local day → that day's total, for days with any data.
+    private static func totals(
+        _ store: HKHealthStore,
+        _ id: HKQuantityTypeIdentifier,
+        _ unit: HKUnit,
+        _ anchor: Date,
+        _ end: Date
+    ) async throws -> [Date: Double] {
+        try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: HKQuantityType(id),
+                quantitySamplePredicate: HKQuery.predicateForSamples(withStart: anchor, end: end),
+                options: .cumulativeSum,
+                anchorDate: anchor,
+                intervalComponents: DateComponents(day: 1)
+            )
+            query.initialResultsHandler = { _, collection, error in
+                if let error {
+                    if (error as? HKError)?.code == .errorNoData {
+                        continuation.resume(returning: [:])
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
+                    return
+                }
+                var out: [Date: Double] = [:]
+                collection?.enumerateStatistics(from: anchor, to: end) { statistics, _ in
+                    if let sum = statistics.sumQuantity() {
+                        let value = sum.doubleValue(for: unit)
+                        if value > 0 { out[statistics.startDate] = value }
+                    }
+                }
+                continuation.resume(returning: out)
             }
             store.execute(query)
         }

@@ -1037,6 +1037,54 @@ public struct BodySamplesResponse: Decodable, Sendable {
     public var landed: Int { (imported ?? 0) + (merged ?? 0) }
 }
 
+/// One day of Apple Health activity for POST /api/mobile/health/activity
+/// (2026-10-17). Totals come from HKStatisticsCollectionQuery, so iPhone and
+/// Watch counting the same steps are de-duplicated the way the Health app
+/// does it. A nil metric is left out of the JSON, and the server leaves that
+/// column as it was; the date is the phone's local day.
+public struct ActivityDayPayload: Encodable, Hashable, Sendable {
+    public let date: String
+    public let steps: Int?
+    public let activeEnergyKcal: Double?
+    public let restingEnergyKcal: Double?
+    public let walkingRunningDistanceKm: Double?
+
+    public init(
+        date: String,
+        steps: Int?,
+        activeEnergyKcal: Double?,
+        restingEnergyKcal: Double?,
+        walkingRunningDistanceKm: Double?
+    ) {
+        self.date = date
+        self.steps = steps
+        self.activeEnergyKcal = activeEnergyKcal
+        self.restingEnergyKcal = restingEnergyKcal
+        self.walkingRunningDistanceKm = walkingRunningDistanceKm
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case date, steps
+        case activeEnergyKcal = "active_energy_kcal"
+        case restingEnergyKcal = "resting_energy_kcal"
+        case walkingRunningDistanceKm = "walking_running_distance_km"
+    }
+}
+
+public struct ActivityDaysRequest: Encodable, Sendable {
+    public let days: [ActivityDayPayload]
+
+    public init(days: [ActivityDayPayload]) {
+        self.days = days
+    }
+}
+
+public struct ActivityDaysResponse: Decodable, Sendable {
+    public let upserted: Int?
+    public let skipped: Int?
+    public let rejected: Int?
+}
+
 public struct DailyHealthSnapshotPayload: Codable, Hashable, Sendable {
     public let localDate: String
     public let timeZone: String

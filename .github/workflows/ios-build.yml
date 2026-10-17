@@ -1,0 +1,41 @@
+# Compile check for the iPhone + Watch app on every pull request that touches
+# ios/** (2026-10-17). Cloud sessions have no Xcode, so without this the first
+# compiler a Swift change met was the TestFlight upload after merge — and a
+# red upload means nothing new reaches his phone. This builds for the
+# simulator with signing off: no secrets, so it is safe on any PR.
+
+name: iOS build
+
+on:
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-build.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the newest released Xcode on the runner
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|release_candidate|_rc' | sort -V | tail -1)"
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+
+      # The iPhone scheme builds the embedded watch app and widgets with it.
+      - name: Build (simulator, unsigned)
+        run: |
+          xcodebuild -project ios/PersonalOS.xcodeproj -scheme PersonalOS \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO -quiet build
