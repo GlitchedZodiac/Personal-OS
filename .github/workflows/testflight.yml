@@ -8,10 +8,13 @@
 #   - every two months, so the build never reaches TestFlight's 90-day expiry
 #   - by hand: Actions → TestFlight → Run workflow (works from the phone)
 #
-# One secret, set once: ASC_KEY_P8 = the full text of
-# ~/.appstoreconnect/private_keys/AuthKey_XZ64H3U47U.p8 (BEGIN/END lines
-# included). The key id and issuer below are not secret without it; they are
-# the same ones CLAUDE.md names.
+# Secrets, set once (Settings → Secrets and variables → Actions):
+#   ASC_KEY_P8  the full text of an App Store Connect API key's .p8 file,
+#               BEGIN/END lines included.
+#   ASC_KEY_ID  that key's id. Optional: without it, the Mac's key
+#               (XZ64H3U47U, the one CLAUDE.md names) is assumed. A key made
+#               from the phone has its own id, and setting this is all that
+#               changes. The issuer id is the team's and the same for every key.
 #
 # No pull_request trigger on purpose: a fork's PR must never run with the key.
 
@@ -38,7 +41,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 60
     env:
-      ASC_KEY_ID: XZ64H3U47U
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID || 'XZ64H3U47U' }}
       ASC_ISSUER_ID: 3f863989-7ac9-48a1-94a5-7547b50ded16
     steps:
       - uses: actions/checkout@v4
