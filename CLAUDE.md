@@ -183,6 +183,13 @@ ASC_KEY_ID=XZ64H3U47U ASC_ISSUER_ID=3f863989-7ac9-48a1-94a5-7547b50ded16 \
   ios/scripts/testflight-upload.sh ios
 ```
 
+- **Automatic since 2026-10-17:** `.github/workflows/testflight.yml` runs
+  that same script on a GitHub Mac runner for every merge to `main` that
+  touches `ios/**`, every other month (so a build never expires), and on
+  demand (Actions → TestFlight → Run workflow). It needs one repository
+  secret, `ASC_KEY_P8` (the `.p8` file's text). A cloud session has no Mac
+  and no key, so for it the merge IS the upload; check the workflow run, then
+  the build, before calling a native change shipped.
 - Run it from a tree that matches `main` (merge first, or merge right after
   — `main` must always be what is on TestFlight). Apple picks the build
   number. Processing takes 5–30 minutes; check it with

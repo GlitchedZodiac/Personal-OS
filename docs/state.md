@@ -5,6 +5,13 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
+**TestFlight from GitHub (2026-10-17, same session, his ask: "how can I get you to push to TestFlight automatically? You do it sometimes but not other times").** The answer to "sometimes": sessions on his Mac had Xcode and the App Store Connect key, and cloud sessions have neither. `.github/workflows/testflight.yml` now runs `ios/scripts/testflight-upload.sh ios` on GitHub's `macos-26` runner. It fires on a push to `main` touching `ios/**`, on the 1st of every other month (the 90-day expiry) and by hand. The only secret is `ASC_KEY_P8`. There is no `pull_request` trigger, so a fork can never run with the key. **NOT RUN YET:** it cannot be exercised before he adds the secret from his Mac. Expect one iteration on the first run. The likely snags:
+- the `macos-26` label (fall back to `macos-15`);
+- a fresh runner needing the API key to be allowed cloud-managed distribution certificates (Admin role);
+- each run minting a new development certificate.
+
+Also verified this session: production serves the activity import. The merge's Vercel deployment completed, and the live MCP `query_data daily_activity` answers with an empty table. His phone and watch had not installed build 4 as of 16 Oct (no build number on his clips). **The repo is public**: state.md carries his body data. Told him; his call.
+
 **Apple Health daily activity + the "?" on his 16 Oct gym session (2026-10-17, main lane; no `ios/**` change, so no TestFlight build).**
 
 **His two asks:** (1) the Apple Health import as specified (table, bearer-token ingest, morning + weekly reports, MCP, Shortcut guide, tests) plus "a nightly pull from health… pull the last 6 months"; (2) "I'm still getting the question marks… I haven't updated my app."
