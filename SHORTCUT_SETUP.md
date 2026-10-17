@@ -5,12 +5,16 @@ Walking + Running Distance** from Apple Health and sends them to Pitaya. Each
 run sends the **last 8 days** (today plus the 7 before it), so a night the
 phone misses is filled in by the next run. Pitaya keeps one row per day and
 overwrites it when the day is sent again, so re-sending never makes duplicates.
-A **one-time backfill** run sends the last 6 months.
+A second, **one-time History Shortcut** sends every day Health has ever
+recorded (step 5).
 
 What you get in Pitaya:
-- **Today → Activity**: yesterday compared with your 7-day average and with the
-  same weekday last week, plus the Mon–Sun week (daily bars, total, daily
-  average, best and lowest day, change from last week).
+- **Today → Activity** (also Train → "Steps & calories history"):
+  - yesterday, compared with your 7-day average and the same weekday last week;
+  - the Mon–Sun week: daily bars, total, daily average, best and lowest day, and the change from last week;
+  - **History** for steps, active kcal or km, by days, weeks, months or years;
+  - trends over 7, 30 and 90 days and 12 months;
+  - all-time records: total, best day, week and month, 10k days and streaks, and steps by weekday.
 - A push around **7 am Central** with yesterday's numbers, and one on **Sunday
   evening** with the week. Switch them off in Settings → Notifications →
   "Steps & calories".
@@ -75,7 +79,7 @@ result.
 **Setup**
 
 1. **Number**: `8` → Set Variable **DaysBack**
-   *(the nightly run sends 8 days; the backfill in step 5 changes this)*
+   *(the nightly run sends 8 days; your full history comes from step 5)*
 
 **For each day**
 
@@ -181,23 +185,70 @@ Shortcuts → **Automation** → **+** → **Time of Day**
 If no data reaches Pitaya for 2 days, you get a "Apple Health Shortcut hasn't
 synced" alert (Settings → Notifications → System alerts).
 
-## 5. The 6-month backfill (once)
+## 5. Your whole history (once): the History Shortcut
 
-1. Open the shortcut and change the **Number** in action 1 from `8` to `185`.
-2. Unlock the phone, open Shortcuts, and run it with ▶︎. Keep the Shortcuts app
-   on screen until it finishes. 185 days × 5 Health queries can take a few
-   minutes.
-3. Expect "Pitaya: 185 days synced", or fewer if some days had no data at all.
-   Pitaya accepts up to 400 days in one push.
-4. **Change the Number back to `8`.** Otherwise every nightly run re-sends six
-   months.
+The nightly Shortcut asks Health one day at a time, which is fine for 8 days
+and far too slow for years. This second Shortcut asks once per metric for
+every day at once ("Group By: Day"), then sends one list per metric. Pitaya
+writes only the metric each list carries, so the four sends fill in each day
+together.
 
-Running the backfill twice is harmless. It overwrites the same 185 rows.
+Shortcuts app → **+** → name it **Pitaya Health History**.
+
+1. **Number**: `3650` → Set Variable **DaysBack**
+   *(10 years. Use `5475` for 15. Days before your first iPhone simply come
+   back empty.)*
+
+**Steps**
+
+2. **Find Health Samples** where
+   - `Type` is `Steps`
+   - `Start Date` is in the last `DaysBack` days
+   - **Group By: Day**, Fill Missing **off**
+   - Sort by **Start Date**, Order **Oldest First**, Limit **off**
+3. **Repeat with Each** item in `Health Samples`
+4. ⠀⠀**Get Details of Health Sample**: `Start Date` of `Repeat Item`
+5. ⠀⠀**Format Date**: `Start Date`, Custom `yyyy-MM-dd`, Time Format **None**
+6. ⠀⠀**Get Details of Health Sample**: `Value` of `Repeat Item`
+7. ⠀⠀**Text**: `{"date":"[Formatted Date]","steps":"[Value]"}`
+8. **End Repeat**
+9. **Combine Text**: `Repeat Results`, separator **Custom** `,`
+10. **Text**: `[` `Combined Text` `]`
+11. **Get Contents of URL**: the same URL, method, headers and **File** body
+    as step 22 of the nightly Shortcut, using the Text from step 10.
+12. **Get Dictionary Value**: `upserted` → **Show Notification**:
+    `Steps: Dictionary Value days`
+
+**Active Energy, Resting Energy, Distance:** select steps 2–12, tap **Duplicate**
+three times, and in each copy change only:
+
+| copy | Find Health Samples `Type` | key in the Text of step 7 |
+|---|---|---|
+| 2 | `Active Energy` | `"active_energy_kcal"` |
+| 3 | `Resting Energy` | `"resting_energy_kcal"` |
+| 4 | `Walking + Running Distance` | `"walking_running_distance_km"` (or `_mi`, as in section 2) |
+
+Check that each copy's Repeat uses **its own** Health Samples and that its
+Combine Text uses **its own** Repeat Results. Duplicated actions sometimes
+still point at the first copy's variables.
+
+**Running it:**
+- Unlock the phone, open Shortcuts and run it with ▶︎. Keep it on screen.
+- It works through every day for each metric, so 10 years can take several
+  minutes per metric. Try `365` first to see how long a year takes.
+- Expect four notifications, one per metric: "Steps: 3,650 days", and so on.
+  Fewer is normal if Health has no data for some days.
+- A push can carry up to 7,500 days.
+- Running it again is harmless: each day is overwritten with the same numbers.
+
+Until this runs, the Activity screen shows what the iPhone app has synced on
+its own. That sync only happens while the app is open, so some of those days
+are partial. A day the Shortcut sends always replaces it.
 
 ## Reference: what Pitaya accepts
 
 `POST /api/health/daily` with header `Authorization: Bearer <HEALTH_INGEST_TOKEN>`.
-Body: a JSON array of days (or `{"days":[...]}`), at most 400:
+Body: a JSON array of days (or `{"days":[...]}`), at most 7,500:
 
 | key | required | notes |
 |---|---|---|
@@ -210,7 +261,10 @@ Body: a JSON array of days (or `{"days":[...]}`), at most 400:
 | `sources` | no | device names; Pitaya works out `source` from them |
 
 Numbers may be JSON numbers or text (`"8123"`, `"6,42"`). Unknown keys are
-ignored. A day with a bad value is rejected on its own and listed in
+ignored. **A key you leave out is left alone; a key sent empty (`""`) clears
+it.** So the nightly Shortcut, which sends every key, overwrites the whole
+day, and the History Shortcut, which sends one metric at a time, never wipes
+the other three. A day with a bad value is rejected on its own and listed in
 `rejected`, and the other days are still stored. A day with nothing in it is
 skipped (`skippedEmpty`). The response's `upserted` is the number of days
 written.

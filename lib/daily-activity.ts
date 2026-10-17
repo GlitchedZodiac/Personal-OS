@@ -17,6 +17,12 @@
 //     on a locked phone gets nothing back and would post a week of zeros —
 //     which would OVERWRITE good days. A day with every metric empty or zero
 //     is therefore never stored; it is reported back as skipped.
+//
+// A key the day does not carry at all is left alone; a key sent empty means
+// "no data" and clears it (2026-10-17, for the history Shortcut). The nightly
+// run sends every key, so it still overwrites the whole day. The history run
+// sends one metric per request (`[{"date":…,"steps":…}, …]` for ten years
+// of steps), and must not wipe the other three.
 
 import crypto from "crypto";
 import { addDaysToDateString, getDateStringInTimeZone } from "@/lib/timezone";
@@ -24,8 +30,8 @@ import { addDaysToDateString, getDateStringInTimeZone } from "@/lib/timezone";
 /** The day boundary his reports use (his call, 2026-10-17). */
 export const ACTIVITY_TIME_ZONE = "America/Chicago";
 
-/** A nightly run sends 8; a 6-month backfill ~185. Anything far past that is not the Shortcut. */
-export const MAX_DAYS_PER_REQUEST = 400;
+/** A nightly run sends 8; the history run one metric over ~10 years. Twenty years is the cap. */
+export const MAX_DAYS_PER_REQUEST = 7500;
 
 /** Apple Health did not exist before iOS 8 (September 2014). */
 const EARLIEST_DAY = "2014-09-01";
@@ -35,6 +41,16 @@ const MIN_TOKEN_LENGTH = 16;
 
 export type ActivitySource = "phone" | "watch" | "mixed";
 
+/** The columns a day can write — in the order they are written. */
+export const ACTIVITY_FIELDS = [
+  "steps",
+  "activeEnergyKcal",
+  "restingEnergyKcal",
+  "walkingRunningDistanceKm",
+  "source",
+] as const;
+export type ActivityField = (typeof ACTIVITY_FIELDS)[number];
+
 export interface ActivityDay {
   date: string;
   steps: number | null;
@@ -42,6 +58,8 @@ export interface ActivityDay {
   restingEnergyKcal: number | null;
   walkingRunningDistanceKm: number | null;
   source: ActivitySource | null;
+  /** the fields this day carried a key for — only these are written */
+  fields: ActivityField[];
 }
 
 export interface RejectedDay {
@@ -162,6 +180,19 @@ const LIMITS = {
 
 const KM_PER_MILE = 1.609344;
 
+/** The keys that carry each field, any spelling or unit. */
+const FIELD_KEYS: Record<ActivityField, string[]> = {
+  steps: ["steps"],
+  activeEnergyKcal: ["active_energy_kcal", "activeEnergyKcal"],
+  restingEnergyKcal: ["resting_energy_kcal", "restingEnergyKcal"],
+  walkingRunningDistanceKm: [
+    "walking_running_distance_km", "walkingRunningDistanceKm",
+    "walking_running_distance_mi", "walkingRunningDistanceMi",
+    "walking_running_distance_m", "walkingRunningDistanceMeters",
+  ],
+  source: ["source", "sources"],
+};
+
 function first(record: Record<string, unknown>, keys: string[]): unknown {
   for (const key of keys) {
     const v = record[key];
@@ -234,6 +265,7 @@ function parseDay(
       restingEnergyKcal: round(resting.value, 1),
       walkingRunningDistanceKm: round(distance.value, 3),
       source: classifySource(first(record, ["source"]) ?? first(record, ["sources"])),
+      fields: ACTIVITY_FIELDS.filter((f) => FIELD_KEYS[f].some((k) => k in record)),
     },
   };
 }
@@ -293,4 +325,56 @@ export function parseActivityPayload(body: unknown, now: Date = new Date()): Par
       rejected,
     },
   };
+}
+
+// ————— Writing —————
+
+const COLUMN: Record<ActivityField, { name: string; type: string }> = {
+  steps: { name: "steps", type: "int4" },
+  activeEnergyKcal: { name: "active_energy_kcal", type: "float8" },
+  restingEnergyKcal: { name: "resting_energy_kcal", type: "float8" },
+  walkingRunningDistanceKm: { name: "walking_running_distance_km", type: "float8" },
+  source: { name: "source", type: "text" },
+};
+
+export interface UpsertStatement {
+  sql: string;
+  params: unknown[];
+  dates: string[];
+}
+
+/**
+ * One INSERT … ON CONFLICT per set of fields sent, however many days it
+ * covers. A row per upsert was fine for 8 days and is not for ten years of
+ * steps (3,650 round trips through the pooler would outlive the function).
+ * Only the fields a day carried are written on conflict, so a history push
+ * of steps leaves that day's kcal and distance as they were. Column names
+ * come from the fixed map above, never from the request.
+ */
+export function buildUpsertStatements(days: ActivityDay[], receivedAt: Date): UpsertStatement[] {
+  const groups = new Map<string, ActivityDay[]>();
+  for (const day of days) {
+    const key = day.fields.join(",");
+    groups.set(key, [...(groups.get(key) ?? []), day]);
+  }
+
+  return [...groups.values()].map((group) => {
+    const fields = group[0].fields;
+    const cols = fields.map((f) => COLUMN[f]);
+    const params: unknown[] = [group.map((d) => d.date), ...fields.map((f) => group.map((d) => d[f]))];
+    params.push(receivedAt.toISOString());
+    const at = `$${params.length}`;
+    const unnest = [`$1::text[]`, ...cols.map((c, i) => `$${i + 2}::${c.type}[]`)].join(", ");
+    const alias = ["d", ...cols.map((_, i) => `c${i}`)].join(", ");
+    const update = [
+      ...cols.map((c) => `"${c.name}" = EXCLUDED."${c.name}"`),
+      `"received_at" = EXCLUDED."received_at"`,
+    ].join(", ");
+    const sql =
+      `INSERT INTO "daily_activity" ("id", "date"${cols.map((c) => `, "${c.name}"`).join("")}, "received_at") ` +
+      `SELECT gen_random_uuid()::text, t.d${cols.map((_, i) => `, t.c${i}`).join("")}, (${at}::timestamptz AT TIME ZONE 'UTC') ` +
+      `FROM unnest(${unnest}) AS t(${alias}) ` +
+      `ON CONFLICT ("date") DO UPDATE SET ${update}`;
+    return { sql, params, dates: group.map((d) => d.date) };
+  });
 }

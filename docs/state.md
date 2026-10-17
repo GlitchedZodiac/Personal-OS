@@ -5,6 +5,32 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
+**Steps history over everything Health has (2026-10-17, later the same day; his ask: "a general view for steps — days, weeks, months, all time and trends … pull from ever … I can't find anything like that in my app").** Why he could not find anything: the Activity screen read only the Shortcut's table, which was empty.
+- **Fallback:** `loadActivityRows` (lib/activity-reports.ts) now fills any day the Shortcut has not sent from the iPhone app's own push (`daily_health_snapshots`, via `mergeActivitySources`). A travel day with two timezone rows keeps the fuller one. Days are marked `origin: app`, and the screen says they may be partial. The morning and weekly pushes use the same merged rows.
+- **History** (`lib/activity-history.ts` pure, `GET /api/health/activity/history`, `components/activity-history.tsx` on /health/activity):
+  - steps, active kcal or km, by 30 days, 26 weeks, 24 months or every year;
+  - each bar is the daily average over the days that arrived; tap a bar for avg, total and days in;
+  - trends: daily average over 7, 30, 90 and 365 days vs the period before;
+  - all time: total, average, best day, best week (4+ days) and best month (15+), 10k days, streaks (a missing day breaks one), steps by weekday.
+  - Everything runs through yesterday, so today's partial count never counts.
+  - Train has a "Steps & calories history" button now.
+- **Ingest:** a key left out is not written, while a key sent empty clears it. `buildUpsertStatements` writes one `INSERT … ON CONFLICT` per set of fields. The cap is now 7,500 days per push.
+- **SHORTCUT_SETUP.md §5:** the History Shortcut replaces the 185-day backfill. It runs one Group-By-Day query per metric over `DaysBack` (3,650 = 10 years), loops the results into a list, and makes four posts.
+- NO DESIGN SLICE (filed with the Activity screen).
+
+**Verified:**
+- 1,536 tests (+22), tsc, lint clean on touched files, `npm run build`.
+- On the local Postgres:
+  - App-only rows gave 9 days, with the travel day kept at 5,072 and the trends correct.
+  - Four Shortcut-style pushes covering 2023-01-01 → 2026-10-16 (1,385 days each; text numbers, decimal commas, miles) took 0.07–0.17 s each. Each one filled only its own column.
+  - Two days with negative kcal (from my test data) were rejected.
+  - History matched SQL exactly: yearly averages, 7-day trend +6%, lifetime 9,745,870, best day, 203 days at 10k.
+- Driven at 375 px in Chromium: every range, a tapped bar, the metric switch, the Train link. No console errors, no horizontal scroll.
+- **Self-smoke caught/fixed:** month labels read as dates ("Sep 26"), so they now read "Sep '26", and record dates carry the full year.
+- **NOT verified:** the History Shortcut on his iPhone (how long Shortcuts takes to loop 3,650 grouped samples), and prod.
+
+---
+
 **Apple Health daily activity + the "?" on his 16 Oct gym session (2026-10-17, main lane; no `ios/**` change, so no TestFlight build).**
 
 **His two asks:** (1) the Apple Health import as specified (table, bearer-token ingest, morning + weekly reports, MCP, Shortcut guide, tests) plus "a nightly pull from health… pull the last 6 months"; (2) "I'm still getting the question marks… I haven't updated my app."

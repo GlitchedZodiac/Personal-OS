@@ -527,6 +527,15 @@ export default function TrainPage() {
           >
             View activities <span>→</span>
           </button>
+          {/* All-day steps & calories live on the Activity screen; he looked
+              for them here first (2026-10-17). */}
+          <button
+            onClick={() => router.push("/health/activity")}
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-border py-[10px] text-[13px] font-semibold text-foreground hover:bg-background"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Steps &amp; calories history <span>→</span>
+          </button>
         </div>
       )}
 

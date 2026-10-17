@@ -24,6 +24,8 @@ export interface ActivityRow {
   walkingRunningDistanceKm: number | null;
   source?: string | null;
   receivedAt?: Date | string | null;
+  /** shortcut = daily_activity; app = the iPhone app's own push, filling a gap */
+  origin?: "shortcut" | "app";
 }
 
 export const ACTIVITY_METRICS = [

@@ -18,28 +18,40 @@ type Row = Record<string, unknown> & { id: string; date: string };
 const table = new Map<string, Row>();
 let seq = 0;
 
+// The route writes with one INSERT … ON CONFLICT ("date") per set of fields
+// (lib/daily-activity.ts buildUpsertStatements; its SQL runs against real
+// Postgres in the self-smoke). The mock applies the same contract: the
+// statement's column list says which fields are written, $1 holds the
+// dates, then one array per column, then received_at.
+const CAMEL: Record<string, string> = {
+  steps: "steps",
+  active_energy_kcal: "activeEnergyKcal",
+  resting_energy_kcal: "restingEnergyKcal",
+  walking_running_distance_km: "walkingRunningDistanceKm",
+  source: "source",
+};
+
+function applyUpsert(sql: string, params: unknown[]) {
+  const cols = /\("id", "date"((?:, "[a-z_]+")*), "received_at"\)/.exec(sql)![1]
+    .split(", ")
+    .filter(Boolean)
+    .map((c) => c.replaceAll('"', ""));
+  const dates = params[0] as string[];
+  const receivedAt = new Date(params[params.length - 1] as string);
+  dates.forEach((date, i) => {
+    const row: Row = table.get(date) ?? { id: `a${++seq}`, date };
+    cols.forEach((col, j) => {
+      row[CAMEL[col]] = (params[j + 1] as unknown[])[i];
+    });
+    row.receivedAt = receivedAt;
+    table.set(date, row);
+  });
+  return dates.length;
+}
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    dailyActivity: {
-      upsert: vi.fn(
-        async ({
-          where,
-          create,
-          update,
-        }: {
-          where: { date: string };
-          create: Record<string, unknown>;
-          update: Record<string, unknown>;
-        }) => {
-          const existing = table.get(where.date);
-          const row = existing
-            ? { ...existing, ...update }
-            : ({ id: `a${++seq}`, ...create } as Row);
-          table.set(where.date, row as Row);
-          return row;
-        }
-      ),
-    },
+    $executeRawUnsafe: vi.fn(async (sql: string, ...params: unknown[]) => applyUpsert(sql, params)),
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   },
 }));
@@ -197,5 +209,38 @@ describe("upsert", () => {
     await new Promise((r) => setTimeout(r, 5));
     await post(week(() => 8100));
     expect((table.get("2026-10-16")?.receivedAt as Date).getTime()).toBeGreaterThan(first.getTime());
+  });
+
+  it("a push of one metric leaves the others alone (the history Shortcut)", async () => {
+    await post(week(() => 8000));
+    const res = await post(
+      week(() => 0).map((d) => ({ date: d.date, walking_running_distance_km: "7,25" }))
+    );
+    expect(res.json.upserted).toBe(7);
+    expect(table.get("2026-10-16")).toMatchObject({
+      steps: 8000,
+      activeEnergyKcal: 400,
+      restingEnergyKcal: 1800,
+      walkingRunningDistanceKm: 7.25,
+      source: "mixed",
+    });
+  });
+
+  it("a key sent empty clears that field — the nightly run still overwrites the day", async () => {
+    await post(week(() => 8000));
+    const res = await post(week(() => 9000).map((d) => ({ ...d, resting_energy_kcal: "" })));
+    expect(res.json.upserted).toBe(7);
+    expect(table.get("2026-10-16")).toMatchObject({ steps: 9000, restingEnergyKcal: null });
+  });
+
+  it("takes ten years of one metric in one push", async () => {
+    const days = Array.from({ length: 3650 }, (_, i) => ({
+      date: new Date(Date.UTC(2016, 9, 18 + i)).toISOString().slice(0, 10),
+      steps: String(5000 + (i % 7) * 100),
+    }));
+    const res = await post(days);
+    expect(res.status).toBe(200);
+    expect(res.json.upserted).toBe(3650);
+    expect(table.size).toBe(3650);
   });
 });
