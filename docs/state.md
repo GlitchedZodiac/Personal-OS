@@ -12,6 +12,8 @@ first. Update the top of this file whenever a session ships.
 
 Also verified this session: production serves the activity import. The merge's Vercel deployment completed, and the live MCP `query_data daily_activity` answers with an empty table. His phone and watch had not installed build 4 as of 16 Oct (no build number on his clips). **The repo is public**: state.md carries his body data. Told him; his call.
 
+---
+
 **Apple Health daily activity + the "?" on his 16 Oct gym session (2026-10-17, main lane; no `ios/**` change, so no TestFlight build).**
 
 **His two asks:** (1) the Apple Health import as specified (table, bearer-token ingest, morning + weekly reports, MCP, Shortcut guide, tests) plus "a nightly pull from health… pull the last 6 months"; (2) "I'm still getting the question marks… I haven't updated my app."
