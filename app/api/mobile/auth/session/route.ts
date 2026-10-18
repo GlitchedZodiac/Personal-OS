@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit } from "@/lib/auth";
 import { createDeviceSession } from "@/lib/mobile-session";
-import { verifyPin } from "@/lib/pin-auth";
+import { attemptPin, lockedResponseInit } from "@/lib/pin-attempt";
 
 // Device pairing: the PIN, typed on the wrist or the phone, becomes a device
 // session. The kinds a device may pair AS are fixed (2026-10, review of D4):
@@ -14,19 +13,6 @@ const MAX_PLATFORM = 40;
 
 export async function POST(request: NextRequest) {
   try {
-    // Same brute-force gate as the web login (2026-08-29 — this was the one
-    // PIN door with no limiter; found during the MCP-exposure audit).
-    const rateLimit = checkRateLimit(request, "mobile-pair");
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: "Too many attempts. Try again in a few minutes." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
-        }
-      );
-    }
-
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const pin = typeof body.pin === "string" ? body.pin : "";
     const deviceLabel =
@@ -43,11 +29,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!(await verifyPin(pin))) {
-      rateLimit.registerFailure();
+    // Same brute-force gate as the web login (2026-08-29 — this was the one
+    // PIN door with no limiter; found during the MCP-exposure audit).
+    const attempt = await attemptPin(request, "mobile-pair", pin);
+    if (attempt.status === "locked") {
+      return NextResponse.json(
+        { error: "Too many attempts. Try again in a few minutes." },
+        lockedResponseInit(attempt.retryAfterSeconds)
+      );
+    }
+    if (attempt.status === "wrong") {
       return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
     }
-    rateLimit.reset();
 
     const { session, accessToken, refreshToken } = await createDeviceSession({
       deviceLabel,

@@ -6,54 +6,65 @@
 // one JSON-RPC object; every response is application/json. We offer no
 // server-initiated stream, so GET answers 405 (allowed by the spec).
 //
-// Auth: bearer device-session token (minted in Settings → Claude connector,
-// deviceType "mcp"; any valid device session is accepted — one household,
-// one trust domain). Self-authenticating: /api/mcp is on the proxy
-// allowlist, same contract as /api/mobile/*.
+// Auth: a CONNECTOR token (deviceType "mcp", minted in Settings → Claude
+// connector or by /api/oauth/token). Until 2026-10 any device session was
+// accepted here — a lost watch was a key to everything (SEC-010).
+// Self-authenticating: /api/mcp is on the proxy allowlist.
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireMobileSession } from "@/lib/mobile-session";
+import { requireConnectorSession } from "@/lib/mobile-session";
 import { handleMcpMessage } from "@/lib/mcp/server";
 
 export const maxDuration = 60;
 
+/** A JSON-RPC body is a few KB; a quarter megabyte is already absurd (SEC-015). */
+const MAX_BODY_BYTES = 256 * 1024;
+
+function rpcError(status: number, code: number, message: string, headers?: Record<string, string>) {
+  return NextResponse.json({ jsonrpc: "2.0", id: null, error: { code, message } }, { status, headers });
+}
+
 export async function POST(request: NextRequest) {
-  const session = await requireMobileSession(request);
-  if (!session) {
+  // Only a CONNECTOR token opens this door (SEC-010, PLAN D4). A watch or
+  // iPhone token is a valid session but the wrong kind: 403, not 401, so a
+  // client does not go looking for a new credential it already has.
+  const auth = await requireConnectorSession(request);
+  if (!auth.ok) {
+    if (auth.reason === "wrong-kind") {
+      return rpcError(
+        403,
+        -32003,
+        "This token belongs to a paired device (watch or iPhone), not the Claude connector. Connect through Settings → Claude connector."
+      );
+    }
     // The WWW-Authenticate pointer is what makes claude.ai's "Detected"
     // OAuth flow work: 401 → resource metadata → our authorization server
     // → the /oauth/authorize sign-in → a token. (RFC 9728 §5.1.)
     const origin = new URL(request.url).origin;
-    return NextResponse.json(
-      {
-        jsonrpc: "2.0",
-        id: null,
-        error: { code: -32001, message: "Unauthorized — bearer token required" },
-      },
-      {
-        status: 401,
-        headers: {
-          "WWW-Authenticate": `Bearer realm="pitaya", resource_metadata="${origin}/.well-known/oauth-protected-resource/api/mcp"`,
-        },
-      }
-    );
+    return rpcError(401, -32001, "Unauthorized — bearer token required", {
+      "WWW-Authenticate": `Bearer realm="pitaya", resource_metadata="${origin}/.well-known/oauth-protected-resource/api/mcp"`,
+    });
   }
 
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (declared > MAX_BODY_BYTES) {
+    return rpcError(413, -32600, `Request body too large (max ${MAX_BODY_BYTES} bytes)`);
+  }
   let raw: unknown;
   try {
-    raw = await request.json();
+    const text = await request.text();
+    if (text.length > MAX_BODY_BYTES) {
+      return rpcError(413, -32600, `Request body too large (max ${MAX_BODY_BYTES} bytes)`);
+    }
+    raw = JSON.parse(text);
   } catch {
-    return NextResponse.json(
-      {
-        jsonrpc: "2.0",
-        id: null,
-        error: { code: -32700, message: "Parse error" },
-      },
-      { status: 400 }
-    );
+    return rpcError(400, -32700, "Parse error");
   }
 
-  const { status, body } = await handleMcpMessage(raw);
+  const { status, body } = await handleMcpMessage(raw, {
+    sessionId: auth.session.id,
+    deviceLabel: auth.session.deviceLabel,
+  });
   if (body == null) return new NextResponse(null, { status });
   return NextResponse.json(body, { status });
 }

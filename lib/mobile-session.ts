@@ -104,25 +104,45 @@ export async function refreshDeviceSession(refreshToken: string) {
   };
 }
 
-export function getBearerToken(request: NextRequest) {
+/**
+ * The token on a request. Device routes take `Authorization: Bearer` only.
+ * The connector (`/api/mcp`) also takes the `api-token` / `x-api-key`
+ * headers, because claude.ai's "no-OAuth" connector path cannot send a
+ * custom Authorization header (2026-08-29) — and only the connector
+ * (SEC-019, 2026-10).
+ */
+export function getBearerToken(request: NextRequest, opts: { allowApiKeyHeaders?: boolean } = {}) {
   const auth = request.headers.get("authorization") || "";
   if (auth.toLowerCase().startsWith("bearer ")) {
     return auth.slice(7).trim() || null;
   }
-  // claude.ai's connector dialog can't send a custom Authorization header —
-  // its "no-OAuth" path sends the token as an extra request header instead
-  // (2026-08-29). Accept the two conventional names.
+  if (!opts.allowApiKeyHeaders) return null;
   const apiToken =
     request.headers.get("api-token") || request.headers.get("x-api-key") || "";
   return apiToken.trim() || null;
 }
 
-export async function requireMobileSession(request: NextRequest) {
-  const token = getBearerToken(request);
-  if (!token) return null;
+/** Which door a token may open. Connector tokens (deviceType "mcp") drive
+ * /api/mcp and nothing else; device tokens (the watch, the iPhone — and
+ * sessions from before deviceType existed) drive /api/mobile/* and never
+ * the connector (SEC-010, PLAN D4). */
+export type SessionKind = "device" | "connector";
+
+export type SessionAuth =
+  | { ok: true; session: Awaited<ReturnType<typeof createDeviceSession>>["session"] }
+  | { ok: false; reason: "missing" | "invalid" | "wrong-kind" };
+
+export async function authenticateSession(request: NextRequest, kind: SessionKind = "device"): Promise<SessionAuth> {
+  const token = getBearerToken(request, { allowApiKeyHeaders: kind === "connector" });
+  if (!token) return { ok: false, reason: "missing" };
 
   const session = await findLiveSession("tokenHash", token, "expiresAt");
-  if (!session) return null;
+  if (!session) return { ok: false, reason: "invalid" };
+
+  const isConnector = session.deviceType === "mcp";
+  if (kind === "connector" ? !isConnector : isConnector) {
+    return { ok: false, reason: "wrong-kind" };
+  }
 
   // lastSeenAt is bookkeeping — flush it after the response instead of taxing
   // every mobile request with a second DB round trip before any real work.
@@ -136,5 +156,16 @@ export async function requireMobileSession(request: NextRequest) {
   // minute per instance — lib/notify.ts).
   after(() => sweepSoon());
 
-  return session;
+  return { ok: true, session };
+}
+
+/** Device routes: the session, or null. */
+export async function requireMobileSession(request: NextRequest) {
+  const auth = await authenticateSession(request, "device");
+  return auth.ok ? auth.session : null;
+}
+
+/** The connector route: a discriminated result, so 401 and 403 can differ. */
+export function requireConnectorSession(request: NextRequest) {
+  return authenticateSession(request, "connector");
 }

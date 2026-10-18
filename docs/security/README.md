@@ -11,45 +11,42 @@ those to you.
 
 ---
 
-## DO THIS FIRST (before you merge the security fixes)
+## DO THIS FIRST — and in this order
 
-**If you merge before setting these, the app, watch and connector all stop
-until you do.** Not because anything is damaged — the new build refuses to
-run with them missing, and the old deployment stays live in its place — but
-nothing new ships until the two values exist.
+**If you set the new secret on the OLD code, every watch, iPhone and Claude
+connector session dies for good; if you merge the new code before setting the
+secrets, the build fails loudly and nothing changes.** So the order is: merge
+first, let the build fail, add the secrets, redeploy, then everything else.
 
-The biggest problem the audit found: when two settings are missing in Vercel,
-Pitaya signs your login using **your PIN as the secret**. A 4–6 digit PIN is
-easy to guess, so a stranger could work your PIN out, or forge a login,
-without ever touching your phone.
+Why: the audit found that when two settings are missing in Vercel, Pitaya
+signs your login using **your PIN as the secret** — easy to guess. The fix
+needs two real secrets. Old code that first sees `APP_AUTH_SECRET` would
+re-lock every device token under it and never recover them; only the new code
+recognises the old ones and moves them over.
 
 0. **Look first.** Vercel → `personal-os` → **Settings → Environment
-   Variables**. Are these names listed for Production: `AUTH_COOKIE_SECRET`,
-   `APP_AUTH_SECRET`, `NEXTAUTH_SECRET`, `CRON_SECRET`,
+   Variables**. Which of these names are listed for Production:
+   `AUTH_COOKIE_SECRET`, `APP_AUTH_SECRET`, `NEXTAUTH_SECRET`, `CRON_SECRET`,
    `FINANCE_VAULT_MASTER_KEY`? Just the names — never copy a value anywhere.
-   Tell Claude which ones are there; that settles what is Critical and what
-   is not.
-1. Open a terminal on the Mac and run this twice, for two different values:
-   ```bash
-   openssl rand -hex 32
-   openssl rand -hex 32
-   ```
-   **Each value must be at least 32 characters long** (these are 64). The
-   build refuses anything shorter.
-2. In the same Vercel page, add both (for **Production**, and **Preview**):
-   - `AUTH_COOKIE_SECRET` = the first value
-   - `APP_AUTH_SECRET` = the second value
-3. **Check `CRON_SECRET` is listed** (step 0). If it is missing, the
-   scheduled jobs (reminders, the weekly report, the Gmail finance sync, the
-   daily refresh) are refused after the fix — and three of them were open to
-   anyone before it.
-4. **Then** merge the security pull request. If you merged first by mistake:
-   the production build fails with a message naming the missing variable, the
-   previous version keeps running, and a redeploy after step 2 fixes it.
-5. After it deploys, open the app once on each device and unlock with your
-   PIN. The watch, the iPhone app and the Claude connector keep working
-   without re-pairing — the fix recognises their existing sign-in keys until
-   17 January 2027 and quietly moves them to the new ones on first use.
+   Tell Claude which are there; it settles what is Critical and what is not.
+1. **Merge the security pull request FIRST**, before any other PR from the
+   weekend. The production build **fails on purpose** with a message naming
+   the two missing variables. That is expected. The previous version keeps
+   running untouched.
+2. In Vercel → Environment Variables, add, for **Production** and **Preview**:
+   - `AUTH_COOKIE_SECRET` = a value from `openssl rand -hex 32`
+   - `APP_AUTH_SECRET` = a second, different value from `openssl rand -hex 32`
+   **Each must be at least 32 characters** (these are 64). Run the command
+   twice in a terminal on the Mac. **Never add `APP_AUTH_SECRET` to a
+   deployment that does not have this PR.**
+3. **Redeploy** — Vercel does not redeploy when a variable changes. Then open
+   the app once on each device and unlock. The watch, the iPhone app and the
+   Claude connector keep working without re-pairing: the new code recognises
+   their existing keys until 17 January 2027 and moves them over on first use.
+4. **Only then merge the other pull requests.**
+5. **Check `CRON_SECRET` is listed** (step 0). Without it the scheduled jobs
+   (reminders, the weekly report, the Gmail finance sync, the daily refresh)
+   are refused — and three of them were open to anyone before this fix.
 
 ## How Pitaya is locked (today)
 
@@ -87,6 +84,12 @@ pasted into a file in the repo.
 | `OPENAI_API_KEY` | AI calls | Rotate at platform.openai.com, paste in Vercel |
 | `VAPID_PRIVATE_KEY` | Web push notifications | Rotate the keypair; browsers re-subscribe |
 | The OpenAI **admin** key | Reading your real OpenAI spend | Delete/reconnect in Settings → AI |
+| `NEXTAUTH_SECRET` (if listed) | Nothing now — it was part of the OLD fallback chain that keyed every token | Leave it exactly as it is until 17 Jan 2027 (old tokens may still be hashed under it); then it can be removed |
+| `ESV_API_KEY` | Bible text in Spirit | Rotate at api.esv.org, paste in Vercel |
+| `RENPHO_EMAIL` / `RENPHO_PASSWORD` | The scale's cloud (sync is OFF) | Change the RENPHO account password; a login from the server signs the phone app out, so use a separate account if you ever switch it on |
+| `GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN/USER_EMAIL` (if listed) | A second, older Gmail path (`/api/finance/inbox/fetch`) | Revoke the grant in your Google account → Security → Third-party access; a follow-up is filed to retire the route |
+| `ASC_KEY_P8` / `ASC_KEY_ID` (GitHub → Settings → Secrets → Actions) | Uploading builds to TestFlight from CI | App Store Connect → Users and Access → Integrations → revoke the key, make a new one, paste the `.p8` text into the GitHub secret |
+| `HEALTH_INGEST_TOKEN` (also in the Shortcut) | see above | — |
 
 ## If a token or secret leaks
 
@@ -110,6 +113,21 @@ pasted into a file in the repo.
   spend), then update Vercel.
 - You never need to paste a secret into chat or a file to rotate it. If a tool
   or a web page ever asks you to, that is the wrong move.
+
+## Two switches worth knowing
+
+- **Settings → Claude connector → "Allow finance over MCP".** Off by default:
+  your Claude gets a clear "finance is off" answer instead of your money.
+  Health, training, spirit and journal are always readable through the
+  connector. Turn it on only if you want Claude to see accounts, transactions,
+  budgets and pockets.
+- **The wrong-PIN lock.** Fifty wrong PINs in an hour, from anyone, lock the
+  door for the rest of the hour and send you a system alert ("Someone is
+  hammering the PIN"). Your own device still gets in with the right PIN as
+  long as it made no wrong guesses itself. The numbers can be changed in
+  Vercel with `AUTH_GLOBAL_MAX_FAILURES` and `AUTH_GLOBAL_WINDOW_MINUTES`.
+  The best protection of all is a longer PIN: 6–8 digits instead of 4 makes
+  guessing a hundred to ten thousand times harder.
 
 ## What to check once a month (two minutes)
 
@@ -139,9 +157,10 @@ pasted into a file in the repo.
 - **Preview deployments.** If you use Vercel preview links, check they are
   password-protected and are not pointed at your real database. The audit
   could not see your Vercel settings. (SEC-060.)
-- **The connector and device tokens can currently read your finances and
-  faith notes.** The fixes lock the Claude connector down to its own token
-  type and put finance behind a switch you turn on deliberately. (SEC-010/011.)
+- **Faith notes stay readable through the connector** (spirit, journal) —
+  that is deliberate: the connector is how you study with Claude. Finance is
+  behind the switch above; the connector only accepts its own token type now,
+  so a lost watch is no longer a key to it. (SEC-010/011.)
 
 ## Who did this, and what changed
 

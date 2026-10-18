@@ -7,15 +7,36 @@ const AUTH_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 // Login limiter (SEC-005, reworked 2026-10): two buckets per scope.
 //  - per client: 5 failures in 10 minutes blocks that client for 10 minutes;
-//  - GLOBAL: 50 failures in an hour, from anyone, locks the scope for the
-//    rest of the hour. Single-user app — fifty wrong PINs is an attack, and a
-//    global cap is what header rotation cannot get around.
-// Both live in this instance's memory; a DB-backed bucket shared across
-// serverless instances is the intake batch (PLAN D2).
+//  - GLOBAL: AUTH_GLOBAL_MAX_FAILURES (default 50) failures in
+//    AUTH_GLOBAL_WINDOW_MINUTES (default 60), from anyone, locks the scope for
+//    the rest of the window. Single-user app — fifty wrong PINs is an attack,
+//    and a global cap is what header rotation cannot get around.
+//
+// The global lock is also a lever against Michael himself: anyone who can
+// reach /api/auth could lock his login for an hour. So (review, 2026-10-18)
+// a client with NO wrong guesses of its own in the window may still present
+// the correct PIN during a lock (`exemptIfCorrect`) — his own device gets
+// in; the attacker, who does not know the PIN, gets exactly one wrong guess
+// per clean client per lock, after which that client is blocked for the
+// rest of it. Tripping the lock also raises a system alert (lib/pin-attempt).
+// Both buckets live in this instance's memory; a DB-backed bucket shared
+// across serverless instances is the intake batch (PLAN D2).
 const PER_CLIENT_MAX_FAILURES = 5;
 const PER_CLIENT_WINDOW_MS = 10 * 60 * 1000;
-const GLOBAL_MAX_FAILURES = 50;
-const GLOBAL_WINDOW_MS = 60 * 60 * 1000;
+const GLOBAL_MAX_FAILURES_DEFAULT = 50;
+const GLOBAL_WINDOW_MINUTES_DEFAULT = 60;
+
+function intEnv(name: string, fallback: number, min: number, max: number) {
+  const n = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
+}
+
+/** The global cap, read per call so a deploy-time env change applies without a restart. */
+export function globalLoginLimits() {
+  const maxFailures = intEnv("AUTH_GLOBAL_MAX_FAILURES", GLOBAL_MAX_FAILURES_DEFAULT, 5, 100_000);
+  const windowMinutes = intEnv("AUTH_GLOBAL_WINDOW_MINUTES", GLOBAL_WINDOW_MINUTES_DEFAULT, 1, 24 * 60);
+  return { maxFailures, windowMinutes, windowMs: windowMinutes * 60 * 1000 };
+}
 
 type RateLimitEntry = {
   attempts: number;
@@ -200,28 +221,74 @@ function blockedFor(entry: RateLimitEntry | undefined, now: number) {
   return entry?.blockedUntil && entry.blockedUntil > now ? entry.blockedUntil - now : 0;
 }
 
-export function checkRateLimit(request: NextRequest, scope: string) {
+export interface FailureOutcome {
+  /** This failure is the one that tripped the global lock. */
+  globalLockTriggered: boolean;
+  maxFailures: number;
+  windowMinutes: number;
+  retryAfterSeconds: number;
+}
+
+export interface RateLimitCheck {
+  /** Neither this client nor the scope is locked. */
+  allowed: boolean;
+  retryAfterSeconds: number;
+  /** The scope is under a global lock. */
+  globalLocked: boolean;
+  /** This client has no failures of its own in the window. */
+  clientClean: boolean;
+  /** Locked only globally, and this client is clean: a CORRECT PIN may still pass. */
+  exemptIfCorrect: boolean;
+  registerFailure: () => FailureOutcome;
+  /** On success: clears this client's failures. The global count decays on its own. */
+  reset: () => void;
+}
+
+export function checkRateLimit(request: NextRequest, scope: string): RateLimitCheck {
   const now = Date.now();
   const clientKey = `${scope}:${getClientIdentifier(request)}`;
   const globalKey = `${scope}:*`;
+  const { maxFailures, windowMinutes, windowMs } = globalLoginLimits();
 
-  const waitMs = Math.max(blockedFor(authAttempts.get(clientKey), now), blockedFor(authAttempts.get(globalKey), now));
+  const client = authAttempts.get(clientKey);
+  const clientBlockedMs = blockedFor(client, now);
+  const globalBlockedMs = blockedFor(authAttempts.get(globalKey), now);
+  const clientClean = !client || client.resetAt <= now || client.attempts === 0;
+  const globalLocked = globalBlockedMs > 0;
+  const waitMs = Math.max(clientBlockedMs, globalBlockedMs);
 
   return {
     allowed: waitMs === 0,
     retryAfterSeconds: Math.ceil(waitMs / 1000),
+    globalLocked,
+    clientClean,
+    exemptIfCorrect: globalLocked && clientBlockedMs === 0 && clientClean,
     registerFailure: () => {
       registerFailure(clientKey, now, PER_CLIENT_MAX_FAILURES, PER_CLIENT_WINDOW_MS);
-      const global = registerFailure(globalKey, now, GLOBAL_MAX_FAILURES, GLOBAL_WINDOW_MS);
+      const global = registerFailure(globalKey, now, maxFailures, windowMs);
+      if (globalLocked || global.justBlocked) {
+        // One wrong guess during a lock spends this client's exemption for
+        // the rest of the lock.
+        const entry = authAttempts.get(clientKey)!;
+        const lockedUntil = authAttempts.get(globalKey)?.blockedUntil ?? 0;
+        entry.blockedUntil = Math.max(entry.blockedUntil ?? 0, lockedUntil);
+        authAttempts.set(clientKey, entry);
+      }
       if (global.justBlocked) {
         console.error(
-          `[auth] ${scope}: ${GLOBAL_MAX_FAILURES} failed attempts in the last hour across all clients — locked for ${Math.ceil((global.blockedUntil - now) / 60000)} min`
+          `[auth] ${scope}: ${maxFailures} failed attempts in the last ${windowMinutes} min across all clients — locked for ${Math.ceil((global.blockedUntil - now) / 60000)} min`
         );
       }
+      const lockedUntil = authAttempts.get(globalKey)?.blockedUntil ?? 0;
+      return {
+        globalLockTriggered: global.justBlocked,
+        maxFailures,
+        windowMinutes,
+        retryAfterSeconds: Math.max(0, Math.ceil((lockedUntil - now) / 1000)),
+      };
     },
     reset: () => {
       authAttempts.delete(clientKey);
-      authAttempts.delete(globalKey);
     },
   };
 }

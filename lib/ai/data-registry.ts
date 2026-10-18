@@ -187,6 +187,16 @@ export const REGISTRY: readonly DatasetSpec[] = [
     orderBy: { loggedAt: "desc" },
   },
   {
+    key: "mcp_audit",
+    kind: "table",
+    summary: "Every write the Claude connector made: tool, when, what, ok.",
+    model: "mcpAuditEvent",
+    fields: ["id", "createdAt", "tool", "ok", "summary", "error", "refId", "deviceLabel"],
+    dateField: "createdAt",
+    orderBy: { createdAt: "desc" },
+    search: ["tool", "summary"],
+  },
+  {
     key: "favorite_foods",
     kind: "table",
     summary: "Saved usual meals and scanned label products.",

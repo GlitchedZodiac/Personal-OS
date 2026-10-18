@@ -61,13 +61,38 @@ export function mintDcrClientId(redirectUris: string[], name?: string): string {
 const cimdCache = new Map<string, { at: number; uris: string[] | null }>();
 const CIMD_CACHE_MS = 10 * 60 * 1000;
 
+// A CIMD client_id is a URL the server FETCHES at approve time. Only a public
+// https hostname may be fetched (SEC-018, 2026-10): no IP literals, no
+// localhost or private-looking names, and no following of redirects — a
+// public host must not be able to bounce the request onto the internal
+// network.
+const PRIVATE_HOST_SUFFIXES = [".local", ".localhost", ".internal", ".lan", ".home", ".test", ".arpa"];
+export function isPublicHttpsUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (!host || host === "localhost") return false;
+  if (host.startsWith("[") || host.includes(":")) return false; // IPv6 literal
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false; // IPv4 literal
+  if (!host.includes(".")) return false; // bare intranet names
+  if (PRIVATE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))) return false;
+  return true;
+}
+
 async function cimdRedirectUris(clientIdUrl: string): Promise<string[] | null> {
+  if (!isPublicHttpsUrl(clientIdUrl)) return null;
   const cached = cimdCache.get(clientIdUrl);
   if (cached && Date.now() - cached.at < CIMD_CACHE_MS) return cached.uris;
   let uris: string[] | null = null;
   try {
     const res = await fetch(clientIdUrl, {
       headers: { accept: "application/json" },
+      redirect: "error",
       signal: AbortSignal.timeout(8000),
     });
     if (res.ok) {
@@ -102,6 +127,9 @@ export async function validateClient(
     return { ok: true, clientLabel: payload.n || "Registered client" };
   }
   if (/^https:\/\//i.test(clientId)) {
+    if (!isPublicHttpsUrl(clientId)) {
+      return { ok: false, error: "client_id must be a public https URL" };
+    }
     const uris = await cimdRedirectUris(clientId);
     if (!uris) {
       return { ok: false, error: "Couldn't read the client metadata document" };

@@ -1,0 +1,68 @@
+import { after, NextRequest } from "next/server";
+import { checkRateLimit, type RateLimitCheck } from "@/lib/auth";
+import { notify } from "@/lib/notify";
+import { verifyPin } from "@/lib/pin-auth";
+
+// One PIN attempt, the same way at every PIN door (web login, PIN change,
+// device pairing): the limiter first, then the stored PIN. Carries the
+// review's two rules for the global lock — a clean client may still present
+// the CORRECT PIN during a lock, and tripping the lock raises a system alert
+// so Michael learns someone is hammering the door.
+
+export type PinAttempt =
+  | { status: "ok" }
+  | { status: "wrong" }
+  | { status: "locked"; retryAfterSeconds: number };
+
+const DOOR_LABEL: Record<string, string> = {
+  "auth-login": "the web login",
+  "auth-update-pin": "the PIN change",
+  "mobile-pair": "device pairing",
+};
+
+export async function alertPinLockout(
+  scope: string,
+  info: { maxFailures: number; windowMinutes: number; retryAfterSeconds: number }
+) {
+  const door = DOOR_LABEL[scope] ?? scope;
+  const hour = new Date().toISOString().slice(0, 13); // one alert per door per hour
+  try {
+    await notify({
+      category: "systemAlerts",
+      title: "Someone is hammering the PIN",
+      body: `${info.maxFailures} wrong PINs at ${door} in ${info.windowMinutes} min. That door is locked for ${Math.max(1, Math.ceil(info.retryAfterSeconds / 60))} min; a device with no wrong guesses of its own still gets in with the right PIN.`,
+      url: "/settings",
+      tag: "pin-lockout",
+      dedupeKey: `pin-lockout:${scope}:${hour}`,
+    });
+  } catch {
+    // The alert must never affect the login path.
+  }
+}
+
+export async function attemptPin(request: NextRequest, scope: string, pin: unknown): Promise<PinAttempt> {
+  const limit: RateLimitCheck = checkRateLimit(request, scope);
+  if (!limit.allowed && !limit.exemptIfCorrect) {
+    return { status: "locked", retryAfterSeconds: limit.retryAfterSeconds };
+  }
+
+  if (await verifyPin(pin)) {
+    limit.reset();
+    return { status: "ok" };
+  }
+
+  const failure = limit.registerFailure();
+  if (failure.globalLockTriggered) {
+    after(() => alertPinLockout(scope, failure));
+  }
+  // A wrong guess from a clean client during a lock gets the lock's answer,
+  // not "wrong": nothing is learned, and the client is now blocked.
+  if (limit.exemptIfCorrect) {
+    return { status: "locked", retryAfterSeconds: Math.max(failure.retryAfterSeconds, 1) };
+  }
+  return { status: "wrong" };
+}
+
+export function lockedResponseInit(retryAfterSeconds: number) {
+  return { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } } as const;
+}

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   authSecretProblems,
-  checkRateLimit,
   clearAuthCookie,
   getAuthCookie,
   setAuthCookie,
   verifyAuthToken,
 } from "@/lib/auth";
-import { pinConfigured, verifyPin } from "@/lib/pin-auth";
+import { pinConfigured } from "@/lib/pin-auth";
+import { attemptPin, lockedResponseInit } from "@/lib/pin-attempt";
 
 // The web login. The PIN is checked against `auth_credentials` (lib/pin-auth),
 // the same row device pairing uses — one PIN, one place (SEC-004). In
@@ -45,25 +45,18 @@ export async function POST(request: NextRequest) {
     const notConfigured = serverNotConfigured();
     if (notConfigured) return notConfigured;
 
-    const rateLimit = checkRateLimit(request, "auth-login");
-    if (!rateLimit.allowed) {
+    const attempt = await attemptPin(request, "auth-login", pin);
+    if (attempt.status === "locked") {
       return NextResponse.json(
         { error: "Too many attempts. Try again in a few minutes." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
-        }
+        lockedResponseInit(attempt.retryAfterSeconds)
       );
     }
-
-    if (await verifyPin(pin)) {
+    if (attempt.status === "ok") {
       const response = NextResponse.json({ success: true });
       setAuthCookie(response);
-      rateLimit.reset();
       return response;
     }
-
-    rateLimit.registerFailure();
     return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
   } catch (error) {
     console.error("Auth error:", error instanceof Error ? error.message : error);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authSecretProblems, checkRateLimit, setAuthCookie } from "@/lib/auth";
-import { pinConfigured, updatePin } from "@/lib/pin-auth";
+import { authSecretProblems, setAuthCookie } from "@/lib/auth";
+import { ensurePinCredential, pinConfigured } from "@/lib/pin-auth";
+import { attemptPin, lockedResponseInit } from "@/lib/pin-attempt";
 
 // Change the PIN. Cookie-gated by proxy.ts (this path is no longer under an
 // allowlisted prefix — SEC-009) AND the current PIN is required. The new PIN
@@ -25,17 +26,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rateLimit = checkRateLimit(request, "auth-update-pin");
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: "Too many attempts. Try again in a few minutes." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
-        }
-      );
-    }
-
     const body = (await request.json().catch(() => ({}))) as { currentPin?: unknown; newPin?: unknown };
     const currentPin = typeof body.currentPin === "string" ? body.currentPin : "";
     const newPin = typeof body.newPin === "string" ? body.newPin : "";
@@ -44,15 +34,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "New PIN must be 4 to 8 digits" }, { status: 400 });
     }
 
-    const changed = await updatePin(currentPin, newPin);
-    if (!changed) {
-      rateLimit.registerFailure();
+    const attempt = await attemptPin(request, "auth-update-pin", currentPin);
+    if (attempt.status === "locked") {
+      return NextResponse.json(
+        { error: "Too many attempts. Try again in a few minutes." },
+        lockedResponseInit(attempt.retryAfterSeconds)
+      );
+    }
+    if (attempt.status === "wrong") {
       return NextResponse.json({ error: "Current PIN is incorrect" }, { status: 401 });
     }
 
+    await ensurePinCredential(newPin);
     const response = NextResponse.json({ success: true });
     setAuthCookie(response);
-    rateLimit.reset();
     return response;
   } catch (error) {
     console.error("Update PIN error:", error instanceof Error ? error.message : error);

@@ -36,7 +36,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { refreshDeviceSession, requireMobileSession } from "@/lib/mobile-session";
+import { refreshDeviceSession, requireConnectorSession, requireMobileSession } from "@/lib/mobile-session";
 import { hashOpaqueToken, legacyAppSecret } from "@/lib/security";
 
 const STRONG = crypto.randomBytes(32).toString("hex");
@@ -73,15 +73,18 @@ describe("D1a — existing sessions survive the secret rollout", () => {
     expect((await requireMobileSession(req("watch-token")))?.id).toBe("watch");
   });
 
-  it("the common leftover: NEXTAUTH_SECRET was set, so old hashes are under IT — still found", async () => {
+  it("the common leftover: NEXTAUTH_SECRET was set — the Claude connector's token is still found, through the connector gate", async () => {
     vi.stubEnv("APP_AUTH_SECRET", "");
     vi.stubEnv("NEXTAUTH_SECRET", "leftover-nextauth-secret-value");
     vi.stubEnv("APP_PIN", "2468");
-    rows.push({ id: "mcp", deviceType: "mcp", tokenHash: oldHash("mcp-token"), refreshTokenHash: oldHash("mcp-refresh"), revokedAt: null, expiresAt: future(), refreshExpiresAt: future() });
+    rows.push({ id: "mcp", deviceLabel: "Claude connector", deviceType: "mcp", tokenHash: oldHash("mcp-token"), refreshTokenHash: oldHash("mcp-refresh"), revokedAt: null, expiresAt: future(), refreshExpiresAt: future() });
     vi.stubEnv("APP_AUTH_SECRET", STRONG);
     vi.stubEnv("NODE_ENV", "production");
-    expect((await requireMobileSession(req("mcp-token")))?.id).toBe("mcp");
-    expect(rows[0].tokenHash).toBe(hashOpaqueToken("mcp-token"));
+    const auth = await requireConnectorSession(req("mcp-token"));
+    expect(auth.ok && auth.session.id).toBe("mcp");
+    expect(rows[0].tokenHash).toBe(hashOpaqueToken("mcp-token")); // re-keyed
+    // …and, being a connector token, it still cannot drive a device route (SEC-010).
+    expect(await requireMobileSession(req("mcp-token"))).toBeNull();
   });
 
   it("a refresh token hashed under the old chain rotates normally", async () => {

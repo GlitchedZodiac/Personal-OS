@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createDeviceSession } from "@/lib/mobile-session";
+import { mcpFinanceAllowed, setMcpFinanceAllowed } from "@/lib/mcp-settings";
 
 const MCP_ACCESS_TTL_DAYS = 365;
 
@@ -23,7 +24,7 @@ export async function GET() {
         lastSeenAt: true,
       },
     });
-    return NextResponse.json({ sessions });
+    return NextResponse.json({ sessions, allowFinance: await mcpFinanceAllowed() });
   } catch (error) {
     console.error("MCP token list error:", error);
     return NextResponse.json({ error: "Failed to list connectors" }, { status: 500 });
@@ -59,5 +60,21 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("MCP token mint error:", error);
     return NextResponse.json({ error: "Failed to mint token" }, { status: 500 });
+  }
+}
+
+// PATCH { allowFinance: boolean } — the one connector setting (2026-10, D3):
+// whether query_data may read finance_* datasets. Off by default; the tool
+// error names this switch when it is off.
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = (await request.json().catch(() => ({}))) as { allowFinance?: unknown };
+    if (typeof body.allowFinance !== "boolean") {
+      return NextResponse.json({ error: "allowFinance must be true or false" }, { status: 400 });
+    }
+    return NextResponse.json({ allowFinance: await setMcpFinanceAllowed(body.allowFinance) });
+  } catch (error) {
+    console.error("MCP settings error:", error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: "Failed to save the connector setting" }, { status: 500 });
   }
 }

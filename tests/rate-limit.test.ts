@@ -49,14 +49,32 @@ describe("checkRateLimit", () => {
     expect(blocked.retryAfterSeconds).toBeGreaterThan(0);
   });
 
-  it("a success resets both the client and the global bucket", () => {
+  it("a success resets the client's bucket; the global count decays on its own", () => {
     const scope = `r-${Math.random()}`;
     const c = checkRateLimit(req({ "x-real-ip": "2.2.2.2" }), scope);
     for (let i = 0; i < 4; i++) c.registerFailure();
     c.reset();
     const again = checkRateLimit(req({ "x-real-ip": "2.2.2.2" }), scope);
     expect(again.allowed).toBe(true);
+    expect(again.clientClean).toBe(true);
     for (let i = 0; i < 4; i++) again.registerFailure();
     expect(checkRateLimit(req({ "x-real-ip": "2.2.2.2" }), scope).allowed).toBe(true); // 4 < 5 after the reset
+  });
+
+  it("during a global lock a clean client is flagged exemptIfCorrect; a dirty one is not", () => {
+    const scope = `x-${Math.random()}`;
+    for (let i = 0; i < 50; i++) checkRateLimit(req({ "x-real-ip": `203.0.113.${i}` }), scope).registerFailure();
+    const clean = checkRateLimit(req({ "x-real-ip": "198.51.100.1" }), scope);
+    expect(clean).toMatchObject({ allowed: false, globalLocked: true, clientClean: true, exemptIfCorrect: true });
+    const dirty = checkRateLimit(req({ "x-real-ip": "203.0.113.3" }), scope);
+    expect(dirty).toMatchObject({ allowed: false, globalLocked: true, clientClean: false, exemptIfCorrect: false });
+    // The failure that trips the lock says so, with the configured numbers.
+    const scope2 = `y-${Math.random()}`;
+    let tripped = 0;
+    for (let i = 0; i < 50; i++) {
+      const out = checkRateLimit(req({ "x-real-ip": `10.9.${i}.1` }), scope2).registerFailure();
+      if (out.globalLockTriggered) tripped++;
+    }
+    expect(tripped).toBe(1);
   });
 });

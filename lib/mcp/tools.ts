@@ -47,6 +47,8 @@ import { createOrLinkTrail, TrailInputError } from "@/lib/trails";
 import { getTrainingWeek, planWeek, type PlannedDayInput } from "@/lib/planner";
 import { getUserTimeZone } from "@/lib/server-timezone";
 import { getDateStringInTimeZone } from "@/lib/timezone";
+import { mcpFinanceAllowed } from "@/lib/mcp-settings";
+import { recordMcpAudit, type McpCallContext } from "@/lib/mcp/audit";
 
 type Json = Record<string, unknown>;
 
@@ -80,6 +82,33 @@ export interface McpToolDef {
 type Handler = (args: Json) => Promise<unknown>;
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
+// ── Input bounds (SEC-014/015, 2026-10) ───────────────────────────────────
+// Every string argument is clamped before a handler sees it, every array
+// shortened, and nesting cut off — a connector token must not be able to
+// park megabytes in a note. Handlers add tighter caps where a field has one.
+const MAX_ARG_STRING = 20_000;
+const MAX_ARG_ARRAY = 500;
+const MAX_ARG_DEPTH = 6;
+export function clampArgs(value: unknown, depth = 0): unknown {
+  if (typeof value === "string") return value.length > MAX_ARG_STRING ? value.slice(0, MAX_ARG_STRING) : value;
+  if (depth >= MAX_ARG_DEPTH) return undefined;
+  if (Array.isArray(value)) return value.slice(0, MAX_ARG_ARRAY).map((v) => clampArgs(v, depth + 1));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, clampArgs(v, depth + 1)])
+    );
+  }
+  return value;
+}
+
+// ── Finance over MCP (SEC-011, PLAN D3) ───────────────────────────────────
+// Off unless Settings → Claude connector says otherwise. The refusal is a
+// tool error that names the switch — never an empty result that would make
+// his own Claude look broken.
+export const FINANCE_DENIED_MESSAGE =
+  'Finance data is off for the Claude connector. Turn it on in Settings → Claude connector → "Allow finance over MCP", then ask again.';
+export const isFinanceDataset = (dataset: unknown) => typeof dataset === "string" && dataset.trim().startsWith("finance_");
 const num = (v: unknown) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -143,7 +172,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     def: {
       name: "query_data",
       description:
-        "Read any Pitaya dataset — workouts, food, body measurements, trails, routines, spirit, journal, todos, finance summaries and more. Filter by days/from/to, search with q, fetch one row by id. Datasets:\n" +
+        "Read any Pitaya dataset — workouts, food, body measurements, trails, routines, spirit, journal, todos, finance summaries and more. Filter by days/from/to, search with q, fetch one row by id. finance_* datasets answer only when Settings → Claude connector → \"Allow finance over MCP\" is on. Datasets:\n" +
         datasetCatalog,
       inputSchema: {
         type: "object",
@@ -160,7 +189,12 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
         required: ["dataset"],
       },
     },
-    handler: async (args) => executeAppData(args as AppDataArgs, await appDataCtx()),
+    handler: async (args) => {
+      if (isFinanceDataset(args.dataset) && !(await mcpFinanceAllowed())) {
+        return { error: FINANCE_DENIED_MESSAGE, setting: "mcpAllowFinance" };
+      }
+      return executeAppData(args as AppDataArgs, await appDataCtx());
+    },
   },
 
   // ── Recipes (his word for saved usuals/products) ──────────────────────
@@ -364,7 +398,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       }
       const created = [];
       for (const it of items) {
-        const desc = str(it.foodDescription);
+        const desc = str(it.foodDescription).slice(0, 300);
         if (!desc) continue;
         created.push(
           await prisma.foodLog.create({
@@ -376,7 +410,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
               proteinG: num(it.proteinG) ?? 0,
               carbsG: num(it.carbsG) ?? 0,
               fatG: num(it.fatG) ?? 0,
-              notes: str(it.notes) || null,
+              notes: str(it.notes).slice(0, 500) || null,
               source: "mcp",
             },
           })
@@ -1303,7 +1337,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       const todo = await prisma.todo.create({
         data: {
           title: `[Pitaya gap] ${title}`.slice(0, 200),
-          notes: str(args.detail) || null,
+          notes: str(args.detail).slice(0, 2000) || null,
           icon: "🧩",
           category: "app",
           priority: "low",
@@ -1409,8 +1443,20 @@ export const MCP_TOOL_DEFS: McpToolDef[] = MCP_TOOLS.map((t) => ({
 }));
 const HANDLERS = new Map(MCP_TOOLS.map((t) => [t.def.name, t.handler]));
 
-export async function callMcpTool(name: string, args: Json): Promise<unknown> {
+const WRITE_TOOLS = new Set(
+  MCP_TOOL_DEFS.filter((d) => d.annotations?.readOnlyHint === false).map((d) => d.name)
+);
+
+export async function callMcpTool(name: string, args: Json, ctx?: McpCallContext): Promise<unknown> {
   const handler = HANDLERS.get(name);
   if (!handler) return { error: `Unknown tool "${name}"` };
-  return handler(args ?? {});
+  const clamped = (clampArgs(args ?? {}) as Json) ?? {};
+  const result = await handler(clamped);
+  // Every tool that can add, change or remove a row leaves a line in the
+  // trail (SEC-013) — including the ones that failed, so a refused delete
+  // is as visible as a successful one.
+  if (WRITE_TOOLS.has(name)) {
+    await recordMcpAudit({ tool: name, args: clamped, result, ctx });
+  }
+  return result;
 }
