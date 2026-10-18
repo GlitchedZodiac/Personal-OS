@@ -1317,6 +1317,8 @@ model ChatConversation {
   updatedAt     DateTime @updatedAt
 
   messages ChatMessage[]
+  // The Coach's review this chat belongs to, when it is one (2026-10-17).
+  coachReview CoachReview?
 
   @@index([lastMessageAt])
   @@map("chat_conversations")
@@ -1844,4 +1846,60 @@ model JournalEntry {
   updatedAt DateTime @updatedAt
 
   @@map("journal_entries")
+}
+
+// ── The Coach: one weekly review (2026-10-17, lane B — docs/coach-plan.md §2.4) ──
+// A review is an artifact: the facts it was written from, the model's text,
+// the post-check's verdicts, and what it cost. Nothing here is ever rewritten,
+// so a review reopened a month later reads as it was written: a manual re-run
+// marks the old row superseded (in one transaction with the new row) rather
+// than overwriting it, and a Test run is its own kind of row.
+//
+// ONE LIVE REVIEW PER WEEK is a database fact, not a convention:
+// `liveWeekStart` is set only on the live row and is unique. A superseded or
+// test row has it null, so any number of those can share a week.
+model CoachReview {
+  id        String @id @default(uuid())
+  weekStart String // Mon YYYY-MM-DD, user-local
+  weekEnd   String // Sun
+  /// live | superseded | test
+  kind      String @default("live")
+  /// = weekStart on the live row, null otherwise — the unique behind "one live review per week"
+  liveWeekStart String? @unique
+  /// generating | ready | failed | blocked_budget
+  status    String
+  /// cron | manual (a Test run is kind "test", triggered by hand)
+  trigger   String
+  /// The registry tier chosen in Settings → Coach (sol | terra | luna) …
+  modelTier String
+  /// … and the model id it resolved to, for the record.
+  model     String
+
+  factsJson  Json
+  reviewJson Json?
+  /// Plain rendering of the review: the chat's first message, export.
+  markdown   String?
+  /// unverified numbers, missing citations, medical-framing hits, action validation, retries
+  checksJson Json?
+
+  inputTokens  Int     @default(0)
+  outputTokens Int     @default(0)
+  costUsd      Decimal @default(0) @db.Decimal(10, 6)
+  durationMs   Int     @default(0)
+  error        String?
+
+  /// Moves he confirmed: [{ index, kind, payload, confirmedAt, result }]
+  actionsJson Json @default("[]")
+
+  /// The chat that talks to this review. SetNull: removing a chat never removes the review.
+  conversationId String?           @unique
+  conversation   ChatConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  generatedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([weekStart, kind])
+  @@index([generatedAt])
+  @@map("coach_reviews")
 }

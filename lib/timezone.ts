@@ -127,6 +127,16 @@ export function getWeekStartDateString(
   return addDaysToDateString(dateStr, -delta);
 }
 
+/** ISO-8601 week number of a local day (weeks start Monday; week 1 holds Jan 4). */
+export function isoWeekNumber(dateStr: string): number {
+  const { year, month, day } = parseDateParts(dateStr);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const weekday = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - weekday);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+}
+
 export function dateStringDiffDays(startDateStr: string, endDateStr: string) {
   const start = parseDateParts(startDateStr);
   const end = parseDateParts(endDateStr);

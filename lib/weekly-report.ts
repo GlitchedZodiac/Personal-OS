@@ -8,6 +8,7 @@ import {
   getDateStringInTimeZone,
   getUtcDateRangeForTimeZone,
   getWeekStartDateString,
+  isoWeekNumber,
 } from "@/lib/timezone";
 
 // The Sunday Report (design 2026-08-11e rev): one Mon–Sun week, computed
@@ -61,15 +62,6 @@ export interface WeeklyReportData {
     deltaKg: number | null;
     series: number[];
   };
-}
-
-function isoWeekNumber(dateStr: string): number {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  const day = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
 }
 
 /** Compute + persist the report for the week containing `dayInWeek`. */
