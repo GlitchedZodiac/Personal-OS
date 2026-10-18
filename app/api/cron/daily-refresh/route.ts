@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { requireCronSecret } from "@/lib/cron-auth";
 import { prisma } from "@/lib/prisma";
 import { getDateStringInTimeZone, getZonedDateParts } from "@/lib/timezone";
 import { getUserTimeZone } from "@/lib/server-timezone";
@@ -27,13 +28,8 @@ function extractRequestedTimeZone(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   try {
     const requestedTimeZone = extractRequestedTimeZone(request);

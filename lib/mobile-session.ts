@@ -1,7 +1,12 @@
 import { after, NextRequest } from "next/server";
 import { sweepSoon } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
-import { createOpaqueToken, hashOpaqueToken } from "@/lib/security";
+import {
+  createOpaqueToken,
+  hashOpaqueToken,
+  legacyHashOpaqueTokens,
+  legacyWindowOpen,
+} from "@/lib/security";
 
 const SESSION_TTL_DAYS = 30;
 const REFRESH_TTL_DAYS = 90;
@@ -43,16 +48,39 @@ export async function createDeviceSession(input: {
   };
 }
 
-export async function refreshDeviceSession(refreshToken: string) {
-  const tokenHash = hashOpaqueToken(refreshToken);
-  const existing = await prisma.deviceSession.findFirst({
-    where: {
-      refreshTokenHash: tokenHash,
-      revokedAt: null,
-      refreshExpiresAt: { gt: new Date() },
-    },
-  });
+type HashField = "tokenHash" | "refreshTokenHash";
 
+/**
+ * Find a live session by its access or refresh token. Tries the current hash
+ * first; during the legacy window (lib/security LEGACY_SECRET_UNTIL) it also
+ * tries the pre-audit hash and, on a match, re-keys the row — so the watch,
+ * the iPhone and the Claude connector keep working across the APP_AUTH_SECRET
+ * rollout without re-pairing (PLAN D1a). After the window, legacy rows are
+ * simply not found.
+ */
+async function findLiveSession(field: HashField, token: string, expiryField: "expiresAt" | "refreshExpiresAt") {
+  const now = new Date();
+  const current = await prisma.deviceSession.findFirst({
+    where: { [field]: hashOpaqueToken(token), revokedAt: null, [expiryField]: { gt: now } },
+  });
+  if (current) return current;
+  if (!legacyWindowOpen(now)) return null;
+
+  // One query over every hash the old server could have written (the chain
+  // head changes when APP_AUTH_SECRET is set; the rows do not).
+  const legacy = await prisma.deviceSession.findFirst({
+    where: { [field]: { in: legacyHashOpaqueTokens(token) }, revokedAt: null, [expiryField]: { gt: now } },
+  });
+  if (!legacy) return null;
+  return prisma.deviceSession.update({
+    where: { id: legacy.id },
+    data: { [field]: hashOpaqueToken(token) },
+  });
+}
+
+export async function refreshDeviceSession(refreshToken: string) {
+  if (!refreshToken) return null;
+  const existing = await findLiveSession("refreshTokenHash", refreshToken, "refreshExpiresAt");
   if (!existing) return null;
 
   const nextAccessToken = createOpaqueToken();
@@ -93,15 +121,7 @@ export async function requireMobileSession(request: NextRequest) {
   const token = getBearerToken(request);
   if (!token) return null;
 
-  const tokenHash = hashOpaqueToken(token);
-  const session = await prisma.deviceSession.findFirst({
-    where: {
-      tokenHash,
-      revokedAt: null,
-      expiresAt: { gt: new Date() },
-    },
-  });
-
+  const session = await findLiveSession("tokenHash", token, "expiresAt");
   if (!session) return null;
 
   // lastSeenAt is bookkeeping — flush it after the response instead of taxing

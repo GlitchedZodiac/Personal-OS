@@ -1,24 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  authSecretProblems,
   checkRateLimit,
   clearAuthCookie,
   getAuthCookie,
-  getConfiguredPin,
-  isPinConfigured,
   setAuthCookie,
   verifyAuthToken,
 } from "@/lib/auth";
+import { pinConfigured, verifyPin } from "@/lib/pin-auth";
+
+// The web login. The PIN is checked against `auth_credentials` (lib/pin-auth),
+// the same row device pairing uses — one PIN, one place (SEC-004). In
+// production the route refuses, loudly, while a signing secret is missing
+// (SEC-001/002): a 503 whose body names the variable, and a log line to match.
+// The build-time preflight (scripts/security-preflight.mjs) should have
+// stopped such a deploy first; this is the second line.
+
+function serverNotConfigured(): NextResponse | null {
+  const problems = authSecretProblems();
+  if (problems.length === 0) return null;
+  const line = problems.map((p) => `${p.variable} is ${p.reason}`).join("; ");
+  console.error(
+    `[auth] refusing to sign in: ${line}. Set it in Vercel → Environment Variables (openssl rand -hex 32, 32+ characters) and redeploy.`
+  );
+  return NextResponse.json(
+    {
+      error: `Server is not configured: ${line}. Set it in Vercel and redeploy.`,
+      missing: problems.map((p) => p.variable),
+    },
+    { status: 503 }
+  );
+}
+
+const PIN_NOT_CONFIGURED = "APP_PIN is not configured. Set one before unlocking the app.";
 
 export async function POST(request: NextRequest) {
   try {
-    const { pin } = await request.json();
+    const body = (await request.json().catch(() => ({}))) as { pin?: unknown };
+    const pin = typeof body.pin === "string" ? body.pin : "";
 
-    if (!isPinConfigured()) {
-      return NextResponse.json(
-        { error: "APP_PIN is not configured. Set one before unlocking the app." },
-        { status: 503 }
-      );
+    if (!(await pinConfigured())) {
+      return NextResponse.json({ error: PIN_NOT_CONFIGURED }, { status: 503 });
     }
+    const notConfigured = serverNotConfigured();
+    if (notConfigured) return notConfigured;
 
     const rateLimit = checkRateLimit(request, "auth-login");
     if (!rateLimit.allowed) {
@@ -31,7 +56,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (pin === getConfiguredPin()) {
+    if (await verifyPin(pin)) {
       const response = NextResponse.json({ success: true });
       setAuthCookie(response);
       rateLimit.reset();
@@ -41,22 +66,20 @@ export async function POST(request: NextRequest) {
     rateLimit.registerFailure();
     return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
   } catch (error) {
-    console.error("Auth error:", error);
+    console.error("Auth error:", error instanceof Error ? error.message : error);
     return NextResponse.json({ error: "Authentication failed" }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
-  if (!isPinConfigured()) {
+  if (!(await pinConfigured())) {
     return NextResponse.json(
-      {
-        authenticated: false,
-        configured: false,
-        error: "APP_PIN is not configured.",
-      },
+      { authenticated: false, configured: false, error: PIN_NOT_CONFIGURED },
       { status: 503 }
     );
   }
+  const notConfigured = serverNotConfigured();
+  if (notConfigured) return notConfigured;
 
   if (verifyAuthToken(getAuthCookie(request))) {
     return NextResponse.json({ authenticated: true, configured: true });

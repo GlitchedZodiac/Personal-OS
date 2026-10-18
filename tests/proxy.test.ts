@@ -30,4 +30,14 @@ describe("proxy", () => {
     expect(status("/api/mobile/health/daily", "POST")).toBe(200);
     expect(status("/api/cron/reminder-push")).toBe(200);
   });
+
+  // SEC-009 (audit 2026-10): `/api/auth` is an EXACT entry now. As a prefix it
+  // also opened /api/auth/update-pin, which must need the cookie too.
+  it("opens the login itself but keeps the PIN-change route behind the cookie", () => {
+    expect(status("/api/auth", "POST")).toBe(200);
+    expect(status("/api/auth", "GET")).toBe(200);
+    expect(status("/api/auth", "DELETE")).toBe(200);
+    expect(status("/api/auth/update-pin", "POST")).toBe(401);
+    expect(status("/api/authx")).toBe(401);
+  });
 });

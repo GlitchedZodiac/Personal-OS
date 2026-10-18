@@ -8,14 +8,13 @@
 // RENPHO_SYNC_ENABLED=1.
 
 import { NextRequest, NextResponse } from "next/server";
+import { requireCronSecret } from "@/lib/cron-auth";
 import { runRenphoSync } from "@/lib/renpho-sync";
 
 export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
-  const auth = request.headers.get("authorization");
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
   return NextResponse.json(await runRenphoSync("cron"));
 }
