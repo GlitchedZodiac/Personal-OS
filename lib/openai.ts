@@ -30,5 +30,13 @@ export const openai = new OpenAI({
 export const CHAT_MODEL = cleanEnv(process.env.OPENAI_MODEL) || "gpt-5.6-terra";
 export const COACH_MODEL =
   cleanEnv(process.env.OPENAI_COACH_MODEL) || "gpt-5.6-sol";
+/** The three GPT-5.6 tiers by name, for surfaces that let him pick one (Settings → Coach).
+ *  sol and terra follow COACH_MODEL / CHAT_MODEL (and their env overrides). */
+export type ModelTier = "sol" | "terra" | "luna";
+export const MODEL_TIERS: Record<ModelTier, string> = {
+  sol: COACH_MODEL,
+  terra: CHAT_MODEL,
+  luna: cleanEnv(process.env.OPENAI_LUNA_MODEL) || "gpt-5.6-luna",
+};
 export const TRANSCRIBE_MODEL = "gpt-transcribe";
 export const TRANSCRIBE_FALLBACK_MODEL = "whisper-1";

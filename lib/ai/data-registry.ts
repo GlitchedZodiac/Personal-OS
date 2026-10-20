@@ -187,6 +187,21 @@ export const REGISTRY: readonly DatasetSpec[] = [
     orderBy: { loggedAt: "desc" },
   },
   {
+    // The Coach's weekly reviews (2026-10-17). The text as he read it, never
+    // the facts/review JSON, and never the synthetic Test runs.
+    key: "coach_reviews",
+    kind: "table",
+    summary: "The Coach's weekly reviews: week, status, model, cost; id for the text.",
+    model: "coachReview",
+    fields: ["id", "weekStart", "weekEnd", "kind", "status", "modelTier", "costUsd", "generatedAt"],
+    detailFields: ["markdown"],
+    dateField: "generatedAt",
+    orderBy: { weekStart: "desc" },
+    baseWhere: { kind: { not: "test" } },
+    defaultLimit: 8,
+    maxLimit: 60,
+  },
+  {
     key: "favorite_foods",
     kind: "table",
     summary: "Saved usual meals and scanned label products.",

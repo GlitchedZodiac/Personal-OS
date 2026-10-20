@@ -5,6 +5,7 @@ import { getUserTimeZone } from "@/lib/server-timezone";
 import { getDateStringInTimeZone, getZonedDateParts } from "@/lib/timezone";
 import { CHAT_SYSTEM_PROMPT, CHAT_RESPONSES_TOOLS } from "@/lib/ai-prompts";
 import { createConversation, touchConversation, writeAiTitle } from "@/lib/chat-conversations";
+import { coachChatContext } from "@/lib/coach/chat-context";
 import { buildChatUserContent, photoPlaceholder, sanitizeImages } from "@/lib/chat-photos";
 import { proposalKindFor, sanitizeProposalArgs } from "@/lib/chat-tools";
 import { type AppDataArgs, executeAppData } from "@/lib/ai/data-access";
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
   // they go together; the user-message insert doesn't gate the model at all,
   // so it starts here and is only awaited before the assistant row is
   // written (which is seconds later, so createdAt ordering still holds).
-  const [settingsRow, existingConversation, priorRows] = await Promise.all([
+  const [settingsRow, existingConversation, priorRows, coachReviewContext] = await Promise.all([
     prisma.userSettings
       .findUnique({ where: { id: "default" }, select: { data: true } })
       .catch(() => null),
@@ -137,6 +138,8 @@ export async function POST(request: NextRequest) {
           take: HISTORY_LIMIT,
         })
       : Promise.resolve([]),
+    // The Coach (2026-10-17): a chat about a weekly review carries that review's facts.
+    coachChatContext(requestedConversationId),
   ]);
 
   // A known chat continues. No id (he tapped "New chat", or the quiet-gap
@@ -146,6 +149,7 @@ export async function POST(request: NextRequest) {
   const conversation =
     existingConversation ?? (await createConversation({ firstUserText: message, at: now, timeZone }));
   const historyRows = startedNew ? [] : priorRows;
+  const coachContext = startedNew ? null : coachReviewContext;
 
   const userRowWrite = prisma.chatMessage
     .create({
@@ -171,7 +175,8 @@ export async function POST(request: NextRequest) {
   const instructions =
     CHAT_SYSTEM_PROMPT.replace(/\{\{RESPONSE_LANGUAGE\}\}/g, aiLanguage) +
     buildDateContext(now, timeZone) +
-    (historyRows.length === 0 ? NEW_CHAT_NOTE : "");
+    (historyRows.length === 0 ? NEW_CHAT_NOTE : "") +
+    (coachContext?.context ?? "");
 
   // Thread history (persisted rolling chat). Proposals compress to one line
   // so the model knows what happened without re-parsing card payloads.
@@ -394,7 +399,7 @@ export async function POST(request: NextRequest) {
         await touchConversation(conversation.id);
 
         recordAIUsage({
-          surface: "chat",
+          surface: coachContext ? "coach-chat" : "chat",
           model: CHAT_MODEL,
           inputTokens: totalIn,
           outputTokens: totalOut,

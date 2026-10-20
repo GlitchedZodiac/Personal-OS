@@ -39,6 +39,7 @@ export type NotificationCategory =
   | "weeklyReport"
   | "spiritHomework"
   | "activityReport"
+  | "coachReview"
   | "test";
 
 /** Which switch governs each category. `test` has none — he just asked for it. */
@@ -51,6 +52,7 @@ const CATEGORY_GATE: Record<NotificationCategory, keyof CategoryPrefs | null> = 
   weeklyReport: "weeklyReport",
   spiritHomework: "spiritHomework",
   activityReport: "activityReports",
+  coachReview: "coachReview",
   test: null,
 };
 

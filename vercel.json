@@ -119,6 +119,14 @@
     {
       "path": "/api/cron/reminder-push",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/coach-weekly",
+      "schedule": "0 0 * * 1"
+    },
+    {
+      "path": "/api/cron/coach-weekly",
+      "schedule": "0 12 * * 1"
     }
   ]
 }

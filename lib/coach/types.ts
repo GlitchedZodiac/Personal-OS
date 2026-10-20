@@ -320,3 +320,95 @@ export interface WeekInput {
   journal: JournalRow[];
   progression: ProgressionRow[];
 }
+
+// ————— The review: what the model returns, as the checks leave it —————
+//
+// STRUCTURED, never prose (his "wall of text" rule starts at the schema):
+// short items with citations, and three moves that each carry the exact
+// payload a confirm card will write.
+
+export type ReviewVerdict = "on_track" | "mixed" | "off_track";
+
+export type ReviewFlag =
+  /** numbers in the text that match no fact (and no number in the move's own action) */
+  | { kind: "unverified"; tokens: string[] }
+  /** the text has numbers but cites no fact */
+  | { kind: "uncited" }
+  /** cites that name no fact */
+  | { kind: "unknown_cite"; ids: string[] }
+  | { kind: "too_long"; words: number; limit: number };
+
+export interface ReviewItem {
+  text: string;
+  /** fact ids ("f12"); inline [f12] markers in `text` are moved here by the checks */
+  cites: string[];
+  flags?: ReviewFlag[];
+}
+
+export interface PlanDayAction {
+  date: string;
+  title: string;
+  routineName?: string;
+  trailName?: string;
+  targetWeightKg?: number;
+  notes?: string;
+}
+
+export type CoachAction =
+  | { kind: "plan_week"; days: PlanDayAction[]; replaceWeek: boolean }
+  | {
+      kind: "adjust_targets";
+      calorieTarget?: number;
+      proteinPct?: number;
+      carbsPct?: number;
+      fatPct?: number;
+    }
+  /** `atLocal` is "YYYY-MM-DDTHH:mm" in the user's zone; the card converts it */
+  | { kind: "set_reminder"; title: string; atLocal: string }
+  /** the card shows an input per field — he types the value, the model never proposes one */
+  | { kind: "log_measurement"; fields: string[]; when?: string }
+  | { kind: "none"; reason?: string };
+
+export type CoachActionKind = CoachAction["kind"];
+
+export interface ReviewMove {
+  title: string;
+  why: string;
+  cites: string[];
+  action: CoachAction;
+  flags?: ReviewFlag[];
+  /** why the checks replaced an invalid action with `none` */
+  actionNote?: string;
+}
+
+export interface ReviewJson {
+  headline: string;
+  /** numbers in the headline that are not facts (the headline carries no cites) */
+  headlineFlags?: ReviewFlag[];
+  verdict: ReviewVerdict;
+  whatHappened: ReviewItem[];
+  whatItMeans: ReviewItem[];
+  moves: ReviewMove[];
+}
+
+/** What the post-check found — stored on the row and rendered as chips. */
+export interface ReviewChecks {
+  unverified: number;
+  uncited: number;
+  unknownCites: number;
+  tooLong: number;
+  medicalRemoved: Array<{ section: string; phrase: string }>;
+  actionsInvalidated: Array<{ index: number; reason: string }>;
+  /** generator calls made (1, or 2 after a retry) */
+  attempts: number;
+  retried: boolean;
+}
+
+/** A move he confirmed — appended to the review's actionsJson. */
+export interface ConfirmedAction {
+  index: number;
+  kind: CoachActionKind;
+  payload: unknown;
+  confirmedAt: string;
+  result?: unknown;
+}

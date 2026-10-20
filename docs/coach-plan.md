@@ -530,7 +530,7 @@ Two moves need care the endpoints do not give them (MEDIUM 8, 9):
   it; `recordAIUsage` is fire-and-forget and still fires for the global
   Settings → AI figures. `coach-chat` spend comes from `ai_usage_events` and
   is shown separately.
-- **Budget** (default $3, D7): compared against **review spend only**
+- **Budget** (default $3, D7) — a blocked run leaves ONE `blocked_budget` marker for the week, never on top of a review that exists and never stacked on itself; the next run after the budget is raised replaces it. Compared against **review spend only**
   (MEDIUM 6 — a 20-turn conversation at today's ~12.5k input tokens a turn is
   ~$0.80 and must not block Sunday). Checked before generation for the cron
   and the manual "run this week". Exceeded → no model call; the cron writes a
@@ -588,12 +588,12 @@ Two moves need care the endpoints do not give them (MEDIUM 8, 9):
 
 | Route | Method | Purpose |
 |---|---|---|
-| `/api/health/coach` | GET | `{ latest, reviews: summaries[], settings, spend: {monthToDateUsd, budgetUsd, reviewsThisMonth} }` — replaces the old GET |
-| `/api/health/coach/run` | POST `{mode: "manual" \| "test", week?}` | Runs the pipeline now; returns `{review}`; 409 on budget, 423 when off (manual only) |
+| `/api/health/coach/reviews` | GET | `{ latest, reviews: summaries[], settings, spend: {reviewsUsd, reviewsCount, chatUsd, chatCalls, budgetUsd, remainingUsd, blocked}, timeZone }` — the old `GET`/`POST /api/health/coach` stays untouched until Phase 4 replaces its page (D15) |
+| `/api/health/coach/run` | POST `{mode: "manual" \| "test", week?, again?}` | Runs the pipeline now; returns `{review}` (or `{review, existed: true}`); 409 on budget, 423 when off (manual only); `again` supersedes a healthy review |
 | `/api/health/coach/reviews/[id]` | GET | Full review: facts, review, checks, actions, conversation summary |
 | `/api/health/coach/reviews/[id]` | PATCH `{action}` | Appends a confirmed action |
 | `/api/health/coach/reviews/[id]/conversation` | POST | Creates the review's chat on the first "Talk to this review" (idempotent) |
-| `/api/health/coach/settings` | GET / PUT | `{enabled, monthlyBudgetUsd, modelTier}` (merging write) |
+| `/api/health/coach/settings` | GET / PUT | `{settings: {enabled, monthlyBudgetUsd, modelTier, journalExcerpts}, spend, tiers: [{tier, label, model, inputUsdPerM, outputUsdPerM, reviewEstimateUsd}]}` (merging, server-side write) |
 | `/api/cron/coach-weekly` | GET, `Bearer CRON_SECRET` | The Sunday run (self-authenticating, already under the `/api/cron/` allowlist) |
 | `/api/ai/chat/stream` | POST | unchanged contract; coach context hook + `coach-chat` surface |
 | `/api/settings` | PUT | unchanged contract; `coach` added to `SERVER_OWNED_KEYS` |
@@ -786,19 +786,19 @@ entry (with the "no design slice" flag); `docs/followups.md`; draft PR.
 |---|---|---|
 | H1 | Sunday 19:00 review covers a partial week; deltas biased low; catch-up skips | **Phase 2**: cutoff + like-for-like previous week, `week.coverage` fact, `plan.thisWeek.upcoming`; D2 rewritten (catch-up supersedes only failed/stuck) |
 | H2 | `/chat?c=` without `pickedByHim` → gap rule starts a new chat; needs Suspense | Phase 4 (§2.5, D5) |
-| H3 | A conversation created at generation becomes the chat tab's default thread | Phase 3/4: created lazily on the first tap (§2.5, D5, §3) |
-| H4 | `generateChatText` returns no usage; its `length` retry is a second call | Phase 3: additive `usage` return; worst case counted (§2.7) |
+| H3 | A conversation created at generation becomes the chat tab's default thread | **Phase 3**: `ensureReviewConversation` on the first tap, one transaction; `POST /api/health/coach/reviews/[id]/conversation` |
+| H4 | `generateChatText` returns no usage; its `length` retry is a second call | **Phase 3**: additive `usage {inputTokens, outputTokens, calls}`; every existing caller untouched (tested) |
 | M5 | 50 UUIDs a fact ≈ 10k tokens | **Phase 2**: `factsForModel()` strips ids/dates (D23) |
-| M6 | Chat spend would block Sunday's review | Phase 3: budget on review spend only; chat shown separately (D7) |
-| M7 | Checker vs action payload, titles, dates, "7 days", "10k" | Phase 3 (D13); `week.number`/`week.daysCovered` facts **in Phase 2** |
-| M8 | `plan_week` reminders/`replaceWeek` scope/`source` | Phase 3/4 (§2.6, D24) |
+| M6 | Chat spend would block Sunday's review | **Phase 3**: budget on `coach_reviews.costUsd` only; `coach-chat` shown separately (D7) |
+| M7 | Checker vs action payload, titles, dates, "7 days", "10k" | **Phase 3**: a writable action's numbers are its own evidence (a `none` action's reason never is); dates accepted only when written as dates inside the window (three weeks + the reminder horizon + dates named in fact labels); thresholds in labels ("10,000+") allowed; deltas match by absolute value; count nouns are units; headline numbers checked |
+| M8 | `plan_week` reminders/`replaceWeek` scope/`source` | **Phase 3**: `reminders` stripped in `validateAction`; `stillWritable()` (pure, client-importable) refuses a plan for a week already begun or a past reminder at confirm; `planWeek` + planner route take an optional `source` ("coach"). Phase 4 wires the card to it |
 | M9 | `set_reminder` timezone | Phase 4 (§2.6, D21) |
 | M10 | `slot` smuggles a timestamp; failed/generating rows block the week; run-again not atomic | **Phase 2**: `kind` + `liveWeekStart @unique`; supersede in `$transaction`, catch-up re-runs failed/stuck (Phase 3) |
-| M11 | `PUT /api/settings` is a replace | Phase 3: coach settings written server-side; `coach` server-owned (§2.4) |
-| M12 | Recovery rows need per-day dedupe | **Phase 2**: fullest row per day (`pickPerDay`) |
-| M13 | Shared files with Lane D; Lane A's cron helper | Hook and `?c=` kept to one insert each; cron check constant-time inline, followup filed for A |
-| L14 | "only two delegates reached" unattainable | §2.7/§5 reworded: no WRITE outside `coach_reviews` + `ai_usage_events` |
-| L15 | Fire-and-forget metering vs budget check | Phase 3: spend = sum of `coach_reviews.costUsd` (D7) |
+| M11 | `PUT /api/settings` is a replace | **Phase 3**: `saveCoachSettings` read-merge-writes one key; `coach` in `SERVER_OWNED_KEYS` (tested: a stale client copy is discarded) |
+| M12 | Recovery rows need per-day dedupe | **Phase 2**: fullest row per day (`pickPerDay`) — reworked per field in the round-2 fixes |
+| M13 | Shared files with Lane D; Lane A's cron helper | **Phase 3**: stream route = one lookup in the existing `Promise.all`, one append, one surface ternary; cron check in `lib/coach/cron-auth.ts` (sha-256 both sides, `timingSafeEqual`, closed when unset); followup filed for A |
+| L14 | "only two delegates reached" unattainable | **Phase 3**: `tests/coach-run.test.ts` records every delegate call — a Test run writes only `coachReview` + `aIUsageEvent` and reads only `userSettings` |
+| L15 | Fire-and-forget metering vs budget check | **Phase 3**: spend = sum of `coach_reviews.costUsd` (`lib/coach/spend.ts`) |
 | L16 | `isTest` + `slot` + `trigger` say one thing three ways | **Phase 2**: `kind` alone; `trigger` is cron/manual |
 | L18 | Developer words on his screen | §0 rewritten; Phase 4 copy follows it |
 | L19 | Journal excerpts persist and ride every turn; water path must be tested | **Phase 2**: excerpts behind a default-off switch (D22); the fixture has water rows and the hydration path is tested |

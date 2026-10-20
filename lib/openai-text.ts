@@ -37,6 +37,9 @@ export async function generateChatText({
   );
 
   let finishReason: string | null = null;
+  // Summed over every call this makes (a `length` retry is a second call), so
+  // a caller that stores what a result cost can (the Coach, 2026-10-17).
+  const usage = { inputTokens: 0, outputTokens: 0, calls: 0 };
 
   for (const budget of budgets) {
     const completion = await openai.chat.completions.create({
@@ -46,12 +49,12 @@ export async function generateChatText({
       max_completion_tokens: budget,
     });
 
-    recordAIUsage({
-      surface,
-      model,
-      inputTokens: completion.usage?.prompt_tokens ?? 0,
-      outputTokens: completion.usage?.completion_tokens ?? 0,
-    });
+    const inputTokens = completion.usage?.prompt_tokens ?? 0;
+    const outputTokens = completion.usage?.completion_tokens ?? 0;
+    usage.inputTokens += inputTokens;
+    usage.outputTokens += outputTokens;
+    usage.calls += 1;
+    recordAIUsage({ surface, model, inputTokens, outputTokens });
 
     const choice = completion.choices[0];
     const text = choice?.message?.content?.trim() || "";
@@ -61,6 +64,7 @@ export async function generateChatText({
       return {
         text,
         finishReason,
+        usage,
       };
     }
 
@@ -72,5 +76,6 @@ export async function generateChatText({
   return {
     text: null,
     finishReason,
+    usage,
   };
 }

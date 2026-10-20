@@ -25,6 +25,8 @@ export interface CategoryPrefs {
   systemAlerts: boolean;
   /** yesterday's steps and calories at 7 am Central; the week on Sunday evening */
   activityReports: boolean;
+  /** the Coach's weekly review is written (Sunday evening), or the Coach is paused by its budget */
+  coachReview: boolean;
 }
 
 export interface NotificationPrefs extends CategoryPrefs {
@@ -51,6 +53,7 @@ export const CATEGORY_KEYS = [
   "weighIn",
   "systemAlerts",
   "activityReports",
+  "coachReview",
 ] as const satisfies ReadonlyArray<keyof CategoryPrefs>;
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -62,6 +65,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   weighIn: true,
   systemAlerts: true,
   activityReports: true,
+  coachReview: true,
   quietHoursEnabled: true,
   quietStart: DEFAULT_QUIET_START,
   quietEnd: DEFAULT_QUIET_END,

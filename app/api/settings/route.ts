@@ -23,7 +23,9 @@ export async function GET() {
 // /api/push/prefs; the device's timezone is written by the heartbeat). A
 // blind replace would let any unrelated settings save — units, language —
 // silently turn switches back on or move quiet hours to a stale timezone.
-const SERVER_OWNED_KEYS = ["notificationPrefs"] as const;
+// `coach` (2026-10-17): the Coach's switch, budget and model, written only by
+// /api/health/coach/settings — a stale client copy must not turn it back on.
+const SERVER_OWNED_KEYS = ["notificationPrefs", "coach"] as const;
 
 // PUT /api/settings — save settings
 export async function PUT(request: NextRequest) {

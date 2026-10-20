@@ -64,6 +64,8 @@ export async function planWeek(input: {
   days: PlannedDayInput[];
   replaceWeek?: boolean;
   timeZone: string;
+  /** who proposed it — "chat" unless said otherwise (the Coach passes "coach") */
+  source?: string;
 }): Promise<{ created: number; remindersCreated: number; weekDates: string[] }> {
   const days = input.days.filter((d) => cleanDay(d.date) && d.title?.trim());
   if (days.length === 0) return { created: 0, remindersCreated: 0, weekDates: [] };
@@ -102,7 +104,7 @@ export async function planWeek(input: {
           typeof day.targetWeightKg === "number" && Number.isFinite(day.targetWeightKg)
             ? day.targetWeightKg
             : null,
-        source: "chat",
+        source: input.source ?? "chat",
       },
     });
     created++;
