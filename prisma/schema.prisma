@@ -373,6 +373,12 @@ model PushSubscription {
 model AuthCredential {
   id        String   @id @default("default")
   pinHash   String
+  /// Hash generation (audit 2026-10): 1 = the pre-audit HMAC form, 2 = scrypt
+  /// under the derived key. Settings shows how much is still on 1.
+  keyVersion Int     @default(1)
+  /// HMAC (under the derived PIN key) of the APP_PIN value an APP_PIN_RESET
+  /// last consumed — a reset works once per value, never as a standing PIN.
+  resetConsumedFor String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -390,6 +396,11 @@ model DeviceSession {
   refreshExpiresAt DateTime
   lastSeenAt       DateTime  @default(now())
   revokedAt        DateTime?
+  /// Hash generation of tokenHash / refreshTokenHash (audit 2026-10):
+  /// 1 = hashed under the pre-audit key (which depends on APP_PIN staying
+  /// as it is), 2 = the derived key. Settings → Devices counts the 1s.
+  keyVersion        Int      @default(1)
+  refreshKeyVersion Int      @default(1)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

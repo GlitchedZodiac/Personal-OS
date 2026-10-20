@@ -13,40 +13,65 @@ those to you.
 
 ## DO THIS FIRST — and in this order
 
+**Your PIN has to be treated as known.** Production has never had the two
+signing secrets, so since 29 August anyone could work out a 4-digit PIN
+offline from a public page of the app. The fix closes that, and then you
+change the PIN.
+
 **If you set the new secret on the OLD code, every watch, iPhone and Claude
 connector session dies for good; if you merge the new code before setting the
-secrets, the build fails loudly and nothing changes.** So the order is: merge
-first, let the build fail, add the secrets, redeploy, then everything else.
+secrets, the build fails loudly and nothing changes.** So: merge first, let
+the build fail, add the secrets, redeploy, change the PIN, then everything
+else.
 
-Why: the audit found that when two settings are missing in Vercel, Pitaya
-signs your login using **your PIN as the secret** — easy to guess. The fix
-needs two real secrets. Old code that first sees `APP_AUTH_SECRET` would
-re-lock every device token under it and never recover them; only the new code
-recognises the old ones and moves them over.
-
-0. **Look first.** Vercel → `personal-os` → **Settings → Environment
-   Variables**. Which of these names are listed for Production:
-   `AUTH_COOKIE_SECRET`, `APP_AUTH_SECRET`, `NEXTAUTH_SECRET`, `CRON_SECRET`,
-   `FINANCE_VAULT_MASTER_KEY`? Just the names — never copy a value anywhere.
-   Tell Claude which are there; it settles what is Critical and what is not.
+0. **In Vercel → Settings, two checks (nothing to type):** "Automatically
+   expose System Environment Variables" is switched **on**, and the **Build
+   Command** is the default (`npm run build`). The safety check runs inside
+   that command.
 1. **Merge the security pull request FIRST**, before any other PR from the
    weekend. The production build **fails on purpose** with a message naming
-   the two missing variables. That is expected. The previous version keeps
-   running untouched.
-2. In Vercel → Environment Variables, add, for **Production** and **Preview**:
+   the two missing variables. The previous version keeps running untouched.
+2. In Vercel → Settings → Environment Variables, add, for **Production** and
+   **Preview**:
    - `AUTH_COOKIE_SECRET` = a value from `openssl rand -hex 32`
    - `APP_AUTH_SECRET` = a second, different value from `openssl rand -hex 32`
    **Each must be at least 32 characters** (these are 64). Run the command
    twice in a terminal on the Mac. **Never add `APP_AUTH_SECRET` to a
    deployment that does not have this PR.**
-3. **Redeploy** — Vercel does not redeploy when a variable changes. Then open
-   the app once on each device and unlock. The watch, the iPhone app and the
-   Claude connector keep working without re-pairing: the new code recognises
-   their existing keys until 17 January 2027 and moves them over on first use.
-4. **Only then merge the other pull requests.**
-5. **Check `CRON_SECRET` is listed** (step 0). Without it the scheduled jobs
-   (reminders, the weekly report, the Gmail finance sync, the daily refresh)
-   are refused — and three of them were open to anyone before this fix.
+3. **Redeploy** — Vercel does not redeploy when a variable changes. Open the
+   app once on each device and unlock. The watch, the iPhone app and the
+   Claude connector keep working without re-pairing.
+4. **Change your PIN** in Settings → right after the redeploy. 6–8 digits if
+   you can; a longer PIN is a hundred to ten thousand times harder to guess.
+5. **Look at who is signed in.** Settings → Devices, and Settings → Claude
+   connector: revoke anything you do not recognise. For the full list, open
+   the Supabase SQL editor and run:
+   ```sql
+   select "deviceType", platform, "deviceLabel", "lastSeenAt"
+   from device_sessions
+   where "revokedAt" is null and "expiresAt" > now()
+   order by "lastSeenAt" desc;
+   ```
+   The row your Claude uses must say `mcp` (if it does not, reconnect in
+   Settings → Claude connector). Any `mcp` row you did not create must be
+   revoked: before this fix, anyone with the PIN could pair as a connector.
+6. **Only then merge the other pull requests.**
+7. **Leave `APP_PIN` alone in Vercel** — do not remove or change it until
+   Settings stops showing "sessions still on the old key", or until
+   17 January 2027. The old device keys were made from it; changing it signs
+   those devices out. (Your PIN itself now lives in the database; changing it
+   in Settings is the right way and is safe.)
+
+**If `APP_AUTH_SECRET` were ever already listed** (it is not today): keep it
+if it is at least 32 characters. If it is shorter, copy its value into a new
+variable `APP_AUTH_SECRET_PREVIOUS`, then replace `APP_AUTH_SECRET` with a
+fresh `openssl rand -hex 32` value — the old one stays recognised until
+17 January 2027.
+
+**Never run a local server against the production database** without the
+same `APP_AUTH_SECRET` as production. (The main checkout's `.env.local`
+points at production.) A local server without it can read but is no longer
+allowed to rewrite any stored key — but it still cannot sign anyone in.
 
 ## How Pitaya is locked (today)
 
@@ -76,7 +101,7 @@ pasted into a file in the repo.
 | Secret | What it protects | If you rotate it |
 |---|---|---|
 | `AUTH_COOKIE_SECRET` | The signature on your login cookie | Everyone's browser logs in once more |
-| `APP_AUTH_SECRET` | The keys behind PIN hashing, device tokens and the connector's OAuth ids | Rotating it unreads the stored PIN and every device token — plan for a re-pair and use the `APP_PIN_RESET` recovery above. (Setting it for the FIRST time is safe: old tokens are recognised until 17 Jan 2027.) |
+| `APP_AUTH_SECRET` | The keys behind PIN hashing, device tokens and the connector's OAuth ids | Put the current value in `APP_AUTH_SECRET_PREVIOUS` first, then set a new one — sessions and the PIN keep working until 17 Jan 2027. (Setting it for the FIRST time is safe: old tokens are recognised.) |
 | `CRON_SECRET` | The scheduled jobs | Update it in Vercel; the crons use it automatically |
 | `HEALTH_INGEST_TOKEN` | The Apple Health Shortcut's push | Change it in Vercel, then in the Shortcut's Authorization header |
 | `FINANCE_VAULT_MASTER_KEY` | The encryption of your Gmail token (and, after the fix, Strava + OpenAI billing key) | Changing it makes the stored encrypted values unreadable — only rotate with a re-connect of those integrations |
@@ -103,9 +128,14 @@ pasted into a file in the repo.
   so any copies of the old login cookie stop working (every browser logs in
   once more).
 - **Locked out after rotating `APP_AUTH_SECRET`?** That secret also protects
-  the stored PIN, so rotating it makes the stored PIN unreadable. Recovery:
-  in Vercel set `APP_PIN` to your PIN and `APP_PIN_RESET` to `1`, redeploy,
-  log in once, then remove `APP_PIN_RESET`.
+  the stored PIN, so rotating it makes the stored PIN unreadable (unless you
+  put the old value in `APP_AUTH_SECRET_PREVIOUS`). Recovery: in Vercel set
+  `APP_PIN` to your PIN and `APP_PIN_RESET` to `1`, redeploy, log in once,
+  then remove `APP_PIN_RESET`. It works once per `APP_PIN` value and sends
+  you a system alert; leaving the flag on does not make `APP_PIN` a second
+  PIN.
+- **The connector says its client is unknown when you reconnect?** Remove
+  the Pitaya connector in claude.ai and add it again (paste only the URL).
 - **A Vercel secret** (one of the table above) — rotate it at its source, paste
   the new value in Vercel, redeploy. For `FINANCE_VAULT_MASTER_KEY`, also
   reconnect the integrations it encrypts.

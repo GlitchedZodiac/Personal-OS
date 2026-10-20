@@ -119,7 +119,9 @@ export async function validateClient(
   if (clientId.startsWith("pos1.")) {
     const payload = verifyCompact<DcrPayload>(clientId.slice(5));
     if (!payload || payload.v !== 1 || !Array.isArray(payload.ru)) {
-      return { ok: false, error: "Unknown client_id" };
+      // Most likely an id registered before the 2026-10 key change: claude.ai
+      // keeps it. Re-adding the connector registers a fresh one.
+      return { ok: false, error: "Unknown client_id — remove the Pitaya connector in claude.ai and add it again (paste only the URL)" };
     }
     if (!payload.ru.includes(redirectUri)) {
       return { ok: false, error: "redirect_uri was not registered by this client" };

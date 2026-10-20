@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { AIStatusCard } from "@/components/ai-status-card";
+import { LegacyKeyNotice } from "@/components/legacy-key-notice";
 import { NEW_CHAT_GAP_CHOICES, normalizeGapHours } from "@/lib/chat-history";
 import {
   getSettings,
@@ -207,6 +208,7 @@ export default function SettingsPage() {
           </button>
         )}
       </div>
+      <LegacyKeyNotice />
       {showPairHelp && !paired && (
         <div className="mt-2 rounded-[12px] border border-border bg-card px-4 py-3 text-xs leading-relaxed text-muted-foreground">
           Open Pitaya on the watch and sign in with your PIN — it appears here

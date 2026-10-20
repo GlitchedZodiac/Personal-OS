@@ -95,8 +95,10 @@ export function PinGate({ children }: PinGateProps) {
         setIsAuthenticated(true);
         rememberGrant();
       } else if (res.status === 503) {
+        // The server names what is missing (a PIN, or a signing secret).
+        const body = await res.json().catch(() => ({}));
         setPinConfigured(false);
-        setError(demoText("APP_PIN is not configured yet", "APP_PIN todavia no esta configurado"));
+        setError(typeof body.error === "string" ? body.error : demoText("APP_PIN is not configured yet", "APP_PIN todavia no esta configurado"));
       } else {
         // The server SAID no. That is different from being unable to ask, and it revokes the
         // offline grant — otherwise a signed-out device would keep letting itself back in.
@@ -141,8 +143,9 @@ export function PinGate({ children }: PinGateProps) {
         setPin("");
         inputRef.current?.focus();
       } else if (res.status === 503) {
+        const body = await res.json().catch(() => ({}));
         setPinConfigured(false);
-        setError(demoText("APP_PIN is not configured yet", "APP_PIN todavia no esta configurado"));
+        setError(typeof body.error === "string" ? body.error : demoText("APP_PIN is not configured yet", "APP_PIN todavia no esta configurado"));
         setPin("");
       } else {
         setError(demoText("Invalid PIN", "PIN invalido"));

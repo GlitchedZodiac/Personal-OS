@@ -4,14 +4,20 @@ import crypto from "crypto";
 // SEC-003 / SEC-004 / SEC-065 (audit 2026-10): one PIN, in auth_credentials,
 // scrypt + salt + pepper; APP_PIN only seeds a missing row; no "1234".
 
-const { rows, upsert } = vi.hoisted(() => {
-  const rows: Record<string, { pinHash: string }> = {};
-  const upsert = vi.fn(async ({ create, update }: { create: { pinHash: string }; update: { pinHash: string } }) => {
-    rows.default = { pinHash: rows.default ? update.pinHash : create.pinHash };
+type Cred = { pinHash: string; keyVersion?: number; resetConsumedFor?: string | null };
+const { rows, upsert, notify } = vi.hoisted(() => {
+  const rows: Record<string, Cred> = {};
+  const upsert = vi.fn(async ({ create, update }: { create: Cred; update: Cred }) => {
+    rows.default = rows.default ? { ...rows.default, ...update } : { ...create };
     return rows.default;
   });
-  return { rows, upsert };
+  const notify = vi.fn(async (input: { title: string }) => {
+    void input;
+    return { status: "sent" };
+  });
+  return { rows, upsert, notify };
 });
+vi.mock("@/lib/notify", () => ({ notify }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     authCredential: {
@@ -33,6 +39,10 @@ function legacyHash(pin: string) {
 beforeEach(() => {
   delete rows.default;
   upsert.mockClear();
+  notify.mockClear();
+  // Rewrites (re-hash, re-seed) happen only on a production server with an
+  // explicit secret — the default here; the dev-mode test overrides it.
+  vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("APP_AUTH_SECRET", STRONG);
   vi.stubEnv("APP_PIN", "2468");
   vi.stubEnv("APP_PIN_RESET", "");
@@ -111,13 +121,56 @@ describe("verifyPin — D1a legacy row and the one-time transition", () => {
     vi.stubEnv("APP_PIN", "5555"); // once in the new format the seed is inert
     expect(await verifyPin("5555")).toBe(false);
   });
-  it("APP_PIN_RESET=1 is the explicit recovery: re-seed from APP_PIN even over a current-format row", async () => {
-    rows.default = { pinHash: hashPin("2468") };
+  it("APP_PIN_RESET=1 is the explicit recovery: re-seed from APP_PIN once, with an alert", async () => {
+    rows.default = { pinHash: hashPin("2468"), keyVersion: 2 };
     vi.stubEnv("APP_PIN", "7777");
     expect(await verifyPin("7777")).toBe(false);
     vi.stubEnv("APP_PIN_RESET", "1");
     expect(await verifyPin("7777")).toBe(true);
     expect(await verifyPin("2468")).toBe(false);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify.mock.calls[0][0].title).toMatch(/reset from APP_PIN/);
+    expect(rows.default.resetConsumedFor).toMatch(/^[0-9a-f]{64}$/);
+    expect(rows.default.resetConsumedFor).not.toContain("7777");
+  });
+
+  it("APP_PIN_RESET left on is NOT a standing second PIN: it cannot undo a later PIN change", async () => {
+    rows.default = { pinHash: hashPin("2468"), keyVersion: 2 };
+    vi.stubEnv("APP_PIN", "7777");
+    vi.stubEnv("APP_PIN_RESET", "1");
+    expect(await verifyPin("7777")).toBe(true); // consumed
+    expect(await updatePin("7777", "1357")).toBe(true); // he changes it in Settings
+    expect(await verifyPin("7777")).toBe(false); // the forgotten flag does not bring it back
+    expect(await verifyPin("1357")).toBe(true);
+    expect(notify).toHaveBeenCalledTimes(1);
+    vi.stubEnv("APP_PIN", "8888"); // a NEW value is a new, single reset
+    expect(await verifyPin("8888")).toBe(true);
+    expect(await verifyPin("8888")).toBe(true); // now it is simply the stored PIN
+    expect(notify).toHaveBeenCalledTimes(2);
+  });
+
+  it("a development server verifies a legacy row but rewrites nothing (it could be pointed at prod)", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("APP_AUTH_SECRET", "");
+    rows.default = { pinHash: legacyHash("2468") };
+    const before = rows.default.pinHash;
+    expect(await verifyPin("2468")).toBe(true);
+    expect(rows.default.pinHash).toBe(before);
+    vi.stubEnv("APP_PIN_RESET", "1");
+    vi.stubEnv("APP_PIN", "9999");
+    expect(await verifyPin("9999")).toBe(false); // no re-seed in development
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("a scrypt row written under a PREVIOUS secret verifies via APP_AUTH_SECRET_PREVIOUS and is re-hashed", async () => {
+    const old = crypto.randomBytes(32).toString("hex");
+    vi.stubEnv("APP_AUTH_SECRET", old);
+    rows.default = { pinHash: hashPin("2468"), keyVersion: 2 };
+    vi.stubEnv("APP_AUTH_SECRET", STRONG);
+    expect(await verifyPin("2468")).toBe(false);
+    vi.stubEnv("APP_AUTH_SECRET_PREVIOUS", old);
+    expect(await verifyPin("2468")).toBe(true);
+    expect(checkPinHash("2468", rows.default.pinHash)).toBe("ok"); // now under the new pepper
   });
 });
 

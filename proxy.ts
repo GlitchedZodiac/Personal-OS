@@ -35,21 +35,30 @@ const PUBLIC_API_PREFIXES = [
 ];
 
 // Once per instance: if production is missing a signing secret, say so in the
-// log the first time anything hits the API (SEC-001/002). /api/auth answers
-// the same thing as a 503 body; here a 401 would otherwise be the only clue.
+// log the first time anything hits the API (SEC-001/002).
 let loggedSecretProblems = false;
+/** Routes that authenticate with their own secret, not the signing secrets. */
+const SECRET_INDEPENDENT = ["/api/cron/", "/api/health/daily"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (!loggedSecretProblems) {
-    const problems = authSecretProblems();
-    if (problems.length > 0) {
+  // Production without its signing secrets cannot sign, verify or hash
+  // anything. Say so by NAME on every route that needs them — the cookie
+  // routes, the device and connector bearer routes, OAuth — instead of a
+  // bare 401 or an unnamed 500 (review of 3a). Crons and the Health
+  // Shortcut use their own secrets and keep working.
+  const problems = authSecretProblems();
+  if (problems.length > 0 && !SECRET_INDEPENDENT.some((p) => pathname === p || pathname.startsWith(p))) {
+    const line = problems.map((p) => `${p.variable} is ${p.reason}`).join("; ");
+    if (!loggedSecretProblems) {
       loggedSecretProblems = true;
-      console.error(
-        `[proxy] ${problems.map((p) => `${p.variable} is ${p.reason}`).join("; ")} — cookie-gated routes will answer 401 until it is set in Vercel and redeployed.`
-      );
+      console.error(`[proxy] ${line} — answering 503 until it is set in Vercel (openssl rand -hex 32, 32+ characters) and redeployed.`);
     }
+    return NextResponse.json(
+      { error: `Server is not configured: ${line}. Set it in Vercel and redeploy.`, missing: problems.map((p) => p.variable) },
+      { status: 503 }
+    );
   }
 
   const isPublic =

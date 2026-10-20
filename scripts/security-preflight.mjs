@@ -7,8 +7,13 @@
 // would take the web app, the watch, the iPhone and the Claude connector
 // down together. Runs first in `npm run build`.
 //
-// Strict when VERCEL_ENV === "production" (Vercel sets it during the build)
-// or when SECURITY_PREFLIGHT_STRICT=1. Elsewhere it only warns.
+// Strict — fails closed — when ANY of these holds:
+//   - VERCEL_ENV === "production" or VERCEL_TARGET_ENV === "production";
+//   - VERCEL is set but VERCEL_ENV is not (the build cannot tell which
+//     environment it is building, so it assumes the worst — review of 3a:
+//     `VERCEL=1` alone used to pass);
+//   - SECURITY_PREFLIGHT_STRICT=1.
+// Elsewhere (local builds, CI, Vercel preview) it only warns.
 //
 // It reads process.env only: on Vercel the project's variables are in the
 // build's environment; locally `npm run build` does NOT load .env.local (Next
@@ -27,14 +32,19 @@ export function evaluate(env = process.env) {
   }
   const warnings = [];
   if (!(env.CRON_SECRET ?? "").trim()) warnings.push("CRON_SECRET is not set — every /api/cron/* call will be refused");
-  const strict = env.VERCEL_ENV === "production" || env.SECURITY_PREFLIGHT_STRICT === "1";
+  const onVercel = Boolean((env.VERCEL ?? "").trim());
+  const strict =
+    env.VERCEL_ENV === "production" ||
+    env.VERCEL_TARGET_ENV === "production" ||
+    (onVercel && !(env.VERCEL_ENV ?? "").trim()) ||
+    env.SECURITY_PREFLIGHT_STRICT === "1";
   return { problems, warnings, strict, ok: !(strict && problems.length > 0) };
 }
 
 const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (isMain) {
   const { problems, warnings, strict, ok } = evaluate();
-  const where = `VERCEL_ENV=${process.env.VERCEL_ENV ?? "unset"}`;
+  const where = `VERCEL=${process.env.VERCEL ?? "unset"}, VERCEL_ENV=${process.env.VERCEL_ENV ?? "unset"}, VERCEL_TARGET_ENV=${process.env.VERCEL_TARGET_ENV ?? "unset"}`;
   for (const w of warnings) console.warn(`[security-preflight] warning: ${w}`);
   if (!ok) {
     console.error(`[security-preflight] REFUSING a production build (${where}):`);

@@ -55,14 +55,49 @@ export function legacyAppSecret(): string {
 /**
  * Every key the OLD server may have hashed under. The old chain picked its
  * head at call time, so the moment Michael sets APP_AUTH_SECRET the head
- * changes — but the rows were written under whatever was set BEFORE (most
- * likely APP_PIN, or a leftover NEXTAUTH_SECRET). Verifiers try all of them;
- * nothing is ever minted under any of them.
+ * changes — but the rows were written under whatever was set BEFORE (in
+ * production: APP_PIN). Verifiers try all of them; nothing is ever minted
+ * under any of them.
+ *
+ * These are read from the CURRENT environment, which is why
+ * docs/security/README.md says: do not remove or change APP_PIN in Vercel
+ * until Settings → Devices shows no session on the old key (or until
+ * LEGACY_SECRET_UNTIL). APP_AUTH_SECRET_PREVIOUS is the escape hatch for
+ * replacing an APP_AUTH_SECRET that already existed.
  */
 export function legacySecretCandidates(): string[] {
-  const raw = [process.env.APP_AUTH_SECRET, process.env.NEXTAUTH_SECRET, process.env.APP_PIN, LEGACY_CONSTANT];
+  const raw = [
+    process.env.APP_AUTH_SECRET,
+    process.env.NEXTAUTH_SECRET,
+    process.env.APP_PIN,
+    process.env.APP_AUTH_SECRET_PREVIOUS,
+    LEGACY_CONSTANT,
+  ];
   return [...new Set(raw.filter((v): v is string => typeof v === "string" && v.length > 0))];
 }
+
+/** The derived key a PREVIOUS APP_AUTH_SECRET produced for one purpose, if one is configured. */
+function previousDerivedKey(purpose: KeyPurpose): Buffer | null {
+  const previous = process.env.APP_AUTH_SECRET_PREVIOUS?.trim() ?? "";
+  if (previous.length < MIN_SECRET_LENGTH) return null;
+  return crypto.createHash("sha256").update(`${previous}:personal-os:${purpose}`).digest();
+}
+
+/**
+ * May this process REWRITE stored hashes (re-key a legacy row, re-hash a PIN,
+ * re-seed from APP_PIN)? Only a production server with an explicit secret.
+ * A development server has no APP_AUTH_SECRET and derives its keys from the
+ * legacy chain — and the main checkout's .env.local points at the PRODUCTION
+ * database, so a dev server that re-keyed rows would rewrite them under a
+ * key production does not have, logging out every device. Everywhere else:
+ * verify only.
+ */
+export function canRewriteHashes(): boolean {
+  return isProduction() && (process.env.APP_AUTH_SECRET?.trim().length ?? 0) >= MIN_SECRET_LENGTH;
+}
+
+/** Hash generation written by the current code (see DeviceSession.keyVersion). */
+export const CURRENT_KEY_VERSION = 2;
 
 export function legacyWindowOpen(now: Date = new Date()): boolean {
   return now < LEGACY_SECRET_UNTIL;
@@ -108,9 +143,15 @@ export function hashOpaqueToken(token: string) {
   return crypto.createHmac("sha256", deriveKey("token")).update(token).digest("hex");
 }
 
-/** The pre-audit hashes of a token (one per legacy candidate) — for finding rows written before the key change. */
+/**
+ * Every hash a token may have been stored under by earlier code: one per
+ * legacy candidate, plus the derived key of APP_AUTH_SECRET_PREVIOUS.
+ */
 export function legacyHashOpaqueTokens(token: string): string[] {
-  return legacySecretCandidates().map((key) => crypto.createHmac("sha256", key).update(token).digest("hex"));
+  const keys: Array<string | Buffer> = [...legacySecretCandidates()];
+  const previous = previousDerivedKey("token");
+  if (previous) keys.push(previous);
+  return keys.map((key) => crypto.createHmac("sha256", key).update(token).digest("hex"));
 }
 
 // ── PIN hashing: scrypt + per-row salt + server pepper ───────────────────
@@ -118,8 +159,16 @@ export function legacyHashOpaqueTokens(token: string): string[] {
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 } as const;
 const PIN_FORMAT = "scrypt$1";
 
-function pepperPin(pin: string): Buffer {
-  return crypto.createHmac("sha256", deriveKey("pin")).update(pin).digest();
+function pepperPin(pin: string, key: Buffer = deriveKey("pin")): Buffer {
+  return crypto.createHmac("sha256", key).update(pin).digest();
+}
+
+/**
+ * A marker that names one PIN value without storing it: HMAC under the
+ * derived PIN key. Used to make APP_PIN_RESET single-use per value.
+ */
+export function pinMarker(pin: string): string {
+  return crypto.createHmac("sha256", deriveKey("pin")).update(`reset:${pin}`).digest("hex");
 }
 
 export function hashPin(pin: string) {
@@ -144,12 +193,19 @@ export function checkPinHash(pin: string, stored: string | null | undefined, now
     const [, , saltB64, hashB64] = stored.split("$");
     if (!saltB64 || !hashB64) return "no";
     const expected = Buffer.from(hashB64, "base64url");
-    const computed = crypto.scryptSync(pepperPin(pin), Buffer.from(saltB64, "base64url"), expected.length, {
-      N: SCRYPT.N,
-      r: SCRYPT.r,
-      p: SCRYPT.p,
-    });
-    return computed.length === expected.length && crypto.timingSafeEqual(computed, expected) ? "ok" : "no";
+    const matchesUnder = (key?: Buffer) => {
+      const computed = crypto.scryptSync(pepperPin(pin, key), Buffer.from(saltB64, "base64url"), expected.length, {
+        N: SCRYPT.N,
+        r: SCRYPT.r,
+        p: SCRYPT.p,
+      });
+      return computed.length === expected.length && crypto.timingSafeEqual(computed, expected);
+    };
+    if (matchesUnder()) return "ok";
+    // Written under a previous APP_AUTH_SECRET (the documented rotation path).
+    const previous = previousDerivedKey("pin");
+    if (previous && legacyWindowOpen(now) && matchesUnder(previous)) return "legacy";
+    return "no";
   }
   if (isLegacyPinHash(stored) && legacyWindowOpen(now)) {
     const b = Buffer.from(stored, "hex");
@@ -191,8 +247,15 @@ export function verifyCompact<T = unknown>(value: string, now: Date = new Date()
   const current = sigMatches(sig, compactSig(body, deriveKey("compact")));
   // A client id minted before the key change (claude.ai keeps it) stays
   // valid through the legacy window; a reconnect after that re-registers.
-  const legacy =
-    !current && legacyWindowOpen(now) && legacySecretCandidates().some((key) => sigMatches(sig, compactSig(body, key)));
+  // Legacy client ids are honoured only under keys that were ever secret.
+  // APP_PIN (presumed known) and the public constant are excluded: anyone can
+  // get an equivalent id from the public register endpoint anyway, so
+  // accepting ids signed under a known key buys nothing (review, 2026-10-20).
+  const legacyKeys: Array<string | Buffer> = [process.env.APP_AUTH_SECRET, process.env.NEXTAUTH_SECRET, process.env.APP_AUTH_SECRET_PREVIOUS]
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
+  const previous = previousDerivedKey("compact");
+  if (previous) legacyKeys.push(previous);
+  const legacy = !current && legacyWindowOpen(now) && legacyKeys.some((key) => sigMatches(sig, compactSig(body, key)));
   if (!current && !legacy) return null;
   try {
     return JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as T;

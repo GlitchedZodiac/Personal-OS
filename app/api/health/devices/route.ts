@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { countLegacyKeySessions } from "@/lib/mobile-session";
+import { pinOnLegacyKey } from "@/lib/pin-auth";
 
 // Device sessions (the watch, later maybe an iPad). Powers the Settings
 // pairing card. Pairing itself happens on-device (PIN sign-in →
@@ -20,7 +22,10 @@ export async function GET() {
         createdAt: true,
       },
     });
-    return NextResponse.json({ devices: sessions });
+    // Additive (audit 2026-10): what still depends on the pre-audit key —
+    // while either is non-zero, APP_PIN must stay as it is in Vercel.
+    const [legacyKeySessions, pinLegacy] = await Promise.all([countLegacyKeySessions(), pinOnLegacyKey()]);
+    return NextResponse.json({ devices: sessions, legacyKeySessions, pinOnLegacyKey: pinLegacy });
   } catch (error) {
     console.error("Devices fetch error:", error);
     return NextResponse.json({ error: "Failed to load devices" }, { status: 500 });

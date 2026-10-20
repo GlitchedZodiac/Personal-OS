@@ -42,6 +42,14 @@ describe("security-preflight", () => {
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/ok \(strict/);
   });
+  it("fails CLOSED when the environment is ambiguous (review of 3a): VERCEL set but VERCEL_ENV absent, or VERCEL_TARGET_ENV=production", () => {
+    const vercelOnly = run({ VERCEL: "1", CI: "1" });
+    expect(vercelOnly.code).toBe(1);
+    expect(vercelOnly.out).toMatch(/VERCEL=1, VERCEL_ENV=unset/);
+    expect(run({ VERCEL_TARGET_ENV: "production" }).code).toBe(1);
+    expect(run({ VERCEL: "1", VERCEL_ENV: "preview" }).code).toBe(0); // a real preview build stays advisory
+    expect(run({ VERCEL: "1", VERCEL_ENV: "production", AUTH_COOKIE_SECRET: strong, APP_AUTH_SECRET: strong }).code).toBe(0);
+  });
   it("only warns outside a production build (local, preview), and SECURITY_PREFLIGHT_STRICT=1 forces strict", () => {
     expect(run({}).code).toBe(0);
     expect(run({ VERCEL_ENV: "preview" }).code).toBe(0);

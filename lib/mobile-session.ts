@@ -2,7 +2,9 @@ import { after, NextRequest } from "next/server";
 import { sweepSoon } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 import {
+  canRewriteHashes,
   createOpaqueToken,
+  CURRENT_KEY_VERSION,
   hashOpaqueToken,
   legacyHashOpaqueTokens,
   legacyWindowOpen,
@@ -38,6 +40,8 @@ export async function createDeviceSession(input: {
       expiresAt: addDays(input.accessTtlDays ?? SESSION_TTL_DAYS),
       refreshExpiresAt: addDays(input.refreshTtlDays ?? REFRESH_TTL_DAYS),
       lastSeenAt: new Date(),
+      keyVersion: CURRENT_KEY_VERSION,
+      refreshKeyVersion: CURRENT_KEY_VERSION,
     },
   });
 
@@ -49,21 +53,30 @@ export async function createDeviceSession(input: {
 }
 
 type HashField = "tokenHash" | "refreshTokenHash";
+type ExpiryField = "expiresAt" | "refreshExpiresAt";
+type SessionRow = Awaited<ReturnType<typeof prisma.deviceSession.findFirst>> & object;
+
+interface SessionMatch {
+  row: SessionRow;
+  /** The stored hash that matched — the current one, or a legacy one. */
+  hash: string;
+  legacy: boolean;
+}
 
 /**
  * Find a live session by its access or refresh token. Tries the current hash
  * first; during the legacy window (lib/security LEGACY_SECRET_UNTIL) it also
- * tries the pre-audit hash and, on a match, re-keys the row — so the watch,
- * the iPhone and the Claude connector keep working across the APP_AUTH_SECRET
- * rollout without re-pairing (PLAN D1a). After the window, legacy rows are
- * simply not found.
+ * tries every hash earlier code could have stored (PLAN D1a). Read-only: the
+ * caller decides whether to re-key. Revoked and expired rows are never
+ * found, legacy or not.
  */
-async function findLiveSession(field: HashField, token: string, expiryField: "expiresAt" | "refreshExpiresAt") {
+async function findLiveSession(field: HashField, token: string, expiryField: ExpiryField): Promise<SessionMatch | null> {
   const now = new Date();
+  const currentHash = hashOpaqueToken(token);
   const current = await prisma.deviceSession.findFirst({
-    where: { [field]: hashOpaqueToken(token), revokedAt: null, [expiryField]: { gt: now } },
+    where: { [field]: currentHash, revokedAt: null, [expiryField]: { gt: now } },
   });
-  if (current) return current;
+  if (current) return { row: current, hash: currentHash, legacy: false };
   if (!legacyWindowOpen(now)) return null;
 
   // One query over every hash the old server could have written (the chain
@@ -72,36 +85,78 @@ async function findLiveSession(field: HashField, token: string, expiryField: "ex
     where: { [field]: { in: legacyHashOpaqueTokens(token) }, revokedAt: null, [expiryField]: { gt: now } },
   });
   if (!legacy) return null;
-  return prisma.deviceSession.update({
-    where: { id: legacy.id },
-    data: { [field]: hashOpaqueToken(token) },
+  return { row: legacy, hash: String((legacy as Record<string, unknown>)[field]), legacy: true };
+}
+
+/**
+ * Move a legacy access-token hash to the current key — only where
+ * canRewriteHashes() allows (a production server with an explicit secret).
+ * Conditional on the hash still being the legacy one, so it cannot revive a
+ * token that a concurrent refresh has just rotated away.
+ */
+async function rekeyAccessToken(match: SessionMatch, token: string): Promise<SessionRow | null> {
+  if (!match.legacy || !canRewriteHashes()) return match.row;
+  const currentHash = hashOpaqueToken(token);
+  const moved = await prisma.deviceSession.updateMany({
+    where: { id: match.row.id, tokenHash: match.hash },
+    data: { tokenHash: currentHash, keyVersion: CURRENT_KEY_VERSION },
+  });
+  if (moved.count === 1) return { ...match.row, tokenHash: currentHash, keyVersion: CURRENT_KEY_VERSION };
+  // Someone changed the row first: a concurrent request re-keyed the same
+  // token (still valid — find it under the current hash), or a refresh
+  // rotated it away (not valid any more — nothing is found).
+  return prisma.deviceSession.findFirst({
+    where: { id: match.row.id, tokenHash: currentHash, revokedAt: null, expiresAt: { gt: new Date() } },
   });
 }
 
 export async function refreshDeviceSession(refreshToken: string) {
   if (!refreshToken) return null;
-  const existing = await findLiveSession("refreshTokenHash", refreshToken, "refreshExpiresAt");
-  if (!existing) return null;
+  const match = await findLiveSession("refreshTokenHash", refreshToken, "refreshExpiresAt");
+  if (!match) return null;
 
   const nextAccessToken = createOpaqueToken();
   const nextRefreshToken = createOpaqueToken();
 
-  const session = await prisma.deviceSession.update({
-    where: { id: existing.id },
+  // Single-use, atomically: the rotation only lands while the row still
+  // carries the refresh hash that matched. Two concurrent refreshes with the
+  // same token → one wins, the other gets nothing.
+  const rotated = await prisma.deviceSession.updateMany({
+    where: { id: match.row.id, refreshTokenHash: match.hash, revokedAt: null },
     data: {
       tokenHash: hashOpaqueToken(nextAccessToken),
       refreshTokenHash: hashOpaqueToken(nextRefreshToken),
       expiresAt: addDays(SESSION_TTL_DAYS),
       refreshExpiresAt: addDays(REFRESH_TTL_DAYS),
       lastSeenAt: new Date(),
+      keyVersion: CURRENT_KEY_VERSION,
+      refreshKeyVersion: CURRENT_KEY_VERSION,
     },
   });
+  if (rotated.count !== 1) return null;
+  const session = await prisma.deviceSession.findUnique({ where: { id: match.row.id } });
+  if (!session) return null;
 
   return {
     session,
     accessToken: nextAccessToken,
     refreshToken: nextRefreshToken,
   };
+}
+
+/**
+ * How many live sessions still depend on the pre-audit key (an access or a
+ * refresh hash on keyVersion 1). While this is above zero, removing or
+ * changing APP_PIN in Vercel logs those devices out (README).
+ */
+export async function countLegacyKeySessions(): Promise<number> {
+  return prisma.deviceSession.count({
+    where: {
+      revokedAt: null,
+      refreshExpiresAt: { gt: new Date() },
+      OR: [{ keyVersion: { lt: CURRENT_KEY_VERSION } }, { refreshKeyVersion: { lt: CURRENT_KEY_VERSION } }],
+    },
+  });
 }
 
 /**
@@ -136,7 +191,9 @@ export async function authenticateSession(request: NextRequest, kind: SessionKin
   const token = getBearerToken(request, { allowApiKeyHeaders: kind === "connector" });
   if (!token) return { ok: false, reason: "missing" };
 
-  const session = await findLiveSession("tokenHash", token, "expiresAt");
+  const match = await findLiveSession("tokenHash", token, "expiresAt");
+  if (!match) return { ok: false, reason: "invalid" };
+  const session = await rekeyAccessToken(match, token);
   if (!session) return { ok: false, reason: "invalid" };
 
   const isConnector = session.deviceType === "mcp";
