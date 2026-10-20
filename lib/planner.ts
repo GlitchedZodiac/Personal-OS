@@ -3,7 +3,11 @@
 // One brain shared by /api/health/planner, the chat's plan_training confirm,
 // the morning nudge cron, and the auto-complete hooks on both workout writers.
 
+import type { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+
+/** The delegates planWeek touches — the client, or a transaction's (the Coach confirms inside one). */
+export type PlannerDb = Pick<PrismaClient, "plannedWorkout" | "reminder" | "sequence" | "trail">;
 import {
   addDaysToDateString,
   getDateStringInTimeZone,
@@ -29,8 +33,8 @@ function cleanDay(value: unknown): string | null {
 }
 
 /** Case-insensitive routine lookup: exact name first, then containment. */
-async function resolveSequenceId(name: string): Promise<string | null> {
-  const rows = await prisma.sequence.findMany({
+async function resolveSequenceId(name: string, db: PlannerDb = prisma): Promise<string | null> {
+  const rows = await db.sequence.findMany({
     where: { isArchived: false },
     select: { id: true, name: true },
   });
@@ -45,8 +49,8 @@ async function resolveSequenceId(name: string): Promise<string | null> {
   return contains?.id ?? null;
 }
 
-async function resolveTrailId(name: string): Promise<string | null> {
-  const rows = await prisma.trail.findMany({
+async function resolveTrailId(name: string, db: PlannerDb = prisma): Promise<string | null> {
+  const rows = await db.trail.findMany({
     select: { id: true, name: true, aliases: true },
   });
   const n = name.trim().toLowerCase();
@@ -66,7 +70,7 @@ export async function planWeek(input: {
   timeZone: string;
   /** who proposed it — "chat" unless said otherwise (the Coach passes "coach") */
   source?: string;
-}): Promise<{ created: number; remindersCreated: number; weekDates: string[] }> {
+}, db: PlannerDb = prisma): Promise<{ created: number; remindersCreated: number; weekDates: string[] }> {
   const days = input.days.filter((d) => cleanDay(d.date) && d.title?.trim());
   if (days.length === 0) return { created: 0, remindersCreated: 0, weekDates: [] };
 
@@ -80,7 +84,7 @@ export async function planWeek(input: {
     ];
     for (const start of weekStarts) {
       const end = addDaysToDateString(start, 6);
-      await prisma.plannedWorkout.deleteMany({
+      await db.plannedWorkout.deleteMany({
         where: { status: "planned", localDate: { gte: start, lte: end } },
       });
     }
@@ -90,10 +94,10 @@ export async function planWeek(input: {
   let remindersCreated = 0;
   for (const day of days) {
     const sequenceId = day.routineName
-      ? await resolveSequenceId(day.routineName)
+      ? await resolveSequenceId(day.routineName, db)
       : null;
-    const trailId = day.trailName ? await resolveTrailId(day.trailName) : null;
-    await prisma.plannedWorkout.create({
+    const trailId = day.trailName ? await resolveTrailId(day.trailName, db) : null;
+    await db.plannedWorkout.create({
       data: {
         localDate: day.date,
         title: day.title.trim(),
@@ -112,7 +116,7 @@ export async function planWeek(input: {
     for (const reminder of day.reminders ?? []) {
       const at = parseLocalStamp(reminder.atLocal, input.timeZone);
       if (!at || !reminder.title?.trim()) continue;
-      await prisma.reminder.create({
+      await db.reminder.create({
         data: {
           title: reminder.title.trim(),
           body: day.title.trim(),

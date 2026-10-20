@@ -29,6 +29,27 @@ export function estimateChatCostUsd(
   );
 }
 
+/**
+ * For a BUDGET, an unknown model is priced at the most expensive tier we
+ * know, never the cheap fallback above: under-counting is how a cap fails.
+ * `estimated` says the model was not in the table (the Coach, 2026-10-20).
+ */
+export function estimateChatCostUsdConservative(
+  model: string,
+  inputTokens: number,
+  outputTokens: number
+): { usd: number; estimated: boolean } {
+  const known = MODEL_PRICES_PER_M[model];
+  const price = known ?? {
+    input: Math.max(...Object.values(MODEL_PRICES_PER_M).map((p) => p.input)),
+    output: Math.max(...Object.values(MODEL_PRICES_PER_M).map((p) => p.output)),
+  };
+  return {
+    usd: (inputTokens / 1_000_000) * price.input + (outputTokens / 1_000_000) * price.output,
+    estimated: !known,
+  };
+}
+
 type RecordArgs = {
   surface: string; // chat | transcribe | photo | plan | insights | projections | text
   model: string;

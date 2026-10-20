@@ -378,35 +378,44 @@ other call.
 
 ### 2.3 The post-check — `lib/coach/checks.ts` (pure)
 
-1. **Numbers ⊂ facts.** Every numeric token in every `text`/`why`/`title`
-   (handles `1,850`, `82.4`, `12%`, `3×`, `2h 10m`) is normalised and matched
-   against the set of fact values (integers exact after rounding; decimals
-   within 1 % or 0.05). Allowed without a fact: digits inside `[fNN]`, dates
-   that appear in any fact's `dates`, and bare 1–3 **not followed by a unit**
-   (so "three moves", "two of the sessions" pass; "2 kg" does not). Anything
-   else marks the item `unverified: true` with the offending token.
-2. **Citations.** An item containing a number but citing no fact id is
-   flagged `uncited`. Every cited id must exist.
-3. **Medical framing lint.** A small list of forbidden framings (diagnos-,
-   disease names, deficiency, syndrome, "you have", "at risk of", "treat",
-   medication, supplement dosing, "consult"/"see a doctor" as advice given
-   with a claim). A hit removes the item and counts it.
-4. **Actions.** Each move's action is validated: `plan_week` dates inside next
-   week, titles non-empty, `routineName`/`trailName` must appear in the facts'
-   routine/trail lists (else the name is dropped and the move notes "routine
-   not found"); `adjust_targets` percentages sum to 100 and `calorieTarget`
-   within ±25 % of the current target (guardrail — a coach does not slash
-   intake by 40 % in one move); `set_reminder` time within the next 8 days;
-   `log_measurement` fields ⊂ `MEASURED_FIELDS`. Invalid → `kind: "none"` with
-   the reason kept on the move.
-5. **One retry.** If more than two items are `unverified`/`uncited` or any
-   medical hit occurred, the generator re-asks once with the violations
-   appended ("these numbers are not in the facts: …"). After the retry the
-   flags stay and are rendered — the UI shows the amber chip; nothing is
-   silently fixed.
+Reworked in review round 3; the rule is **every number against the facts
+its own sentence cites**.
 
-All of this is unit-tested on canned reviews (good, numbers invented, missing
-cites, medical phrasing, bad plan dates).
+1. **Cited evidence, with units.** A sentence's evidence is the facts it
+   cites plus their `derivedFrom` parents. Every number in it must equal one
+   of those values (integers exact or by rounding, decimals within 1 % or
+   0.05, by absolute value so "down 0.3 kg" is −0.3) **in a compatible
+   unit**: "6 days" does not pass a fact counted in sessions, "lb" never
+   passes kilograms. A number equal to some *other* fact does not pass.
+2. **Read like a person writes.** Number words that quantify something
+   measured ("seven days", "a dozen sessions"), both ends of a range
+   ("3–4 kg"), digits glued to letters ("x4321"). Fact ids and heart-rate
+   zone names (`f12`, `Z2`) are names, not numbers; a digit 1–3 before a
+   structural noun ("3 moves") is the review's own shape.
+3. **Dates and times are their own tokens.** A month-name or ISO date
+   passes only inside the window (the reviewed week, the one before, and the
+   reminder horizon) or when a cited fact names it; a clock time only when a
+   cited fact states it or the move's reminder sets it.
+4. **A move's own evidence is its structured payload** — kcal, %, the grams
+   those imply, target kg, the number of days planned, the reminder's date
+   and time — never the free text of a title or note.
+5. **The headline cites nothing, so it states no number.**
+6. **Medical framing** is matched as phrases in context (a condition named,
+   a diagnosis implied, a treatment, a dose, a supplement to take, "see a
+   doctor") — "treat yourself", "a full dose of sleep", "supplement your
+   walks" are coaching. A matching line is **removed visibly**: it stays in
+   its slot, empty and marked, and its original words are kept in
+   `checksJson.medicalRemoved`. A move is never dropped.
+7. **Actions** are validated: plan dates inside next week, known
+   routine/trail names, no planner reminders, **never "replace the week"**;
+   calories within ±25 %, macros a complete set adding to 100 and each
+   moving at most 10 points; reminders within the horizon; measurement
+   fields from `MEASURED_FIELDS`, a suggested date only inside the review's
+   weeks. Invalid → a text-only move with the reason kept.
+8. **Recorded, not hidden.** An invalid verdict (shown as "mixed") and items
+   beyond the section limits are flagged in `checksJson`.
+9. **One retry** when more than two items are unverified/uncited, a cite is
+   unknown, anything was removed, or fewer than three usable moves remain.
 
 ### 2.4 Storage — `coach_reviews`
 
@@ -508,80 +517,69 @@ the model (`CHAT_MODEL`, terra) — is unchanged (D8). Lane D edits
 `CHAT_SYSTEM_PROMPT` in the same route; the hook is one `await` and one
 string append, in one place.
 
-### 2.6 Execute buttons = proposals
+### 2.6 Execute buttons = proposals — confirmed on the server
 
-Each move renders as a card in the same confirm-first shape as the dock's
-proposal cards, showing exactly what will be written:
+Each move renders as a card in the confirmation-dock shape, showing exactly
+what will be written: the planned days; current → new targets in kcal,
+grams and %; the reminder's text, local time **and named time zone**; an
+input per measurement field (he types the values — nothing is proposed).
 
-| Action | Card shows | Confirm writes through | Record |
-|---|---|---|---|
-| `plan_week` | each day: weekday · title · routine/trail · target kg; "replaces this week's planned days" when `replaceWeek` | `POST /api/health/planner {days, replaceWeek}` (the chat's `plan_week` payload, verbatim) | `{kind, payload, result: {created, remindersCreated}}` |
-| `adjust_targets` | current → proposed for kcal and each macro (grams and %), with the fact chips that justify it | `saveSettingsToServer({calorieTarget, proteinPct, carbsPct, fatPct})` — the `MacroTargetsSheet` path, `PUT /api/settings` | before/after |
-| `set_reminder` | title · local day and time | `POST /api/reminders {title, body, remindAt, url: "/health/coach"}` | reminder id |
-| `log_measurement` | the row to be written with an input per requested field (he types the value; nothing proposed by the model) | `POST /api/health/body` | measurement id |
-| `none` | the move as text, "nothing to write" | — | — |
+**Confirm is one server route** (review round 3, item 3):
+`POST /api/health/coach/reviews/[id]/moves/[n]/confirm`
+(`lib/coach/confirm.ts`). Under a row lock, in one transaction, it loads
+the **stored** move (the client sends nothing but a measurement's typed
+values), refuses Test reviews, re-runs `validateAction` against the stored
+facts and `stillWritable()` in his zone, returns the earlier result if the
+move was already confirmed (idempotent — two taps write once), then writes
+through the existing lib paths and records the move:
 
-After the endpoint returns OK the client calls
-`PATCH /api/health/coach/reviews/[id] {action: {index, kind, payload, result}}`,
-which appends to `actionsJson`; the card flips to "Done · time". Test reviews
-render the cards disabled ("Test review — actions are off"). Nothing is ever
-written without the tap; the endpoints keep their own validation.
+| Action | Written by |
+|---|---|
+| `plan_week` | `planWeek(…, tx)` — the stored days only, no reminders, never replacing the week, `source: "coach"` |
+| `adjust_targets` | read-merge-write of `user_settings.data` (the keys the macro sheet writes); the record keeps `before` |
+| `set_reminder` | a `reminders` row; the stored local time converted **on the server** in his device's zone (D21) |
+| `log_measurement` | a `body_measurements` row from the typed values, validated against the field vocabulary, `source: "manual"` |
 
-Two moves need care the endpoints do not give them (MEDIUM 8, 9):
-
-- `plan_week`: `PlannedDayInput.reminders` would create Reminder rows the card
-  never showed, so the checks strip `reminders` from every day; `replaceWeek`
-  deletes still-planned rows in **every** week the dates touch, so the dates
-  are validated again at **confirm** (all inside next week) in the Coach's
-  own confirm handler before the planner is called; `planWeek` hard-codes
-  `source: "chat"` — a `source` argument is added to it additively so Coach
-  plans read `source: "coach"`.
-- `set_reminder`: `POST /api/reminders` does `new Date(remindAt)` on a UTC
-  server, so a bare "07:00" would fire at 02:00 local. The card converts
-  `atLocal` with `zonedLocalDateTimeToUtc` in the reminder timezone (D21) and
-  names the zone on the card ("Tue 7:00 am · Houston").
+The card then shows "Done · time". **Undo** only where the row's own
+endpoint already offers a way back: targets are re-saved through the
+settings write (the record's `before`), a measurement is deleted through
+`DELETE /api/health/body?id=`; the card then marks the record taken back
+(`PATCH /api/health/coach/reviews/[id] {action: {index, undo: true}}` — the
+PATCH's only job now). Plans and reminders have no delete path, so their
+cards say where to change them. Test reviews render the cards disabled.
 
 ### 2.7 Metering, budget, switch, Test
 
 - Every model call carries `surface: "coach"` (review) or `"coach-chat"`
-  (follow-up chat). `generateChatText` gains an additive `usage` field in its
-  return (`{inputTokens, outputTokens, calls}` summed over its own
-  `length`-retry) so the review row can store exact tokens and cost (HIGH 4);
-  with the one post-check retry a review is at most 2 generator calls, each
-  of which may retry once on `length` — 4 model calls worst case, all
-  counted.
-- **Spend** (LOW 15): the Coach's own spend is the sum of
-  `coach_reviews.costUsd` for the calendar month (in the user's timezone) —
-  written synchronously on the row, so a budget check right after a run sees
-  it; `recordAIUsage` is fire-and-forget and still fires for the global
-  Settings → AI figures. `coach-chat` spend comes from `ai_usage_events` and
-  is shown separately.
-- **Budget** (default $3, D7) — a blocked run leaves ONE `blocked_budget` marker for the week, never on top of a review that exists and never stacked on itself; the next run after the budget is raised replaces it. Compared against **review spend only**
-  (MEDIUM 6 — a 20-turn conversation at today's ~12.5k input tokens a turn is
-  ~$0.80 and must not block Sunday). Checked before generation for the cron
-  and the manual "run this week". Exceeded → no model call; the cron writes a
-  `blocked_budget` row once per week and notifies once ("Coach paused — $3
-  monthly budget reached; raise it in Settings → Coach"). The manual button
-  says the same inline. A **Test** run he taps still runs past the budget —
-  it is how he checks the thing works — and is metered like any other run;
-  the Settings card says so beside the button. Follow-up chat is counted,
-  shown, never blocked.
+  (follow-up chat). `generateChatText` returns `usage` (all calls summed),
+  takes a per-request `timeoutMs` (no SDK retries) and a `deadline`, and a
+  failed call throws with the usage of the calls before it.
+- **Every call is paid for once and recorded** (review round 3, item 1). A
+  failed run writes its tokens and cost on the `failed` row. A run in
+  flight (`generating`, under two minutes old) owns its week: a second
+  "Run now" or "Write again" gets it back (409 `in_flight`), and a lost
+  supersede race returns the winner — never a 500, never a second model
+  call. The generation ends within 50 s: each call is capped at 35 s and no
+  retry starts with under 15 s left.
+- **Cost** is priced conservatively: a model missing from the price table
+  is costed at the highest tier and `checksJson.costEstimated` says so.
+- **Spend** (`lib/coach/spend.ts`): review spend is the sum of
+  `coach_reviews.costUsd` for the calendar month in his timezone, **Test
+  runs excluded**; Test spend and chat spend are shown beside it.
+- **Budget** (default $3, D7): blocks the cron and the manual "run this
+  week" on review spend only, leaving ONE `blocked_budget` marker per week
+  that never replaces a review and never stacks; a run after the budget is
+  raised replaces it. A **Test** he taps runs past the budget and the
+  switch, but at most **5 a day** (429 after). Chat is counted, never
+  blocked.
 - **On/Off**: off → the cron returns `{skipped: "coach off"}`, no row, no
-  notification; the screen still shows past reviews; Settings explains.
-- **Model picker**: `sol | terra | luna` tier keys → `MODEL_TIERS` in
-  `lib/openai.ts`; the Settings card shows each tier's price per 1M tokens
-  from `lib/ai-usage.ts` and the estimated cost of one review.
-- **Journal switch**: `journalExcerpts` (default off) — the only setting that
-  changes what the facts contain.
-- **Test**: `POST /api/health/coach/run {mode: "test"}` runs the whole
-  pipeline with `fixtureSource()` as the `CoachSource`, writes a
-  `coach_reviews` row with `kind: "test"`, **no** conversation, **no**
-  notification, actions disabled; real metering. The proof (LOW 14): a unit
-  test with a prisma mock whose data delegates throw on any write asserts a
-  test run completes with **no write outside `coach_reviews` and
-  `ai_usage_events`** — reads of `user_settings` (timezone, budget) are
-  expected and allowed (`lib/coach/run.ts` takes `{source, generate, now}`
-  injections for exactly this).
+  notification; past reviews stay readable.
+- **Model picker**: `sol | terra | luna` → `MODEL_TIERS` in `lib/openai.ts`.
+- **Journal switch**: `journalExcerpts` (default off).
+- **Test**: the full pipeline on `fixtureSource()`; a `kind: "test"` row, no
+  conversation, no notification, actions off, real metering. Proven by a
+  recording Prisma double: a Test run writes only `coach_reviews` and
+  `ai_usage_events` and reads only `user_settings`.
 
 ### 2.8 Schedule and notification
 
@@ -615,9 +613,10 @@ Two moves need care the endpoints do not give them (MEDIUM 8, 9):
 | Route | Method | Purpose |
 |---|---|---|
 | `/api/health/coach/reviews` | GET | `{ latest, reviews: summaries[], settings, spend: {reviewsUsd, reviewsCount, chatUsd, chatCalls, budgetUsd, remainingUsd, blocked}, timeZone }` — the old `GET`/`POST /api/health/coach` stays untouched until Phase 4 replaces its page (D15) |
-| `/api/health/coach/run` | POST `{mode: "manual" \| "test", week?, again?}` | Runs the pipeline now; returns `{review}` (or `{review, existed: true}`); 409 on budget, 423 when off (manual only); `again` supersedes a healthy review |
+| `/api/health/coach/run` | POST `{mode: "manual" \| "test", week?, again?}` | Runs the pipeline now; `{review}` (or `{review, existed: true}`); 409 `budget`, 409 `in_flight` (a run is writing this week), 423 when off (manual only), 429 `test_limit`; `again` supersedes a healthy review, never one in flight |
 | `/api/health/coach/reviews/[id]` | GET | Full review: facts, review, checks, actions, conversation summary |
-| `/api/health/coach/reviews/[id]` | PATCH `{action}` | Appends a confirmed action |
+| `/api/health/coach/reviews/[id]` | PATCH `{action: {index, undo: true}}` | Marks a confirmed move taken back (after the card undid it through the row's own endpoint) |
+| `/api/health/coach/reviews/[id]/moves/[n]/confirm` | POST `{values?}` | **The only path that writes a move**: stored move, re-validated, `stillWritable()`, idempotent, one transaction (§2.6) |
 | `/api/health/coach/reviews/[id]/conversation` | POST | Creates the review's chat on the first "Talk to this review" (idempotent) |
 | `/api/health/coach/settings` | GET / PUT | `{settings: {enabled, monthlyBudgetUsd, modelTier, journalExcerpts}, spend, tiers: [{tier, label, model, inputUsdPerM, outputUsdPerM, reviewEstimateUsd}]}` (merging, server-side write) |
 | `/api/cron/coach-weekly` | GET, `Bearer CRON_SECRET` | The Sunday run (self-authenticating, already under the `/api/cron/` allowlist) |
@@ -724,13 +723,13 @@ desktop 1280×900 — the review, a fact sheet open, a move's confirm, Settings
 | D4 | One review per week | `liveWeekStart` unique on the live row (`kind` live/superseded/test is one field); manual **Run again** supersedes in one transaction, old row kept with its chat and actions | "Re-reading never rewrites"; a database unique beats a convention (review MEDIUM 10, LOW 16) |
 | D5 | Talk to a review | Conversation created **lazily on the first tap**; deep link `/chat?c=<id>` into the existing Chat with `pickedByHim` set (gap rule bypassed) inside a Suspense boundary; facts injected into that chat's instructions; first message = the review | No parallel chat UI; a conversation minted at generation would become Sunday night's default chat and swallow a food log (review HIGH 2, 3) |
 | D6 | Test mode | Fixture source; `kind: "test"` row; no conversation; no notification; actions disabled; **real** metering; runs even past the budget when he taps it | "Without touching real rows" — but spend is real and must count; a Test he asks for is a diagnostic |
-| D7 | Budget | $3/month, calendar month in the user's timezone, measured on **review spend only** (sum of `coach_reviews.costUsd`); `coach-chat` shown separately, never blocked; blocks the cron and the manual "run this week"; **a Test run he taps himself still runs when the budget is exhausted** (metered like any other run) — orchestrator's call, 2026-10-17 | A chatty month (~$0.80 for 20 turns) must not block Sunday (review MEDIUM 6); the synchronous row sum sees a run the fire-and-forget meter may not have written yet (LOW 15) |
+| D7 | Budget | $3/month, calendar month in his timezone, measured on **review spend only** — Test rows and chat excluded, both shown; blocks the cron and the manual "run this week"; a Test he taps runs past it and past the switch, capped at 5 a day; a failed run's spend counts | A chatty month or a few Tests must not block Sunday; a failed run is not free (review rounds 2–3) |
 | D8 | Model picker scope | Governs the review model (default sol); follow-up chat stays on `CHAT_MODEL` (terra) | The stream route's model is app-wide; changing it per conversation is a bigger change than this lane should make |
 | D9 | Action menu and guardrails | Four kinds + none; targets within ±25 %, plan dates inside next week, routine/trail names must exist; invalid → text-only move | A staffer proposes, within limits; the existing endpoints keep their own validation |
 | D10 | Water | Keep the intake; Coach shows hydration only when rows exist; followup to Lane C to de-emphasise `/health/water` | Zero rows ever; the tool costs nothing to keep |
 | D11 | Journal | Keep; quote ≤ 3 short excerpts when present; flat "no pages" fact otherwise, never a scolding | The Journal tab is in the design IA; a notification/review "is never a summons" |
 | D12 | daily_activity | Read merged rows via `loadActivityRows()`; "no step data this week" when empty | Not dead — the iPhone app's push shipped today |
-| D13 | Citation strictness | Every number must match a fact value — or a number in the SAME move's action payload (a proposed target is by definition not a fact) — with the `week` facts (number, days covered) and month-aware date matching added; planned-day titles are not checked; bare 1–3 without a unit allowed; flagged items shown with an amber chip, one retry, never silently dropped | "Every number cites the row it came from" made enforceable without making the prose unwritable (review MEDIUM 7) |
+| D13 | Citation strictness | Every number must equal a value of the facts ITS sentence cites (or their parents), in a compatible unit; number words and ranges read; dates only inside the window or named by a cited fact; times only from cited facts or the reminder; a move's evidence is its structured payload only; no numbers in the headline; flagged items shown, one retry, never silently fixed | The first rule ("equals any fact") let 25 of the integers 1–100 pass on a real week (review round 3, item 2) |
 | D14 | Reasoning | `reasoningEffort: "low"`, 2,400/3,400 token budgets | The Sunday Report's proven setting; cost stays at cents |
 | D15 | Old coach API | Delete the `GET`/`POST /api/health/coach` handlers (todo-task generator) **in Phase 4, with the page that used them**, after a consumer grep over `ios/`, `lib/mcp`, `lib/ai`, `components` and `public/sw.js` — so the removal is reviewed beside its replacement | Grep so far: only the old page and one link in `components/ai-meal-suggestion.tsx` (to the page path, which survives) |
 | D16 | Notification | Category `coachReview`, default on, deep link to the review; quiet hours apply | Same contract as "Weekly report ready" |
@@ -738,13 +737,15 @@ desktop 1280×900 — the review, a fact sheet open, a move's confirm, Settings
 | D18 | Chat deep link | `?c=<conversationId>` support added to `/chat` (~15 lines) | Needed for D5; the only touch outside `components/coach/*` and the stream hook |
 | D19 | Registry | `coach_reviews` becomes a readable dataset (no facts/review JSON) | Chat and MCP can quote past reviews |
 | D20 | Sunday Report | Untouched; the Coach links to it | Michael's call to keep it where it is |
-| D21 | Reminder timezone | `set_reminder.atLocal` is converted client-side with `zonedLocalDateTimeToUtc` in the **device's** zone (`notificationPrefs.timeZone`, Houston today) when one is known, else `settings.timeZone`; the zone is named on the card | A 7 am reminder is about where he wakes up, which is what the device reports and what quiet hours already follow (review MEDIUM 9) |
+| D21 | Reminder timezone | The stored local time is converted **on the server** in the device's zone (`notificationPrefs.timeZone`, Houston today), else `settings.timeZone`; the overview returns that zone so the card names exactly the zone the write uses | A 7 am reminder is about where he wakes up; the server, not the client, owns the conversion (review round 3, item 3) |
 | D22 | Journal excerpts | Off by default; a Coach switch turns quoting on; the page count is always a fact | His words becoming model context and persisting on the review is new exposure (review LOW 19) |
 | D23 | The model's copy of the facts | `factsForModel()` strips row ids, dates and the routine/trail ids; notes carry no ids; the stored facts keep provenance for the chips | 30–40 % fewer input tokens on a real week (21 % synthetic); no UUID reaches the model (review round 2, item 5) |
+| D29 | A Sunday-morning preview | A review he runs by hand before the week ends is a preview: the scheduled run (Sunday 19:00, or the Monday catch-up) replaces it with the whole week's, keeping it as "replaced" | Otherwise an 8 am review would stand in for the week (review round 3, item 6) |
+| D30 | Medical framing | Matched as phrases in context; a matching line is removed visibly in its slot, its original kept in `checksJson`; a move is never dropped | A silent rewrite of a saved artifact, and a dropped move forced a paid retry (review round 3, item 4) |
 | D25 | Counts vs sums | A count of zero is a fact; a sum, average or delta with no rows behind it is not minted | "0 sessions" is honest; "0 kcal burned" beside a session with no recorded burn is not (review round 2, item 2) |
 | D26 | The partial day | Averages and their day counts use whole days only, in both weeks; intake and steps show the partial day as "… so far"; recovery leaves it out (sleep for a night lands the next morning; HRV/RHR of a running day are partial readings) | One Sunday lunch must not move a weekly average (review round 2, item 1) |
 | D27 | The weekly training target | Compared with distinct DAYS trained, not sessions | A walk and a strength session on one day are one training day (review round 2, item 3) |
-| D24 | Plan-move guardrails at confirm | `reminders` stripped from every planned day; dates re-validated inside next week at confirm; `planWeek` gets an additive `source` so Coach plans read `source: "coach"` | The planner creates Reminder rows and deletes planned rows in every touched week; the card must show exactly what will be written (review MEDIUM 8) |
+| D24 | Confirming a move | One server route writes every move: the stored move, re-validated, `stillWritable()`, idempotent under a row lock, written through `planWeek`/the settings merge/a reminder row/a body row and recorded in the same transaction; the client only previews; plans never carry reminders nor replace a week | A client-side write path let a stale or edited card write anything (review round 3, item 3) |
 
 ---
 
@@ -851,3 +852,19 @@ entry (with the "no design slice" flag); `docs/followups.md`; draft PR.
 | 13 | Previous tonnage cited a walk | Cites lifting rows only |
 | 14 | Fixture targets equal to his | 2,500 kcal, 25/50/25, 5 days — plainly invented |
 | Docs | §0 promise and "null when empty" untrue; token claim overstated | §0, §2.1 and the groups table rewritten to the code; the claim corrected to 30–40 % real / 21 % synthetic (the Phase 2 commit message's "~half" stands uncorrected there — commits are never amended) |
+
+## 11. Review round 3 (2026-10-20, of 8fa8f34 + 47538f3) — what changed
+
+| # | Finding | Landed |
+|---|---|---|
+| 1a | A failed run's paid calls were never recorded | Usage travels on the error (`CoachGenerationError`, and on `generateChatText`'s throw); the failed row carries tokens and cost |
+| 1b | Two "Run again" taps both paid; a lost race was a 500 | A fresh `generating` row is in flight and returned; a lost supersede returns the winner; the route answers 409 `in_flight` |
+| 1c | Test spend blocked Sunday's review while Tests skipped the budget | Tests excluded from the blocking sum and shown apart; 5 Test runs a day |
+| 1d | An unpriced model under-counted 2.5× | `estimateChatCostUsdConservative`: highest tier, `costEstimated` flagged |
+| 2 | A number passed if it equalled ANY fact | §2.3 rewritten: cited facts only, units, words, ranges, dates, times, structured payload, glued digits |
+| 3 | `stillWritable()` had no caller; the client wrote moves | `POST …/moves/[n]/confirm` (§2.6); PATCH is undo-marking only; the planner route is back to exactly what `main` has |
+| 4 | Medical lines silently deleted; false positives and misses | Phrase list in context; visible removal; original kept; moves never dropped |
+| 5 | Two "Talk" taps made two chats | Linked with `updateMany … where conversationId is null`; the loser's transaction rolls back its chat |
+| 6 | A Sunday-morning manual run stood in for the week | The scheduled run supersedes a manual preview written before the cutoff (D29) |
+| 7 | A slow call could pass the 60 s ceiling | 50 s hard deadline, 35 s per call, no retry under 15 s left, cost always recorded |
+| 8 | Measurement dates, macro shifts, "replace the week", silent verdict/truncation, unconstrained status/trigger | Window-only dates; ±10 points per macro; replace never offered; both flagged in `checksJson`; migration `20261020180000_coach_reviews_value_check` |

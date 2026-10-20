@@ -49,4 +49,30 @@ describe("generateChatText usage", () => {
     const { text } = await generateChatText({ messages: [{ role: "user", content: "x" }], maxCompletionTokens: 40 });
     expect(text).toBe("A title");
   });
+
+  it("passes a per-request timeout with no SDK retries, and stops retrying at the deadline", async () => {
+    h.create.mockResolvedValueOnce(completion("", "length", 100, 200));
+    const result = await generateChatText({
+      messages: [{ role: "user", content: "hi" }],
+      maxCompletionTokens: 10,
+      retryMaxCompletionTokens: 20,
+      timeoutMs: 30_000,
+      deadline: Date.now() + 1_000, // no time for the length retry
+    });
+    expect(h.create).toHaveBeenCalledTimes(1);
+    expect(h.create.mock.calls[0][1]).toEqual({ timeout: 30_000, maxRetries: 0 });
+    expect(result).toMatchObject({ text: null, usage: { calls: 1 } });
+  });
+
+  it("a failing call throws with what the earlier calls cost on it", async () => {
+    h.create
+      .mockResolvedValueOnce(completion("", "length", 100, 200))
+      .mockRejectedValueOnce(new Error("timeout"));
+    const error = await generateChatText({
+      messages: [{ role: "user", content: "hi" }],
+      maxCompletionTokens: 10,
+      retryMaxCompletionTokens: 20,
+    }).catch((e: unknown) => e);
+    expect((error as { usage?: unknown }).usage).toEqual({ inputTokens: 100, outputTokens: 200, calls: 1 });
+  });
 });

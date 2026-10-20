@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
 import { buildWeekFacts } from "@/lib/coach/facts";
-import { COACH_SYSTEM_PROMPT, generateReview, parseReviewJson, renderReviewMarkdown, type GenerateFn } from "@/lib/coach/review";
+import { COACH_SYSTEM_PROMPT, CoachGenerationError, generateReview, parseReviewJson, renderReviewMarkdown, type GenerateFn } from "@/lib/coach/review";
 import { loadWeekInput } from "@/lib/coach/source";
 import type { WeekFacts } from "@/lib/coach/types";
 import { MODEL_TIERS } from "@/lib/openai";
@@ -65,7 +65,7 @@ describe("generateReview", () => {
     expect(retry.messages.at(-2)).toMatchObject({ role: "assistant" });
     const note = retry.messages.at(-1)!;
     expect(note.role).toBe("system");
-    expect(note.content).toMatch(/not in the facts: 77/);
+    expect(note.content).toMatch(/not in the facts it cites \(with their units\): 77 sessions/);
     expect(note.content).toMatch(/medical framing/);
     expect(out.checks).toMatchObject({ attempts: 2, retried: true, unverified: 0 });
     expect(out.usage).toEqual({ inputTokens: 10000, outputTokens: 2400, calls: 2 });
@@ -77,7 +77,7 @@ describe("generateReview", () => {
     expect(generate).toHaveBeenCalledTimes(2);
     expect(out.checks.retried).toBe(true);
     expect(out.checks.unverified).toBeGreaterThan(0);
-    expect(out.review.headlineFlags).toEqual([{ kind: "unverified", tokens: ["77"] }]);
+    expect(out.review.headlineFlags).toEqual([{ kind: "unverified", tokens: ["77 sessions"] }]);
   });
 
   it("asks again when the first answer is not JSON, and fails plainly after two", async () => {
@@ -98,11 +98,42 @@ describe("generateReview", () => {
     expect(out.model).toBe(MODEL_TIERS.luna);
   });
 
-  it("past the soft deadline it writes what it has instead of retrying", async () => {
+  it("with too little time left it writes what it has instead of retrying", async () => {
     const generate = vi.fn<GenerateFn>(async () => answer(JSON.stringify(badReview(facts))));
-    const out = await generateReview({ facts, tier: "sol", generate, deadlineMs: -1 });
+    const out = await generateReview({ facts, tier: "sol", generate, retryMinRemainingMs: 10_000_000 });
     expect(generate).toHaveBeenCalledTimes(1);
     expect(out.checks.retried).toBe(false);
+  });
+
+  it("every call carries a hard timeout and the deadline inside the 50 s budget", async () => {
+    const generate = scripted(JSON.stringify(goodReview(facts)));
+    await generateReview({ facts, tier: "sol", generate });
+    const args = generate.mock.calls[0][0];
+    expect(args.timeoutMs).toBeGreaterThan(0);
+    expect(args.timeoutMs).toBeLessThanOrEqual(35_000);
+    expect(args.deadline).toBeGreaterThan(Date.now());
+  });
+
+  it("a failure keeps what it cost: the usage of every call made travels with the error", async () => {
+    let n = 0;
+    const generate = vi.fn<GenerateFn>(async () => {
+      n++;
+      if (n === 1) return answer("not json", 4000, 900);
+      throw Object.assign(new Error("timeout"), { usage: { inputTokens: 4100, outputTokens: 0, calls: 1 } });
+    });
+    const failure = await generateReview({ facts, tier: "sol", generate }).catch((e: unknown) => e);
+    expect(failure).toBeInstanceOf(CoachGenerationError);
+    expect((failure as CoachGenerationError).usage).toEqual({ inputTokens: 8100, outputTokens: 900, calls: 2 });
+    expect((failure as CoachGenerationError).model).toBe(MODEL_TIERS.sol);
+  });
+
+  it("shows a removed line in the markdown, never the removed words", async () => {
+    const raw = goodReview(facts);
+    raw.whatHappened.push({ text: "Low HRV suggests insomnia.", cites: [] });
+    const generate = scripted(JSON.stringify(raw), JSON.stringify(raw));
+    const out = await generateReview({ facts, tier: "sol", generate });
+    expect(out.markdown).toContain("_(removed: it read as medical advice)_");
+    expect(out.markdown).not.toContain("insomnia");
   });
 });
 

@@ -13,6 +13,7 @@ const h = vi.hoisted(() => {
     plans: [] as Array<Record<string, unknown>>,
     txRuns: 0,
     findByConversation: 0,
+    raceWinner: null as string | null,
   };
   const prisma = {
     coachReview: {
@@ -27,6 +28,17 @@ const h = vi.hoisted(() => {
         const r = state.reviews.get(where.id)!;
         Object.assign(r, data);
         return r;
+      },
+      updateMany: async ({ where, data }: { where: { id: string; conversationId: null }; data: Record<string, unknown> }) => {
+        const r = state.reviews.get(where.id);
+        if (!r || r.conversationId !== null) return { count: 0 };
+        // a tap that won elsewhere between this one's read and its write
+        if (state.raceWinner) {
+          r.conversationId = state.raceWinner;
+          return { count: 0 };
+        }
+        Object.assign(r, data);
+        return { count: 1 };
       },
     },
     chatConversation: {
@@ -50,7 +62,15 @@ const h = vi.hoisted(() => {
     },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
       state.txRuns++;
-      return fn(prisma);
+      // a rolled-back transaction leaves nothing behind
+      const before = { conversations: state.conversations.length, messages: state.messages.length };
+      try {
+        return await fn(prisma);
+      } catch (error) {
+        state.conversations.length = before.conversations;
+        state.messages.length = before.messages;
+        throw error;
+      }
     },
   };
   return { state, prisma };
@@ -87,6 +107,7 @@ beforeEach(() => {
   h.state.plans.length = 0;
   h.state.txRuns = 0;
   h.state.findByConversation = 0;
+  h.state.raceWinner = null;
 });
 
 describe("the review's chat is created on the first tap", () => {
@@ -107,6 +128,14 @@ describe("the review's chat is created on the first tap", () => {
       meta: { source: "coach", reviewId: "rv1" },
     });
     expect(h.state.reviews.get("rv1")!.conversationId).toBe("c1");
+  });
+
+  it("two taps at once: the loser's chat rolls back and it gets the winner's", async () => {
+    seed("rv1");
+    h.state.raceWinner = "c-winner";
+    expect(await ensureReviewConversation("rv1", NOW)).toEqual({ ok: true, conversationId: "c-winner", created: false });
+    expect(h.state.conversations).toHaveLength(0);
+    expect(h.state.messages).toHaveLength(0);
   });
 
   it("the second tap opens the same chat and creates nothing", async () => {

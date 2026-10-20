@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       now,
       settings,
       onExisting: "supersede_if_unhealthy",
+      scheduled: true,
     });
     const label = weekLabel(weekStart, addDaysToDateString(weekStart, 6));
 

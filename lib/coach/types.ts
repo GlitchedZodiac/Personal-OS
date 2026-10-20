@@ -344,7 +344,7 @@ export interface WeekInput {
 export type ReviewVerdict = "on_track" | "mixed" | "off_track";
 
 export type ReviewFlag =
-  /** numbers in the text that match no fact (and no number in the move's own action) */
+  /** numbers, dates or times in the text that match none of the facts it cites (nor the move's structured payload) */
   | { kind: "unverified"; tokens: string[] }
   /** the text has numbers but cites no fact */
   | { kind: "uncited" }
@@ -352,11 +352,19 @@ export type ReviewFlag =
   | { kind: "unknown_cite"; ids: string[] }
   | { kind: "too_long"; words: number; limit: number };
 
+/** A line the checks took out — kept in place, visibly, never silently dropped. */
+export interface Removal {
+  reason: "medical";
+  phrase: string;
+}
+
 export interface ReviewItem {
   text: string;
   /** fact ids ("f12"); inline [f12] markers in `text` are moved here by the checks */
   cites: string[];
   flags?: ReviewFlag[];
+  /** set when the line was removed; `text` is then empty and the original is in checks.medicalRemoved */
+  removed?: Removal;
 }
 
 export interface PlanDayAction {
@@ -391,8 +399,10 @@ export interface ReviewMove {
   cites: string[];
   action: CoachAction;
   flags?: ReviewFlag[];
-  /** why the checks replaced an invalid action with `none` */
+  /** why the checks replaced an invalid action with `none`, or adjusted it */
   actionNote?: string;
+  /** set when the move was removed; title/why are then empty and the action is `none` */
+  removed?: Removal;
 }
 
 export interface ReviewJson {
@@ -411,8 +421,15 @@ export interface ReviewChecks {
   uncited: number;
   unknownCites: number;
   tooLong: number;
-  medicalRemoved: Array<{ section: string; phrase: string }>;
+  /** the original text of every removed line, so the artifact is never silently rewritten */
+  medicalRemoved: Array<{ section: string; phrase: string; text: string }>;
   actionsInvalidated: Array<{ index: number; reason: string }>;
+  /** the model's verdict was not one of the three; "mixed" was shown instead */
+  verdictInvalid?: boolean;
+  /** items beyond the section limits, dropped — and counted here */
+  truncated?: Array<{ section: string; dropped: number }>;
+  /** the model's price is not in the table: cost was estimated at the highest tier */
+  costEstimated?: boolean;
   /** generator calls made (1, or 2 after a retry) */
   attempts: number;
   retried: boolean;
@@ -425,4 +442,6 @@ export interface ConfirmedAction {
   payload: unknown;
   confirmedAt: string;
   result?: unknown;
+  /** set when he took it back through the same endpoint (targets restored, measurement deleted) */
+  undoneAt?: string;
 }

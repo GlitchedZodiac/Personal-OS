@@ -17,6 +17,8 @@ const h = vi.hoisted(() => {
     inTx: false,
     settingsData: {} as Record<string, unknown>,
     seq: 0,
+    /** plants a competing run's live row as a supersede transaction begins — the lost race */
+    raceOnce: null as null | (() => void),
   };
   const p2002 = () => Object.assign(new Error("Unique constraint failed on liveWeekStart"), { code: "P2002" });
   const checkRow = (r: Row) => {
@@ -75,6 +77,7 @@ const h = vi.hoisted(() => {
       Object.assign(r, next);
       return { ...r };
     },
+    count: async ({ where }) => state.reviews.filter((x) => matches(x, where as Record<string, unknown>)).length,
     aggregate: async ({ where }) => {
       const rows = state.reviews.filter((x) => matches(x, where as Record<string, unknown>));
       return { _sum: { costUsd: rows.reduce((s, r) => s + Number(r.costUsd), 0) }, _count: rows.length };
@@ -112,6 +115,11 @@ const h = vi.hoisted(() => {
         if (prop === "$transaction") {
           return async (fn: (tx: unknown) => Promise<unknown>) => {
             state.calls.push({ model: "$transaction", method: "run", inTx: false });
+            if (state.raceOnce) {
+              const plant = state.raceOnce;
+              state.raceOnce = null;
+              plant();
+            }
             state.inTx = true;
             try {
               return await fn(prisma);
@@ -128,8 +136,8 @@ const h = vi.hoisted(() => {
 });
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }));
 
-import { recordAIUsage } from "@/lib/ai-usage";
-import { defaultReviewWeek, isHealthy, runCoachReview, STALE_GENERATING_MS } from "@/lib/coach/run";
+import { estimateChatCostUsdConservative, recordAIUsage } from "@/lib/ai-usage";
+import { defaultReviewWeek, isHealthy, runCoachReview, STALE_GENERATING_MS, TEST_RUNS_PER_DAY } from "@/lib/coach/run";
 import type { GenerateFn } from "@/lib/coach/review";
 import { DEFAULT_COACH_SETTINGS } from "@/lib/coach/settings";
 import type { WeekFacts } from "@/lib/coach/types";
@@ -153,6 +161,7 @@ beforeEach(() => {
   h.state.reviews.length = 0;
   h.state.calls.length = 0;
   h.state.seq = 0;
+  h.state.raceOnce = null;
   h.state.settingsData = { timeZone: "America/Bogota", coach: { ...DEFAULT_COACH_SETTINGS } };
   generate.mockClear();
 });
@@ -335,5 +344,92 @@ describe("which week, and what is healthy", () => {
     expect(isHealthy({ status: "generating", generatedAt: at(STALE_GENERATING_MS + 1) }, NOW)).toBe(false);
     expect(isHealthy({ status: "failed", generatedAt: at(0) }, NOW)).toBe(false);
     expect(isHealthy({ status: "blocked_budget", generatedAt: at(0) }, NOW)).toBe(false);
+  });
+});
+
+describe("money: nothing is paid for twice, and nothing paid for goes unrecorded", () => {
+  const live = (extra: Partial<Parameters<typeof runCoachReview>[0]> = {}) =>
+    runCoachReview({ trigger: "manual", kind: "live", now: NOW, generate, source: fixtureSource("full", { weekStart: WEEK }), ...extra });
+
+  it("a failed run records the tokens and cost of the calls it made", async () => {
+    let n = 0;
+    const flaky = vi.fn(async (args: Parameters<GenerateFn>[0]) => {
+      n++;
+      if (n === 1) return { text: "not json", finishReason: "stop", usage: { inputTokens: 6000, outputTokens: 800, calls: 1 } };
+      throw Object.assign(new Error("model timed out"), { usage: { inputTokens: 6100, outputTokens: 0, calls: 1 }, model: args.model });
+    });
+    const result = await live({ generate: flaky as unknown as GenerateFn });
+    expect(result.outcome).toBe("ran");
+    const row = h.state.reviews[0];
+    expect(row).toMatchObject({ status: "failed", inputTokens: 12100, outputTokens: 800 });
+    expect(Number(row.costUsd)).toBeCloseTo((12100 / 1e6) * 5 + (800 / 1e6) * 30, 6);
+  });
+
+  it("a run in flight is returned, never replaced — even by 'run again'", async () => {
+    h.state.reviews.push({ id: "busy", kind: "live", liveWeekStart: WEEK, weekStart: WEEK, status: "generating", trigger: "manual", costUsd: 0, generatedAt: new Date(NOW.getTime() - 5_000), factsJson: {} });
+    const again = await live({ onExisting: "supersede" });
+    expect(again).toMatchObject({ outcome: "skipped", reason: "exists", review: { id: "busy" } });
+    expect(generate).not.toHaveBeenCalled();
+    expect(h.state.reviews).toHaveLength(1);
+  });
+
+  it("a lost supersede race returns the winner's row — no second model call, no error", async () => {
+    await live();
+    generate.mockClear();
+    h.state.raceOnce = () => {
+      const current = h.state.reviews.find((r) => r.kind === "live")!;
+      current.kind = "superseded";
+      current.liveWeekStart = null;
+      h.state.reviews.push({ id: "winner", kind: "live", liveWeekStart: WEEK, weekStart: WEEK, status: "generating", trigger: "manual", costUsd: 0, generatedAt: NOW, factsJson: {} });
+    };
+    const loser = await live({ onExisting: "supersede" });
+    expect(loser).toMatchObject({ outcome: "skipped", reason: "exists", review: { id: "winner" } });
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("Test spend never blocks a review — and Tests are capped per day instead", async () => {
+    h.state.reviews.push({ id: "pricey-test", kind: "test", liveWeekStart: null, weekStart: WEEK, costUsd: 9, generatedAt: new Date("2026-10-11T15:00:00Z") });
+    expect((await live()).outcome).toBe("ran");
+    for (let i = 0; i < TEST_RUNS_PER_DAY - 1; i++) {
+      expect((await runCoachReview({ trigger: "manual", kind: "test", now: NOW, generate })).outcome).toBe("ran");
+    }
+    expect(await runCoachReview({ trigger: "manual", kind: "test", now: NOW, generate })).toEqual({ outcome: "skipped", reason: "test_limit", limit: 5 });
+  });
+
+  it("an unknown model is priced at the highest tier, and says it is an estimate", () => {
+    expect(estimateChatCostUsdConservative("gpt-5.6-terra", 1e6, 1e6)).toEqual({ usd: 14, estimated: false });
+    expect(estimateChatCostUsdConservative("gpt-9-mystery", 1e6, 1e6)).toEqual({ usd: 35, estimated: true });
+  });
+});
+
+describe("a Sunday-morning preview gives way to the scheduled review", () => {
+  const preview = () =>
+    h.state.reviews.push({
+      id: "preview", kind: "live", liveWeekStart: WEEK, weekStart: WEEK, status: "ready", trigger: "manual", costUsd: 0.07,
+      generatedAt: new Date("2026-10-11T14:00:00Z"), factsJson: { coverage: { complete: false } },
+    });
+
+  it("the cron replaces a manual review written before the week ended, keeping it as replaced", async () => {
+    preview();
+    const result = await runCoachReview({
+      trigger: "cron", kind: "live", now: NOW, generate, source: fixtureSource("full", { weekStart: WEEK }),
+      onExisting: "supersede_if_unhealthy", scheduled: true,
+    });
+    expect(result.outcome).toBe("ran");
+    expect(h.state.reviews.find((r) => r.id === "preview")).toMatchObject({ kind: "superseded", liveWeekStart: null });
+    expect(h.state.reviews.find((r) => r.kind === "live")).toMatchObject({ trigger: "cron", status: "ready" });
+  });
+
+  it("but not a review the scheduled run wrote, nor a manual one of a finished week", async () => {
+    preview();
+    h.state.reviews[0].trigger = "cron";
+    expect(
+      await runCoachReview({ trigger: "cron", kind: "live", now: NOW, generate, source: fixtureSource("full"), onExisting: "supersede_if_unhealthy", scheduled: true })
+    ).toMatchObject({ outcome: "skipped", reason: "exists" });
+    h.state.reviews[0].trigger = "manual";
+    h.state.reviews[0].factsJson = { coverage: { complete: true } };
+    expect(
+      await runCoachReview({ trigger: "cron", kind: "live", now: NOW, generate, source: fixtureSource("full"), onExisting: "supersede_if_unhealthy", scheduled: true })
+    ).toMatchObject({ outcome: "skipped", reason: "exists" });
   });
 });

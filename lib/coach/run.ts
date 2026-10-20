@@ -14,14 +14,14 @@
 // writes nothing outside coach_reviews and ai_usage_events.
 
 import type { CoachReview, Prisma } from "@prisma/client";
-import { estimateChatCostUsd } from "@/lib/ai-usage";
+import { estimateChatCostUsdConservative } from "@/lib/ai-usage";
 import { MODEL_TIERS } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
 import { getUserTimeZone } from "@/lib/server-timezone";
-import { addDaysToDateString, getDateStringInTimeZone, getWeekStartDateString } from "@/lib/timezone";
+import { addDaysToDateString, getDateStringInTimeZone, getUtcDayBoundsForTimeZone, getWeekStartDateString } from "@/lib/timezone";
 import { buildWeekFacts } from "./facts";
 import { fixtureSource } from "./fixture-week";
-import { generateReview, type GenerateFn } from "./review";
+import { CoachGenerationError, generateReview, type GenerateFn } from "./review";
 import { type CoachSettings, getCoachSettings } from "./settings";
 import { loadWeekInput } from "./source";
 import { prismaCoachSource } from "./source-prisma";
@@ -37,6 +37,8 @@ export type OnExisting = "skip" | "supersede" | "supersede_if_unhealthy";
 
 /** A `generating` row this old was killed mid-run and no longer owns the week. */
 export const STALE_GENERATING_MS = 2 * 60_000;
+/** Test runs he can tap in one local day — they skip the budget, so they are capped instead. */
+export const TEST_RUNS_PER_DAY = 5;
 
 export interface RunOptions {
   trigger: RunTrigger;
@@ -51,11 +53,14 @@ export interface RunOptions {
   onExisting?: OnExisting;
   /** Test runs default to true — a Test he taps is a diagnostic (D7) */
   ignoreBudget?: boolean;
+  /** the Sunday cron and its catch-up: a manual PREVIEW written before the week ended gives way */
+  scheduled?: boolean;
 }
 
 export type RunResult =
   | { outcome: "ran"; review: CoachReview }
   | { outcome: "skipped"; reason: "coach_off" }
+  | { outcome: "skipped"; reason: "test_limit"; limit: number }
   | { outcome: "skipped"; reason: "exists"; review: CoachReview }
   | { outcome: "skipped"; reason: "budget"; spend: CoachSpend; review: CoachReview | null };
 
@@ -77,8 +82,23 @@ export function defaultReviewWeek(now: Date, timeZone: string): string {
 
 export function isHealthy(row: Pick<CoachReview, "status" | "generatedAt">, now: Date): boolean {
   if (row.status === "ready") return true;
-  if (row.status === "generating") return now.getTime() - row.generatedAt.getTime() < STALE_GENERATING_MS;
+  if (row.status === "generating") return isInFlight(row, now);
   return false; // failed, blocked_budget
+}
+
+/** A run that started recently and has not finished: it owns the week, whatever anyone asks. */
+export function isInFlight(row: Pick<CoachReview, "status" | "generatedAt">, now: Date): boolean {
+  return row.status === "generating" && now.getTime() - row.generatedAt.getTime() < STALE_GENERATING_MS;
+}
+
+/**
+ * A review he ran by hand before the week was over (Sunday morning): a
+ * preview. The scheduled run replaces it with the review of the whole week
+ * (keeping the preview as "replaced") — review round 3, item 6.
+ */
+export function isPreview(row: Pick<CoachReview, "trigger" | "factsJson">): boolean {
+  const coverage = (row.factsJson as { coverage?: { complete?: boolean } } | null)?.coverage;
+  return row.trigger === "manual" && coverage?.complete === false;
 }
 
 type ClaimData = Omit<Prisma.CoachReviewUncheckedCreateInput, "kind" | "liveWeekStart">;
@@ -93,7 +113,8 @@ async function claim(
   kind: "live" | "test",
   weekStart: string,
   onExisting: OnExisting,
-  now: Date
+  now: Date,
+  scheduled = false
 ): Promise<{ row: CoachReview } | { existing: CoachReview }> {
   if (kind === "test") {
     return { row: await prisma.coachReview.create({ data: { ...data, kind: "test", liveWeekStart: null } }) };
@@ -105,17 +126,30 @@ async function claim(
   }
   const existing = await prisma.coachReview.findUnique({ where: { liveWeekStart: weekStart } });
   if (!existing) throw new Error(`The week ${weekStart} is claimed but its live row cannot be read.`);
+  // A run in flight is never replaced and never paid for twice — two "Run
+  // again" taps 50 ms apart get the first one's row (review round 3, item 1b).
+  if (isInFlight(existing, now)) return { existing };
   if (onExisting === "skip") return { existing };
-  if (onExisting === "supersede_if_unhealthy" && isHealthy(existing, now)) return { existing };
+  if (onExisting === "supersede_if_unhealthy" && isHealthy(existing, now) && !(scheduled && isPreview(existing))) {
+    return { existing };
+  }
   // Supersede: one transaction, so there is never a moment with two live rows or none.
-  const row = await prisma.$transaction(async (tx) => {
-    await tx.coachReview.update({
-      where: { id: existing.id },
-      data: { kind: "superseded", liveWeekStart: null },
+  try {
+    const row = await prisma.$transaction(async (tx) => {
+      await tx.coachReview.update({
+        where: { id: existing.id },
+        data: { kind: "superseded", liveWeekStart: null },
+      });
+      return tx.coachReview.create({ data: { ...data, kind: "live", liveWeekStart: weekStart } });
     });
-    return tx.coachReview.create({ data: { ...data, kind: "live", liveWeekStart: weekStart } });
-  });
-  return { row };
+    return { row };
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    // Another run superseded first: theirs owns the week now.
+    const winner = await prisma.coachReview.findUnique({ where: { liveWeekStart: weekStart } });
+    if (!winner) throw error;
+    return { existing: winner };
+  }
 }
 
 export async function runCoachReview(opts: RunOptions): Promise<RunResult> {
@@ -128,9 +162,17 @@ export async function runCoachReview(opts: RunOptions): Promise<RunResult> {
   const weekStart = getWeekStartDateString(opts.weekStart ?? defaultReviewWeek(now, timeZone), 1);
   const weekEnd = addDaysToDateString(weekStart, 6);
   const onExisting = opts.onExisting ?? "skip";
+  const scheduled = opts.scheduled ?? false;
   const modelTier = settings.modelTier;
   const model = MODEL_TIERS[modelTier];
   const base = { weekStart, weekEnd, trigger: opts.trigger, modelTier, model };
+
+  // Test runs skip the budget, so they are capped per local day instead.
+  if (isTest) {
+    const { dayStart } = getUtcDayBoundsForTimeZone(getDateStringInTimeZone(now, timeZone), timeZone);
+    const today = await prisma.coachReview.count({ where: { kind: "test", generatedAt: { gte: dayStart } } });
+    if (today >= TEST_RUNS_PER_DAY) return { outcome: "skipped", reason: "test_limit", limit: TEST_RUNS_PER_DAY };
+  }
 
   // Budget: review spend only, never for a Test he taps.
   const ignoreBudget = opts.ignoreBudget ?? isTest;
@@ -166,14 +208,15 @@ export async function runCoachReview(opts: RunOptions): Promise<RunResult> {
     opts.kind,
     weekStart,
     onExisting,
-    now
+    now,
+    scheduled
   );
   if ("existing" in claimed) return { outcome: "skipped", reason: "exists", review: claimed.existing };
   const row = claimed.row;
 
   try {
     const generated = await generateReview({ facts, tier: modelTier, generate: opts.generate, now });
-    const costUsd = estimateChatCostUsd(generated.model, generated.usage.inputTokens, generated.usage.outputTokens);
+    const cost = estimateChatCostUsdConservative(generated.model, generated.usage.inputTokens, generated.usage.outputTokens);
     const ready = await prisma.coachReview.update({
       where: { id: row.id },
       data: {
@@ -181,10 +224,10 @@ export async function runCoachReview(opts: RunOptions): Promise<RunResult> {
         model: generated.model,
         reviewJson: generated.review as object,
         markdown: generated.markdown,
-        checksJson: generated.checks as object,
+        checksJson: { ...generated.checks, ...(cost.estimated ? { costEstimated: true } : {}) } as object,
         inputTokens: generated.usage.inputTokens,
         outputTokens: generated.usage.outputTokens,
-        costUsd,
+        costUsd: cost.usd,
         durationMs: generated.durationMs,
         error: null,
       },
@@ -192,9 +235,25 @@ export async function runCoachReview(opts: RunOptions): Promise<RunResult> {
     return { outcome: "ran", review: ready };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    // A failed run still paid for the calls it made: they go on the row, so
+    // the budget sees them and a retry is not free (review round 3, item 1a).
+    const usage = error instanceof CoachGenerationError ? error.usage : { inputTokens: 0, outputTokens: 0, calls: 0 };
+    const cost = estimateChatCostUsdConservative(
+      error instanceof CoachGenerationError ? error.model : model,
+      usage.inputTokens,
+      usage.outputTokens
+    );
     const failed = await prisma.coachReview.update({
       where: { id: row.id },
-      data: { status: "failed", error: message.slice(0, 500), durationMs: Date.now() - now.getTime() },
+      data: {
+        status: "failed",
+        error: message.slice(0, 500),
+        durationMs: Date.now() - now.getTime(),
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        costUsd: cost.usd,
+        ...(cost.estimated ? { checksJson: { costEstimated: true } } : {}),
+      },
     });
     return { outcome: "ran", review: failed };
   }

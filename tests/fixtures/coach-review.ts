@@ -70,7 +70,7 @@ export function goodReview(facts: WeekFacts) {
       },
       {
         title: "Weigh in on Saturday",
-        why: `Only ${n("body.weighIns")} weigh-ins this week.`,
+        why: `Weighed in on only ${n("body.weighIns")} days.`,
         cites: [f("body.weighIns").id],
         action: { kind: "log_measurement", fields: ["weightKg", "waistCm", "notAField"] },
       },

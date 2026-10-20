@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
         days: body.days as PlannedDayInput[],
         replaceWeek: body.replaceWeek === true,
         timeZone,
-        source: body.source === "coach" ? "coach" : undefined,
       });
       return NextResponse.json(result);
     }

@@ -7,17 +7,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { estimateChatCostUsd } from "@/lib/ai-usage";
 import { getCoachSettings, saveCoachSettings } from "@/lib/coach/settings";
 import { getCoachSpend } from "@/lib/coach/spend";
+import { TIER_LABEL } from "@/lib/coach/labels";
 import { MODEL_TIERS, type ModelTier } from "@/lib/openai";
 import { getUserTimeZone } from "@/lib/server-timezone";
 
 /** A typical review once ids are stripped from the facts: ~7k tokens in, ~1.5k out (an estimate). */
 const REVIEW_TOKENS = { input: 7_000, output: 1_500 };
 
-const TIER_LABEL: Record<ModelTier, string> = {
-  sol: "Sol — the thorough one",
-  terra: "Terra — balanced",
-  luna: "Luna — quick and cheap",
-};
 
 function tiers() {
   return (Object.keys(MODEL_TIERS) as ModelTier[]).map((tier) => {

@@ -9,8 +9,12 @@ import { getZonedDateParts, zonedLocalDateTimeToUtc } from "@/lib/timezone";
 export interface CoachSpend {
   /** first instant of the calendar month in the user's timezone, ISO */
   monthStart: string;
+  /** live and replaced reviews — what the budget counts */
   reviewsUsd: number;
   reviewsCount: number;
+  /** Test runs — shown, never counted against the budget (they are capped per day instead) */
+  testsUsd: number;
+  testsCount: number;
   chatUsd: number;
   chatCalls: number;
   budgetUsd: number;
@@ -33,9 +37,14 @@ export async function getCoachSpend(opts: {
 }): Promise<CoachSpend> {
   const now = opts.now ?? new Date();
   const monthStart = monthStartUtc(now, opts.timeZone);
-  const [reviews, chat] = await Promise.all([
+  const [reviews, tests, chat] = await Promise.all([
     prisma.coachReview.aggregate({
-      where: { generatedAt: { gte: monthStart } },
+      where: { generatedAt: { gte: monthStart }, kind: { not: "test" } },
+      _sum: { costUsd: true },
+      _count: true,
+    }),
+    prisma.coachReview.aggregate({
+      where: { generatedAt: { gte: monthStart }, kind: "test" },
       _sum: { costUsd: true },
       _count: true,
     }),
@@ -51,6 +60,8 @@ export async function getCoachSpend(opts: {
     monthStart: monthStart.toISOString(),
     reviewsUsd,
     reviewsCount: reviews._count,
+    testsUsd: money(tests._sum.costUsd),
+    testsCount: tests._count,
     chatUsd,
     chatCalls: chat._count,
     budgetUsd: opts.budgetUsd,

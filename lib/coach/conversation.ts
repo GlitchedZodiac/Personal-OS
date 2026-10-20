@@ -12,6 +12,8 @@ export type EnsureConversationResult =
   | { ok: true; conversationId: string; created: boolean }
   | { ok: false; error: "not_found" | "test_review" | "not_ready" };
 
+class LostRace extends Error {}
+
 export function conversationTitle(weekStart: string, weekEnd: string): string {
   return `Coach · ${weekLabel(weekStart, weekEnd)}`;
 }
@@ -29,30 +31,40 @@ export async function ensureReviewConversation(
   if (review.conversationId) return { ok: true, conversationId: review.conversationId, created: false };
   if (review.status !== "ready" || !review.markdown) return { ok: false, error: "not_ready" };
 
-  const conversationId = await prisma.$transaction(async (tx) => {
-    const conversation = await tx.chatConversation.create({
-      data: {
-        title: conversationTitle(review.weekStart, review.weekEnd),
-        // "user": the AI namer (writeAiTitle) only renames "auto" titles.
-        titleSource: "user",
-        createdAt: now,
-        lastMessageAt: now,
-      },
+  try {
+    const conversationId = await prisma.$transaction(async (tx) => {
+      const conversation = await tx.chatConversation.create({
+        data: {
+          title: conversationTitle(review.weekStart, review.weekEnd),
+          // "user": the AI namer (writeAiTitle) only renames "auto" titles.
+          titleSource: "user",
+          createdAt: now,
+          lastMessageAt: now,
+        },
+      });
+      await tx.chatMessage.create({
+        data: {
+          role: "assistant",
+          content: review.markdown as string,
+          conversationId: conversation.id,
+          createdAt: now,
+          meta: { source: "coach", reviewId: review.id },
+        },
+      });
+      // Only if no other tap linked one first: a second tap in the same moment
+      // loses here, and its transaction — chat and message — rolls back.
+      const linked = await tx.coachReview.updateMany({
+        where: { id: review.id, conversationId: null },
+        data: { conversationId: conversation.id },
+      });
+      if (linked.count === 0) throw new LostRace();
+      return conversation.id;
     });
-    await tx.chatMessage.create({
-      data: {
-        role: "assistant",
-        content: review.markdown as string,
-        conversationId: conversation.id,
-        createdAt: now,
-        meta: { source: "coach", reviewId: review.id },
-      },
-    });
-    await tx.coachReview.update({
-      where: { id: review.id },
-      data: { conversationId: conversation.id },
-    });
-    return conversation.id;
-  });
-  return { ok: true, conversationId, created: true };
+    return { ok: true, conversationId, created: true };
+  } catch (error) {
+    if (!(error instanceof LostRace)) throw error;
+    const winner = await prisma.coachReview.findUnique({ where: { id: review.id }, select: { conversationId: true } });
+    if (!winner?.conversationId) throw error;
+    return { ok: true, conversationId: winner.conversationId, created: false };
+  }
 }

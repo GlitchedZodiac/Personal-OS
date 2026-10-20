@@ -12,6 +12,7 @@ import { MODEL_TIERS, type ModelTier } from "@/lib/openai";
 import { generateChatText } from "@/lib/openai-text";
 import { checkReview, LIMITS, needsRetry, type CheckResult } from "./checks";
 import { factsForModel } from "./facts";
+import { weekLabel } from "./labels";
 import type { ReviewChecks, ReviewJson, WeekFacts } from "./types";
 
 export type GenerateFn = typeof generateChatText;
@@ -21,8 +22,28 @@ export interface GenerateReviewInput {
   tier: ModelTier;
   generate?: GenerateFn;
   now?: Date;
-  /** no retry once this much of the function's time is gone */
-  deadlineMs?: number;
+  /** the whole generation must end within this (the function's ceiling is 60 s) */
+  hardDeadlineMs?: number;
+  /** no retry with less than this left */
+  retryMinRemainingMs?: number;
+}
+
+export interface GenerationUsage {
+  inputTokens: number;
+  outputTokens: number;
+  calls: number;
+}
+
+/** A failed generation still cost something: the usage of every call made travels with it. */
+export class CoachGenerationError extends Error {
+  constructor(
+    message: string,
+    readonly usage: GenerationUsage,
+    readonly model: string
+  ) {
+    super(message);
+    this.name = "CoachGenerationError";
+  }
 }
 
 export interface GeneratedReview {
@@ -36,24 +57,28 @@ export interface GeneratedReview {
 
 export const REVIEW_MAX_TOKENS = 2400;
 export const REVIEW_RETRY_MAX_TOKENS = 3400;
-/** Vercel's ceiling is 60 s; past this, write what there is rather than time out. */
-export const REVIEW_SOFT_DEADLINE_MS = 40_000;
+/** Vercel's ceiling is 60 s: the generation ends by 50 s, whatever happens. */
+export const REVIEW_HARD_DEADLINE_MS = 50_000;
+/** One call may take at most this long. */
+export const REVIEW_CALL_TIMEOUT_MS = 35_000;
+/** No retry is started with less than this left. */
+export const REVIEW_RETRY_MIN_REMAINING_MS = 15_000;
 
 export const COACH_SYSTEM_PROMPT = `You are the Coach inside Pitaya — one person's private training and nutrition log (kettlebells, trails, food and macros, weight and body composition, sleep and heart data from his watch). Every Sunday you review his week. You are a real staffer: sharp, warm, concrete, never a cheerleader, never a scold.
 
 THE ONLY SOURCE OF TRUTH IS THE FACTS LIST YOU ARE GIVEN.
-- Every number you write must be the value of a fact, written as it appears there (same rounding), followed by that fact's id in square brackets, like "6 sessions [f4]". A delta or percentage you want to mention must itself be a fact; if it is not there, do not compute it.
+- Every number you write must be the value of a fact THAT SENTENCE CITES, written as it appears there (same rounding, same unit), followed by that fact's id in square brackets, like "6 sessions [f4]". Cite the fact the number comes from, not a neighbour. A delta or percentage you want to mention must itself be a fact; if it is not there, do not compute it. Numbers written as words ("seven days") and ranges ("3–4") are checked the same way.
 - If a fact is null or absent, or says "no … this week", say so in plain words and move on. Never estimate, never fill a gap, never assume a day happened.
 - The "week.coverage" fact says how much of the week is in. When it is partial, say so once, in the first item. Averages cover whole days only, in both weeks; the partial day appears as its own "… so far" facts — mention them as such and never fold them into an average.
 - Optional intakes (water, journal, steps) with nothing in them: state the absence once, flat. Never nag.
 
 NO MEDICAL CLAIMS. You describe training, intake, body and recovery numbers and what to do next week. No diagnoses, no disease names, no "you have", no "at risk of", no supplement or medication advice, no "see a doctor". Sleep, HRV and resting heart rate are described as numbers and trends only.
 
-VOICE AND LENGTH. Plain words a person reads on a phone. headline: at most ${LIMITS.headlineWords} words, verdict first ("Volume up, protein slipped."). whatHappened: at most ${LIMITS.happenedItems} items of at most ${LIMITS.happenedWords} words, each a cited number with its meaning. whatItMeans: at most ${LIMITS.meansItems} items of at most ${LIMITS.meansWords} words. moves: exactly ${LIMITS.moves}, each with a title of at most ${LIMITS.moveTitleWords} words and a why of at most ${LIMITS.moveWhyWords} words, cited.
+VOICE AND LENGTH. Plain words a person reads on a phone. headline: at most ${LIMITS.headlineWords} words, verdict first, and NO NUMBERS (it cites nothing): "Volume up, protein slipped." whatHappened: at most ${LIMITS.happenedItems} items of at most ${LIMITS.happenedWords} words, each a cited number with its meaning. whatItMeans: at most ${LIMITS.meansItems} items of at most ${LIMITS.meansWords} words. moves: exactly ${LIMITS.moves}, each with a title of at most ${LIMITS.moveTitleWords} words and a why of at most ${LIMITS.moveWhyWords} words, cited.
 
 MOVES ARE PROPOSALS HE CONFIRMS. Each move carries ONE action the app can write exactly as shown:
-- {"kind":"plan_week","days":[{"date":"YYYY-MM-DD","title":"…","routineName"?:"one of routines","trailName"?:"one of trails","targetWeightKg"?:number,"notes"?:"…"}],"replaceWeek":false} — dates must be in nextWeek.dates; use ONLY routine and trail names from the lists given; never invent one.
-- {"kind":"adjust_targets","calorieTarget"?:number,"proteinPct"?:number,"carbsPct"?:number,"fatPct"?:number} — a change of at most 25% in kcal; percentages, if given, come as all three and add to 100.
+- {"kind":"plan_week","days":[{"date":"YYYY-MM-DD","title":"…","routineName"?:"one of routines","trailName"?:"one of trails","targetWeightKg"?:number,"notes"?:"…"}],"replaceWeek":false} — dates must be in nextWeek.dates; use ONLY routine and trail names from the lists given; never invent one; replaceWeek is always false; put no numbers in titles or notes.
+- {"kind":"adjust_targets","calorieTarget"?:number,"proteinPct"?:number,"carbsPct"?:number,"fatPct"?:number} — a change of at most 25% in kcal; percentages, if given, come as all three, add to 100, and move each by at most 10 points.
 - {"kind":"set_reminder","title":"…","atLocal":"YYYY-MM-DDTHH:mm"} — a time within the coming week, in his local time.
 - {"kind":"log_measurement","fields":["weightKg", …]} — asks him to weigh or measure; he types the value, you never propose one.
 - {"kind":"none"} — a move he simply does; most weeks at least one move is this.
@@ -111,55 +136,83 @@ export async function generateReview(input: GenerateReviewInput): Promise<Genera
   const generate = input.generate ?? generateChatText;
   const model = MODEL_TIERS[input.tier];
   const started = Date.now();
-  const deadline = input.deadlineMs ?? REVIEW_SOFT_DEADLINE_MS;
-  const usage = { inputTokens: 0, outputTokens: 0, calls: 0 };
+  const hardEnd = started + (input.hardDeadlineMs ?? REVIEW_HARD_DEADLINE_MS);
+  const retryMin = input.retryMinRemainingMs ?? REVIEW_RETRY_MIN_REMAINING_MS;
+  const remaining = () => hardEnd - Date.now();
+  const usage: GenerationUsage = { inputTokens: 0, outputTokens: 0, calls: 0 };
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     { role: "system", content: COACH_SYSTEM_PROMPT },
     { role: "user", content: userContent(input.facts) },
   ];
 
-  const call = async (extra: typeof messages, max: number, retryMax: number) => {
-    const result = await generate({
-      model,
-      surface: "coach",
-      messages: [...messages, ...extra],
-      maxCompletionTokens: max,
-      retryMaxCompletionTokens: retryMax,
-      reasoningEffort: "low",
-    });
-    usage.inputTokens += result.usage?.inputTokens ?? 0;
-    usage.outputTokens += result.usage?.outputTokens ?? 0;
-    usage.calls += result.usage?.calls ?? 1;
-    return result.text;
+  const add = (u: Partial<GenerationUsage> | undefined, fallbackCalls: number) => {
+    usage.inputTokens += u?.inputTokens ?? 0;
+    usage.outputTokens += u?.outputTokens ?? 0;
+    usage.calls += u?.calls ?? fallbackCalls;
   };
 
-  // Attempt 1.
-  const firstText = await call([], REVIEW_MAX_TOKENS, REVIEW_RETRY_MAX_TOKENS);
-  let parsed = parseReviewJson(firstText);
-  let result: CheckResult | null = parsed ? checkReview(parsed, input.facts, { attempts: 1, retried: false }) : null;
-  const outOfTime = () => Date.now() - started > deadline;
+  // Every call has a hard timeout inside the 50 s budget; what a failed call
+  // had already cost comes back on the error and is counted.
+  const call = async (extra: typeof messages, max: number, retryMax: number) => {
+    const left = remaining();
+    if (left < 3_000) throw new Error("out of time before the model could answer");
+    try {
+      const result = await generate({
+        model,
+        surface: "coach",
+        messages: [...messages, ...extra],
+        maxCompletionTokens: max,
+        retryMaxCompletionTokens: retryMax,
+        reasoningEffort: "low",
+        timeoutMs: Math.min(REVIEW_CALL_TIMEOUT_MS, left),
+        deadline: hardEnd,
+      });
+      add(result.usage, 1);
+      return result.text;
+    } catch (error) {
+      add((error as { usage?: Partial<GenerationUsage> })?.usage, 0);
+      throw error;
+    }
+  };
 
-  // One retry: for no JSON at all, or for a review that broke the contract.
-  if (!result || needsRetry(result)) {
-    if (outOfTime() && result) {
-      return finish(result, input.facts, model, usage, started);
+  const attempt = async (): Promise<GeneratedReview> => {
+    const firstText = await call([], REVIEW_MAX_TOKENS, REVIEW_RETRY_MAX_TOKENS);
+    let parsed = parseReviewJson(firstText);
+    let result: CheckResult | null = parsed ? checkReview(parsed, input.facts, { attempts: 1, retried: false }) : null;
+
+    // One retry: for no JSON at all, or for a review that broke the contract —
+    // only with time left for it; otherwise what there is gets written.
+    if (!result || needsRetry(result)) {
+      if (remaining() < retryMin) {
+        if (result) return finish(result, input.facts, model, usage, started);
+        throw new Error("The model did not return a review, and there was no time to ask again.");
+      }
+      const note = result
+        ? RETRY_NOTE(result.violations)
+        : "Your previous answer was not a JSON object. Return ONLY the JSON object described, with no prose around it.";
+      const extra: typeof messages = firstText
+        ? [
+            { role: "assistant", content: firstText },
+            { role: "system", content: note },
+          ]
+        : [{ role: "system", content: note }];
+      const secondText = await call(extra, REVIEW_RETRY_MAX_TOKENS, REVIEW_RETRY_MAX_TOKENS);
+      parsed = parseReviewJson(secondText);
+      if (parsed) {
+        result = checkReview(parsed, input.facts, { attempts: 2, retried: true });
+      } else if (result) {
+        result = { ...result, checks: { ...result.checks, attempts: 2, retried: true } };
+      }
     }
-    const note = result
-      ? RETRY_NOTE(result.violations)
-      : "Your previous answer was not a JSON object. Return ONLY the JSON object described, with no prose around it.";
-    const extra: typeof messages = firstText
-      ? [{ role: "assistant", content: firstText }, { role: "system", content: note }]
-      : [{ role: "system", content: note }];
-    const secondText = await call(extra, REVIEW_RETRY_MAX_TOKENS, REVIEW_RETRY_MAX_TOKENS);
-    parsed = parseReviewJson(secondText);
-    if (parsed) {
-      result = checkReview(parsed, input.facts, { attempts: 2, retried: true });
-    } else if (result) {
-      result = { ...result, checks: { ...result.checks, attempts: 2, retried: true } };
-    }
+    if (!result) throw new Error("The model did not return a review (no JSON object after two attempts).");
+    return finish(result, input.facts, model, usage, started);
+  };
+
+  try {
+    return await attempt();
+  } catch (error) {
+    throw new CoachGenerationError((error as Error)?.message ?? String(error), { ...usage }, model);
   }
-  if (!result) throw new Error("The model did not return a review (no JSON object after two attempts).");
-  return finish(result, input.facts, model, usage, started);
 }
 
 function finish(
@@ -181,13 +234,8 @@ function finish(
 
 // ————— markdown: the chat's first message, export, and the model's own context —————
 
-export function weekLabel(weekStart: string, weekEnd: string): string {
-  const f = (day: string) => {
-    const [y, m, d] = day.split("-").map(Number);
-    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-  };
-  return `${f(weekStart)} – ${f(weekEnd)}`;
-}
+// weekLabel lives with the screen's words (lib/coach/labels.ts, client-safe); re-exported here.
+export { weekLabel };
 
 const cite = (ids: string[]) => (ids.length ? ` [${ids.join(", ")}]` : "");
 
@@ -217,14 +265,20 @@ export function renderReviewMarkdown(review: ReviewJson, facts: WeekFacts): stri
   lines.push(`# ${review.headline}`);
   lines.push(`_Week ${facts.weekNumber} · ${weekLabel(facts.weekStart, facts.weekEnd)} · covers ${facts.coverage.label}_`);
   lines.push("");
+  const line = (it: ReviewJson["whatHappened"][number]) =>
+    it.removed ? "- _(removed: it read as medical advice)_" : `- ${it.text}${cite(it.cites)}`;
   lines.push("## What happened");
-  for (const it of review.whatHappened) lines.push(`- ${it.text}${cite(it.cites)}`);
+  for (const it of review.whatHappened) lines.push(line(it));
   lines.push("");
   lines.push("## What it means");
-  for (const it of review.whatItMeans) lines.push(`- ${it.text}${cite(it.cites)}`);
+  for (const it of review.whatItMeans) lines.push(line(it));
   lines.push("");
   lines.push("## Three moves for next week");
   review.moves.forEach((m, i) => {
+    if (m.removed) {
+      lines.push(`${i + 1}. _(removed: it read as medical advice)_`);
+      return;
+    }
     lines.push(`${i + 1}. **${m.title}** — ${m.why}${cite(m.cites)}`);
     lines.push(`   _Action: ${describeAction(m.action)}_`);
   });

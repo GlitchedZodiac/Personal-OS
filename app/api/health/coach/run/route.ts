@@ -41,6 +41,12 @@ export async function POST(request: NextRequest) {
 
     if (mode === "test") {
       const result = await runCoachReview({ trigger: "manual", kind: "test", weekStart, timeZone, now, settings });
+      if (result.outcome === "skipped" && result.reason === "test_limit") {
+        return NextResponse.json(
+          { error: "test_limit", message: `That's ${result.limit} Test runs today — the limit, since Tests skip the budget. Try again tomorrow.` },
+          { status: 429 }
+        );
+      }
       if (result.outcome !== "ran") return NextResponse.json({ error: "test run did not start" }, { status: 500 });
       return NextResponse.json({ review: detailReview(result.review) });
     }
@@ -58,7 +64,16 @@ export async function POST(request: NextRequest) {
       onExisting: body.again === true ? "supersede" : "supersede_if_unhealthy",
     });
     if (result.outcome === "ran") return NextResponse.json({ review: detailReview(result.review) });
-    if (result.reason === "exists") return NextResponse.json({ review: detailReview(result.review), existed: true });
+    if (result.reason === "exists") {
+      // A run already writing this week is not paid for twice: say so, with it.
+      if (result.review.status === "generating") {
+        return NextResponse.json(
+          { error: "in_flight", message: "This week's review is being written right now.", review: detailReview(result.review) },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json({ review: detailReview(result.review), existed: true });
+    }
     if (result.reason === "budget") {
       return NextResponse.json(
         {
