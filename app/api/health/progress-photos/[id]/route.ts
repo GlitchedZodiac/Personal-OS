@@ -34,11 +34,15 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const body = await request.json();
+    const body = (await request.json().catch(() => ({}))) as { journalNote?: unknown };
+    // Bounded (audit 2026-10, SEC-028): a note is text, and not a novel.
+    if (body.journalNote != null && (typeof body.journalNote !== "string" || body.journalNote.length > 2_000)) {
+      return NextResponse.json({ error: "journalNote must be text of at most 2000 characters" }, { status: 400 });
+    }
 
     const photo = await prisma.progressPhoto.update({
       where: { id },
-      data: { journalNote: body.journalNote },
+      data: { journalNote: (body.journalNote as string | null | undefined) ?? null },
     });
 
     return NextResponse.json({

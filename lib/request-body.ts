@@ -42,3 +42,14 @@ export function capString(value: unknown, max: number): string | null {
   if (!trimmed) return null;
   return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
 }
+
+/**
+ * An integer query parameter, clamped (audit 2026-10, SEC-053). A missing or
+ * unreadable value falls back; it never reaches Prisma as NaN (`take: NaN`
+ * threw and answered 500).
+ */
+export function clampInt(value: string | null | undefined, opts: { fallback: number; min: number; max: number }): number {
+  const n = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(n)) return opts.fallback;
+  return Math.min(opts.max, Math.max(opts.min, n));
+}

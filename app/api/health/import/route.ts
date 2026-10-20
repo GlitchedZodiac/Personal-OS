@@ -68,6 +68,10 @@ async function batchCreateWithFallback(
   }
 }
 
+// Bound (audit 2026-10, SEC-032): an import is a deliberate, one-off action,
+// so an over-size file is refused with a clear message rather than read.
+const MAX_IMPORT_ROWS_PER_SECTION = 20_000;
+
 type NumericLike = number | string;
 
 interface ImportFoodEntry {
@@ -140,6 +144,16 @@ export async function POST(request: NextRequest) {
     const results: Record<string, { imported: number; errors: number; errorMessages?: string[] }> = {};
 
     // ─── Food Logs ──────────────────────────────────────────────
+    for (const section of ["foodLogs", "workouts", "measurements", "waterLogs"] as const) {
+      const rows = (body as Record<string, unknown>)[section];
+      if (Array.isArray(rows) && rows.length > MAX_IMPORT_ROWS_PER_SECTION) {
+        return NextResponse.json(
+          { error: `${section} has ${rows.length} rows; at most ${MAX_IMPORT_ROWS_PER_SECTION} per import — split the file` },
+          { status: 413 }
+        );
+      }
+    }
+
     if (Array.isArray(body.foodLogs) && body.foodLogs.length > 0) {
       const now = new Date();
       const mapped = (body.foodLogs as ImportFoodEntry[]).map((entry) => ({

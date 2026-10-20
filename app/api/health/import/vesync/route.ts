@@ -42,7 +42,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No CSV data provided" }, { status: 400 });
     }
 
+    // Bound (audit 2026-10, SEC-032).
+    if (csvText.length > 5_000_000) {
+      return NextResponse.json({ error: "CSV is too large (max 5 MB)" }, { status: 413 });
+    }
     const rows = parseCSV(csvText);
+    if (rows.length > 20_000) {
+      return NextResponse.json({ error: `CSV has ${rows.length} rows; at most 20000 per import — split the file` }, { status: 413 });
+    }
 
     if (rows.length === 0) {
       return NextResponse.json(

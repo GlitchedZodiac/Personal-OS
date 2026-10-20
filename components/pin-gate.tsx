@@ -101,8 +101,10 @@ export function PinGate({ children }: PinGateProps) {
         setError(typeof body.error === "string" ? body.error : demoText("APP_PIN is not configured yet", "APP_PIN todavia no esta configurado"));
       } else {
         // The server SAID no. That is different from being unable to ask, and it revokes the
-        // offline grant — otherwise a signed-out device would keep letting itself back in.
+        // offline grant — otherwise a signed-out device would keep letting itself back in —
+        // and the service worker's cached copies of his data go with it (SEC-066).
         try { localStorage.removeItem(OFFLINE_GRANT_KEY); } catch {}
+        try { navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" }); } catch {}
       }
     } catch {
       // We could not ask. On a plane, in a basement, on church wifi that has given up, the PIN

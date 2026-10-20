@@ -170,6 +170,8 @@ function buildWhere(
     }
   }
 
+  // A search is a few words; 200 characters bounds the ILIKE scan (SEC-055).
+  if (typeof args.q === "string" && args.q.length > 200) args = { ...args, q: args.q.slice(0, 200) };
   if (args.q && spec.search?.length) {
     and.push({
       OR: spec.search.map((field) => ({

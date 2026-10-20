@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { endOfDay, endOfMonth, startOfDay, startOfMonth, subDays } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { clampInt } from "@/lib/request-body";
 import { getCuratedPrimaryTransactionWhere, getCuratedSourceWhere } from "@/lib/finance/curated-mode";
 import { ingestFinanceCandidate } from "@/lib/finance/ingestion";
 import {
@@ -120,8 +121,9 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category");
     const type = searchParams.get("type");
     const status = searchParams.get("status") || "posted";
-    const limit = parseInt(searchParams.get("limit") || "100", 10);
-    const offset = parseInt(searchParams.get("offset") || "0", 10);
+    // Clamped (audit 2026-10, SEC-053): NaN or a huge value never reaches Prisma.
+    const limit = clampInt(searchParams.get("limit"), { fallback: 100, min: 1, max: 500 });
+    const offset = clampInt(searchParams.get("offset"), { fallback: 0, min: 0, max: 1_000_000 });
     const { dateStart, dateEnd } = getDateRange(searchParams);
     const primaryAccount = await ensurePrimaryCashAccount();
     const curatedTransactionFilter = getCuratedPrimaryTransactionWhere(primaryAccount.id);

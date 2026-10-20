@@ -24,7 +24,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
+    // Bound (audit 2026-10, SEC-032).
+    if (csvText.length > 5_000_000) {
+      return NextResponse.json({ error: "CSV is too large (max 5 MB)" }, { status: 413 });
+    }
     const lines = csvText.trim().split("\n");
+    if (lines.length > 20_001) {
+      return NextResponse.json({ error: `CSV has ${lines.length - 1} rows; at most 20000 per import — split the file` }, { status: 413 });
+    }
     if (lines.length < 2) {
       return NextResponse.json(
         { error: "CSV must have at least a header and one data row" },

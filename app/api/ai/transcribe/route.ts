@@ -34,6 +34,12 @@ export async function POST(request: NextRequest) {
       `[Transcribe] File: ${fileName}, size: ${audioFile.size} bytes, type: ${mimeType}, ext: ${ext}`
     );
 
+    // Bounds (audit 2026-10, SEC-029): OpenAI accepts 25 MB; Vercel stops a
+    // body at ~4.5 MB first. Locally this is the only bound.
+    if (audioFile.size > 25_000_000) {
+      return NextResponse.json({ error: "Recording is too long" }, { status: 413 });
+    }
+
     // Reject empty files
     if (audioFile.size < 100) {
       console.error(`[Transcribe] File too small: ${audioFile.size} bytes`);
