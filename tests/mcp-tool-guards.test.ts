@@ -27,10 +27,20 @@ const { db } = vi.hoisted(() => {
     },
     mcpAuditEvent: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { db.audit.push(data); return data; }) },
     todo: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { const row = { id: "todo-1", ...data }; db.todos.push(row); return row; }) },
-    waterLog: { createMany: vi.fn(async ({ data }: { data: unknown[] }) => { db.water += data.length; return { count: data.length }; }) },
-    foodLog: { delete: vi.fn(async () => { throw new Error("not found"); }) },
+    waterLog: { createMany: vi.fn(async ({ data }: { data: unknown[] }) => { db.water += data.length; return { count: data.length }; }), count: vi.fn(async () => 9), findMany: vi.fn(async () => []) },
+    foodLog: {
+      delete: vi.fn(async () => { throw new Error("not found"); }),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: `food-${Math.random().toString(36).slice(2, 8)}`, ...data })),
+    },
+    waterLogCount: 0,
+    // delegateFor() needs findMany to recognise a model; count is what the digest calls.
+    financialTransaction: { count: vi.fn(async () => 42), findMany: vi.fn(async () => []) },
+    scheduledObligation: { count: vi.fn(async () => 3), findMany: vi.fn(async () => []) },
+    savingsGoal: { count: vi.fn(async () => 2), findMany: vi.fn(async () => []) },
     favoriteFoods: {
       findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => ({ id: "fav-2", foodDescription: "Abuela's secret arepa" })),
+      update: vi.fn(async () => ({})),
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) => (where.id === "fav-1" ? { id: "fav-1", foodDescription: "Arepa con queso" } : null)),
       delete: vi.fn(async () => ({})),
     },
@@ -169,5 +179,31 @@ describe("over-limit input is refused by name, never cut (SEC-014, review of 3b)
   it("log_water stays bounded", async () => {
     await callMcpTool("log_water", { glasses: 1_000_000 });
     expect(db.water).toBe(24);
+  });
+});
+
+describe("MCP leftovers (second-pass review)", () => {
+  it("app_digest hides finance COUNTS while the switch is off, shows them when on", async () => {
+    const off = (await callMcpTool("query_data", { dataset: "app_digest" })) as { datasets: Array<{ dataset: string }> };
+    expect(off.datasets.map((d) => d.dataset)).toContain("water");
+    expect(off.datasets.some((d) => d.dataset.startsWith("finance_"))).toBe(false);
+    await setMcpFinanceAllowed(true);
+    const on = (await callMcpTool("query_data", { dataset: "app_digest" })) as { datasets: Array<{ dataset: string }> };
+    expect(on.datasets.some((d) => d.dataset === "finance_transactions")).toBe(true);
+  });
+  it("an id typed as a sentence is stored as its length, not its words", () => {
+    expect(summarizeArgs({ id: "my late wife's journal entry" })).toBe("id:text(28)");
+    expect(summarizeArgs({ id: "3f2a9c1e-0b7d-4e4a-9a1c-0c2e7d5b9f10" })).toBe("id=3f2a9c1e-0b7d-4e4a-9a1c-0c2e7d5b9f10");
+  });
+  it("an error that quotes his words is redacted in the trail", async () => {
+    await callMcpTool("rename_recipe", { id: "fav-1", newName: "Arepa" });
+    expect(db.audit[0].error).toBe('A recipe named "…" already exists');
+  });
+  it("log_food records the ids it wrote", async () => {
+    await callMcpTool("log_food", { items: [
+      { mealType: "lunch", foodDescription: "rice", calories: 1, proteinG: 1, carbsG: 1, fatG: 1 },
+      { mealType: "lunch", foodDescription: "beans", calories: 1, proteinG: 1, carbsG: 1, fatG: 1 },
+    ] });
+    expect(String(db.audit[0].refId)).toMatch(/^food-[a-z0-9]+,food-[a-z0-9]+$/);
   });
 });

@@ -14,6 +14,7 @@
 import crypto from "crypto";
 import { lookup } from "node:dns/promises";
 import net from "node:net";
+import { ipv6Hextets } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createOpaqueToken, hashOpaqueToken, signCompact, verifyCompact } from "@/lib/security";
 
@@ -102,10 +103,31 @@ export function isPrivateAddress(address: string): boolean {
     );
   }
   if (family === 6) {
-    const a = address.toLowerCase();
-    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(a);
-    if (mapped) return isPrivateAddress(mapped[1]);
-    return a === "::" || a === "::1" || /^f[cd]/.test(a) || /^fe[89ab]/.test(a) || /^ff/.test(a);
+    const h = ipv6Hextets(address);
+    if (!h) return true;
+    const n = h.map((x) => (x.includes(".") ? x : parseInt(x, 16)));
+    // An embedded IPv4 (dotted or as the last two hextets).
+    const embedded = (): string => {
+      const last = h[h.length - 1];
+      if (last.includes(".")) return last;
+      const hi = n[6] as number;
+      const lo = n[7] as number;
+      return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+    };
+    const zero = (from: number, to: number) => n.slice(from, to).every((x) => x === 0);
+    if (zero(0, 7) && (n[7] === 0 || n[7] === 1)) return true; // :: and ::1
+    if (zero(0, 5) && n[5] === 0xffff) return isPrivateAddress(embedded()); // ::ffff:a.b.c.d, ::ffff:7f00:1
+    if (zero(0, 6)) return isPrivateAddress(embedded()); // the old IPv4-compatible form
+    const first = n[0] as number;
+    if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
+    if ((first & 0xffc0) === 0xfe80 || (first & 0xffc0) === 0xfec0) return true; // fe80::/10 link-local, fec0::/10 site-local
+    if ((first & 0xff00) === 0xff00) return true; // multicast
+    if (first === 0x64 && n[1] === 0xff9b) return true; // NAT64 64:ff9b::/96 (and the local-use /48)
+    if (first === 0x2002) return true; // 6to4: an IPv4 behind an IPv6 face
+    if (first === 0x2001 && n[1] === 0) return true; // Teredo
+    if (first === 0x2001 && n[1] === 0x0db8) return true; // documentation
+    if (first === 0x100 && zero(1, 4)) return true; // discard-only
+    return false;
   }
   return true; // not an IP at all: refuse
 }

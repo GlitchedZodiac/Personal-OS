@@ -21,10 +21,13 @@ const VERBATIM_KEYS = new Set([
   "workoutType", "replaceWeek", "force", "days", "limit", "from", "to", "weekStart",
 ]);
 
+/** An id or a fixed-vocabulary token — never free text (review: an `id` typed as a sentence was stored as typed). */
+const TOKEN_SHAPE = /^[A-Za-z0-9_.:-]{1,64}$/;
+
 function shapeOf(key: string, value: unknown, depth: number): string {
   if (value === null || value === undefined) return `${key}:null`;
-  if (VERBATIM_KEYS.has(key) && (typeof value === "string" || typeof value === "number" || typeof value === "boolean")) {
-    return `${key}=${String(value).slice(0, 64)}`;
+  if (VERBATIM_KEYS.has(key) && (typeof value === "number" || typeof value === "boolean" || (typeof value === "string" && TOKEN_SHAPE.test(value)))) {
+    return `${key}=${String(value)}`;
   }
   if (typeof value === "string") return `${key}:text(${value.length})`;
   if (typeof value === "number") return `${key}:num`;
@@ -54,9 +57,19 @@ export function referencedId(result: unknown): string | null {
     const v = r[key];
     if (v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string") return (v as { id: string }).id;
   }
+  // log_food: the ids of every row it wrote.
+  if (Array.isArray(r.entries)) {
+    const ids = (r.entries as Array<{ id?: unknown }>).map((e) => e?.id).filter((v): v is string => typeof v === "string");
+    if (ids.length) return ids.slice(0, 20).join(",");
+  }
   if (typeof r.filed === "string") return r.filed;
-  if (typeof r.deleted === "string") return r.deleted; // delete_entry returns the id it deleted
+  if (typeof r.deleted === "string" && TOKEN_SHAPE.test(r.deleted)) return r.deleted; // delete_entry returns the id it deleted
   return null;
+}
+
+/** A tool's error text with anything it quotes (a recipe name, a title) removed. */
+export function redactError(text: string): string {
+  return text.replace(/"[^"]*"/g, '"…"').replace(/“[^”]*”/g, "“…”").slice(0, 300);
 }
 
 export async function recordMcpAudit(input: {
@@ -67,7 +80,7 @@ export async function recordMcpAudit(input: {
   ctx?: McpCallContext;
 }): Promise<void> {
   const r = input.result && typeof input.result === "object" ? (input.result as Record<string, unknown>) : null;
-  const errorText = r && typeof r.error === "string" ? String(r.error).slice(0, 300) : null;
+  const errorText = r && typeof r.error === "string" ? redactError(String(r.error)) : null;
   const count = r && typeof r.count === "number" ? ` → ${r.count} rows` : "";
   try {
     await prisma.mcpAuditEvent.create({

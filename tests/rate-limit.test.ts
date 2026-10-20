@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/security-settings", () => ({ getMarkerGeneration: vi.fn(async () => 0), bumpMarkerGeneration: vi.fn(async () => 1) }));
 import { NextRequest } from "next/server";
 import { clientBucket, createKnownDeviceToken, getClientIdentifier } from "@/lib/auth";
 import { checkRateLimit as checkShared } from "@/lib/rate-limit";

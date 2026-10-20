@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
-import { getClientIdentifier, isKnownDevice } from "@/lib/auth";
+import { getClientIdentifier, readKnownDevice } from "@/lib/auth";
+import { getMarkerGeneration } from "@/lib/security-settings";
 import { defaultRateStore, type RateStore } from "@/lib/rate-limit-store";
 
 // The PIN-door limiter (audit 2026-10, SEC-005; PLAN D2 + D2b).
@@ -69,7 +70,12 @@ export async function checkRateLimit(
   const globalKey = `${scope}:*`;
   const { maxFailures, windowMinutes, windowMs } = globalLoginLimits();
 
-  const buckets = await store.read([clientKey, globalKey], now);
+  // The marker (if any) is its own bucket: a wrong guess during a lock burns
+  // the MARKER, not just the address it came from (review, 2026-10-20: one
+  // marker used to buy a fresh check from every new IP).
+  const marker = readKnownDevice(request);
+  const markerKey = marker ? `${scope}:marker:${marker.nonce}` : null;
+  const buckets = await store.read(markerKey ? [clientKey, globalKey, markerKey] : [clientKey, globalKey], now);
   const client = buckets.get(clientKey);
   const global = buckets.get(globalKey);
   const clientBlockedMs = remaining(client?.blockedUntil, now);
@@ -77,7 +83,9 @@ export async function checkRateLimit(
   const clientClean = !client || client.resetAt <= now || client.attempts === 0;
   const globalLocked = globalBlockedMs > 0;
   const waitMs = Math.max(clientBlockedMs, globalBlockedMs);
-  const knownDevice = globalLocked ? isKnownDevice(request) : false;
+  const markerBurned = markerKey ? remaining(buckets.get(markerKey)?.blockedUntil, now) > 0 : false;
+  const knownDevice =
+    globalLocked && marker !== null && !markerBurned && marker.generation === (await getMarkerGeneration());
 
   return {
     allowed: waitMs === 0,
@@ -94,8 +102,9 @@ export async function checkRateLimit(
       const lockEnd = after.blockedUntil ?? 0;
       if (globalLocked || tripped) {
         // A wrong guess during (or causing) a lock spends this client's chance
-        // for the rest of the lock, known device or not.
+        // AND this marker's for the rest of the lock.
         await store.blockUntil(clientKey, lockEnd);
+        if (markerKey && lockEnd > now) await store.fail(markerKey, 1, lockEnd - now, now);
       }
       if (tripped) {
         console.error(
@@ -113,4 +122,23 @@ export async function checkRateLimit(
       await store.clear(clientKey);
     },
   };
+}
+
+/**
+ * Clear a door's counts — Settings → "Unlock device pairing" (review,
+ * 2026-10-20): a flood can keep the pairing door shut for as long as it
+ * lasts, and native apps carry no known-device marker. Unlocking hands a
+ * flooding attacker at most one more window of guesses (50 by default);
+ * with a 6–8 digit PIN (D12) that is negligible.
+ */
+export async function clearDoor(scope: string, store: RateStore = defaultRateStore()): Promise<void> {
+  await store.clearPrefix(`${scope}:`);
+}
+
+/** Is a door locked right now, and for how long? */
+export async function doorLock(scope: string, store: RateStore = defaultRateStore()): Promise<{ locked: boolean; retryAfterSeconds: number }> {
+  const now = Date.now();
+  const global = (await store.read([`${scope}:*`], now)).get(`${scope}:*`);
+  const ms = remaining(global?.blockedUntil, now);
+  return { locked: ms > 0, retryAfterSeconds: Math.ceil(ms / 1000) };
 }

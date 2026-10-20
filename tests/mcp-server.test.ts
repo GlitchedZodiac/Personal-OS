@@ -37,6 +37,8 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     // The connector's paper trail (SEC-013): every write tool records a row.
     mcpAuditEvent: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => data) },
+    // The connector reads its finance switch (its own settings row) on every query.
+    userSettings: { findUnique: vi.fn(async () => null) },
     bodyMeasurement: {
       findMany: vi.fn(
         async ({ where }: { where: { measuredAt: { gte: Date; lte: Date } } }) =>

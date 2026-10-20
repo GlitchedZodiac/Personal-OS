@@ -5,6 +5,7 @@
 // monthly; revocation is the control.
 
 import { NextRequest, NextResponse } from "next/server";
+import { secretErrorResponse } from "@/lib/secret-errors";
 import { prisma } from "@/lib/prisma";
 import { createDeviceSession } from "@/lib/mobile-session";
 import { mcpFinanceAllowed, setMcpFinanceAllowed } from "@/lib/mcp-settings";
@@ -58,6 +59,8 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    const named = secretErrorResponse(error);
+    if (named) return named;
     console.error("MCP token mint error:", error);
     return NextResponse.json({ error: "Failed to mint token" }, { status: 500 });
   }

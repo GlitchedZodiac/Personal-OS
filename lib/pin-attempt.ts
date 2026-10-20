@@ -31,7 +31,7 @@ export async function alertPinLockout(
     await notify({
       category: "systemAlerts",
       title: "Someone is hammering the PIN",
-      body: `${info.maxFailures} wrong PINs at ${door} in ${info.windowMinutes} min. That door is locked for ${Math.max(1, Math.ceil(info.retryAfterSeconds / 60))} min; a device with no wrong guesses of its own still gets in with the right PIN.`,
+      body: `${info.maxFailures} wrong PINs at ${door} in ${info.windowMinutes} min. That door is locked for ${Math.max(1, Math.ceil(info.retryAfterSeconds / 60))} min. A browser you have signed in on before still gets in with your PIN; to pair a new device, use Settings → "Unlock device pairing".`,
       url: "/settings",
       tag: "pin-lockout",
       dedupeKey: `pin-lockout:${scope}:${hour}`,

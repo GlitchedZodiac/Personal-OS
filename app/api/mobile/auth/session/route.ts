@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { secretErrorResponse } from "@/lib/secret-errors";
 import { createDeviceSession } from "@/lib/mobile-session";
 import { attemptPin, lockedResponseInit } from "@/lib/pin-attempt";
 
@@ -61,6 +62,8 @@ export async function POST(request: NextRequest) {
       refreshToken,
     });
   } catch (error) {
+    const named = secretErrorResponse(error);
+    if (named) return named;
     console.error("Mobile session create error:", error instanceof Error ? error.message : error);
     return NextResponse.json(
       { error: "Failed to create session" },

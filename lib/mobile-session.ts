@@ -2,6 +2,7 @@ import { after, NextRequest } from "next/server";
 import { sweepSoon } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 import {
+  assertHashWritesAllowed,
   canRewriteHashes,
   createOpaqueToken,
   CURRENT_KEY_VERSION,
@@ -27,6 +28,7 @@ export async function createDeviceSession(input: {
   accessTtlDays?: number;
   refreshTtlDays?: number;
 }) {
+  assertHashWritesAllowed();
   const accessToken = createOpaqueToken();
   const refreshToken = createOpaqueToken();
 
@@ -129,6 +131,7 @@ export async function refreshDeviceSession(refreshToken: string, kind: SessionKi
   const isConnector = match.row.deviceType === "mcp";
   if (kind === "connector" ? !isConnector : isConnector) return null;
   const ttl = REFRESH_TTLS[kind];
+  assertHashWritesAllowed();
 
   const nextAccessToken = createOpaqueToken();
   const nextRefreshToken = createOpaqueToken();
@@ -165,6 +168,9 @@ export async function refreshDeviceSession(refreshToken: string, kind: SessionKi
  * changing APP_PIN in Vercel logs those devices out (README).
  */
 export async function countLegacyKeySessions(): Promise<number> {
+  // After the window closes, old-key sessions cannot sign in anyway: nothing
+  // depends on APP_PIN any more, so nothing is counted (review, 2026-10-20).
+  if (!legacyWindowOpen()) return 0;
   return prisma.deviceSession.count({
     where: {
       revokedAt: null,
@@ -240,4 +246,22 @@ export async function requireMobileSession(request: NextRequest) {
 /** The connector route: a discriminated result, so 401 and 403 can differ. */
 export function requireConnectorSession(request: NextRequest) {
   return authenticateSession(request, "connector");
+}
+
+/**
+ * Revoke old-key sessions nobody has used for 30 days — Settings' "Revoke
+ * unused old sessions". Their refresh hash would otherwise hold the old-key
+ * count above zero for up to a year (review, 2026-10-20).
+ */
+export async function revokeStaleLegacySessions(days = 30): Promise<number> {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const result = await prisma.deviceSession.updateMany({
+    where: {
+      revokedAt: null,
+      lastSeenAt: { lt: cutoff },
+      OR: [{ keyVersion: { lt: CURRENT_KEY_VERSION } }, { refreshKeyVersion: { lt: CURRENT_KEY_VERSION } }],
+    },
+    data: { revokedAt: new Date() },
+  });
+  return result.count;
 }

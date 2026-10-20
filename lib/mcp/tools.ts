@@ -191,7 +191,12 @@ const datasetKeys = REGISTRY.map((s) => s.key);
 
 async function appDataCtx() {
   const timeZone = await getUserTimeZone(null);
-  return { timeZone, todayStr: getDateStringInTimeZone(new Date(), timeZone), settingsKeys: MCP_SETTINGS_KEYS };
+  return {
+    timeZone,
+    todayStr: getDateStringInTimeZone(new Date(), timeZone),
+    settingsKeys: MCP_SETTINGS_KEYS,
+    hideFinance: !(await mcpFinanceAllowed()),
+  };
 }
 
 // ── The tool table ───────────────────────────────────────────────────────

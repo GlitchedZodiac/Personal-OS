@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { secretErrorResponse } from "@/lib/secret-errors";
 import { authSecretProblems, setAuthCookie, setKnownDeviceCookie } from "@/lib/auth";
 import { ensurePinCredential, pinConfigured } from "@/lib/pin-auth";
 import { attemptPin, lockedResponseInit } from "@/lib/pin-attempt";
+import { getMarkerGeneration } from "@/lib/security-settings";
 
 // Change the PIN. Cookie-gated by proxy.ts (this path is no longer under an
 // allowlisted prefix — SEC-009) AND the current PIN is required. The new PIN
@@ -53,9 +55,11 @@ export async function POST(request: NextRequest) {
     await ensurePinCredential(newPin);
     const response = NextResponse.json({ success: true });
     setAuthCookie(response);
-    setKnownDeviceCookie(response);
+    setKnownDeviceCookie(response, await getMarkerGeneration());
     return response;
   } catch (error) {
+    const named = secretErrorResponse(error);
+    if (named) return named;
     console.error("Update PIN error:", error instanceof Error ? error.message : error);
     return NextResponse.json({ error: "Failed to update PIN" }, { status: 500 });
   }

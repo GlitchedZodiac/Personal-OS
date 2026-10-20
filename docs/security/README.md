@@ -38,9 +38,14 @@ else.
    **Each must be at least 32 characters** (these are 64). Run the command
    twice in a terminal on the Mac. **Never add `APP_AUTH_SECRET` to a
    deployment that does not have this PR.**
-3. **Redeploy** — Vercel does not redeploy when a variable changes. Open the
-   app once on each device and unlock. The watch, the iPhone app and the
-   Claude connector keep working without re-pairing.
+3. **Redeploy the RIGHT deployment.** Vercel → Deployments → the **top**
+   deployment (the failed one from the merge, marked **Error**) → ⋯ →
+   **Redeploy**. **Never redeploy the one marked "Current"** — that rebuilds
+   the OLD code with the new secret, and the watch and iPhone would delete
+   their sign-in when their next refresh failed. (Adding the two variables
+   changes nothing until this redeploy, so adding them early is safe.) Then
+   open the app once on each device and unlock. The watch, the iPhone app
+   and the Claude connector keep working without re-pairing.
 4. **Change your PIN** in Settings → right after the redeploy. A new PIN must
    be **6 to 8 digits** — the watch, the iPhone and the web all take up to 8.
    Even with the lock, a patient attacker can try about 50 PINs an hour at
@@ -61,9 +66,14 @@ else.
 6. **Only then merge the other pull requests.**
 7. **Leave `APP_PIN` alone in Vercel** — do not remove or change it until
    Settings stops showing "sessions still on the old key", or until
-   17 January 2027. The old device keys were made from it; changing it signs
-   those devices out. (Your PIN itself now lives in the database; changing it
-   in Settings is the right way and is safe.)
+   17 January 2027. The old device keys were made from it. If it changes
+   while that note is showing, those devices are refused, their refresh
+   fails, and **each one deletes its own sign-in** ("Session expired — pair
+   again"); putting `APP_PIN` back does **not** bring them back — you re-pair
+   them. Each device moves over the next time it refreshes (about a month for
+   a phone or watch in use); Settings has "Revoke unused old sessions" for the
+   ones nobody uses. (Your PIN itself lives in the database; changing it in
+   Settings is the right way and is safe.)
 
 **If `APP_AUTH_SECRET` were ever already listed** (it is not today): keep it
 if it is at least 32 characters. If it is shorter, copy its value into a new
@@ -131,11 +141,14 @@ pasted into a file in the repo.
   once more).
 - **Locked out after rotating `APP_AUTH_SECRET`?** That secret also protects
   the stored PIN, so rotating it makes the stored PIN unreadable (unless you
-  put the old value in `APP_AUTH_SECRET_PREVIOUS`). Recovery: in Vercel set
-  `APP_PIN` to your PIN and `APP_PIN_RESET` to `1`, redeploy, log in once,
-  then remove `APP_PIN_RESET`. It works once per `APP_PIN` value and sends
-  you a system alert; leaving the flag on does not make `APP_PIN` a second
-  PIN.
+  put the old value in `APP_AUTH_SECRET_PREVIOUS`). Recovery, in this order:
+  (1) in Vercel set `APP_PIN` to a **NEW** 6–8 digit PIN — never the old one,
+  which must be presumed known; (2) set `APP_PIN_RESET` to `1`; (3) redeploy
+  the top deployment; (4) sign in once with the new PIN; (5) remove
+  `APP_PIN_RESET`. It works once per `APP_PIN` value and sends you a system
+  alert; leaving the flag on does not make `APP_PIN` a second PIN. (Changing
+  `APP_PIN` here signs out old-key devices — see step 7 — so do this only if
+  you are truly locked out.)
 - **The connector says its client is unknown when you reconnect?** Remove
   the Pitaya connector in claude.ai and add it again (paste only the URL).
 - **A Vercel secret** (one of the table above) — rotate it at its source, paste
@@ -162,10 +175,16 @@ pasted into a file in the repo.
   every successful sign-in sets. Any other device gets "too many attempts"
   without the PIN even being checked, however many addresses it comes from.
   So a flood cannot lock you out of your own phone or Mac, and it cannot
-  use the lock to guess either. The web sign-in and device pairing are
-  counted separately, so if someone floods pairing, pairing a NEW watch or
-  phone waits until the hour is over. The counts are kept in the database,
-  so they hold across every server instance and restart. The numbers can be changed in Vercel with
+  use the lock to guess either. A wrong guess burns that browser's pass for
+  the rest of the lock; "Forget all known devices" in Settings voids every
+  pass at once (after a lost laptop, say). The web sign-in and device pairing
+  are counted separately, and the counts are kept in the database, so a
+  redeploy does NOT clear them. **If pairing a new watch or phone says "too
+  many attempts":** Settings shows "Device pairing is locked" with an
+  **Unlock device pairing** button — tap it, then pair right away. Without a
+  browser at hand: wait out the hour, or run
+  `delete from rate_limit_buckets where key like 'mobile-pair:%';` in the
+  Supabase SQL editor. The numbers can be changed in Vercel with
   `AUTH_GLOBAL_MAX_FAILURES` and `AUTH_GLOBAL_WINDOW_MINUTES`. The best
   protection of all is a longer PIN: 6–8 digits instead of 4 makes guessing
   a hundred to ten thousand times harder.

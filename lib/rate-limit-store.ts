@@ -27,6 +27,8 @@ export interface RateStore {
   clear(key: string): Promise<void>;
   /** Block a key until at least `until` (never shortens an existing block). */
   blockUntil(key: string, until: number): Promise<void>;
+  /** Forget every key starting with this prefix (a door's counts). */
+  clearPrefix(prefix: string): Promise<void>;
 }
 
 export function memoryStore(): RateStore {
@@ -57,6 +59,9 @@ export function memoryStore(): RateStore {
     async blockUntil(key, until) {
       const b = map.get(key);
       if (b) b.blockedUntil = Math.max(b.blockedUntil ?? 0, until);
+    },
+    async clearPrefix(prefix) {
+      for (const k of [...map.keys()]) if (k.startsWith(prefix)) map.delete(k);
     },
   };
 }
@@ -106,6 +111,9 @@ export const postgresStore: RateStore = {
       SET "blockedUntil" = GREATEST(COALESCE("blockedUntil", ${at}), ${at}), "updatedAt" = NOW()
       WHERE "key" = ${key}
     `);
+  },
+  async clearPrefix(prefix) {
+    await prisma.rateLimitBucket.deleteMany({ where: { key: { startsWith: prefix } } });
   },
 };
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/security-settings", () => ({ getMarkerGeneration: vi.fn(async () => 0), bumpMarkerGeneration: vi.fn(async () => 1) }));
 import crypto from "crypto";
 import { NextRequest } from "next/server";
 

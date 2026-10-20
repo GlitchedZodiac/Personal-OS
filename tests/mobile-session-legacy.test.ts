@@ -56,8 +56,8 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { countLegacyKeySessions, refreshDeviceSession, requireConnectorSession, requireMobileSession } from "@/lib/mobile-session";
-import { hashOpaqueToken, LEGACY_SECRET_UNTIL } from "@/lib/security";
+import { countLegacyKeySessions, createDeviceSession, refreshDeviceSession, requireConnectorSession, requireMobileSession, revokeStaleLegacySessions } from "@/lib/mobile-session";
+import { assertHashWritesAllowed, hashOpaqueToken, LEGACY_SECRET_UNTIL, MissingSecretError } from "@/lib/security";
 
 const STRONG = crypto.randomBytes(32).toString("hex");
 const future = () => new Date(Date.now() + 86_400_000);
@@ -233,5 +233,43 @@ describe("refresh doors accept only their own kind (review of 3b)", () => {
     const days = (d: unknown) => Math.round(((d as Date).getTime() - Date.now()) / 86_400_000);
     expect(days(rows()[0].expiresAt)).toBe(30);
     expect(days(rows()[0].refreshExpiresAt)).toBe(365);
+  });
+});
+
+describe("the old-key counter (second-pass review)", () => {
+  it("counts nothing after the cutoff — nothing depends on APP_PIN any more", async () => {
+    seed("watch", "apple_watch", "2468");
+    afterRollout();
+    expect(await countLegacyKeySessions()).toBe(1);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(LEGACY_SECRET_UNTIL.getTime() + 1_000));
+    expect(await countLegacyKeySessions()).toBe(0);
+  });
+  it("'Revoke unused old sessions' revokes only old-key sessions unseen for 30 days", async () => {
+    afterRollout();
+    seed("stale", "mcp", "2468", { lastSeenAt: new Date(Date.now() - 40 * 86_400_000) });
+    seed("active", "apple_watch", "2468", { lastSeenAt: new Date() });
+    rows().push({ id: "current", deviceType: "iphone", tokenHash: "c", refreshTokenHash: "c", revokedAt: null, expiresAt: future(), refreshExpiresAt: future(), keyVersion: 2, refreshKeyVersion: 2, lastSeenAt: new Date(Date.now() - 40 * 86_400_000) } as Row);
+    expect(await revokeStaleLegacySessions(30)).toBe(1);
+    expect(rows().find((r) => r.id === "stale")!.revokedAt).not.toBeNull();
+    expect(rows().find((r) => r.id === "active")!.revokedAt).toBeNull();
+    expect(rows().find((r) => r.id === "current")!.revokedAt).toBeNull();
+  });
+});
+
+describe("a development server pointed at a NON-local database writes no keys (second-pass review)", () => {
+  it("refuses to mint or rotate without an explicit secret; a local database or an explicit secret is fine", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("APP_AUTH_SECRET", "");
+    vi.stubEnv("DATABASE_URL", "postgresql://u:p@aws-0-us-east-1.pooler.supabase.com:6543/postgres");
+    expect(() => assertHashWritesAllowed()).toThrow(MissingSecretError);
+    await expect(createDeviceSession({ deviceLabel: "x", deviceType: "iphone" })).rejects.toThrow(/non-local database/);
+    seed("phone", "iphone", "2468");
+    await expect(refreshDeviceSession("phone-refresh", "device")).rejects.toThrow(/non-local database/);
+    vi.stubEnv("DATABASE_URL", "postgresql://zodiac@127.0.0.1:5432/pitaya_lane_a");
+    expect(() => assertHashWritesAllowed()).not.toThrow();
+    vi.stubEnv("DATABASE_URL", "postgresql://u:p@db.example.com/postgres");
+    vi.stubEnv("APP_AUTH_SECRET", STRONG);
+    expect(() => assertHashWritesAllowed()).not.toThrow();
   });
 });

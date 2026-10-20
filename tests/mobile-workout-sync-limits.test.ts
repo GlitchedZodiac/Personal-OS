@@ -32,7 +32,7 @@ const { db } = vi.hoisted(() => {
     rows: [] as Array<{ id: string } & Record<string, unknown>>,
     seq: 0,
     // externalId → how create should fail
-    poison: new Map<string, "validation-full" | "validation-always" | "outage">(),
+    poison: new Map<string, "validation-full" | "validation-always" | "outage" | "validation-update">(),
   };
   return { db };
 });
@@ -41,6 +41,9 @@ vi.mock("@/lib/prisma", () => ({
     trail: { findMany: vi.fn(async () => []) },
     workoutLog: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        if (data.externalId != null && db.rows.some((r) => r.externalId === data.externalId)) {
+          throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed", { code: "P2002", clientVersion: "7.0.0" });
+        }
         const mode = db.poison.get(String(data.externalId));
         const minimal = !!(data.metricsData as { syncFallback?: unknown } | null)?.syncFallback;
         if (mode === "outage") {
@@ -53,8 +56,17 @@ vi.mock("@/lib/prisma", () => ({
         db.rows.push(row);
         return row;
       }),
-      findUnique: vi.fn(async () => null),
-      update: vi.fn(),
+      findUnique: vi.fn(async ({ where }: { where: { externalSource_externalId: { externalId: string } } }) =>
+        db.rows.find((r) => r.externalId === where.externalSource_externalId.externalId) ?? null),
+      update: vi.fn(async ({ where, data }: { where: { externalSource_externalId: { externalId: string } }; data: Record<string, unknown> }) => {
+        const id = where.externalSource_externalId.externalId;
+        if (db.poison.get(id) === "validation-update") {
+          throw new Prisma.PrismaClientValidationError("Invalid value for argument", { clientVersion: "7.0.0" });
+        }
+        const row = db.rows.find((r) => r.externalId === id)!;
+        Object.assign(row, data);
+        return row;
+      }),
     },
   },
 }));
@@ -84,7 +96,7 @@ beforeEach(() => {
 });
 
 describe("big real sessions sync whole", () => {
-  it("a 12-hour hike at 1 Hz (43,200 points) is stored untouched", async () => {
+  it("43,200 route points (a 12-hour hike at 1 Hz, compact encoding) are stored untouched — the watch's full-precision encoding of the same hike is ~5 MB and is refused by Vercel before the app; splitting the drain is the watch's fix (followups)", async () => {
     const points = hikePoints(43_200);
     const res = await POST(syncRequest({ items: [item("hike-12h", { workoutType: "hike", durationMinutes: 720, routeData: { points } })] }));
     expect(res.status).toBe(200);
@@ -130,7 +142,7 @@ describe("one poison item never sinks the batch", () => {
       syncRequest({
         items: [
           item("good-1"),
-          item("malformed", { startedAt: "garbage", durationMinutes: "abc", stepCount: 1e15, description: "nul\u0000here" }),
+          item("malformed", { durationMinutes: "abc", stepCount: 1e15, description: "nul\u0000here" }),
           item("refused-json", { metricsData: { bad: true } }),
           "not an item",
           item("refused-always"),
@@ -149,7 +161,7 @@ describe("one poison item never sinks the batch", () => {
     type Issue = { index: number; externalId: string | null; action: string; reasons: string[] };
     const byIndex: Record<number, Issue> = Object.fromEntries((body.itemIssues as Issue[]).map((i) => [i.index, i]));
     expect(byIndex[1]).toMatchObject({ externalId: "malformed", action: "trimmed" });
-    expect(byIndex[1].reasons).toEqual(expect.arrayContaining(["nul_removed", "startedAt:invalid", "stepCount:out_of_range"]));
+    expect(byIndex[1].reasons).toEqual(expect.arrayContaining(["nul_removed", "durationMinutes:invalid", "stepCount:out_of_range"]));
     expect(byIndex[2]).toMatchObject({ externalId: "refused-json", action: "stored_minimal" });
     expect(byIndex[3]).toMatchObject({ externalId: null, action: "rejected", reasons: ["not_an_object"] });
     expect(byIndex[4]).toMatchObject({ externalId: "refused-always", action: "rejected" });
@@ -168,15 +180,36 @@ describe("one poison item never sinks the batch", () => {
     expect(res.status).toBe(500);
   });
 
-  it("past the batch limit, the extra items are reported, never the whole batch refused", async () => {
-    const items = Array.from({ length: SYNC_LIMITS.maxItems + 10 }, (_, i) => item(`b-${i}`));
+  it("there is no item-count limit: a 300-item drain stores every item (the byte cap is the bound)", async () => {
+    const items = Array.from({ length: 300 }, (_, i) => item(`b-${i}`));
     const res = await POST(syncRequest({ items }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.created).toBe(SYNC_LIMITS.maxItems);
-    const over = (body.itemIssues as Array<{ reasons: string[]; index: number }>).filter((i) => i.reasons.includes("batch_limit"));
-    expect(over).toHaveLength(10);
-    expect(over[0].index).toBe(SYNC_LIMITS.maxItems);
+    expect(body.created).toBe(300);
+    expect(body.itemIssues).toEqual([]);
+  });
+
+  it("the minimal fallback NEVER overwrites a good row that already exists (second-pass review)", async () => {
+    const points = Array.from({ length: 2_880 }, (_, i) => ({ lat: 4.6, lng: -74, t: i }));
+    await POST(syncRequest({ items: [item("hike-full", { workoutType: "hike", routeData: { points }, exercises: [{ name: "Hike" }], avgHeartRateBpm: 128 })] }));
+    const before = { ...db.rows[0] };
+    // The re-send's UPDATE is refused as bad data → fallback → minimal INSERT → duplicate → keep.
+    db.poison.set("hike-full", "validation-update");
+    const res = await POST(syncRequest({ items: [item("hike-full", { workoutType: "hike", metricsData: { bad: true } })] }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.itemIssues).toEqual([expect.objectContaining({ externalId: "hike-full", action: "kept_existing" })]);
+    expect(db.rows).toHaveLength(1);
+    expect((db.rows[0].routeData as { points: unknown[] }).points).toHaveLength(2_880);
+    expect(db.rows[0].exercises).toEqual(before.exercises);
+    expect(db.rows[0].avgHeartRateBpm).toBe(128);
+  });
+
+  it("an unreadable start is reported as not stored, never filed under today", async () => {
+    const res = await POST(syncRequest({ items: [item("bad-date", { startedAt: "-010000-01-01T00:00:00Z" }), item("ok")] }));
+    const body = await res.json();
+    expect(body.created).toBe(1);
+    expect(body.itemIssues).toEqual([expect.objectContaining({ externalId: "bad-date", action: "rejected", reasons: expect.arrayContaining(["startedAt:invalid"]) })]);
   });
 
   it("a body over the platform limit is refused before it is read", async () => {

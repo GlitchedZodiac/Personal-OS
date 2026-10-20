@@ -36,6 +36,8 @@ export interface AppDataContext {
   todayStr: string;
   /** When set, the `settings` dataset returns only these keys ("a.b" = one sub-key). */
   settingsKeys?: readonly string[];
+  /** The caller may not see finance data — not even counts (app_digest). */
+  hideFinance?: boolean;
 }
 
 function clampInt(value: unknown, fallback: number, min: number, max: number) {
@@ -230,7 +232,7 @@ async function runCurated(
       return { currency: "COP", note: "Negative amounts are expenses.", summary };
     }
     case "app_digest":
-      return buildDigest();
+      return buildDigest(ctx.hideFinance === true);
     default:
       // The eight original health branches keep their exact behaviour.
       return executeGetHealthData(
@@ -246,8 +248,8 @@ async function runCurated(
  * started all this is the model concluding "you have no measurements" without
  * looking — one call tells it what exists before it decides nothing does.
  */
-async function buildDigest() {
-  const pairs: [string, string][] = [
+async function buildDigest(hideFinance: boolean) {
+  const all: [string, string][] = [
     ["bodyMeasurement", "body_measurements"],
     ["foodLog", "recent_food"],
     ["workoutLog", "recent_workouts"],
@@ -266,6 +268,9 @@ async function buildDigest() {
     ["scheduledObligation", "finance_obligations"],
     ["savingsGoal", "finance_goals"],
   ];
+  // With finance off for the caller (the connector without its switch), even
+  // the COUNTS of finance rows stay out (review, 2026-10-20).
+  const pairs = hideFinance ? all.filter(([, dataset]) => !dataset.startsWith("finance_")) : all;
   const counts = await Promise.all(
     pairs.map(async ([model, dataset]) => {
       const d = delegateFor(model);

@@ -3,10 +3,17 @@ import { Prisma } from "@prisma/client";
 import {
   downsampleEvenly,
   isItemDataError,
-  sanitizeSyncItem,
+  sanitizeSyncItem as sanitizeResult,
   stripNul,
   SYNC_LIMITS,
+  type SanitizedSyncItem,
 } from "@/lib/workout-sync-limits";
+
+/** The accepted item, or null when the sanitizer refused it. */
+const sanitizeSyncItem = (raw: unknown): SanitizedSyncItem | null => {
+  const r = sanitizeResult(raw);
+  return r.ok ? r.item : null;
+};
 
 // The pure half of the sync bounds (audit 2026-10, SEC-024).
 
@@ -42,14 +49,32 @@ describe("sanitizeSyncItem", () => {
   });
   it("defaults what it cannot read instead of rejecting the item", () => {
     const out = sanitizeSyncItem({
-      externalId: "x", startedAt: "garbage", endedAt: "2026-08-28T13:00:00Z",
+      externalId: "x", startedAt: "2026-08-28T12:00:00Z",
       durationMinutes: "abc", stepCount: 1e15, avgHeartRateBpm: "NaN", workoutType: "walk",
     })!;
-    expect(out.startedAt.toISOString()).toBe("2026-08-28T13:00:00.000Z"); // fell back to endedAt
     expect(out.durationMinutes).toBe(0);
     expect(out.stepCount).toBeNull();
     expect(out.avgHeartRateBpm).toBeNull();
-    expect(out.notes).toEqual(expect.arrayContaining(["startedAt:invalid", "durationMinutes:invalid", "stepCount:out_of_range", "avgHeartRateBpm:invalid"]));
+    expect(out.notes).toEqual(expect.arrayContaining(["durationMinutes:invalid", "stepCount:out_of_range", "avgHeartRateBpm:invalid"]));
+  });
+  it("an unreadable or out-of-range start is REJECTED, not filed as 'now' (second-pass review)", () => {
+    for (const startedAt of ["garbage", "-010000-01-01T00:00:00Z", "1999-12-31T23:59:59Z", new Date(Date.now() + 5 * 86_400_000).toISOString()]) {
+      const r = sanitizeResult({ externalId: "bad", startedAt, workoutType: "walk" });
+      expect(r.ok, startedAt).toBe(false);
+      if (!r.ok) expect(r.reasons).toContain("startedAt:invalid");
+    }
+    // Missing entirely keeps the old contract default: endedAt, else now.
+    expect(sanitizeSyncItem({ externalId: "m", endedAt: "2026-08-28T13:00:00Z" })!.startedAt.toISOString()).toBe("2026-08-28T13:00:00.000Z");
+    // An out-of-range END is dropped and noted, the item kept.
+    const kept = sanitizeSyncItem({ externalId: "e", startedAt: "2026-08-28T12:00:00Z", endedAt: "-010000-01-01T00:00:00Z" })!;
+    expect(kept.endedAt).toBeNull();
+    expect(kept.notes).toContain("endedAt:invalid");
+  });
+  it("NUL stripping survives absurdly deep JSON (it used to overflow the stack)", () => {
+    let deep: unknown = "leaf\u0000";
+    for (let i = 0; i < 10_000; i++) deep = { d: deep };
+    const out = sanitizeSyncItem({ externalId: "deep", startedAt: "2026-08-28T12:00:00Z", metricsData: { deep } })!;
+    expect(out.notes).toContain("depth_trimmed");
   });
   it("downsamples an over-cap route and records the trim in metricsData.syncTrimmed", () => {
     const points = Array.from({ length: SYNC_LIMITS.maxRoutePoints + 10_000 }, (_, i) => ({ lat: 1, lng: 2, t: i }));
@@ -91,14 +116,27 @@ describe("sanitizeSyncItem", () => {
     expect(out.notes).toContain("nul_removed");
     expect(stripNul({ "k\u0000": ["\u0000"] })).toEqual({ k: [""] });
   });
-  it("returns null only for something that is not an item at all", () => {
-    expect(sanitizeSyncItem(null)).toBeNull();
+  it("refuses only something that is not an item at all", () => {
+    expect(sanitizeResult(null)).toEqual({ ok: false, externalId: null, reasons: ["not_an_object"] });
     expect(sanitizeSyncItem("x")).toBeNull();
     expect(sanitizeSyncItem([1])).toBeNull();
   });
 });
 
 describe("isItemDataError", () => {
+  it("recognises the REAL pg-adapter shape (captured from Postgres 17): P2039 carrying SQLSTATE 22009 / 22021", () => {
+    const real = (code: string) =>
+      new Prisma.PrismaClientKnownRequestError("Database error", {
+        code: "P2039",
+        clientVersion: "7.9.1",
+        meta: { modelName: "WorkoutLog", driverAdapterError: { name: "DriverAdapterError", cause: { originalCode: code, kind: "postgres", code } } },
+      });
+    expect(isItemDataError(real("22009"))).toBe(true); // time zone displacement out of range (a year −10000)
+    expect(isItemDataError(real("22021"))).toBe(true); // a NUL byte
+    expect(isItemDataError(real("23503"))).toBe(true); // a foreign key
+    expect(isItemDataError(real("08006"))).toBe(false); // connection failure → 500, queue kept
+    expect(isItemDataError(real("57P01"))).toBe(false); // admin shutdown
+  });
   it("treats validation and data codes as item-level, connectivity as systemic", () => {
     expect(isItemDataError(new Prisma.PrismaClientValidationError("bad", { clientVersion: "7.0.0" }))).toBe(true);
     expect(isItemDataError(new Prisma.PrismaClientKnownRequestError("too long", { code: "P2000", clientVersion: "7.0.0" }))).toBe(true);

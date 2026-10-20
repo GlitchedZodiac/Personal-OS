@@ -5,6 +5,7 @@
 // / rotating refresh token, not the cookie.
 
 import { NextRequest, NextResponse } from "next/server";
+import { secretErrorResponse } from "@/lib/secret-errors";
 import { consumeAuthCode, sweepExpiredCodes } from "@/lib/oauth";
 import { createDeviceSession, refreshDeviceSession } from "@/lib/mobile-session";
 
@@ -32,6 +33,16 @@ async function readParams(request: NextRequest): Promise<Record<string, string>>
 }
 
 export async function POST(request: NextRequest) {
+  try {
+    return await handle(request);
+  } catch (error) {
+    const named = secretErrorResponse(error);
+    if (named) return named;
+    throw error;
+  }
+}
+
+async function handle(request: NextRequest) {
   const p = await readParams(request);
   const grant = p.grant_type ?? "";
 

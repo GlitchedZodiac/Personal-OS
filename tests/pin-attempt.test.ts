@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/security-settings", () => ({ getMarkerGeneration: vi.fn(async () => 0), bumpMarkerGeneration: vi.fn(async () => 1) }));
 import crypto from "crypto";
 import { NextRequest } from "next/server";
 
@@ -30,7 +31,9 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { attemptPin } from "@/lib/pin-attempt";
-import { createKnownDeviceToken } from "@/lib/auth";
+import { createKnownDeviceToken, readKnownDeviceToken } from "@/lib/auth";
+import { getMarkerGeneration } from "@/lib/security-settings";
+import { clearDoor, doorLock } from "@/lib/rate-limit";
 import { globalLoginLimits } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { hashPin } from "@/lib/security";
@@ -126,5 +129,52 @@ describe("attemptPin under a global lock", () => {
     expect(await attemptPin(req("1.1.1.1"), scope, "0000")).toEqual({ status: "wrong" });
     expect(await attemptPin(req("1.1.1.1"), scope, "2468")).toEqual({ status: "ok" });
     expect(notify).not.toHaveBeenCalled();
+  });
+});
+
+describe("the known-device marker (second-pass review)", () => {
+  const marked = (ip: string, token: string) =>
+    new NextRequest("http://localhost/api/auth", { method: "POST", headers: { "x-real-ip": ip, cookie: `pitaya_known_device=${token}` } });
+
+  it("a wrong guess burns the MARKER, not just its address: the same marker from a fresh IP gets no real check", async () => {
+    const scope = `burn-${Math.random()}`;
+    await floodUntilLocked(scope);
+    const token = createKnownDeviceToken();
+    expect((await attemptPin(marked("203.0.113.30", token), scope, "0000")).status).toBe("locked"); // burned
+    expect((await attemptPin(marked("203.0.113.31", token), scope, "2468")).status).toBe("locked"); // same marker, new IP
+    expect((await attemptPin(marked("203.0.113.32", createKnownDeviceToken()), scope, "2468"))).toEqual({ status: "ok" }); // another marker
+  });
+
+  it("'Forget all known devices' (a new generation) voids every older marker", async () => {
+    const scope = `gen-${Math.random()}`;
+    await floodUntilLocked(scope);
+    const old = createKnownDeviceToken(0);
+    vi.mocked(getMarkerGeneration).mockResolvedValue(1);
+    expect((await attemptPin(marked("203.0.113.40", old), scope, "2468")).status).toBe("locked");
+    expect((await attemptPin(marked("203.0.113.41", createKnownDeviceToken(1)), scope, "2468"))).toEqual({ status: "ok" });
+    vi.mocked(getMarkerGeneration).mockResolvedValue(0);
+  });
+
+  it("lives 90 days and carries a nonce and a generation", () => {
+    const body = JSON.parse(Buffer.from(createKnownDeviceToken(3).split(".")[0], "base64url").toString());
+    expect(body.exp - body.iat).toBe(90 * 24 * 60 * 60);
+    expect(readKnownDeviceToken(createKnownDeviceToken(3))).toMatchObject({ generation: 3 });
+  });
+});
+
+describe("unlocking device pairing (second-pass review)", () => {
+  it("a flooded pairing door reports its lock, and clearing it lets his correct PIN through", async () => {
+    for (let i = 0; i < 6; i++) await attemptPin(req(`198.51.100.${i}`), "mobile-pair", "0000");
+    expect((await doorLock("mobile-pair")).locked).toBe(true);
+    expect((await attemptPin(req("203.0.113.60"), "mobile-pair", "2468")).status).toBe("locked");
+    await clearDoor("mobile-pair");
+    expect((await doorLock("mobile-pair")).locked).toBe(false);
+    expect(await attemptPin(req("203.0.113.60"), "mobile-pair", "2468")).toEqual({ status: "ok" });
+  });
+  it("the alert names the way out", async () => {
+    const scope = `alert-text-${Math.random()}`;
+    await floodUntilLocked(scope);
+    expect(notify.mock.calls.at(-1)![0].body).toMatch(/Unlock device pairing/);
+    expect(notify.mock.calls.at(-1)![0].body).not.toMatch(/no wrong guesses of its own/);
   });
 });

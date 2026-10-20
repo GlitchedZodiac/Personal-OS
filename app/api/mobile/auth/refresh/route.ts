@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { secretErrorResponse } from "@/lib/secret-errors";
 import { refreshDeviceSession } from "@/lib/mobile-session";
 
 export async function POST(request: NextRequest) {
@@ -29,6 +30,8 @@ export async function POST(request: NextRequest) {
       refreshToken: refreshed.refreshToken,
     });
   } catch (error) {
+    const named = secretErrorResponse(error);
+    if (named) return named;
     console.error("Mobile session refresh error:", error);
     return NextResponse.json(
       { error: "Failed to refresh session" },

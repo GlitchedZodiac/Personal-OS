@@ -17,8 +17,9 @@ export const SYNC_LIMITS = {
   /** Vercel's own request-body limit is ~4.5 MB; the route matches it so the
    *  app never refuses a body production would have accepted. */
   maxBodyBytes: 4_500_000,
-  /** He has ~170 workouts in total; a drain of 250 means months offline. */
-  maxItems: 250,
+  // No item-count cap (review, 2026-10-20): the watch removes EVERY pending
+  // item on any 2xx, so a cap that accepted-and-dropped the rest lost them.
+  // The byte cap above is the real bound.
   maxRoutePoints: 60_000,
   maxStreamPoints: 60_000,
   maxExercises: 500,
@@ -39,6 +40,11 @@ export const SYNC_LIMITS = {
 } as const;
 
 const INT32_MAX = 2_147_483_647;
+/** Sessions are filed between 2000-01-01 and two days from now; Postgres refuses far-out years (22008/22009). */
+const MIN_DATE_MS = Date.UTC(2000, 0, 1);
+const FUTURE_SLACK_MS = 2 * 24 * 60 * 60 * 1000;
+/** NUL stripping walks at most this deep; a real item is ~6 levels. */
+const MAX_JSON_DEPTH = 64;
 const MAX_DURATION_MINUTES = 7 * 24 * 60;
 const STREAM_KEYS = ["hrStream", "timeStream", "altitudeStream"] as const;
 
@@ -60,7 +66,9 @@ export function downsampleEvenly<T>(values: readonly T[], max: number): T[] {
 export type ItemIssue = {
   index: number;
   externalId: string | null;
-  action: "trimmed" | "stored_minimal" | "rejected";
+  /** trimmed: stored with changes · stored_minimal: stored with only its scalar facts ·
+   *  kept_existing: a good row already existed and was left alone · rejected: not stored. */
+  action: "trimmed" | "stored_minimal" | "kept_existing" | "rejected";
   reasons: string[];
 };
 
@@ -119,7 +127,9 @@ function int32OrNull(value: unknown, field: string, notes: string[]): number | n
 function dateOrNull(value: unknown): Date | null {
   if (value === null || value === undefined || value === "") return null;
   const d = new Date(value as string);
-  return Number.isFinite(d.getTime()) ? d : null;
+  const t = d.getTime();
+  if (!Number.isFinite(t) || t < MIN_DATE_MS || t > Date.now() + FUTURE_SLACK_MS) return null;
+  return d;
 }
 
 function jsonBytes(value: unknown): number {
@@ -140,26 +150,35 @@ function jsonBytes(value: unknown): number {
  * Postgres refuses U+0000 in both `text` and `jsonb`, so one NUL anywhere in
  * an item used to fail the whole batch, forever, on every retry. Remove them.
  */
-export function stripNul(value: unknown, changed: { hit: boolean } = { hit: false }): unknown {
+export function stripNul(value: unknown, changed: { hit: boolean; deep?: boolean } = { hit: false }, depth = 0): unknown {
   if (typeof value === "string") {
     if (!value.includes("\u0000")) return value;
     changed.hit = true;
     return value.replace(/\u0000/g, "");
   }
-  if (Array.isArray(value)) return value.map((v) => stripNul(v, changed));
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [stripNul(k, changed) as string, stripNul(v, changed)])
-    );
+  if (value === null || typeof value !== "object") return value;
+  // Depth-capped (review, 2026-10-20): unbounded recursion on deeply nested
+  // JSON overflowed the stack. Nothing real nests this deep; deeper values
+  // are dropped and the item says so.
+  if (depth >= MAX_JSON_DEPTH) {
+    changed.deep = true;
+    return null;
   }
-  return value;
+  if (Array.isArray(value)) return value.map((v) => stripNul(v, changed, depth + 1));
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([k, v]) => [stripNul(k, changed, depth + 1) as string, stripNul(v, changed, depth + 1)])
+  );
 }
 
-export function sanitizeSyncItem(raw: unknown): SanitizedSyncItem | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const nul = { hit: false };
+export type SanitizeResult =
+  | { ok: true; item: SanitizedSyncItem }
+  | { ok: false; externalId: string | null; reasons: string[] };
+
+export function sanitizeSyncItem(raw: unknown): SanitizeResult {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ok: false, externalId: null, reasons: ["not_an_object"] };
+  const nul: { hit: boolean; deep?: boolean } = { hit: false };
   const item = stripNul(raw, nul) as Record<string, unknown>;
-  const notes: string[] = nul.hit ? ["nul_removed"] : [];
+  const notes: string[] = [...(nul.hit ? ["nul_removed"] : []), ...(nul.deep ? ["depth_trimmed"] : [])];
   const S = SYNC_LIMITS.strings;
 
   const capNoted = (key: keyof typeof S): string | null => {
@@ -173,13 +192,17 @@ export function sanitizeSyncItem(raw: unknown): SanitizedSyncItem | null {
   const externalSource = capNoted("externalSource") ?? "app_watch";
   const workoutType = capNoted("workoutType") ?? "other";
 
-  // startedAt is what the row is filed under; an unreadable one falls back
-  // to endedAt, then to now — the session is kept, the fallback is noted.
-  let startedAt = dateOrNull(item.startedAt);
+  // startedAt is what the row is filed under. Missing: endedAt, else now (the
+  // contract's old default). Present but unreadable or outside 2000 … now+2d:
+  // the item is NOT filed — "now" would put a session on today and mark
+  // today's plan done (review, 2026-10-20). The real watch always sends one.
   const endedAt = dateOrNull(item.endedAt);
   if (item.endedAt != null && item.endedAt !== "" && !endedAt) notes.push("endedAt:invalid");
+  let startedAt = dateOrNull(item.startedAt);
   if (!startedAt) {
-    if (item.startedAt != null && item.startedAt !== "") notes.push("startedAt:invalid");
+    if (item.startedAt != null && item.startedAt !== "") {
+      return { ok: false, externalId, reasons: [...notes, "startedAt:invalid"] };
+    }
     startedAt = endedAt ?? new Date();
   }
 
@@ -265,7 +288,7 @@ export function sanitizeSyncItem(raw: unknown): SanitizedSyncItem | null {
     metricsData = { ...base, syncTrimmed: trimmed };
   }
 
-  return {
+  return { ok: true, item: {
     externalId,
     externalSource,
     workoutType,
@@ -287,7 +310,7 @@ export function sanitizeSyncItem(raw: unknown): SanitizedSyncItem | null {
     deviceType: capNoted("deviceType"),
     trailId: capNoted("trailId"),
     notes,
-  };
+  } };
 }
 
 /**
@@ -300,12 +323,33 @@ const DATA_ERROR_CODES = new Set([
   "P2000", "P2003", "P2004", "P2005", "P2006", "P2007", "P2009", "P2011",
   "P2012", "P2019", "P2020", "P2023", "P2033",
 ]);
+/**
+ * The Postgres SQLSTATE behind a driver-adapter error, if any. Through the pg
+ * adapter Prisma reports "Database error" as P2039 and keeps the real code in
+ * meta.driverAdapterError.cause.originalCode (verified against Postgres 17,
+ * 2026-10-20: an out-of-range year is 22009, a NUL byte 22021).
+ */
+export function postgresState(error: unknown): string | null {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return null;
+  const cause = (error.meta as { driverAdapterError?: { cause?: { originalCode?: unknown; code?: unknown } } } | undefined)
+    ?.driverAdapterError?.cause;
+  const code = cause?.originalCode ?? cause?.code;
+  return typeof code === "string" ? code : null;
+}
+
 export function isItemDataError(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientValidationError) return true;
-  return error instanceof Prisma.PrismaClientKnownRequestError && DATA_ERROR_CODES.has(error.code);
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (DATA_ERROR_CODES.has(error.code)) return true;
+  // Class 22 (data exception) and 23 (integrity) are about the ROW, not the
+  // database's health; connection (08), resources (53), shutdown (57) are not.
+  const state = postgresState(error);
+  return state !== null && /^2[23]/.test(state);
 }
 
 export function errorCode(error: unknown): string {
+  const state = postgresState(error);
+  if (state) return `pg:${state}`;
   if (error instanceof Prisma.PrismaClientKnownRequestError) return error.code;
   if (error instanceof Prisma.PrismaClientValidationError) return "validation";
   return "unknown";

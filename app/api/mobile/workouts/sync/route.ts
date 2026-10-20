@@ -79,21 +79,14 @@ export async function POST(request: NextRequest) {
     // item on any 2xx, so the rule is: trim and keep wherever possible,
     // report every change, and NEVER fail the whole batch for one item.
     const itemIssues: ItemIssue[] = [];
-    const idOf = (raw: unknown) =>
-      raw && typeof raw === "object" && typeof (raw as { externalId?: unknown }).externalId === "string"
-        ? ((raw as { externalId: string }).externalId.slice(0, SYNC_LIMITS.strings.externalId))
-        : null;
-    rawItems.slice(SYNC_LIMITS.maxItems).forEach((raw, k) => {
-      itemIssues.push({ index: SYNC_LIMITS.maxItems + k, externalId: idOf(raw), action: "rejected", reasons: ["batch_limit"] });
-    });
     const items: Array<SanitizedSyncItem & { index: number }> = [];
-    rawItems.slice(0, SYNC_LIMITS.maxItems).forEach((raw, index) => {
+    rawItems.forEach((raw, index) => {
       const clean = sanitizeSyncItem(raw);
-      if (!clean) {
-        itemIssues.push({ index, externalId: null, action: "rejected", reasons: ["not_an_object"] });
+      if (!clean.ok) {
+        itemIssues.push({ index, externalId: clean.externalId, action: "rejected", reasons: clean.reasons });
         return;
       }
-      items.push({ ...clean, index });
+      items.push({ ...clean.item, index });
     });
 
     // Custom movements must be in the index before any row is given an id.
@@ -211,8 +204,9 @@ export async function POST(request: NextRequest) {
         metricsData: Prisma.InputJsonValue | typeof Prisma.JsonNull;
       },
       externalSource: string,
-      externalId: string | null
-    ) => {
+      externalId: string | null,
+      opts: { insertOnly?: boolean } = {}
+    ): Promise<{ id: string; created: boolean; keptExisting?: boolean; exercises: unknown; metricsData: unknown }> => {
       if (!externalId) {
         const entry = await prisma.workoutLog.create({ data });
         return { id: entry.id, created: true, exercises: data.exercises, metricsData: data.metricsData };
@@ -229,6 +223,17 @@ export async function POST(request: NextRequest) {
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002";
         if (!isDup) throw error;
+        if (opts.insertOnly) {
+          // The minimal fallback NEVER overwrites a row that already exists
+          // (review, 2026-10-20: a re-send replaced a complete hike's route,
+          // exercises and HR with the minimal form). The good row stays.
+          const existing = await prisma.workoutLog.findUnique({
+            where: { externalSource_externalId: { externalSource, externalId } },
+            select: { id: true },
+          });
+          if (!existing) throw error;
+          return { id: existing.id, created: false, keptExisting: true, exercises: null, metricsData: null };
+        }
         // A re-send must not undo what was fixed on the phone since the
         // first one — lib/workout-resync.ts holds the rule.
         const where = { externalSource_externalId: { externalSource, externalId } };
@@ -349,8 +354,8 @@ export async function POST(request: NextRequest) {
         };
         delete (minimal as { trailId?: string }).trailId;
         try {
-          stored = await writeRow(minimal, externalSource, externalId);
-          action = "stored_minimal";
+          stored = await writeRow(minimal, externalSource, externalId, { insertOnly: true });
+          action = stored.keptExisting ? "kept_existing" : "stored_minimal";
         } catch (fallbackError) {
           if (!isItemDataError(fallbackError)) throw fallbackError;
           notes.push(`db:${errorCode(fallbackError)}`);
@@ -359,15 +364,16 @@ export async function POST(request: NextRequest) {
           continue;
         }
       }
-      if (stored.created) created++;
-      else updated++;
       const workoutId = stored.id;
       if (action) {
         itemIssues.push({ index: item.index, externalId, action, reasons: notes });
-        if (action === "stored_minimal") {
-          console.warn(`[sync] item ${item.index} (${externalId ?? "no id"}) stored minimal: ${notes.join(", ")}`);
+        if (action !== "trimmed") {
+          console.warn(`[sync] item ${item.index} (${externalId ?? "no id"}) ${action}: ${notes.join(", ")}`);
         }
       }
+      if (stored.keptExisting) continue; // nothing new was written: no PRs, no voice links
+      if (stored.created) created++;
+      else updated++;
 
       // The session's voice clips get tied to the row they ended up on.
       const savedLog = (stored.metricsData as { setLog?: unknown } | null)?.setLog;

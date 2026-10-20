@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { secretErrorResponse } from "@/lib/secret-errors";
 import {
   authSecretProblems,
   clearAuthCookie,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/auth";
 import { pinConfigured } from "@/lib/pin-auth";
 import { attemptPin, lockedResponseInit } from "@/lib/pin-attempt";
+import { getMarkerGeneration } from "@/lib/security-settings";
 
 // The web login. The PIN is checked against `auth_credentials` (lib/pin-auth),
 // the same row device pairing uses — one PIN, one place (SEC-004). In
@@ -56,11 +58,13 @@ export async function POST(request: NextRequest) {
     if (attempt.status === "ok") {
       const response = NextResponse.json({ success: true });
       setAuthCookie(response);
-      setKnownDeviceCookie(response);
+      setKnownDeviceCookie(response, await getMarkerGeneration());
       return response;
     }
     return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
   } catch (error) {
+    const named = secretErrorResponse(error);
+    if (named) return named;
     console.error("Auth error:", error instanceof Error ? error.message : error);
     return NextResponse.json({ error: "Authentication failed" }, { status: 500 });
   }

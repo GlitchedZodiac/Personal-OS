@@ -156,49 +156,63 @@ export function clearAuthCookie(response: NextResponse) {
   response.cookies.delete(AUTH_COOKIE_NAME);
 }
 
-// ── Known-device marker (PLAN D2b) ────────────────────────────────────────
+// ── Known-device marker (PLAN D2b; review, 2026-10-20) ─────────────────────
 // Set on every successful PIN sign-in, signed with the cookie secret, and
-// distinct from the session cookie by its `sub`, so neither can stand in for
-// the other. It grants nothing on its own: it only lets this browser present
-// the correct PIN while a global wrong-PIN lock is on. Logging out keeps it —
-// it marks the device, not the session.
+// distinct from the session cookie by its `sub`. It grants nothing on its
+// own: it only lets this browser present the correct PIN while a door-wide
+// wrong-PIN lock is on. It carries a random nonce (a wrong guess during a
+// lock burns THAT marker, wherever it is used from) and a generation number
+// (Settings → "Forget all known devices" bumps it, voiding every marker
+// without rotating AUTH_COOKIE_SECRET). 90 days, renewed on each sign-in.
 const KNOWN_DEVICE_COOKIE = "pitaya_known_device";
-const KNOWN_DEVICE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60; // browsers cap cookies at 400 days
+const KNOWN_DEVICE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 const KNOWN_DEVICE_SUB = "pitaya-known-device";
 
-export function createKnownDeviceToken() {
+export interface KnownDeviceMarker {
+  nonce: string;
+  generation: number;
+}
+
+export function createKnownDeviceToken(generation = 0) {
   const secret = getCookieSecret();
   if (!secret) return "";
   const now = Math.floor(Date.now() / 1000);
   const payload = base64UrlEncode(
-    JSON.stringify({ sub: KNOWN_DEVICE_SUB, iat: now, exp: now + KNOWN_DEVICE_MAX_AGE_SECONDS, n: crypto.randomBytes(8).toString("hex") })
+    JSON.stringify({ sub: KNOWN_DEVICE_SUB, iat: now, exp: now + KNOWN_DEVICE_MAX_AGE_SECONDS, n: crypto.randomBytes(12).toString("hex"), g: generation })
   );
   return `${payload}.${signToken(payload, secret)}`;
 }
 
-export function verifyKnownDeviceToken(token: string | undefined): boolean {
-  if (!token) return false;
+/** The marker's nonce and generation if its signature, subject and expiry hold; else null. */
+export function readKnownDeviceToken(token: string | undefined): KnownDeviceMarker | null {
+  if (!token) return null;
   const secret = getCookieSecret();
-  if (!secret) return false;
+  if (!secret) return null;
   const [payload, signature] = token.split(".");
-  if (!payload || !signature) return false;
+  if (!payload || !signature) return null;
   const expected = signToken(payload, secret);
   if (
     Buffer.byteLength(signature) !== Buffer.byteLength(expected) ||
     !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
   ) {
-    return false;
+    return null;
   }
   try {
-    const body = JSON.parse(base64UrlDecode(payload)) as { sub?: string; exp?: number };
-    return body.sub === KNOWN_DEVICE_SUB && typeof body.exp === "number" && body.exp > Math.floor(Date.now() / 1000);
+    const body = JSON.parse(base64UrlDecode(payload)) as { sub?: string; exp?: number; n?: unknown; g?: unknown };
+    if (body.sub !== KNOWN_DEVICE_SUB || typeof body.exp !== "number" || body.exp <= Math.floor(Date.now() / 1000)) return null;
+    if (typeof body.n !== "string" || !/^[0-9a-f]{8,64}$/.test(body.n)) return null;
+    return { nonce: body.n, generation: typeof body.g === "number" ? body.g : 0 };
   } catch {
-    return false;
+    return null;
   }
 }
 
-export function setKnownDeviceCookie(response: NextResponse) {
-  const token = createKnownDeviceToken();
+export function verifyKnownDeviceToken(token: string | undefined): boolean {
+  return readKnownDeviceToken(token) !== null;
+}
+
+export function setKnownDeviceCookie(response: NextResponse, generation = 0) {
+  const token = createKnownDeviceToken(generation);
   if (!token) return;
   response.cookies.set(KNOWN_DEVICE_COOKIE, token, {
     httpOnly: true,
@@ -209,20 +223,19 @@ export function setKnownDeviceCookie(response: NextResponse) {
   });
 }
 
-export function isKnownDevice(request: NextRequest): boolean {
-  return verifyKnownDeviceToken(request.cookies.get(KNOWN_DEVICE_COOKIE)?.value);
+export function readKnownDevice(request: NextRequest): KnownDeviceMarker | null {
+  return readKnownDeviceToken(request.cookies.get(KNOWN_DEVICE_COOKIE)?.value);
 }
 
 export function getAuthCookie(request: NextRequest) {
   return request.cookies.get(AUTH_COOKIE_NAME)?.value;
 }
-
 export function isAuthenticatedRequest(request: NextRequest) {
   return verifyAuthToken(getAuthCookie(request));
 }
 
 /** Expand an IPv6 address to its 8 hextets, or null when it is not one. */
-function ipv6Hextets(ip: string): string[] | null {
+export function ipv6Hextets(ip: string): string[] | null {
   const bare = ip.replace(/^\[|\]$/g, "").split("%")[0];
   if (!bare.includes(":")) return null;
   const halves = bare.split("::");

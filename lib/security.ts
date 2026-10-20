@@ -96,6 +96,37 @@ export function canRewriteHashes(): boolean {
   return isProduction() && (process.env.APP_AUTH_SECRET?.trim().length ?? 0) >= MIN_SECRET_LENGTH;
 }
 
+function databaseIsLocal(): boolean {
+  try {
+    const host = new URL((process.env.DATABASE_URL ?? "").trim()).hostname.replace(/^\[|\]$/g, "");
+    return host === "127.0.0.1" || host === "localhost" || host === "::1" || host.endsWith(".localhost");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Before writing a NEW hash — minting a session, rotating a refresh token,
+ * storing a PIN (review, 2026-10-20). Production already demands the secret.
+ * A development server without an explicit APP_AUTH_SECRET derives its keys
+ * from APP_PIN; pointed at a NON-local database (the main checkout's
+ * .env.local is production) it would write rows only it can read — a phone
+ * refreshed there was signed out of production. So: refuse, by name.
+ */
+export function assertHashWritesAllowed(): void {
+  if (isProduction()) {
+    getAppSecret();
+    return;
+  }
+  const explicit = (process.env.APP_AUTH_SECRET?.trim().length ?? 0) >= MIN_SECRET_LENGTH;
+  if (!explicit && !databaseIsLocal()) {
+    throw new MissingSecretError(
+      "APP_AUTH_SECRET",
+      "required before a development server writes keys to a non-local database (it would write them under a key production does not have)"
+    );
+  }
+}
+
 /** Hash generation written by the current code (see DeviceSession.keyVersion). */
 export const CURRENT_KEY_VERSION = 2;
 

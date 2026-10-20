@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { canRewriteHashes, checkPinHash, CURRENT_KEY_VERSION, hashPin, isLegacyPinHash, pinMarker } from "@/lib/security";
+import { assertHashWritesAllowed, canRewriteHashes, checkPinHash, CURRENT_KEY_VERSION, hashPin, isLegacyPinHash, pinMarker } from "@/lib/security";
 
 // The ONE place the PIN lives (SEC-004/SEC-065, 2026-10): `auth_credentials`
 // (scrypt, salted, peppered) — for the web login AND device pairing. APP_PIN
@@ -58,6 +58,7 @@ export async function pinConfigured(): Promise<boolean> {
 
 /** Write (or overwrite) the stored PIN in the current hash format. */
 export async function ensurePinCredential(pin: string, extra: { resetConsumedFor?: string } = {}) {
+  assertHashWritesAllowed();
   const pinHash = hashPin(pin);
   const data = { pinHash, keyVersion: CURRENT_KEY_VERSION, ...extra };
   return prisma.authCredential.upsert({

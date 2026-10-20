@@ -49,6 +49,11 @@ describe("isPrivateAddress", () => {
     }
     for (const a of ["160.79.104.10", "8.8.8.8", "2607:6bc0::10"]) expect(isPrivateAddress(a), a).toBe(false);
   });
+  it("also knows the forms the second-pass review found missing", () => {
+    for (const a of ["::ffff:7f00:1", "64:ff9b::a00:1", "64:ff9b:1::1", "2002:a00:1::1", "fec0::1", "2001:0:4136:e378::1", "2001:db8::1"]) {
+      expect(isPrivateAddress(a), a).toBe(true);
+    }
+  });
 });
 
 describe("resolving before fetching", () => {
