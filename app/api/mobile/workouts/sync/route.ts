@@ -29,35 +29,19 @@ import {
   type RoutineCoda,
 } from "@/lib/mobile-summary";
 import { getUserTimeZone } from "@/lib/server-timezone";
+import { readJsonCapped } from "@/lib/request-body";
+import {
+  errorCode,
+  isItemDataError,
+  sanitizeSyncItem,
+  SYNC_LIMITS,
+  type ItemIssue,
+  type SanitizedSyncItem,
+} from "@/lib/workout-sync-limits";
 
 // A cold start plus a multi-item queue drain can outlive the 10s default —
 // which the watch experienced as "tapped Save, nothing happened".
 export const maxDuration = 60;
-
-type MobileWorkoutPayload = {
-  externalId?: string;
-  externalSource?: string;
-  startedAt?: string;
-  endedAt?: string | null;
-  durationMinutes?: number;
-  workoutType?: string;
-  description?: string | null;
-  caloriesBurned?: number | null;
-  distanceMeters?: number | null;
-  stepCount?: number | null;
-  avgHeartRateBpm?: number | null;
-  maxHeartRateBpm?: number | null;
-  elevationGainM?: number | null;
-  routeData?: Prisma.InputJsonValue;
-  metricsData?: Prisma.InputJsonValue;
-  exercises?: Prisma.InputJsonValue;
-  source?: string;
-  syncStatus?: string;
-  deviceType?: string | null;
-  // Additive (2026-08-28, §Trails): set when the session was started from a
-  // saved trail on the wrist.
-  trailId?: string;
-};
 
 /** A watch item that carries a per-entry log (voice or taps). */
 function hasSetLog(metricsData: unknown): boolean {
@@ -68,12 +52,6 @@ function hasSetLog(metricsData: unknown): boolean {
   );
 }
 
-function toNullableNumber(value: unknown) {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 export async function POST(request: NextRequest) {
   try {
     const session = await requireMobileSession(request);
@@ -81,17 +59,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const items: MobileWorkoutPayload[] = Array.isArray(body.items)
-      ? body.items
-      : [];
+    // Bounded read (SEC-024): the platform's own ~4.5 MB limit, matched here
+    // so a local or self-hosted run is bounded the same way.
+    const read = await readJsonCapped(request, SYNC_LIMITS.maxBodyBytes);
+    if (!read.ok) {
+      return NextResponse.json({ error: read.error }, { status: read.status });
+    }
+    const body = (read.value && typeof read.value === "object" ? read.value : {}) as { items?: unknown };
+    const rawItems: unknown[] = Array.isArray(body.items) ? body.items : [];
 
-    if (items.length === 0) {
+    if (rawItems.length === 0) {
       return NextResponse.json(
         { error: "Workout items are required" },
         { status: 400 }
       );
     }
+
+    // Per-item report (additive, SEC-024). The watch removes every pending
+    // item on any 2xx, so the rule is: trim and keep wherever possible,
+    // report every change, and NEVER fail the whole batch for one item.
+    const itemIssues: ItemIssue[] = [];
+    const idOf = (raw: unknown) =>
+      raw && typeof raw === "object" && typeof (raw as { externalId?: unknown }).externalId === "string"
+        ? ((raw as { externalId: string }).externalId.slice(0, SYNC_LIMITS.strings.externalId))
+        : null;
+    rawItems.slice(SYNC_LIMITS.maxItems).forEach((raw, k) => {
+      itemIssues.push({ index: SYNC_LIMITS.maxItems + k, externalId: idOf(raw), action: "rejected", reasons: ["batch_limit"] });
+    });
+    const items: Array<SanitizedSyncItem & { index: number }> = [];
+    rawItems.slice(0, SYNC_LIMITS.maxItems).forEach((raw, index) => {
+      const clean = sanitizeSyncItem(raw);
+      if (!clean) {
+        itemIssues.push({ index, externalId: null, action: "rejected", reasons: ["not_an_object"] });
+        return;
+      }
+      items.push({ ...clean, index });
+    });
 
     // Custom movements must be in the index before any row is given an id.
     if (items.some((i) => hasSetLog(i.metricsData))) {
@@ -158,9 +161,9 @@ export async function POST(request: NextRequest) {
     // the insert loop instead of extending the watch's wait afterwards.
     const routineRun = items
       .map((item) => ({
-        sequenceId: (item.metricsData as { sequenceId?: string } | undefined)
+        sequenceId: (item.metricsData as { sequenceId?: string } | null)
           ?.sequenceId,
-        startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
+        startedAt: item.startedAt,
       }))
       .filter(
         (r): r is { sequenceId: string; startedAt: Date } =>
@@ -185,7 +188,7 @@ export async function POST(request: NextRequest) {
     const requestedTrailIds = [
       ...new Set(
         items
-          .map((i) => (typeof i.trailId === "string" ? i.trailId.trim() : ""))
+          .map((i) => i.trailId ?? "")
           .filter(Boolean)
       ),
     ];
@@ -200,20 +203,66 @@ export async function POST(request: NextRequest) {
         : []
     );
 
-    for (const item of items) {
-      const externalSource =
-        typeof item.externalSource === "string" && item.externalSource.trim().length > 0
-          ? item.externalSource.trim()
-          : "app_watch";
-      const externalId =
-        typeof item.externalId === "string" && item.externalId.trim().length > 0
-          ? item.externalId.trim()
+    // One row, written the dedupe-safe way. Returns what was finally stored
+    // (a re-send is merged with edits made on the phone since).
+    const writeRow = async (
+      data: Prisma.WorkoutLogUncheckedCreateInput & {
+        exercises: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+        metricsData: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+      },
+      externalSource: string,
+      externalId: string | null
+    ) => {
+      if (!externalId) {
+        const entry = await prisma.workoutLog.create({ data });
+        return { id: entry.id, created: true, exercises: data.exercises, metricsData: data.metricsData };
+      }
+      // Atomicity lives in the DB: (externalSource, externalId) is unique,
+      // so a raced or retried POST loses the create and lands as an update.
+      // The find-then-create this replaces let two in-flight queue drains
+      // both see "not found" and both insert.
+      try {
+        const entry = await prisma.workoutLog.create({ data });
+        return { id: entry.id, created: true, exercises: data.exercises, metricsData: data.metricsData };
+      } catch (error) {
+        const isDup =
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002";
+        if (!isDup) throw error;
+        // A re-send must not undo what was fixed on the phone since the
+        // first one — lib/workout-resync.ts holds the rule.
+        const where = { externalSource_externalId: { externalSource, externalId } };
+        const prior = await prisma.workoutLog.findUnique({
+          where,
+          select: { exercises: true, metricsData: true, description: true },
+        });
+        const merged = prior
+          ? mergeResync(prior, {
+              exercises: data.exercises === Prisma.JsonNull ? null : data.exercises,
+              metricsData: data.metricsData === Prisma.JsonNull ? null : data.metricsData,
+              description: data.description ?? null,
+            })
           : null;
+        const finalExercises = merged
+          ? ((merged.exercises as Prisma.InputJsonValue | null) ?? Prisma.JsonNull)
+          : data.exercises;
+        const finalMetrics = merged
+          ? ((merged.metricsData as Prisma.InputJsonValue | null) ?? Prisma.JsonNull)
+          : data.metricsData;
+        const entry = await prisma.workoutLog.update({
+          where,
+          data: merged
+            ? { ...data, description: merged.description, exercises: finalExercises, metricsData: finalMetrics }
+            : data,
+        });
+        return { id: entry.id, created: false, exercises: finalExercises, metricsData: finalMetrics };
+      }
+    };
 
-      const workoutType =
-        typeof item.workoutType === "string" && item.workoutType.trim().length > 0
-          ? item.workoutType.trim()
-          : "other";
+    for (const item of items) {
+      const { externalSource, externalId, workoutType } = item;
+      const notes = [...item.notes];
+
       // GPS trails only ride genuinely outdoor types — pre-2026-08-28 watch
       // builds could attach a stale tracker buffer to stationary sessions.
       // Strip, never reject: a sync must not lose a workout.
@@ -223,130 +272,105 @@ export async function POST(request: NextRequest) {
         routeAllowed && item.routeData && typeof item.routeData === "object"
           ? (item.routeData as { points?: unknown }).points
           : null;
-      const routeAnalytics = Array.isArray(routePoints)
-        ? analyzeRoute(routePoints as RoutePointIn[], {
-            authoritativeMeters: toNullableNumber(item.distanceMeters),
-          })
-        : null;
+      // Analytics are derived, never essential: a malformed stream or route
+      // costs the derived numbers, not the session.
+      let routeAnalytics: RouteAnalytics | null = null;
+      try {
+        routeAnalytics = Array.isArray(routePoints)
+          ? analyzeRoute(routePoints as RoutePointIn[], {
+              authoritativeMeters: item.distanceMeters,
+            })
+          : null;
+      } catch {
+        notes.push("routeAnalytics:skipped");
+      }
+      let metrics: Prisma.InputJsonValue | undefined;
+      try {
+        metrics = enrichMetrics((item.metricsData ?? undefined) as Prisma.InputJsonValue | undefined, workoutType);
+      } catch {
+        notes.push("streamMetrics:skipped");
+        metrics = (item.metricsData ?? undefined) as Prisma.InputJsonValue | undefined;
+      }
 
       const data = {
-        startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
-        endedAt: item.endedAt ? new Date(item.endedAt) : null,
-        durationMinutes: Math.max(0, Number(item.durationMinutes || 0)),
+        startedAt: item.startedAt,
+        endedAt: item.endedAt,
+        durationMinutes: item.durationMinutes,
         workoutType,
-        description:
-          typeof item.description === "string" ? item.description : null,
-        caloriesBurned: toNullableNumber(item.caloriesBurned),
-        distanceMeters: toNullableNumber(item.distanceMeters),
-        stepCount:
-          item.stepCount === undefined || item.stepCount === null
-            ? null
-            : Math.round(Number(item.stepCount)),
-        avgHeartRateBpm:
-          item.avgHeartRateBpm === undefined || item.avgHeartRateBpm === null
-            ? null
-            : Math.round(Number(item.avgHeartRateBpm)),
-        maxHeartRateBpm:
-          item.maxHeartRateBpm === undefined || item.maxHeartRateBpm === null
-            ? null
-            : Math.round(Number(item.maxHeartRateBpm)),
-        elevationGainM: toNullableNumber(item.elevationGainM),
+        description: item.description,
+        caloriesBurned: item.caloriesBurned,
+        distanceMeters: item.distanceMeters,
+        stepCount: item.stepCount,
+        avgHeartRateBpm: item.avgHeartRateBpm,
+        maxHeartRateBpm: item.maxHeartRateBpm,
+        elevationGainM: item.elevationGainM,
         // DbNull (SQL NULL), not JsonNull: a JSON-level null made every
         // "routeData IS NOT NULL" audit lie.
         routeData:
           item.routeData != null && routeAllowed
-            ? item.routeData
+            ? (item.routeData as Prisma.InputJsonValue)
             : Prisma.DbNull,
         metricsData:
-          withRouteAnalytics(
-            enrichMetrics(item.metricsData, workoutType),
-            routeAnalytics
-          ) ?? Prisma.JsonNull,
+          withRouteAnalytics(metrics, routeAnalytics) ?? Prisma.JsonNull,
         // Voice-logged rows arrive named by the server's own parser; the id
         // is added where it is missing so they are findable like edited rows.
         exercises: hasSetLog(item.metricsData)
           ? ((withCanonicalIds(item.exercises) as Prisma.InputJsonValue | undefined) ??
             Prisma.JsonNull)
-          : (item.exercises ?? Prisma.JsonNull),
-        deviceType:
-          typeof item.deviceType === "string" && item.deviceType.trim().length > 0
-            ? item.deviceType.trim()
-            : session.deviceType,
+          : ((item.exercises as Prisma.InputJsonValue | null) ?? Prisma.JsonNull),
+        deviceType: item.deviceType ?? session.deviceType,
         externalSource,
         externalId,
-        syncStatus:
-          typeof item.syncStatus === "string" && item.syncStatus.trim().length > 0
-            ? item.syncStatus.trim()
-            : "synced",
-        source:
-          typeof item.source === "string" && item.source.trim().length > 0
-            ? item.source.trim()
-            : "mobile",
+        syncStatus: item.syncStatus ?? "synced",
+        source: item.source ?? "mobile",
         // Present only when valid, so a retry without it never clears a link.
-        ...(typeof item.trailId === "string" && validTrailIds.has(item.trailId.trim())
-          ? { trailId: item.trailId.trim() }
-          : {}),
+        ...(item.trailId && validTrailIds.has(item.trailId) ? { trailId: item.trailId } : {}),
       };
 
-      let workoutId: string;
-      if (externalId) {
-        // Atomicity lives in the DB: (externalSource, externalId) is unique,
-        // so a raced or retried POST loses the create and lands as an update.
-        // The find-then-create this replaces let two in-flight queue drains
-        // both see "not found" and both insert.
+      let stored: Awaited<ReturnType<typeof writeRow>>;
+      let action: ItemIssue["action"] | null = notes.length > 0 ? "trimmed" : null;
+      try {
+        stored = await writeRow(data, externalSource, externalId);
+      } catch (error) {
+        // Only an error about THIS item's data is handled here. The database
+        // being unreachable (or anything unknown) fails the request with 500
+        // so the watch keeps its whole queue and retries — a 200 that marked
+        // every item rejected would make it drop them all.
+        if (!isItemDataError(error)) throw error;
+        notes.push(`db:${errorCode(error)}`);
+        // Keep the session with only its scalar facts; the heavy JSON that
+        // the database refused is what is let go, and the row says so.
+        const minimal = {
+          ...data,
+          routeData: Prisma.DbNull,
+          exercises: Prisma.JsonNull,
+          metricsData: { syncFallback: { reason: errorCode(error), notes: notes.slice(0, 20) } } as Prisma.InputJsonValue,
+          description: data.description ? data.description.slice(0, 2_000) : null,
+        };
+        delete (minimal as { trailId?: string }).trailId;
         try {
-          const entry = await prisma.workoutLog.create({ data });
-          created++;
-          workoutId = entry.id;
-        } catch (error) {
-          const isDup =
-            error instanceof Prisma.PrismaClientKnownRequestError &&
-            error.code === "P2002";
-          if (!isDup) throw error;
-          // A re-send must not undo what was fixed on the phone since the
-          // first one — lib/workout-resync.ts holds the rule.
-          const where = { externalSource_externalId: { externalSource, externalId } };
-          const prior = await prisma.workoutLog.findUnique({
-            where,
-            select: { exercises: true, metricsData: true, description: true },
-          });
-          const merged = prior
-            ? mergeResync(prior, {
-                exercises: data.exercises === Prisma.JsonNull ? null : data.exercises,
-                metricsData: data.metricsData === Prisma.JsonNull ? null : data.metricsData,
-                description: data.description,
-              })
-            : null;
-          const entry = await prisma.workoutLog.update({
-            where,
-            data: merged
-              ? {
-                  ...data,
-                  description: merged.description,
-                  exercises:
-                    (merged.exercises as Prisma.InputJsonValue | null) ?? Prisma.JsonNull,
-                  metricsData:
-                    (merged.metricsData as Prisma.InputJsonValue | null) ?? Prisma.JsonNull,
-                }
-              : data,
-          });
-          if (merged) {
-            data.exercises =
-              (merged.exercises as Prisma.InputJsonValue | null) ?? Prisma.JsonNull;
-            data.metricsData =
-              (merged.metricsData as Prisma.InputJsonValue | null) ?? Prisma.JsonNull;
-          }
-          updated++;
-          workoutId = entry.id;
+          stored = await writeRow(minimal, externalSource, externalId);
+          action = "stored_minimal";
+        } catch (fallbackError) {
+          if (!isItemDataError(fallbackError)) throw fallbackError;
+          notes.push(`db:${errorCode(fallbackError)}`);
+          itemIssues.push({ index: item.index, externalId, action: "rejected", reasons: notes });
+          console.warn(`[sync] item ${item.index} (${externalId ?? "no id"}) rejected: ${notes.join(", ")}`);
+          continue;
         }
-      } else {
-        const entry = await prisma.workoutLog.create({ data });
-        created++;
-        workoutId = entry.id;
+      }
+      if (stored.created) created++;
+      else updated++;
+      const workoutId = stored.id;
+      if (action) {
+        itemIssues.push({ index: item.index, externalId, action, reasons: notes });
+        if (action === "stored_minimal") {
+          console.warn(`[sync] item ${item.index} (${externalId ?? "no id"}) stored minimal: ${notes.join(", ")}`);
+        }
       }
 
       // The session's voice clips get tied to the row they ended up on.
-      const savedLog = (data.metricsData as { setLog?: unknown } | null)?.setLog;
+      const savedLog = (stored.metricsData as { setLog?: unknown } | null)?.setLog;
       if (isSetLog(savedLog)) {
         voiceLogs.push({ workoutLogId: workoutId, externalId, setLog: savedLog });
       }
@@ -356,10 +380,10 @@ export async function POST(request: NextRequest) {
       try {
         const newPRs = await detectAndRecordPRs({
           workoutLogId: workoutId,
-          exercises: data.exercises === Prisma.JsonNull ? null : data.exercises,
+          exercises: stored.exercises === Prisma.JsonNull ? null : stored.exercises,
           achievedAt: data.startedAt,
           workoutType,
-          metricsData: data.metricsData === Prisma.JsonNull ? null : data.metricsData,
+          metricsData: stored.metricsData === Prisma.JsonNull ? null : stored.metricsData,
         });
         if (newPRs.length > 0) prResults.push({ externalId, newPRs });
       } catch (error) {
@@ -377,9 +401,9 @@ export async function POST(request: NextRequest) {
     // celebration push. Neither may tax the watch's wait or fail the sync.
     const newestSaved = items
       .map((item) => ({
-        startedAt: item.startedAt ? new Date(item.startedAt) : new Date(),
+        startedAt: item.startedAt,
         sequenceId:
-          (item.metricsData as { sequenceId?: string } | undefined)?.sequenceId ??
+          (item.metricsData as { sequenceId?: string } | null)?.sequenceId ??
           null,
       }))
       .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
@@ -440,10 +464,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       created,
       updated,
-      total: items.length,
+      total: rawItems.length,
       // Additive (2026-08-28): items whose routeData was dropped because the
       // workoutType can't legitimately carry a GPS trail.
       strippedRoutes,
+      // Additive (2026-10, SEC-024): every item that was trimmed, stored in a
+      // minimal form, or not stored — with why. Older watch builds ignore it
+      // (their decoder skips unknown keys, as it already does strippedRoutes).
+      itemIssues: itemIssues.sort((a, b) => a.index - b.index),
       prs: prResults,
       summary,
       routine,

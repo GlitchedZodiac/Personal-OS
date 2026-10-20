@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { toFile } from "openai";
 import { requireMobileSession } from "@/lib/mobile-session";
+import { capString } from "@/lib/request-body";
 import {
   openai,
   hasOpenAIKey,
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
       /** Session context: { workoutId, t, kind, build, bells, previous }. */
       context?: unknown;
     };
-    const entryId = typeof body.entryId === "string" ? body.entryId : null;
+    const entryId = capString(body.entryId, 120);
     const context = readVoiceContext(body.context);
     const parseOptions = {
       defaultVestKg: DEFAULT_VEST_KG,
@@ -101,7 +102,8 @@ export async function POST(request: NextRequest) {
       ...(context.previous ? { previous: context.previous as unknown as VoicePrevious } : {}),
     };
 
-    let transcript = typeof body.transcript === "string" ? body.transcript.trim() : "";
+    // A spoken entry is a sentence; 2,000 characters is generous (SEC-025).
+    let transcript = typeof body.transcript === "string" ? body.transcript.trim().slice(0, 2_000) : "";
     let transcribeMs = 0;
     let audioSeconds: number | null = null;
     let clipAudio: { bytes: Buffer; mime: string } | null = null;
@@ -111,6 +113,11 @@ export async function POST(request: NextRequest) {
       if (typeof body.audioBase64 !== "string" || body.audioBase64.length < 200) {
         return NextResponse.json({ error: "No audio" }, { status: 400 });
       }
+      // Check the ENCODED length first (SEC-023): decoding an oversized
+      // string just to measure it would hold both copies in memory.
+      if (body.audioBase64.length > Math.ceil(MAX_AUDIO_BYTES / 3) * 4 + 4) {
+        return NextResponse.json({ error: "Clip too long" }, { status: 413 });
+      }
       const audio = Buffer.from(body.audioBase64, "base64");
       if (audio.length > MAX_AUDIO_BYTES) {
         return NextResponse.json({ error: "Clip too long" }, { status: 413 });
@@ -119,7 +126,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Transcription unavailable" }, { status: 503 });
       }
       await ensureUserExercisesLoaded();
-      const mime = typeof body.mime === "string" ? body.mime : "audio/m4a";
+      const givenMime = capString(body.mime, 60);
+      const mime = givenMime && givenMime.startsWith("audio/") ? givenMime : "audio/m4a";
       clipAudio = { bytes: audio, mime };
       const file = await toFile(audio, "entry.m4a", { type: mime });
       const t0 = Date.now();

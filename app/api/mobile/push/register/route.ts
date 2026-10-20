@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireMobileSession } from "@/lib/mobile-session";
+import { capString } from "@/lib/request-body";
 import { prisma } from "@/lib/prisma";
 
 // POST — the companion registers its APNs device token so reminders can
@@ -33,14 +34,9 @@ export async function POST(request: NextRequest) {
     }
 
     const environment = body.environment === "sandbox" ? "sandbox" : "production";
-    const platform =
-      typeof body.platform === "string" && body.platform.trim()
-        ? body.platform.trim()
-        : "ios";
-    const bundleId =
-      typeof body.bundleId === "string" && body.bundleId.trim()
-        ? body.bundleId.trim()
-        : null;
+    // Bounded (audit 2026-10, SEC-025).
+    const platform = capString(body.platform, 40) ?? "ios";
+    const bundleId = capString(body.bundleId, 200);
 
     const device = await prisma.pushDevice.upsert({
       where: { token },

@@ -6,6 +6,18 @@ import { prisma } from "@/lib/prisma";
 import type { IncomingBodySample } from "@/lib/body-measurements";
 import { ingestBodySamples } from "@/lib/body-ingest";
 import { renphoSyncEnabled, runRenphoSync } from "@/lib/renpho-sync";
+import { capString, readJsonCapped } from "@/lib/request-body";
+
+// Bounds (audit 2026-10, SEC-025). The companion sends one day: a few
+// hundred bytes plus a handful of weigh-ins. The caps sit far above that.
+const MAX_BODY_BYTES = 1_000_000;
+const MAX_WEIGHT_SAMPLES = 500;
+const MAX_RAW_PAYLOAD_BYTES = 64_000;
+// "yyyy-MM-dd" from a DateFormatter that follows the device's calendar and
+// numbering system — any digits, fixed shape.
+const LOCAL_DATE = /^\p{Nd}{4}-\p{Nd}{2}-\p{Nd}{2}$/u;
+// An IANA identifier (TimeZone.current.identifier): "America/Bogota", "Etc/GMT+5".
+const TIME_ZONE = /^[A-Za-z0-9_+\-/]{1,64}$/;
 
 // POST — the companion's daily HealthKit push (steps, resting HR, active
 // energy, distance, sleep, HRV) plus optional bodyMass samples.
@@ -39,19 +51,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const read = await readJsonCapped(request, MAX_BODY_BYTES);
+    if (!read.ok) return NextResponse.json({ error: read.error }, { status: read.status });
+    const body = (read.value && typeof read.value === "object" ? read.value : {}) as Record<string, unknown>;
     const localDate =
       typeof body.localDate === "string" ? body.localDate.trim() : "";
     const timeZone =
       typeof body.timeZone === "string" ? body.timeZone.trim() : "";
-    const source =
-      typeof body.source === "string" && body.source.trim().length > 0
-        ? body.source.trim()
-        : "apple_health";
+    const source = capString(body.source, 40) ?? "apple_health";
 
     if (!localDate || !timeZone) {
       return NextResponse.json(
         { error: "localDate and timeZone are required" },
+        { status: 400 }
+      );
+    }
+    // They form the row's unique key, so they are checked, not trimmed.
+    if (!LOCAL_DATE.test(localDate) || !TIME_ZONE.test(timeZone)) {
+      return NextResponse.json(
+        { error: "localDate must be yyyy-MM-dd and timeZone an IANA identifier" },
         { status: 400 }
       );
     }
@@ -67,6 +85,12 @@ export async function POST(request: NextRequest) {
     ) as Record<string, unknown>;
     const field = (key: string) =>
       body[key] !== undefined && body[key] !== null ? body[key] : nested[key];
+
+    const rawPayloadBytes = body.rawData == null ? 0 : Buffer.byteLength(JSON.stringify(body.rawData), "utf8");
+    const rawPayload =
+      rawPayloadBytes > MAX_RAW_PAYLOAD_BYTES
+        ? { trimmed: true, bytes: rawPayloadBytes }
+        : ((body.rawData ?? null) as object | null);
 
     const metrics = {
       steps: Math.max(0, int(body.steps) ?? 0),
@@ -84,7 +108,8 @@ export async function POST(request: NextRequest) {
       spo2Pct: num(field("spo2Pct")),
       rawData: {
         deviceSessionId: session.id,
-        payload: body.rawData ?? null,
+        // A diagnostic copy; over budget it is summarised, not stored.
+        payload: rawPayload,
       },
     };
 
@@ -103,11 +128,13 @@ export async function POST(request: NextRequest) {
     });
 
     // ——— body-mass samples → body_measurements (dedup, never duplicate) ———
-    const samples: WeightSample[] = Array.isArray(body.weightSamples)
-      ? body.weightSamples
+    const allSamples: WeightSample[] = Array.isArray(body.weightSamples)
+      ? (body.weightSamples as WeightSample[])
       : num(body.weightKg) !== null
-        ? [{ measuredAt: body.weightMeasuredAt, weightKg: body.weightKg }]
+        ? [{ measuredAt: body.weightMeasuredAt, weightKg: body.weightKg } as WeightSample]
         : [];
+    // Trim, never reject: the day still lands (SEC-025).
+    const samples = allSamples.slice(0, MAX_WEIGHT_SAMPLES);
 
     // One shared helper with the backfill endpoint — merge-not-skip, one range
     // query, intra-batch collapse, and unparseable timestamps rejected rather
@@ -144,9 +171,11 @@ export async function POST(request: NextRequest) {
       weightsMerged: weights.merged,
       weightsSkipped: weights.skipped,
       weightsInvalid: weights.invalid,
+      // Additive (2026-10): samples beyond the per-request cap, not read.
+      ...(allSamples.length > samples.length ? { weightsTrimmed: allSamples.length - samples.length } : {}),
     });
   } catch (error) {
-    console.error("Daily health snapshot sync error:", error);
+    console.error("Daily health snapshot sync error:", error instanceof Error ? error.message : error);
     return NextResponse.json(
       { error: "Failed to sync daily health snapshot" },
       { status: 500 }
