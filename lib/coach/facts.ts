@@ -4,16 +4,22 @@
 // derived ones (deltas, percentages, averages, day counts), so the post-check
 // can hold the model to "every number is a fact".
 //
-// Honesty rules, per group: an empty week is a fact ("no food logged this
-// week"), never a zero that looks like data; an average always travels with
-// the count of days it was taken over; optional intakes (water, trails) with
-// nothing in them simply have no group; nothing is estimated.
+// HONESTY RULES (review round 2):
+// - A COUNT of zero is a fact ("0 sessions", "0 days with food logged") —
+//   the zero IS the honest statement. A SUM, AVERAGE or DELTA with no rows
+//   behind it is not minted at all: no "0 kcal burned" beside a session that
+//   recorded no burn, no delta between two empty weeks.
+// - An empty optional intake (water, trails) has no group.
+// - Nothing is estimated.
 //
 // COVERAGE. The Sunday-evening review runs before the week is over, so the
-// week is read through a cutoff (input.cutoff): rows after it are ignored,
-// and the previous week is cut at the same weekday and time, so a delta
-// never sets six and a half days against seven. The coverage is itself a
-// fact ("week.coverage") the model must state when it is partial.
+// week is read through a cutoff (input.cutoff), and the previous week is cut
+// at the same weekday and second. Counts of events (sessions, records, pages)
+// run to the cutoff in both weeks. AVERAGES and the day counts behind them use
+// WHOLE days only — Monday to Saturday in both weeks on a Sunday run — and the
+// partial day is shown on its own as "Sunday so far". A day that has not
+// finished is never averaged in (one 800 kcal lunch before 19:00 would turn a
+// +33 kcal/day week into −171).
 
 import { isDistanceType } from "@/lib/activities";
 import { buildWeeklyReport } from "@/lib/activity-summary";
@@ -51,7 +57,7 @@ const MAX_DATES = 14;
 const MAX_EXCERPTS = 3;
 const EXCERPT_CHARS = 160;
 const TEN_K_STEPS = 10_000;
-/** The weight trend wants at least this many weigh-ins over at least this span. */
+/** The weight trend wants at least this many weigh-in days over at least this span. */
 const TREND_MIN_POINTS = 3;
 const TREND_MIN_SPAN_DAYS = 14;
 
@@ -98,6 +104,17 @@ function labelDay(day: string): string {
   });
 }
 
+function weekdayName(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+}
+
+function localClock(t: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone })
+    .format(t)
+    .toLowerCase();
+}
+
 const typeLabel = (type: string) => type.replace(/_/g, " ");
 
 function leastSquaresSlope(xs: number[], ys: number[]): number {
@@ -122,57 +139,53 @@ interface Ctx {
   nextStart: string;
   nextEnd: string;
   targets: CoachTargets;
-  /** The instant the week is read through, and its like-for-like twin a week earlier. */
+  /** The instant the week is read through, and its twin exactly a week earlier. */
   cutoff: Date;
   prevCutoff: Date;
   cutoffDay: string;
   prevCutoffDay: string;
   complete: boolean;
+  /** The day the cutoff falls inside while the week runs — shown "so far", never averaged. */
+  partialDay: string | null;
+  /** "7:00 pm" */
+  clock: string;
   dayOf(d: Date): string;
-  /** Timestamped rows: inside the week and not after the cutoff. */
+  /** Timestamped rows: inside the week and not after the cutoff (counts of events). */
   tsInWeek(t: Date): boolean;
   tsInPrev(t: Date): boolean;
-  /** Day-keyed rows: inside the week and not after the cutoff's day. */
+  /** Day-keyed rows through the cutoff's day (counts of events). */
   dayInWeek(day: string): boolean;
-  dayInPrev(day: string): boolean;
+  /** Whole days only — what averages and their day counts use, in both weeks. */
+  fullDayInWeek(day: string): boolean;
+  fullDayInPrev(day: string): boolean;
 }
 
 const byStart = (a: { startedAt: Date }, b: { startedAt: Date }) =>
   a.startedAt.getTime() - b.startedAt.getTime();
 
+/** "Sunday so far (through 7:00 pm)" — the label of a partial day's facts. */
+const soFar = (c: Ctx) => `${weekdayName(c.partialDay as string)} so far (through ${c.clock})`;
+
 // ————— week (what the facts cover) —————
 
-function localClock(t: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone })
-    .format(t)
-    .toLowerCase();
-}
-
-function weekdayName(day: string): string {
-  const [y, m, d] = day.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
-}
-
-function coverageOf(c: Ctx, timeZone: string): WeekCoverage {
-  const daysCovered = c.complete
-    ? 7
-    : Math.min(7, Math.max(1, dateStringDiffDays(c.weekStart, c.cutoffDay) + 1));
-  const clock = localClock(c.cutoff, timeZone);
+function coverageOf(c: Ctx): WeekCoverage {
+  const fullDays = c.complete ? 7 : Math.max(0, Math.min(7, dateStringDiffDays(c.weekStart, c.cutoffDay)));
   let label: string;
   if (c.complete) {
     label = "the full week, Monday to Sunday";
   } else if (c.cutoffDay === c.weekStart) {
-    label = `Monday through ${clock}`;
+    label = `Monday through ${c.clock}`;
   } else {
     const lastFull = addDaysToDateString(c.cutoffDay, -1);
     const full = lastFull === c.weekStart ? "Monday" : `Monday to ${weekdayName(lastFull)}`;
-    label = `${full} in full, ${weekdayName(c.cutoffDay)} through ${clock}`;
+    label = `${full} in full, ${weekdayName(c.cutoffDay)} through ${c.clock}`;
   }
   return {
     complete: c.complete,
     cutoff: c.cutoff.toISOString(),
-    cutoffLocal: `${labelDay(c.cutoffDay)} · ${clock}`,
-    daysCovered,
+    cutoffLocal: `${labelDay(c.cutoffDay)} · ${c.clock}`,
+    fullDays,
+    partialDay: c.partialDay,
     label,
   };
 }
@@ -187,12 +200,15 @@ function addWeek(c: Ctx, coverage: WeekCoverage) {
     source: { table: "calendar", note: "ISO week number" },
   });
   book.add({
-    key: "week.daysCovered",
+    key: "week.fullDays",
     group: "week",
-    label: "Days of the week covered",
-    value: coverage.daysCovered,
+    label: "Whole days in the averages",
+    value: coverage.fullDays,
     unit: "days",
-    source: { table: "calendar", dates: [c.weekStart, c.cutoffDay] },
+    source: {
+      table: "calendar",
+      dates: Array.from({ length: coverage.fullDays }, (_, i) => addDaysToDateString(c.weekStart, i)),
+    },
   });
   book.add({
     key: "week.coverage",
@@ -203,7 +219,7 @@ function addWeek(c: Ctx, coverage: WeekCoverage) {
       table: "calendar",
       note: coverage.complete
         ? "the week was over when the review was written"
-        : "the previous week is compared through the same weekday and time, so deltas are like for like",
+        : "averages use whole days only, in both weeks, and the partial day is shown on its own as 'so far'; counts of sessions and records run to the same moment in both weeks",
     },
   });
 }
@@ -230,77 +246,109 @@ function addTraining(c: Ctx) {
     unit: "sessions",
     source: src(sessions),
   });
-  const prevSessions = book.add({
-    key: "training.sessions.prev",
-    group: "compare",
-    label: "Sessions trained · previous week",
-    value: prev.length,
-    unit: "sessions",
-    source: src(prev),
-  });
-  book.add({
-    key: "training.sessions.delta",
-    group: "compare",
-    label: "Sessions vs previous week",
-    value: sessions.length - prev.length,
-    unit: "sessions",
-    source: { table: "workout_logs", note: "this week minus the previous week" },
-    derivedFrom: [sessionsFact.id, prevSessions.id],
+  // Days, not sessions, are what the weekly target counts: a walk and a
+  // strength session on one day are one training day (review round 2, item 3).
+  const trainedDays = [...new Set(sessions.map((w) => c.dayOf(w.startedAt)))].sort();
+  const daysFact = book.add({
+    key: "training.days",
+    group: "training",
+    label: "Days trained",
+    value: trainedDays.length,
+    unit: "days",
+    source: { table: "workout_logs", ids: idsOf(sessions), dates: trainedDays, count: sessions.length },
   });
 
-  const lifted = sessions
-    .map((w) => ({ w, kg: sessionVolumeKg(w.exercises) }))
-    .filter((x) => x.kg > 0);
-  const volume = round(sum(lifted.map((x) => x.kg)));
-  const volumeFact = book.add({
-    key: "training.volumeKg",
-    group: "training",
-    label: "Tonnage lifted",
-    value: volume,
-    unit: "kg",
-    source: src(
-      lifted.map((x) => x.w),
-      { field: "exercises", note: "sets × reps × kg; a pair counts both bells" }
-    ),
-  });
-  const prevVolume = round(sum(prev.map((w) => sessionVolumeKg(w.exercises))));
-  const prevVolumeFact = book.add({
-    key: "training.volumeKg.prev",
-    group: "compare",
-    label: "Tonnage · previous week",
-    value: prevVolume,
-    unit: "kg",
-    source: src(prev, { field: "exercises" }),
-  });
-  if (prevVolume > 0) {
-    book.add({
-      key: "training.volumeKg.deltaPct",
+  if (prev.length > 0) {
+    const prevSessions = book.add({
+      key: "training.sessions.prev",
       group: "compare",
-      label: "Tonnage vs previous week",
-      value: pctChange(volume, prevVolume),
-      unit: "%",
-      source: { table: "workout_logs", note: "change in tonnage, this week over the previous" },
-      derivedFrom: [volumeFact.id, prevVolumeFact.id],
+      label: "Sessions trained · previous week",
+      value: prev.length,
+      unit: "sessions",
+      source: src(prev),
     });
+    if (sessions.length > 0) {
+      book.add({
+        key: "training.sessions.delta",
+        group: "compare",
+        label: "Sessions vs previous week",
+        value: sessions.length - prev.length,
+        unit: "sessions",
+        source: { table: "workout_logs", note: "this week minus the previous week, both to the same moment" },
+        derivedFrom: [sessionsFact.id, prevSessions.id],
+      });
+    }
   }
 
-  book.add({
-    key: "training.activeMinutes",
-    group: "training",
-    label: "Minutes trained",
-    value: sum(sessions.map((w) => w.durationMinutes)),
-    unit: "min",
-    source: src(sessions, { field: "durationMinutes" }),
-  });
+  const lifted = sessions.map((w) => ({ w, kg: sessionVolumeKg(w.exercises) })).filter((x) => x.kg > 0);
+  const prevLifted = prev.map((w) => ({ w, kg: sessionVolumeKg(w.exercises) })).filter((x) => x.kg > 0);
+  let volumeFact: Fact | null = null;
+  if (lifted.length > 0) {
+    volumeFact = book.add({
+      key: "training.volumeKg",
+      group: "training",
+      label: "Tonnage lifted",
+      value: round(sum(lifted.map((x) => x.kg))),
+      unit: "kg",
+      source: src(
+        lifted.map((x) => x.w),
+        { field: "exercises", note: "sets × reps × kg; a pair counts both bells" }
+      ),
+    });
+  }
+  if (prevLifted.length > 0) {
+    const prevVolumeFact = book.add({
+      key: "training.volumeKg.prev",
+      group: "compare",
+      label: "Tonnage · previous week",
+      value: round(sum(prevLifted.map((x) => x.kg))),
+      unit: "kg",
+      source: src(
+        prevLifted.map((x) => x.w),
+        { field: "exercises" }
+      ),
+    });
+    if (volumeFact) {
+      book.add({
+        key: "training.volumeKg.deltaPct",
+        group: "compare",
+        label: "Tonnage vs previous week",
+        value: pctChange(volumeFact.value as number, prevVolumeFact.value as number),
+        unit: "%",
+        source: { table: "workout_logs", note: "change in tonnage, this week over the previous" },
+        derivedFrom: [volumeFact.id, prevVolumeFact.id],
+      });
+    }
+  }
+
+  const timed = sessions.filter((w) => w.durationMinutes > 0);
+  if (timed.length > 0) {
+    book.add({
+      key: "training.activeMinutes",
+      group: "training",
+      label: "Minutes trained",
+      value: sum(timed.map((w) => w.durationMinutes)),
+      unit: "min",
+      source: src(timed, { field: "durationMinutes" }),
+    });
+  }
   const burned = sessions.filter((w) => (w.caloriesBurned ?? 0) > 0);
-  book.add({
-    key: "training.kcal",
-    group: "training",
-    label: "Training burn",
-    value: round(sum(burned.map((w) => w.caloriesBurned ?? 0))),
-    unit: "kcal",
-    source: src(burned, { field: "caloriesBurned", note: "training burn only — no BMR model" }),
-  });
+  if (burned.length > 0) {
+    const missing = sessions.length - burned.length;
+    book.add({
+      key: "training.kcal",
+      group: "training",
+      label: "Training burn",
+      // Each session rounded, then summed — exactly as the Sunday Report does,
+      // so the two screens never disagree by a calorie.
+      value: sum(burned.map((w) => Math.round(w.caloriesBurned ?? 0))),
+      unit: "kcal",
+      source: src(burned, {
+        field: "caloriesBurned",
+        note: `training burn only — no BMR model${missing > 0 ? `; ${missing} session${missing === 1 ? "" : "s"} recorded no burn` : ""}`,
+      }),
+    });
+  }
 
   const roped = sessions.filter((w) => jumpSecondsOf(w) > 0);
   if (roped.length > 0) {
@@ -316,9 +364,7 @@ function addTraining(c: Ctx) {
 
   const byType = new Map<string, WorkoutRow[]>();
   for (const w of sessions) byType.set(w.workoutType, [...(byType.get(w.workoutType) ?? []), w]);
-  const types = [...byType.entries()].sort(
-    (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0])
-  );
+  const types = [...byType.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
   for (const [type, rows] of types) {
     book.add({
       key: `training.type.${type}`,
@@ -341,14 +387,16 @@ function addTraining(c: Ctx) {
         ? m.sequenceName
         : undefined;
     const head = `${labelDay(day)} · ${typeLabel(w.workoutType)}`;
-    book.add({
-      key: `training.session.${n}.minutes`,
-      group: "training",
-      label: context ? `${head} · ${context}` : head,
-      value: w.durationMinutes,
-      unit: "min",
-      source: { table: "workout_logs", field: "durationMinutes", ids: [w.id], dates: [day] },
-    });
+    if (w.durationMinutes > 0) {
+      book.add({
+        key: `training.session.${n}.minutes`,
+        group: "training",
+        label: context ? `${head} · ${context}` : head,
+        value: w.durationMinutes,
+        unit: "min",
+        source: { table: "workout_logs", field: "durationMinutes", ids: [w.id], dates: [day] },
+      });
+    }
     if (isDistanceType(w.workoutType) && (w.distanceMeters ?? 0) > 0) {
       book.add({
         key: `training.session.${n}.km`,
@@ -372,7 +420,8 @@ function addTraining(c: Ctx) {
   });
 
   // The plan he set for THIS week, when he set one. "No plan" is a fact of
-  // its own — never "0 of 0 done".
+  // its own — never "0 of 0 done". Plan rows are sessions; days are counted
+  // separately.
   const plans = input.plans.filter((p) => p.localDate >= c.weekStart && p.localDate <= c.weekEnd);
   const planSrc = (rows: PlanRow[]): FactSource => ({
     table: "planned_workouts",
@@ -392,8 +441,16 @@ function addTraining(c: Ctx) {
     book.add({
       key: "plan.thisWeek.planned",
       group: "plan",
-      label: "Days planned",
+      label: "Planned sessions",
       value: plans.length,
+      unit: "sessions",
+      source: planSrc(plans),
+    });
+    book.add({
+      key: "plan.thisWeek.days",
+      group: "plan",
+      label: "Days with a plan",
+      value: new Set(plans.map((p) => p.localDate)).size,
       unit: "days",
       source: planSrc(plans),
     });
@@ -401,30 +458,30 @@ function addTraining(c: Ctx) {
     book.add({
       key: "plan.thisWeek.done",
       group: "plan",
-      label: "Planned days trained",
+      label: "Planned sessions trained",
       value: done.length,
-      unit: "days",
+      unit: "sessions",
       source: planSrc(done),
     });
-    // A planned day that is still ahead of the cutoff is upcoming, not missed.
+    // A planned session still ahead of the cutoff is upcoming, not missed.
     const open = plans.filter((p) => p.status === "planned");
     const missed = open.filter((p) => c.complete || p.localDate < c.cutoffDay);
     const upcoming = open.filter((p) => !c.complete && p.localDate >= c.cutoffDay);
     book.add({
       key: "plan.thisWeek.missed",
       group: "plan",
-      label: "Planned days not trained",
+      label: "Planned sessions not trained",
       value: missed.length,
-      unit: "days",
+      unit: "sessions",
       source: planSrc(missed),
     });
     if (upcoming.length > 0) {
       book.add({
         key: "plan.thisWeek.upcoming",
         group: "plan",
-        label: "Planned days still ahead this week",
+        label: "Planned sessions still ahead this week",
         value: upcoming.length,
-        unit: "days",
+        unit: "sessions",
         source: planSrc(upcoming),
       });
     }
@@ -433,9 +490,9 @@ function addTraining(c: Ctx) {
       book.add({
         key: "plan.thisWeek.skipped",
         group: "plan",
-        label: "Planned days skipped",
+        label: "Planned sessions skipped",
         value: skipped.length,
-        unit: "days",
+        unit: "sessions",
         source: planSrc(skipped),
       });
     }
@@ -451,11 +508,11 @@ function addTraining(c: Ctx) {
   book.add({
     key: "training.vsTargetDays",
     group: "training",
-    label: "Sessions vs weekly target",
-    value: sessions.length - c.targets.plannedWorkoutDays,
-    unit: "sessions",
-    source: { table: "workout_logs", note: "sessions minus the weekly target" },
-    derivedFrom: [sessionsFact.id, targetDays.id],
+    label: "Days trained vs weekly target",
+    value: trainedDays.length - c.targets.plannedWorkoutDays,
+    unit: "days",
+    source: { table: "workout_logs", note: "distinct days trained minus the weekly target" },
+    derivedFrom: [daysFact.id, targetDays.id],
   });
 
   return sessions;
@@ -486,16 +543,8 @@ function addRecords(c: Ctx) {
   recs.forEach((r, i) => {
     const n = i + 1;
     const day = c.dayOf(r.achievedAt);
-    const source: FactSource = {
-      table: "personal_records",
-      field: "value",
-      ids: [r.id],
-      dates: [day],
-    };
-    const notes: string[] = [];
-    if (r.workoutLogId) notes.push(`set in workout ${r.workoutLogId}`);
-    if (r.previousValue == null) notes.push("first record on this movement");
-    if (notes.length) source.note = notes.join("; ");
+    const source: FactSource = { table: "personal_records", field: "value", ids: [r.id], dates: [day] };
+    if (r.previousValue == null) source.note = "first record on this movement";
     book.add({
       key: `records.${n}`,
       group: "records",
@@ -524,19 +573,24 @@ function addTrails(c: Ctx, sessions: WorkoutRow[]) {
   const runs = sessions.filter((w) => w.trailId);
   if (runs.length === 0) return;
   const trail = new Map(input.trails.map((t) => [t.id, t]));
-  const prevByTrail = new Map(input.previousTrailRuns.map((w) => [w.trailId as string, w]));
+  // The run each run is compared with: the trail's last run before the week,
+  // then — for a second run in the same week — that week's earlier run.
+  const lastRun = new Map(input.previousTrailRuns.map((w) => [w.trailId as string, w]));
 
   runs.forEach((w, i) => {
     const n = i + 1;
     const day = c.dayOf(w.startedAt);
-    const name = trail.get(w.trailId as string)?.name ?? "unnamed trail";
+    const trailId = w.trailId as string;
+    const name = trail.get(trailId)?.name ?? "unnamed trail";
     const rowSrc = (row: WorkoutRow, field: string): FactSource => ({
       table: "workout_logs",
       field,
       ids: [row.id],
       dates: [c.dayOf(row.startedAt)],
-      note: `trail ${row.trailId}`,
     });
+    const prev = lastRun.get(trailId);
+    lastRun.set(trailId, w);
+
     const minutes = book.add({
       key: `trails.${n}.minutes`,
       group: "trails",
@@ -566,14 +620,13 @@ function addTrails(c: Ctx, sessions: WorkoutRow[]) {
       });
     }
 
-    const prev = prevByTrail.get(w.trailId as string);
     if (!prev) {
       book.add({
         key: `trails.${n}.prev.none`,
         group: "trails",
         label: `${name} · previous run`,
         value: "first recorded run of this trail",
-        source: { table: "workout_logs", count: 0, note: `trail ${w.trailId}` },
+        source: { table: "workout_logs", count: 0 },
       });
       return;
     }
@@ -645,8 +698,13 @@ function bucketFood(c: Ctx, rows: FoodRow[]): Map<string, DayIntake> {
 
 function addIntake(c: Ctx) {
   const { book, input, targets } = c;
-  const week = bucketFood(c, input.food.filter((f) => c.tsInWeek(f.loggedAt)));
-  const prev = bucketFood(c, input.food.filter((f) => c.tsInPrev(f.loggedAt)));
+  const inWeek = input.food.filter((f) => c.tsInWeek(f.loggedAt));
+  const week = bucketFood(c, inWeek.filter((f) => c.fullDayInWeek(c.dayOf(f.loggedAt))));
+  const prev = bucketFood(
+    c,
+    input.food.filter((f) => c.tsInPrev(f.loggedAt) && c.fullDayInPrev(c.dayOf(f.loggedAt)))
+  );
+  const partialRows = c.partialDay ? inWeek.filter((f) => c.dayOf(f.loggedAt) === c.partialDay) : [];
   const weekRows = [...week.values()].flatMap((d) => d.rows);
   const prevRows = [...prev.values()].flatMap((d) => d.rows);
   const src = (rows: FoodRow[], extra: Partial<FactSource> = {}): FactSource => ({
@@ -663,7 +721,7 @@ function addIntake(c: Ctx) {
     label: "Days with food logged",
     value: week.size,
     unit: "days",
-    source: src(weekRows),
+    source: src(weekRows, c.partialDay ? { note: `whole days only; ${soFar(c)} is shown on its own` } : {}),
   });
   const target = book.add({
     key: "intake.target",
@@ -705,11 +763,12 @@ function addIntake(c: Ctx) {
       key: "intake.none",
       group: "intake",
       label: "Food this week",
-      value: "no food logged this week",
+      value: partialRows.length > 0 ? "no food logged on the week's whole days" : "no food logged this week",
       source: { table: "food_logs", count: 0 },
     });
   } else {
     const dayValues = [...week.values()];
+    // As the Sunday Report computes it: the rounded average over logged days.
     const avgKcal = round(mean(dayValues.map((d) => d.kcal)) as number);
     avgKcalFact = book.add({
       key: "intake.avgKcal",
@@ -717,7 +776,7 @@ function addIntake(c: Ctx) {
       label: "Average intake on logged days",
       value: avgKcal,
       unit: "kcal",
-      source: src(weekRows, { field: "calories", note: "average over logged days only" }),
+      source: src(weekRows, { field: "calories", note: "average over whole logged days only" }),
     });
     book.add({
       key: "intake.avgVsTarget",
@@ -738,12 +797,12 @@ function addIntake(c: Ctx) {
       derivedFrom: [avgKcalFact.id, target.id, loggedDays.id],
     });
 
-    const avgP = round(mean(dayValues.map((d) => d.p)) as number);
+    const avgPExact = mean(dayValues.map((d) => d.p)) as number;
     avgProteinFact = book.add({
       key: "intake.avgProteinG",
       group: "intake",
       label: "Average protein on logged days",
-      value: avgP,
+      value: round(avgPExact),
       unit: "g",
       source: src(weekRows, { field: "proteinG" }),
     });
@@ -751,10 +810,11 @@ function addIntake(c: Ctx) {
       book.add({
         key: "intake.proteinPctOfTarget",
         group: "intake",
-        label: "Protein as % of target",
-        value: round((avgP / targets.proteinTargetG) * 100),
+        label: "Protein vs target (capped at 100%)",
+        // The Sunday Report's adherence: the unrounded average over the target, capped at 100.
+        value: Math.min(100, round((avgPExact / targets.proteinTargetG) * 100)),
         unit: "%",
-        source: { table: "food_logs", note: "average protein ÷ protein target" },
+        source: { table: "food_logs", note: "average protein ÷ protein target, capped at 100 — as the Sunday Report computes it" },
         derivedFrom: [avgProteinFact.id, proteinTarget.id],
       });
     }
@@ -765,12 +825,7 @@ function addIntake(c: Ctx) {
       label: "Days at or above the protein target",
       value: hit.length,
       unit: "days",
-      source: {
-        table: "food_logs",
-        field: "proteinG",
-        dates: daysOf(hit.map(([day]) => day)),
-        count: hit.length,
-      },
+      source: { table: "food_logs", field: "proteinG", dates: daysOf(hit.map(([day]) => day)), count: hit.length },
       derivedFrom: [proteinTarget.id],
     });
     book.add({
@@ -801,16 +856,36 @@ function addIntake(c: Ctx) {
     }
   }
 
-  book.add({
-    key: "intake.loggedDays.prev",
-    group: "compare",
-    label: "Days with food logged · previous week",
-    value: prev.size,
-    unit: "days",
-    source: src(prevRows),
-  });
+  if (partialRows.length > 0) {
+    const note = "the day is not over — left out of the averages";
+    book.add({
+      key: "intake.partialDay.kcal",
+      group: "intake",
+      label: `${soFar(c)} · kcal logged`,
+      value: round(sum(partialRows.map((f) => f.calories))),
+      unit: "kcal",
+      source: src(partialRows, { field: "calories", note }),
+    });
+    book.add({
+      key: "intake.partialDay.proteinG",
+      group: "intake",
+      label: `${soFar(c)} · protein`,
+      value: round(sum(partialRows.map((f) => f.proteinG))),
+      unit: "g",
+      source: src(partialRows, { field: "proteinG", note }),
+    });
+  }
+
   if (prev.size > 0) {
     const prevValues = [...prev.values()];
+    book.add({
+      key: "intake.loggedDays.prev",
+      group: "compare",
+      label: "Days with food logged · previous week",
+      value: prev.size,
+      unit: "days",
+      source: src(prevRows),
+    });
     const prevAvg = round(mean(prevValues.map((d) => d.kcal)) as number);
     const prevAvgFact = book.add({
       key: "intake.avgKcal.prev",
@@ -818,7 +893,7 @@ function addIntake(c: Ctx) {
       label: "Average intake · previous week",
       value: prevAvg,
       unit: "kcal",
-      source: src(prevRows, { field: "calories", note: "average over logged days only" }),
+      source: src(prevRows, { field: "calories", note: "average over whole logged days only" }),
     });
     if (avgKcalFact) {
       book.add({
@@ -858,17 +933,11 @@ function addIntake(c: Ctx) {
 
 function addHydration(c: Ctx) {
   const { book, input } = c;
-  const rows = input.water.filter((w) => c.tsInWeek(w.loggedAt));
+  const rows = input.water.filter((w) => c.tsInWeek(w.loggedAt) && c.fullDayInWeek(c.dayOf(w.loggedAt)));
   if (rows.length === 0) return;
   const days = daysOf(rows.map((w) => c.dayOf(w.loggedAt)));
   const total = sum(rows.map((w) => w.amountMl));
-  const src: FactSource = {
-    table: "water_logs",
-    field: "amountMl",
-    ids: idsOf(rows),
-    dates: days,
-    count: rows.length,
-  };
+  const src: FactSource = { table: "water_logs", field: "amountMl", ids: idsOf(rows), dates: days, count: rows.length };
   const daysFact = book.add({
     key: "hydration.daysLogged",
     group: "hydration",
@@ -880,7 +949,7 @@ function addHydration(c: Ctx) {
   const totalFact = book.add({
     key: "hydration.totalMl",
     group: "hydration",
-    label: "Water logged",
+    label: "Water logged, whole days",
     value: total,
     unit: "ml",
     source: src,
@@ -905,13 +974,25 @@ function fieldSourceOf(row: BodyRow, field: string): string | undefined {
   return row.source ?? undefined;
 }
 
+/** One reading per day: the day's FIRST, as lib/body-summary.ts reads a day (review round 2, item 8). */
+function firstOfDay(c: Ctx, rows: BodyRow[]): BodyRow[] {
+  const byDay = new Map<string, BodyRow>();
+  for (const r of rows) {
+    const day = c.dayOf(r.measuredAt);
+    if (!byDay.has(day)) byDay.set(day, r);
+  }
+  return [...byDay.values()];
+}
+
 function addBody(c: Ctx) {
   const { book, input } = c;
   const rows = input.body
     .filter((r) => r.weightKg != null && r.measuredAt <= c.cutoff)
     .sort((a, b) => a.measuredAt.getTime() - b.measuredAt.getTime());
-  const weekRows = rows.filter((r) => c.tsInWeek(r.measuredAt));
-  const prevRows = rows.filter((r) => c.tsInPrev(r.measuredAt));
+  const daily = firstOfDay(c, rows);
+  const weekDaily = daily.filter((r) => c.tsInWeek(r.measuredAt));
+  const prevDaily = daily.filter((r) => c.tsInPrev(r.measuredAt));
+  const weekAll = rows.filter((r) => c.tsInWeek(r.measuredAt));
   const rowSrc = (r: BodyRow, field: string): FactSource => ({
     table: "body_measurements",
     field,
@@ -921,7 +1002,7 @@ function addBody(c: Ctx) {
   });
 
   let lastFact: Fact | null = null;
-  if (weekRows.length === 0) {
+  if (weekDaily.length === 0) {
     book.add({
       key: "body.none",
       group: "body",
@@ -929,32 +1010,35 @@ function addBody(c: Ctx) {
       value: "no weigh-in this week",
       source: { table: "body_measurements", count: 0 },
     });
-    const before = rows.filter((r) => c.dayOf(r.measuredAt) < c.weekStart).at(-1);
+    // However old: the source asks for the newest weigh-in before the week.
+    const candidates = [...rows.filter((r) => c.dayOf(r.measuredAt) < c.weekStart), ...(input.lastWeighInBefore ? [input.lastWeighInBefore] : [])];
+    const before = candidates.sort((a, b) => b.measuredAt.getTime() - a.measuredAt.getTime())[0];
     if (before) {
       book.add({
         key: "body.lastWeighInDaysAgo",
         group: "body",
-        label: "Days since the last weigh-in, at week end",
-        value: dateStringDiffDays(c.dayOf(before.measuredAt), c.weekEnd),
+        label: `Days since the last weigh-in, at ${c.complete ? "week end" : labelDay(c.cutoffDay)}`,
+        value: dateStringDiffDays(c.dayOf(before.measuredAt), c.cutoffDay),
         unit: "days",
         source: rowSrc(before, "weightKg"),
       });
     }
   } else {
-    const first = weekRows[0];
-    const last = weekRows[weekRows.length - 1];
+    const first = weekDaily[0];
+    const last = weekDaily[weekDaily.length - 1];
     book.add({
       key: "body.weighIns",
       group: "body",
-      label: "Weigh-ins this week",
-      value: weekRows.length,
-      unit: "weigh-ins",
+      label: "Days with a weigh-in",
+      value: weekDaily.length,
+      unit: "days",
       source: {
         table: "body_measurements",
         field: "weightKg",
-        ids: idsOf(weekRows),
-        dates: daysOf(weekRows.map((r) => c.dayOf(r.measuredAt))),
-        count: weekRows.length,
+        ids: idsOf(weekDaily),
+        dates: daysOf(weekDaily.map((r) => c.dayOf(r.measuredAt))),
+        count: weekDaily.length,
+        note: "one reading per day — the day's first",
       },
     });
     const firstFact = book.add({
@@ -965,7 +1049,7 @@ function addBody(c: Ctx) {
       unit: "kg",
       source: rowSrc(first, "weightKg"),
     });
-    if (weekRows.length > 1) {
+    if (weekDaily.length > 1) {
       lastFact = book.add({
         key: "body.weightLast",
         group: "body",
@@ -980,14 +1064,14 @@ function addBody(c: Ctx) {
         label: "Weight change across the week",
         value: round((last.weightKg as number) - (first.weightKg as number), 1),
         unit: "kg",
-        source: { table: "body_measurements", note: "last weigh-in minus the first, this week" },
+        source: { table: "body_measurements", note: "the last weigh-in day's first reading minus the first day's" },
         derivedFrom: [firstFact.id, lastFact.id],
       });
     } else {
       lastFact = firstFact;
     }
 
-    const fat = [...weekRows].reverse().find((r) => r.bodyFatPct != null);
+    const fat = [...weekAll].reverse().find((r) => r.bodyFatPct != null);
     if (fat) {
       book.add({
         key: "body.fatPct",
@@ -998,13 +1082,11 @@ function addBody(c: Ctx) {
         source: rowSrc(fat, "bodyFatPct"),
       });
     }
-    const skm = [...weekRows]
+    const skm = [...weekAll]
       .reverse()
       .find((r) => r.skeletalMuscleKg != null || (r.skeletalMusclePct != null && r.weightKg != null));
     if (skm) {
-      const kg =
-        skm.skeletalMuscleKg ??
-        ((skm.skeletalMusclePct as number) * (skm.weightKg as number)) / 100;
+      const kg = skm.skeletalMuscleKg ?? ((skm.skeletalMusclePct as number) * (skm.weightKg as number)) / 100;
       book.add({
         key: "body.skeletalMuscleKg",
         group: "body",
@@ -1016,12 +1098,12 @@ function addBody(c: Ctx) {
     }
   }
 
-  if (rows.length >= TREND_MIN_POINTS) {
-    const firstDay = c.dayOf(rows[0].measuredAt);
-    const lastDay = c.dayOf(rows[rows.length - 1].measuredAt);
+  if (daily.length >= TREND_MIN_POINTS) {
+    const firstDay = c.dayOf(daily[0].measuredAt);
+    const lastDay = c.dayOf(daily[daily.length - 1].measuredAt);
     if (dateStringDiffDays(firstDay, lastDay) >= TREND_MIN_SPAN_DAYS) {
-      const xs = rows.map((r) => dateStringDiffDays(firstDay, c.dayOf(r.measuredAt)));
-      const ys = rows.map((r) => r.weightKg as number);
+      const xs = daily.map((r) => dateStringDiffDays(firstDay, c.dayOf(r.measuredAt)));
+      const ys = daily.map((r) => r.weightKg as number);
       book.add({
         key: "body.trendKgPerWeek",
         group: "body",
@@ -1031,17 +1113,17 @@ function addBody(c: Ctx) {
         source: {
           table: "body_measurements",
           field: "weightKg",
-          ids: idsOf(rows),
-          dates: daysOf(rows.map((r) => c.dayOf(r.measuredAt))),
-          count: rows.length,
-          note: "least-squares slope over the weigh-ins of the last 4 weeks",
+          ids: idsOf(daily),
+          dates: daysOf(daily.map((r) => c.dayOf(r.measuredAt))),
+          count: daily.length,
+          note: "least-squares slope over each day's first reading, last 4 weeks",
         },
       });
     }
   }
 
-  if (prevRows.length > 0 && lastFact) {
-    const prevLast = prevRows[prevRows.length - 1];
+  if (prevDaily.length > 0 && lastFact) {
+    const prevLast = prevDaily[prevDaily.length - 1];
     const prevFact = book.add({
       key: "body.weightLast.prev",
       group: "compare",
@@ -1065,16 +1147,39 @@ function addBody(c: Ctx) {
 // ————— recovery —————
 
 type RecoveryField = "sleepMinutes" | "hrvMs" | "restingHeartRateBpm";
+const RECOVERY_FIELDS: readonly RecoveryField[] = ["sleepMinutes", "hrvMs", "restingHeartRateBpm"];
 
-/** One row per day: the companion keys rows by date + timezone + source, so a
- *  travel day can have two. The fuller row wins; ties go to the first. */
-function pickPerDay(rows: SnapshotRow[]): Map<string, SnapshotRow> {
-  const filled = (r: SnapshotRow) =>
-    [r.sleepMinutes, r.hrvMs, r.restingHeartRateBpm].filter((v) => v != null).length;
-  const out = new Map<string, SnapshotRow>();
-  for (const r of rows) {
-    const current = out.get(r.localDate);
-    if (!current || filled(r) > filled(current)) out.set(r.localDate, r);
+interface DayRecovery {
+  value: Partial<Record<RecoveryField, number>>;
+  rowId: Partial<Record<RecoveryField, string>>;
+}
+
+/**
+ * One reading per day and per FIELD. The companion keys rows by date +
+ * timezone + source, so a travel day can have two; a sleep-only row and an
+ * HRV-only row of the same day both count. Duplicates are read in a fixed
+ * order (source, then timezone, then id), so the answer never depends on the
+ * order rows arrive in (review round 2, item 6).
+ */
+function mergePerDay(rows: SnapshotRow[]): Map<string, DayRecovery> {
+  const sorted = [...rows].sort(
+    (a, b) =>
+      a.localDate.localeCompare(b.localDate) ||
+      (a.source ?? "").localeCompare(b.source ?? "") ||
+      a.timeZone.localeCompare(b.timeZone) ||
+      a.id.localeCompare(b.id)
+  );
+  const out = new Map<string, DayRecovery>();
+  for (const r of sorted) {
+    const day = out.get(r.localDate) ?? { value: {}, rowId: {} };
+    for (const field of RECOVERY_FIELDS) {
+      const v = r[field];
+      if (v != null && day.value[field] === undefined) {
+        day.value[field] = v;
+        day.rowId[field] = r.id;
+      }
+    }
+    out.set(r.localDate, day);
   }
   return out;
 }
@@ -1090,54 +1195,25 @@ const RECOVERY_METRICS: Array<{
   countLabel: string;
   countUnit: string;
 }> = [
-  {
-    key: "sleep",
-    field: "sleepMinutes",
-    label: "Sleep",
-    unit: "h",
-    places: 1,
-    convert: (m) => m / 60,
-    countKey: "sleepNights",
-    countLabel: "Nights with sleep data",
-    countUnit: "nights",
-  },
-  {
-    key: "hrv",
-    field: "hrvMs",
-    label: "HRV",
-    unit: "ms",
-    places: 0,
-    convert: (v) => v,
-    countKey: "hrvDays",
-    countLabel: "Days with HRV",
-    countUnit: "days",
-  },
-  {
-    key: "rhr",
-    field: "restingHeartRateBpm",
-    label: "Resting heart rate",
-    unit: "bpm",
-    places: 0,
-    convert: (v) => v,
-    countKey: "rhrDays",
-    countLabel: "Days with resting heart rate",
-    countUnit: "days",
-  },
+  { key: "sleep", field: "sleepMinutes", label: "Sleep", unit: "h", places: 1, convert: (m) => m / 60, countKey: "sleepNights", countLabel: "Nights with sleep data", countUnit: "nights" },
+  { key: "hrv", field: "hrvMs", label: "HRV", unit: "ms", places: 0, convert: (v) => v, countKey: "hrvDays", countLabel: "Days with HRV", countUnit: "days" },
+  { key: "rhr", field: "restingHeartRateBpm", label: "Resting heart rate", unit: "bpm", places: 0, convert: (v) => v, countKey: "rhrDays", countLabel: "Days with resting heart rate", countUnit: "days" },
 ];
 
 function addRecovery(c: Ctx) {
   const { book, input } = c;
-  const week = pickPerDay(input.snapshots.filter((s) => c.dayInWeek(s.localDate)));
-  const prev = pickPerDay(input.snapshots.filter((s) => c.dayInPrev(s.localDate)));
+  const week = mergePerDay(input.snapshots.filter((s) => c.fullDayInWeek(s.localDate)));
+  const prev = mergePerDay(input.snapshots.filter((s) => c.fullDayInPrev(s.localDate)));
 
   for (const m of RECOVERY_METRICS) {
-    const have = [...week.values()].filter((r) => r[m.field] != null);
-    const src = (rows: SnapshotRow[]): FactSource => ({
+    const have = [...week.entries()].filter(([, d]) => d.value[m.field] !== undefined).sort(([a], [b]) => a.localeCompare(b));
+    const src = (entries: Array<[string, DayRecovery]>): FactSource => ({
       table: "daily_health_snapshots",
       field: m.field,
-      ids: idsOf(rows),
-      dates: daysOf(rows.map((r) => r.localDate)),
-      count: rows.length,
+      ids: entries.map(([, d]) => d.rowId[m.field] as string).slice(0, MAX_IDS),
+      dates: daysOf(entries.map(([day]) => day)),
+      count: entries.length,
+      ...(c.partialDay ? { note: "whole days only" } : {}),
     });
     if (have.length === 0) {
       book.add({
@@ -1149,7 +1225,7 @@ function addRecovery(c: Ctx) {
       });
       continue;
     }
-    const avg = round(m.convert(mean(have.map((r) => r[m.field] as number)) as number), m.places);
+    const avg = round(m.convert(mean(have.map(([, d]) => d.value[m.field] as number)) as number), m.places);
     const avgFact = book.add({
       key: `recovery.${m.key}Avg`,
       group: "recovery",
@@ -1166,12 +1242,9 @@ function addRecovery(c: Ctx) {
       unit: m.countUnit,
       source: src(have),
     });
-    const prevHave = [...prev.values()].filter((r) => r[m.field] != null);
+    const prevHave = [...prev.entries()].filter(([, d]) => d.value[m.field] !== undefined);
     if (prevHave.length > 0) {
-      const prevAvg = round(
-        m.convert(mean(prevHave.map((r) => r[m.field] as number)) as number),
-        m.places
-      );
+      const prevAvg = round(m.convert(mean(prevHave.map(([, d]) => d.value[m.field] as number)) as number), m.places);
       const prevFact = book.add({
         key: `recovery.${m.key}Avg.prev`,
         group: "compare",
@@ -1198,110 +1271,123 @@ function addRecovery(c: Ctx) {
 function addActivity(c: Ctx) {
   const { book, input } = c;
   const report = buildWeeklyReport(
-    input.activity.filter((r) => c.dayInWeek(r.date) || c.dayInPrev(r.date)),
+    input.activity.filter((r) => c.fullDayInWeek(r.date) || c.fullDayInPrev(r.date)),
     c.weekStart
   );
   const base: FactSource = {
     table: "daily_activity",
     note: "Apple Health days from the iPhone app or the Shortcut, filled from daily_health_snapshots where a day is missing",
   };
+  const partial = c.partialDay ? input.activity.find((r) => r.date === c.partialDay) : undefined;
+
   if (report.daysWithData === 0) {
     book.add({
       key: "activity.none",
       group: "activity",
       label: "Steps this week",
-      value: "no step data this week",
+      value: partial?.steps != null ? "no step data on the week's whole days" : "no step data this week",
       source: { ...base, count: 0 },
     });
-    return;
-  }
-  const dates = report.days.filter((d) => d.hasData).map((d) => d.date);
-  book.add({
-    key: "activity.daysArrived",
-    group: "activity",
-    label: "Days with Apple Health data",
-    value: report.daysWithData,
-    unit: "days",
-    source: { ...base, dates, count: report.daysWithData },
-  });
-  if (report.dailyAvg.steps != null) {
-    const stepsFact = book.add({
-      key: "activity.stepsAvg",
+  } else {
+    const dates = report.days.filter((d) => d.hasData).map((d) => d.date);
+    book.add({
+      key: "activity.daysArrived",
       group: "activity",
-      label: "Steps per day · average over the days that arrived",
-      value: report.dailyAvg.steps,
-      unit: "steps",
-      source: { ...base, field: "steps", dates, count: report.daysWithData },
+      label: "Days with Apple Health data",
+      value: report.daysWithData,
+      unit: "days",
+      source: { ...base, dates, count: report.daysWithData },
     });
-    if (report.totals.steps != null) {
-      book.add({
-        key: "activity.stepsTotal",
+    if (report.dailyAvg.steps != null) {
+      const stepsFact = book.add({
+        key: "activity.stepsAvg",
         group: "activity",
-        label: "Steps · days that arrived",
-        value: report.totals.steps,
+        label: "Steps per day · average over the days that arrived",
+        value: report.dailyAvg.steps,
         unit: "steps",
         source: { ...base, field: "steps", dates, count: report.daysWithData },
       });
-    }
-    const tenK = report.days.filter((d) => (d.steps ?? 0) >= TEN_K_STEPS);
-    book.add({
-      key: "activity.tenKDays",
-      group: "activity",
-      label: "Days at 10,000+ steps",
-      value: tenK.length,
-      unit: "days",
-      source: { ...base, field: "steps", dates: tenK.map((d) => d.date), count: tenK.length },
-    });
-    if (report.best) {
-      book.add({
-        key: "activity.bestDaySteps",
-        group: "activity",
-        label: `Most steps · ${labelDay(report.best.date)}`,
-        value: report.best.steps,
-        unit: "steps",
-        source: { ...base, field: "steps", dates: [report.best.date] },
-      });
-    }
-    if (report.previous.dailyAvg.steps != null) {
-      const prevFact = book.add({
-        key: "activity.stepsAvg.prev",
-        group: "compare",
-        label: "Steps per day · previous week",
-        value: report.previous.dailyAvg.steps,
-        unit: "steps",
-        source: { ...base, field: "steps", count: report.previous.daysWithData },
-      });
-      if (report.change.steps != null) {
+      if (report.totals.steps != null) {
         book.add({
-          key: "activity.stepsAvg.deltaPct",
-          group: "compare",
-          label: "Steps per day vs previous week",
-          value: report.change.steps,
-          unit: "%",
-          source: { ...base, note: "change in the daily average, this week over the previous" },
-          derivedFrom: [stepsFact.id, prevFact.id],
+          key: "activity.stepsTotal",
+          group: "activity",
+          label: "Steps · days that arrived",
+          value: report.totals.steps,
+          unit: "steps",
+          source: { ...base, field: "steps", dates, count: report.daysWithData },
         });
       }
+      const tenK = report.days.filter((d) => (d.steps ?? 0) >= TEN_K_STEPS);
+      book.add({
+        key: "activity.tenKDays",
+        group: "activity",
+        label: "Days at 10,000+ steps",
+        value: tenK.length,
+        unit: "days",
+        source: { ...base, field: "steps", dates: tenK.map((d) => d.date), count: tenK.length },
+      });
+      if (report.best) {
+        book.add({
+          key: "activity.bestDaySteps",
+          group: "activity",
+          label: `Most steps · ${labelDay(report.best.date)}`,
+          value: report.best.steps,
+          unit: "steps",
+          source: { ...base, field: "steps", dates: [report.best.date] },
+        });
+      }
+      if (report.previous.dailyAvg.steps != null) {
+        const prevFact = book.add({
+          key: "activity.stepsAvg.prev",
+          group: "compare",
+          label: "Steps per day · previous week",
+          value: report.previous.dailyAvg.steps,
+          unit: "steps",
+          source: { ...base, field: "steps", count: report.previous.daysWithData },
+        });
+        if (report.change.steps != null) {
+          book.add({
+            key: "activity.stepsAvg.deltaPct",
+            group: "compare",
+            label: "Steps per day vs previous week",
+            value: report.change.steps,
+            unit: "%",
+            source: { ...base, note: "change in the daily average, this week over the previous" },
+            derivedFrom: [stepsFact.id, prevFact.id],
+          });
+        }
+      }
+    }
+    if (report.dailyAvg.activeEnergyKcal != null) {
+      book.add({
+        key: "activity.activeKcalAvg",
+        group: "activity",
+        label: "Active calories per day · average",
+        value: report.dailyAvg.activeEnergyKcal,
+        unit: "kcal",
+        source: { ...base, field: "active_energy_kcal", dates, count: report.daysWithData },
+      });
+    }
+    if (report.dailyAvg.walkingRunningDistanceKm != null) {
+      book.add({
+        key: "activity.kmAvg",
+        group: "activity",
+        label: "Walk + run per day · average",
+        value: round(report.dailyAvg.walkingRunningDistanceKm, 1),
+        unit: "km",
+        source: { ...base, field: "walking_running_distance_km", dates, count: report.daysWithData },
+      });
     }
   }
-  if (report.dailyAvg.activeEnergyKcal != null) {
+
+  if (partial?.steps != null) {
     book.add({
-      key: "activity.activeKcalAvg",
+      key: "activity.partialDay.steps",
       group: "activity",
-      label: "Active calories per day · average",
-      value: report.dailyAvg.activeEnergyKcal,
-      unit: "kcal",
-      source: { ...base, field: "active_energy_kcal", dates, count: report.daysWithData },
-    });
-  }
-  if (report.dailyAvg.walkingRunningDistanceKm != null) {
-    book.add({
-      key: "activity.kmAvg",
-      group: "activity",
-      label: "Walk + run per day · average",
-      value: round(report.dailyAvg.walkingRunningDistanceKm, 1),
-      unit: "km",
-      source: { ...base, field: "walking_running_distance_km", dates, count: report.daysWithData },
+      label: `${soFar(c)} · steps`,
+      value: partial.steps,
+      unit: "steps",
+      source: { ...base, field: "steps", dates: [partial.date], count: 1, note: "the day is not over — left out of the averages" },
     });
   }
 }
@@ -1324,25 +1410,35 @@ function addNextWeek(c: Ctx) {
       source: { table: "planned_workouts", count: 0 },
     });
   } else {
+    const src: FactSource = {
+      table: "planned_workouts",
+      ids: idsOf(plans),
+      dates: daysOf(plans.map((p) => p.localDate)),
+      count: plans.length,
+    };
     book.add({
       key: "plan.nextWeek.planned",
       group: "plan",
-      label: "Days already planned for next week",
+      label: "Sessions already planned for next week",
       value: plans.length,
+      unit: "sessions",
+      source: src,
+    });
+    book.add({
+      key: "plan.nextWeek.days",
+      group: "plan",
+      label: "Days already planned for next week",
+      value: new Set(plans.map((p) => p.localDate)).size,
       unit: "days",
-      source: {
-        table: "planned_workouts",
-        ids: idsOf(plans),
-        dates: daysOf(plans.map((p) => p.localDate)),
-        count: plans.length,
-      },
+      source: src,
     });
     plans.forEach((p, i) => {
-      const parts = [
-        p.title,
-        p.sequenceId ? seqName.get(p.sequenceId) : undefined,
-        p.trailId ? trailName.get(p.trailId) : undefined,
-      ].filter((x): x is string => Boolean(x));
+      // "Ridge Loop", not "Ridge Loop · Ridge Loop": a routine or trail named
+      // like the plan's own title adds nothing (review round 2, item 12).
+      const parts: string[] = [];
+      for (const part of [p.title, p.sequenceId ? seqName.get(p.sequenceId) : undefined, p.trailId ? trailName.get(p.trailId) : undefined]) {
+        if (part && !parts.some((x) => x.trim().toLowerCase() === part.trim().toLowerCase())) parts.push(part);
+      }
       const value = p.targetWeightKg ? `${parts.join(" · ")} · ${p.targetWeightKg} kg` : parts.join(" · ");
       book.add({
         key: `plan.nextWeek.${i + 1}`,
@@ -1391,18 +1487,12 @@ function addJournal(c: Ctx) {
     label: "Journal pages written",
     value: pages.length,
     unit: "pages",
-    source: {
-      table: "journal_entries",
-      ids: idsOf(pages),
-      dates: daysOf(pages.map((p) => p.localDate)),
-      count: pages.length,
-    },
+    source: { table: "journal_entries", ids: idsOf(pages), dates: daysOf(pages.map((p) => p.localDate)), count: pages.length },
   });
   if (!input.options.journalExcerpts) return;
   pages.slice(0, MAX_EXCERPTS).forEach((p, i) => {
     const text = p.text.replace(/\s+/g, " ").trim();
-    const excerpt =
-      text.length > EXCERPT_CHARS ? `${text.slice(0, EXCERPT_CHARS - 1).trimEnd()}…` : text;
+    const excerpt = text.length > EXCERPT_CHARS ? `${text.slice(0, EXCERPT_CHARS - 1).trimEnd()}…` : text;
     book.add({
       key: `journal.excerpt.${i + 1}`,
       group: "journal",
@@ -1429,19 +1519,21 @@ export function buildWeekFacts(input: WeekInput): WeekFacts {
   const weekSpan = getUtcDateRangeForTimeZone(weekStart, weekEnd, timeZone);
   const prevSpan = getUtcDateRangeForTimeZone(prevStart, prevEnd, timeZone);
   const cutoff = new Date(
-    Math.min(
-      Math.max(input.cutoff.getTime(), weekSpan.rangeStart.getTime()),
-      weekSpan.rangeEnd.getTime()
-    )
+    Math.min(Math.max(input.cutoff.getTime(), weekSpan.rangeStart.getTime()), weekSpan.rangeEnd.getTime())
   );
   const complete = cutoff.getTime() >= weekSpan.rangeEnd.getTime();
   const cutoffDay = dayOf(cutoff);
   const prevCutoffDay = addDaysToDateString(cutoffDay, -7);
-  // The previous week is cut at the same local weekday and minute.
+  // The previous week is cut at the same local weekday, hour, minute, second
+  // and millisecond (review round 2, item 10).
   const parts = getZonedDateParts(cutoff, timeZone);
   const prevCutoff = complete
     ? prevSpan.rangeEnd
-    : zonedLocalDateTimeToUtc(prevCutoffDay, timeZone, parts.hour, parts.minute, 59);
+    : new Date(
+        zonedLocalDateTimeToUtc(prevCutoffDay, timeZone, parts.hour, parts.minute, parts.second).getTime() +
+          cutoff.getUTCMilliseconds()
+      );
+  const partialDay = complete ? null : cutoffDay;
 
   const book = new FactBook();
   const c: Ctx = {
@@ -1459,14 +1551,17 @@ export function buildWeekFacts(input: WeekInput): WeekFacts {
     cutoffDay,
     prevCutoffDay,
     complete,
+    partialDay,
+    clock: localClock(cutoff, timeZone),
     dayOf,
     tsInWeek: (t) => t >= weekSpan.rangeStart && t <= cutoff,
     tsInPrev: (t) => t >= prevSpan.rangeStart && t <= prevCutoff,
     dayInWeek: (day) => day >= weekStart && day <= cutoffDay,
-    dayInPrev: (day) => day >= prevStart && day <= prevCutoffDay,
+    fullDayInWeek: (day) => day >= weekStart && (complete ? day <= weekEnd : day < cutoffDay),
+    fullDayInPrev: (day) => day >= prevStart && (complete ? day <= prevEnd : day < prevCutoffDay),
   };
 
-  const coverage = coverageOf(c, timeZone);
+  const coverage = coverageOf(c);
   addWeek(c, coverage);
   const sessions = addTraining(c);
   addRecords(c);
@@ -1499,7 +1594,13 @@ export function buildWeekFacts(input: WeekInput): WeekFacts {
   };
 }
 
-/** The facts as the model sees them: provenance ids and dates stripped (they are for the chips). */
+/**
+ * The facts as the model sees them: every value, but no provenance — row ids
+ * and dates stay on the stored facts for the chips, and the routine and trail
+ * lists carry names only. On a real week that is 30–40 % fewer input tokens
+ * (21 % on the synthetic week, whose ids are short) and no UUID ever reaches
+ * the model (review round 2, item 5).
+ */
 export function factsForModel(facts: WeekFacts): ModelWeekFacts {
   const trimmed: ModelFact[] = facts.facts.map(({ source, ...rest }) => {
     const { table, field, count, note, fieldSource } = source;
@@ -1514,7 +1615,12 @@ export function factsForModel(facts: WeekFacts): ModelWeekFacts {
       },
     };
   });
-  return { ...facts, facts: trimmed };
+  return {
+    ...facts,
+    facts: trimmed,
+    routines: facts.routines.map(({ name, kind }) => ({ name, kind })),
+    trails: facts.trails.map(({ name }) => ({ name })),
+  };
 }
 
 export function factByKey(facts: WeekFacts, key: string): Fact | undefined {

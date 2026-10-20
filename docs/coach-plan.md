@@ -21,9 +21,13 @@ Volume up, protein slipped."** Tapping it opens **Today → The Coach** (the old
 "Weekly game plan" page, replaced).
 
 The review covers Monday to Saturday in full and Sunday up to the moment it
-was written, and it says so at the top ("through Sunday 7:00 pm"). Last week
-is compared up to the same moment, so "fewer sessions than last week" is
-never an artifact of Sunday night not having happened yet.
+was written, and it says so at the top ("through Sunday 7:00 pm"). Averages
+(intake, steps, sleep, heart data) use whole days only — Monday to Saturday
+in both weeks — and Sunday so far is shown on its own line ("Sunday so far:
+800 kcal"), so one Sunday lunch can never make the week's average look like
+a starving day. Counts (sessions, records) run to 7 pm in both weeks, so
+"fewer sessions than last week" is never an artifact of Sunday night not
+having happened yet.
 
 The screen is numbers first, not an essay:
 
@@ -272,35 +276,57 @@ ones**: deltas vs the previous week, percentages of target, averages, and
 post-check strict: a number in the prose either matches a fact value or is
 flagged.
 
-**Coverage (review round 1, HIGH 1).** The facts are built through a
+**Coverage (review rounds 1 and 2).** The facts are built through a
 `cutoff` — `now` while the week is running, the end of its Sunday once it is
-over. Rows after the cutoff are ignored, and the previous week is cut at the
-same weekday and minute, so a Sunday-evening delta never sets six and a half
-days against seven. A `week` group states it: `week.coverage` ("Monday to
-Saturday in full, Sunday through 7:00 pm"), `week.daysCovered`,
-`week.number`; a planned day still ahead of the cutoff is `upcoming`, not
-`missed`. The model is given `factsForModel(facts)`: the same facts with row
-ids and dates stripped (they are for the chips; at ~20 tokens a UUID they
-would double a review's cost — MEDIUM 5). Journal excerpts are facts only
-when the Coach's journal switch is on (default off — LOW 19); the page count
-always is.
+over — and the previous week is cut at the same weekday, hour, minute,
+second and millisecond. Two rules then apply:
+
+- **Counts of events** (sessions, training days, records, journal pages)
+  run to the cutoff in both weeks.
+- **Averages and the day counts behind them** (intake, protein days,
+  hydration, sleep, HRV, resting HR, steps) use **whole days only**, in both
+  weeks: on a Sunday-evening run, Monday to Saturday against Monday to
+  Saturday. The partial day is shown on its own — `intake.partialDay.kcal`,
+  `intake.partialDay.proteinG`, `activity.partialDay.steps`, labelled
+  "Sunday so far (through 7:00 pm)" — and never averaged in. (Measured on
+  the prod copy: 2 of 6 recent Sundays had food after 19:00, 17 % of Sunday
+  calories; one 800 kcal lunch before the cutoff would have turned a +33
+  kcal/day week into −171.)
+
+A `week` group states it: `week.coverage` ("Monday to Saturday in full,
+Sunday through 7:00 pm"), `week.fullDays`, `week.number`; a planned session
+still ahead of the cutoff is `upcoming`, not `missed`.
+
+**Honesty rule.** A COUNT of zero is a fact — "0 sessions" is the honest
+statement. A SUM, AVERAGE or DELTA with no rows behind it is never minted:
+no "Training burn 0 kcal" beside a session that recorded none, no delta
+between two empty weeks, no "previous week" fact when the previous week has
+no rows.
+
+**The model's copy.** `factsForModel(facts)` keeps every fact and value but
+drops provenance: row ids and dates, and the ids in the routine/trail lists
+(notes carry no ids at all). That is 30–40 % fewer input tokens on a real
+week (21 % on the synthetic week, whose ids are short) and no UUID ever
+reaches the model — tested by asserting no fixture row id appears anywhere
+in it. Journal excerpts are facts only when the Coach's journal switch is
+on (default off); the page count always is.
 
 What the facts cover (group → facts; each says "none" honestly):
 
 | Group | Facts | Source | Honest-when-empty |
 |---|---|---|---|
-| week | ISO week number, days covered, what the review covers (the cutoff, in words) | calendar | always present |
-| training | sessions, planned days, planned done/skipped, volume kg (`sessionVolumeKg`), active minutes, training kcal, jump-rope seconds, sessions by type, per-session list (date, type, minutes, kcal, trail/routine) | `workout_logs`, `planned_workouts` | 0 sessions is a fact; "no plan set" is a fact (not 0 of 0) |
+| week | ISO week number, whole days in the averages (`week.fullDays`), what the review covers (the cutoff, in words) | calendar | always present |
+| training | sessions and **distinct days trained** (the weekly target counts days), planned sessions/days done/missed/upcoming, tonnage (`sessionVolumeKg`, cites only lifting rows), minutes, training kcal (each session rounded then summed, as the Sunday Report does), jump-rope minutes, sessions by type, per-session list | `workout_logs`, `planned_workouts` | `0 sessions` / `0 days` are facts; tonnage, minutes and burn are absent when no row carries them; "no plan was set" is a fact (never "0 of 0") |
 | records | each record achieved in the week: exercise, kind, value, previous, date | `personal_records` | "no new records" |
-| trails | each named-trail run: trail, minutes, km, gain, vs the trail's previous run (both ids) | `workout_logs.trailId` + `trails` | omitted group when no linked runs |
-| intake | logged days, avg kcal on logged days, target, avg deficit, week deficit, avg protein/carbs/fat g, targets, protein days hit, per-day kcal list | `food_logs`, `user_settings` | `loggedDays = 0` → averages null, one fact "no food logged" |
-| hydration | avg ml per logged day, days logged | `water_logs` | **group omitted** (D10) |
-| body | first/last weight in week (+ids, fieldSource), delta, 4-week slope kg/week, latest fat %, latest skeletal muscle kg, days since last weigh-in | `body_measurements` | "no weigh-in this week"; composition facts only when present |
-| recovery | sleep avg h + nights with data, HRV avg + days, resting HR avg + days, each vs previous week; one row per day (the fullest of the timezone/source duplicates wins, as `mergeActivitySources` does — MEDIUM 12) | `daily_health_snapshots` | each metric states its day count; a metric with 0 days is a single "none" fact |
-| activity | steps avg + days arrived, active kcal avg, km avg, 10k days, vs previous week | `loadActivityRows()` | "no step data this week" |
-| plan | next week's rows already planned; progression suggestions (raise earned / deload due) | `planned_workouts`, `lib/progression-db.ts` | "nothing planned yet" |
+| trails | each named-trail run: trail, minutes, km, gain, vs the trail's previous run — a second run in the same week is compared with that week's first; the pre-week run is asked for per trail | `workout_logs.trailId` + `trails` | omitted group when no linked runs |
+| intake | whole days with food, avg kcal (rounded, over whole logged days), vs target, week vs target, avg protein/carbs/fat, protein vs target (unrounded average, capped at 100 — the Sunday Report's adherence), protein days hit, per-day kcal; **"Sunday so far"** kcal and protein | `food_logs`, `user_settings` | `0 days` + "no food logged"; no averages |
+| hydration | days logged, total and per-day ml over whole days | `water_logs` | **group omitted** (D10) |
+| body | days with a weigh-in, first/last weight (each day read by its FIRST reading, as `lib/body-summary.ts`), delta, 4-week slope, latest fat % and skeletal muscle (+ids, fieldSource) | `body_measurements` | "no weigh-in this week" + days since the last one, however old, counted to the cutoff |
+| recovery | sleep/HRV/resting-HR averages over whole days + their day counts, each vs previous week; a day's duplicate rows merged **per field** in a fixed order (source, timezone, id), so a sleep-only row and an HRV row of the same day both count | `daily_health_snapshots` | each metric states its day count; a metric with 0 days is a single "none" fact; the partial day is left out (its sleep often arrives the next morning) |
+| activity | steps avg over whole days that arrived, total, 10k days, best day, active kcal, km, vs previous week; **"Sunday so far"** steps | `loadActivityRows()` | "no step data this week" |
+| plan | next week's planned sessions and days (a routine or trail named like the title is not repeated); progression suggestions | `planned_workouts`, `lib/progression-db.ts` | "nothing planned yet" |
 | journal | pages written (count); up to 3 excerpts ≤ 160 chars **only when the journal switch is on** | `journal_entries` | "no journal pages this week" |
-| compare | previous-week counterparts for sessions, volume, avg kcal, protein, weight — the deltas | same tables, prior Mon–Sun | null when either side is empty |
+| compare | previous-week counterparts and their deltas | same tables, previous week cut like for like | **omitted** when either side has no rows |
 
 Pure helpers reused: `sessionVolumeKg`, `jumpSecondsOf`, `metricValue`,
 `getCoachTargets`, `mergeActivitySources`, `buildWeeklyReport` (activity),
@@ -714,7 +740,10 @@ desktop 1280×900 — the review, a fact sheet open, a move's confirm, Settings
 | D20 | Sunday Report | Untouched; the Coach links to it | Michael's call to keep it where it is |
 | D21 | Reminder timezone | `set_reminder.atLocal` is converted client-side with `zonedLocalDateTimeToUtc` in the **device's** zone (`notificationPrefs.timeZone`, Houston today) when one is known, else `settings.timeZone`; the zone is named on the card | A 7 am reminder is about where he wakes up, which is what the device reports and what quiet hours already follow (review MEDIUM 9) |
 | D22 | Journal excerpts | Off by default; a Coach switch turns quoting on; the page count is always a fact | His words becoming model context and persisting on the review is new exposure (review LOW 19) |
-| D23 | The model's copy of the facts | `factsForModel()` strips row ids and dates; the stored facts keep them for the chips | ~50 UUIDs a fact would double a review's cost (review MEDIUM 5) |
+| D23 | The model's copy of the facts | `factsForModel()` strips row ids, dates and the routine/trail ids; notes carry no ids; the stored facts keep provenance for the chips | 30–40 % fewer input tokens on a real week (21 % synthetic); no UUID reaches the model (review round 2, item 5) |
+| D25 | Counts vs sums | A count of zero is a fact; a sum, average or delta with no rows behind it is not minted | "0 sessions" is honest; "0 kcal burned" beside a session with no recorded burn is not (review round 2, item 2) |
+| D26 | The partial day | Averages and their day counts use whole days only, in both weeks; intake and steps show the partial day as "… so far"; recovery leaves it out (sleep for a night lands the next morning; HRV/RHR of a running day are partial readings) | One Sunday lunch must not move a weekly average (review round 2, item 1) |
+| D27 | The weekly training target | Compared with distinct DAYS trained, not sessions | A walk and a strength session on one day are one training day (review round 2, item 3) |
 | D24 | Plan-move guardrails at confirm | `reminders` stripped from every planned day; dates re-validated inside next week at confirm; `planWeek` gets an additive `source` so Coach plans read `source: "coach"` | The planner creates Reminder rows and deletes planned rows in every touched week; the card must show exactly what will be written (review MEDIUM 8) |
 
 ---
@@ -802,3 +831,23 @@ entry (with the "no design slice" flag); `docs/followups.md`; draft PR.
 | L16 | `isTest` + `slot` + `trigger` say one thing three ways | **Phase 2**: `kind` alone; `trigger` is cron/manual |
 | L18 | Developer words on his screen | §0 rewritten; Phase 4 copy follows it |
 | L19 | Journal excerpts persist and ride every turn; water path must be tested | **Phase 2**: excerpts behind a default-off switch (D22); the fixture has water rows and the hydration path is tested |
+
+## 10. Review round 2 (2026-10-20, of b89d28e) — what changed
+
+| # | Finding | Landed |
+|---|---|---|
+| 1 | A partial Sunday averaged as a full day (intake, steps, sleep, HRV) | Whole days only in both weeks; "Sunday so far" facts; fixture Sunday with food before and after 19:00 (D26) |
+| 2 | Zeros with no rows (tonnage/minutes/burn 0, deltas between empty sides) | Counts stay, sums/averages/deltas need rows; test pinning the zero replaced (D25) |
+| 3 | Sessions compared with a days-per-week target; plan rows labelled days | `training.days` vs the target; plan facts in sessions plus separate day counts (D27) |
+| 4 | One live review per week only half enforced | **In Phase 3 (`8fa8f34`)**: migration `20261020120000_coach_reviews_live_check` — `kind` in (live, superseded, test) and live ⇔ `liveWeekStart` = `weekStart`; proven with rolled-back inserts |
+| 5 | Row ids in notes and the envelope of the model's copy | Notes carry no ids; envelope names only; tested over every fixture row id and a UUID pattern (D23) |
+| 6 | Recovery dedupe order-dependent and lossy | Per-field merge, fixed order; Prisma source orders by date, source, timezone, id |
+| 7 | Second trail run compared with the pre-week run; shared `take` | Chained comparison within the week; one query per trail |
+| 8 | Weight change by row, not by day | Each day read by its first reading |
+| 9 | "Days since last weigh-in" lost past 28 days; counted to a future Sunday | `lastWeighInBefore` on the source; counted to the cutoff |
+| 10 | The two cutoffs differed in seconds | Same weekday, hour, minute, second and millisecond |
+| 11 | Burn off by a calorie; protein adherence uncapped and from a rounded average | Both now computed as the Sunday Report does |
+| 12 | "Ridge Loop · Ridge Loop" | A name equal to the title is not repeated |
+| 13 | Previous tonnage cited a walk | Cites lifting rows only |
+| 14 | Fixture targets equal to his | 2,500 kcal, 25/50/25, 5 days — plainly invented |
+| Docs | §0 promise and "null when empty" untrue; token claim overstated | §0, §2.1 and the groups table rewritten to the code; the claim corrected to 30–40 % real / 21 % synthetic (the Phase 2 commit message's "~half" stands uncorrected there — commits are never amended) |

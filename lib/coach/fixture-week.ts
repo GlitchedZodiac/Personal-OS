@@ -29,13 +29,16 @@ export const FIXTURE_TIME_ZONE = "America/Bogota";
 
 export type FixtureKind = "full" | "partial" | "empty";
 
-/** Protein target 2200 × 30 % ÷ 4 = 165 g; carbs 248 g; fat 61 g. */
+/**
+ * Round, plainly invented targets — not his (review round 2, item 14).
+ * Protein 2500 × 25 % ÷ 4 = 156 g; carbs 2500 × 50 % ÷ 4 = 313 g; fat 69 g.
+ */
 export const FIXTURE_SETTINGS = {
-  calorieTarget: 2200,
-  proteinPct: 30,
-  carbsPct: 45,
+  calorieTarget: 2500,
+  proteinPct: 25,
+  carbsPct: 50,
   fatPct: 25,
-  workoutGoals: { daysPerWeek: 4 },
+  workoutGoals: { daysPerWeek: 5 },
   timeZone: FIXTURE_TIME_ZONE,
 };
 
@@ -189,7 +192,9 @@ export function fixtureRows(
   ): FoodRow => ({ id, loggedAt: at(offset, hhmm), calories, proteinG, carbsG, fatG });
 
   // Day totals: Mon 2150/170 · Tue 2400/120 · Wed 1900/180 · Thu 2300/140 ·
-  // Fri 2050/175 · Sat 2600/110 · Sun none → 6 days, 2233 kcal, 149 g protein.
+  // Fri 2050/175 · Sat 2600/110 → 6 whole days, 2233 kcal, 149 g protein.
+  // Sunday: lunch at 13:00 (800 kcal) BEFORE a 19:00 review, dinner at 20:00
+  // (900 kcal) after it — the partial day must never be averaged in.
   const fullFood: FoodRow[] = [
     meal("fx-f1", 0, "07:30", 520, 35, 60, 15),
     meal("fx-f2", 0, "13:00", 850, 70, 90, 25),
@@ -209,11 +214,16 @@ export function fixtureRows(
     meal("fx-f16", 5, "08:00", 700, 30, 90, 25),
     meal("fx-f17", 5, "13:30", 1000, 40, 120, 35),
     meal("fx-f18", 5, "20:00", 900, 40, 100, 35),
-    // Previous week: 4 days, 2050 kcal and 150 g protein on average.
+    meal("fx-f19", 6, "13:00", 800, 40, 80, 30),
+    meal("fx-f20", 6, "20:00", 900, 50, 90, 35),
+    // Previous week: 4 weekdays, 2050 kcal and 150 g protein on average —
+    // plus a Sunday lunch, which a Sunday-evening review leaves out of the
+    // previous week too (like for like).
     meal("fx-pf1", -7, "12:00", 2000, 150, 200, 60),
     meal("fx-pf2", -6, "12:00", 2100, 140, 220, 65),
     meal("fx-pf3", -4, "12:00", 1950, 160, 180, 62),
     meal("fx-pf4", -2, "12:00", 2150, 150, 230, 68),
+    meal("fx-pf5", -1, "12:00", 2200, 160, 220, 70),
   ];
 
   const records: RecordRow[] = [
@@ -287,6 +297,7 @@ export function fixtureRows(
     id,
     localDate: day(offset),
     timeZone: timeZoneOfRow,
+    source: "apple_health",
     sleepMinutes,
     hrvMs,
     restingHeartRateBpm,
@@ -323,7 +334,8 @@ export function fixtureRows(
     source: "mixed",
     origin: "shortcut",
   });
-  // Six of seven days arrived: 9,775 steps a day, three days over 10k.
+  // Mon–Sat: 9,775 steps a day, three days over 10k. Sunday arrives too, but
+  // a Sunday-evening review shows it only as "so far".
   const fullActivity: ActivityRow[] = [
     activityDay(0, 8200, 480, 5.9),
     activityDay(1, 11400, 610, 8.4),
@@ -331,12 +343,14 @@ export function fixtureRows(
     activityDay(3, 10250, 560, 7.3),
     activityDay(4, 9100, 510, 6.5),
     activityDay(5, 12800, 690, 9.6),
-    // Previous week: five days, 8,000 a day.
+    activityDay(6, 4000, 250, 2.8),
+    // Previous week: five weekdays at 8,000 a day, and a Sunday.
     activityDay(-7, 7800, 450, 5.5),
     activityDay(-6, 8200, 470, 5.8),
     activityDay(-5, 7600, 440, 5.3),
     activityDay(-4, 9000, 520, 6.4),
     activityDay(-3, 7400, 430, 5.2),
+    activityDay(-1, 9000, 520, 6.4),
   ];
 
   const plan = (
@@ -443,6 +457,10 @@ export function fixtureSource(
     records: async ({ start, end }) => rows.records.filter((r) => within(r.achievedAt, start, end)),
     bodyMeasurements: async ({ start, end }) =>
       rows.body.filter((r) => within(r.measuredAt, start, end)),
+    lastWeighInBefore: async (before) =>
+      [...rows.body]
+        .filter((r) => r.weightKg != null && r.measuredAt < before)
+        .sort((a, b) => b.measuredAt.getTime() - a.measuredAt.getTime())[0] ?? null,
     snapshots: async ({ from, to }) => rows.snapshots.filter((r) => withinDays(r.localDate, from, to)),
     activityRows: async ({ from, to }) => rows.activity.filter((r) => withinDays(r.date, from, to)),
     plannedWorkouts: async ({ from, to }) =>

@@ -22,6 +22,17 @@ const WORKOUT_SELECT = {
   trailId: true,
 } as const;
 
+const BODY_SELECT = {
+  id: true,
+  measuredAt: true,
+  weightKg: true,
+  bodyFatPct: true,
+  skeletalMuscleKg: true,
+  skeletalMusclePct: true,
+  source: true,
+  fieldSources: true,
+} as const;
+
 export function prismaCoachSource(): CoachSource {
   return {
     async settings() {
@@ -70,27 +81,28 @@ export function prismaCoachSource(): CoachSource {
       return prisma.bodyMeasurement.findMany({
         where: { measuredAt: { gte: start, lte: end }, weightKg: { not: null } },
         orderBy: { measuredAt: "asc" },
-        select: {
-          id: true,
-          measuredAt: true,
-          weightKg: true,
-          bodyFatPct: true,
-          skeletalMuscleKg: true,
-          skeletalMusclePct: true,
-          source: true,
-          fieldSources: true,
-        },
+        select: BODY_SELECT,
+      });
+    },
+
+    lastWeighInBefore(before) {
+      return prisma.bodyMeasurement.findFirst({
+        where: { measuredAt: { lt: before }, weightKg: { not: null } },
+        orderBy: { measuredAt: "desc" },
+        select: BODY_SELECT,
       });
     },
 
     snapshots({ from, to }) {
       return prisma.dailyHealthSnapshot.findMany({
         where: { localDate: { gte: from, lte: to } },
-        orderBy: { localDate: "asc" },
+        // A day's duplicates (timezone, source) are merged per field in this order.
+        orderBy: [{ localDate: "asc" }, { source: "asc" }, { timeZone: "asc" }, { id: "asc" }],
         select: {
           id: true,
           localDate: true,
           timeZone: true,
+          source: true,
           sleepMinutes: true,
           hrvMs: true,
           restingHeartRateBpm: true,
@@ -134,21 +146,20 @@ export function prismaCoachSource(): CoachSource {
     },
 
     async previousTrailRuns(trailIds, before) {
-      if (trailIds.length === 0) return [];
-      const rows = await prisma.workoutLog.findMany({
-        where: { trailId: { in: trailIds }, startedAt: { lt: before } },
-        orderBy: { startedAt: "desc" },
-        take: 60,
-        select: WORKOUT_SELECT,
-      });
-      const seen = new Set<string>();
-      const latest: WorkoutRow[] = [];
-      for (const row of rows) {
-        if (!row.trailId || seen.has(row.trailId)) continue;
-        seen.add(row.trailId);
-        latest.push(row);
-      }
-      return latest;
+      // One query per trail (a week holds a handful): a shared `take` could let
+      // a much-walked trail push another out and fake a "first recorded run".
+      const rows = await Promise.all(
+        [...new Set(trailIds)].map((trailId) =>
+          prisma.workoutLog.findFirst({
+            where: { trailId, startedAt: { lt: before } },
+            orderBy: { startedAt: "desc" },
+            select: WORKOUT_SELECT,
+          })
+        )
+      );
+      const found: WorkoutRow[] = [];
+      for (const row of rows) if (row) found.push(row);
+      return found;
     },
 
     waterLogs({ start, end }) {

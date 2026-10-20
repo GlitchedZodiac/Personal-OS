@@ -40,7 +40,7 @@ export function goodReview(facts: WeekFacts) {
     moves: [
       {
         title: "Plan the strength days",
-        why: `Only ${n("plan.thisWeek.done")} planned days were trained [${f("plan.thisWeek.done").id}].`,
+        why: `Only ${n("plan.thisWeek.done")} planned sessions were trained [${f("plan.thisWeek.done").id}].`,
         cites: [],
         action: {
           kind: "plan_week",

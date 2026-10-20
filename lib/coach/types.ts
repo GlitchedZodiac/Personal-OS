@@ -96,8 +96,13 @@ export interface WeekCoverage {
   cutoff: string;
   /** "Sun, Oct 11 · 7:00 pm" — labels only. */
   cutoffLocal: string;
-  /** Calendar days of the week with any coverage, 1–7. */
-  daysCovered: number;
+  /**
+   * Whole days of the week before the cutoff, 0–7. Averages and day counts
+   * use only these, in BOTH weeks (review round 2, MUST FIX 1).
+   */
+  fullDays: number;
+  /** The day the cutoff falls inside while the week is running — shown as "… so far", never averaged. */
+  partialDay: string | null;
   /** "Monday to Saturday in full, Sunday through 7:00 pm" / "the full week, Monday to Sunday" */
   label: string;
 }
@@ -136,8 +141,11 @@ export interface ModelFactSource {
   fieldSource?: string;
 }
 export type ModelFact = Omit<Fact, "source"> & { source: ModelFactSource };
-export interface ModelWeekFacts extends Omit<WeekFacts, "facts"> {
+/** Names only: a routine's or trail's id is provenance, not evidence (review round 2, item 5). */
+export interface ModelWeekFacts extends Omit<WeekFacts, "facts" | "routines" | "trails"> {
   facts: ModelFact[];
+  routines: Array<{ name: string; kind: string }>;
+  trails: Array<{ name: string }>;
 }
 
 export interface FactsOptions {
@@ -207,6 +215,8 @@ export interface SnapshotRow {
   id: string;
   localDate: string;
   timeZone: string;
+  /** with timeZone, the deterministic order a day's duplicate rows are merged in */
+  source: string;
   sleepMinutes: number | null;
   hrvMs: number | null;
   restingHeartRateBpm: number | null;
@@ -278,13 +288,15 @@ export interface CoachSource {
   workouts(range: DateRange): Promise<WorkoutRow[]>;
   records(range: DateRange): Promise<RecordRow[]>;
   bodyMeasurements(range: DateRange): Promise<BodyRow[]>;
+  /** The newest weigh-in strictly before `before`, however old — "days since the last weigh-in". */
+  lastWeighInBefore(before: Date): Promise<BodyRow | null>;
   snapshots(days: DayRange): Promise<SnapshotRow[]>;
   /** Merged Apple Health days — lib/activity-reports.ts loadActivityRows. */
   activityRows(days: DayRange): Promise<ActivityRow[]>;
   plannedWorkouts(days: DayRange): Promise<PlanRow[]>;
   sequences(): Promise<SequenceRow[]>;
   trails(): Promise<TrailRow[]>;
-  /** The most recent run of each trail strictly before `before` (one row per trail). */
+  /** The most recent run of EACH trail strictly before `before` — asked per trail, so one busy trail cannot starve another. */
   previousTrailRuns(trailIds: string[], before: Date): Promise<WorkoutRow[]>;
   waterLogs(range: DateRange): Promise<WaterRow[]>;
   journalEntries(days: DayRange): Promise<JournalRow[]>;
@@ -309,6 +321,8 @@ export interface WeekInput {
   records: RecordRow[];
   /** Four weeks ending on weekEnd — the trend needs more than the week. */
   body: BodyRow[];
+  /** The newest weigh-in before the week, however old. */
+  lastWeighInBefore: BodyRow | null;
   snapshots: SnapshotRow[];
   activity: ActivityRow[];
   /** This week and next. */

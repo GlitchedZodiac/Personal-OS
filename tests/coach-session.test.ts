@@ -145,6 +145,7 @@ describe("what a review's chat knows", () => {
     expect(ctx.context).toContain('"id":"f1"');
     expect(ctx.context).toContain("nothing is written without his tap");
     expect(ctx.context).not.toContain('"ids"'); // provenance arrays stay on the stored facts
+    expect(ctx.context).not.toContain("fx-w1"); // and no row id rides in a note either
   });
 
   it("an ordinary chat gets nothing — and no chat id means no query at all", async () => {
