@@ -6,6 +6,16 @@ import { ChatHistoryDrawer } from "@/components/chat-history-drawer";
 import { PhotoTray } from "@/components/photo-tray";
 import { PushNudge } from "@/components/push-nudge";
 import { CameraIcon, JournalIcon, MicIcon } from "@/components/pitaya-icons";
+import {
+  FoodCardActions,
+  FoodCardBody,
+  SaveAsUsualOffer,
+  bumpFoodScale,
+  scaleFoodItems,
+  setAllFoodScales,
+  setFoodScale,
+  type FoodCardItem,
+} from "@/components/intake/food-card";
 import { HANDOFF_EVENT, takeChatHandOff, type ChatHandOff } from "@/lib/chat-handoff";
 import { isStale, normalizeGapHours, type ConversationSummary } from "@/lib/chat-history";
 import { haptic } from "@/lib/haptics";
@@ -806,28 +816,16 @@ export default function ChatPage() {
     [messages, filter]
   );
 
-  const scaledItems = (msg: ChatMsg): FoodItem[] => {
-    const items = msg.meta?.data?.items ?? [];
-    const scales = itemScales[msg.id] ?? items.map(() => 1);
-    return items.map((it, i) => {
-      const s = scales[i] ?? 1;
-      return {
-        ...it,
-        calories: Math.round(it.calories * s),
-        proteinG: Math.round(it.proteinG * s),
-        carbsG: Math.round(it.carbsG * s),
-        fatG: Math.round(it.fatG * s),
-      };
-    });
-  };
+  // The food card's arithmetic lives in components/intake/food-card.tsx (2026-10-18).
+  const scaledItems = (msg: ChatMsg): FoodItem[] =>
+    scaleFoodItems((msg.meta?.data?.items ?? []) as FoodCardItem[], itemScales[msg.id]);
 
-  const bumpScale = (msgId: string, idx: number, dir: 1 | -1, count: number) => {
-    setItemScales((prev) => {
-      const scales = [...(prev[msgId] ?? Array.from({ length: count }, () => 1))];
-      scales[idx] = Math.max(0.25, Math.round((scales[idx] + dir * 0.25) * 100) / 100);
-      return { ...prev, [msgId]: scales };
-    });
-  };
+  const bumpScale = (msgId: string, idx: number, dir: 1 | -1, count: number) =>
+    setItemScales((prev) => ({ ...prev, [msgId]: bumpFoodScale(prev[msgId], idx, dir, count) }));
+  const setAllScales = (msgId: string, count: number, factor: number) =>
+    setItemScales((prev) => ({ ...prev, [msgId]: setAllFoodScales(count, factor) }));
+  const applyLastTime = (msgId: string, idx: number, factor: number, count: number) =>
+    setItemScales((prev) => ({ ...prev, [msgId]: setFoodScale(prev[msgId], idx, factor, count) }));
 
   const confirmProposal = async (msg: ChatMsg) => {
     const kind = msg.meta?.kind;
@@ -841,7 +839,12 @@ export default function ChatPage() {
         const res = await fetch("/api/health/food/batch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items, loggedAt: new Date().toISOString() }),
+          body: JSON.stringify({
+            items,
+            loggedAt: new Date().toISOString(),
+            // 2026-10-18: the row remembers how it came in (the route defaults to "voice" otherwise)
+            source: typeof data.source === "string" ? data.source : undefined,
+          }),
         });
         if (!res.ok) throw new Error("Save failed");
         const kcal = items.reduce((s, i) => s + i.calories, 0);
@@ -1061,12 +1064,8 @@ export default function ChatPage() {
       )
       .at(-1);
     const editing = editingCard === msg.id;
+    // Totals are drawn by the food card itself (components/intake/food-card.tsx).
     const items = kind === "food" ? scaledItems(msg) : [];
-    const totalKcal = items.reduce((s, i) => s + i.calories, 0);
-    const totals = items.reduce(
-      (acc, i) => ({ p: acc.p + i.proteinG, c: acc.c + i.carbsG, f: acc.f + i.fatG }),
-      { p: 0, c: 0, f: 0 }
-    );
 
     return (
       <div
@@ -1081,70 +1080,17 @@ export default function ChatPage() {
         </div>
 
         <div className="px-3.5 pt-1">
-          {kind === "food" &&
-            items.map((it, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between border-b border-muted py-2.5"
-              >
-                <div className="min-w-0 pr-2">
-                  <p className="text-[13.5px] font-semibold text-foreground">
-                    {it.foodDescription}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {it.proteinG}P · {it.carbsG}C · {it.fatG}F
-                  </p>
-                  {/* v4: fold-matched against saved usuals server-side */}
-                  {(() => {
-                    const raw = (data.items as { usual?: { foodDescription: string } }[])?.[i];
-                    return raw?.usual ? (
-                      <p className="mt-0.5 text-[10.5px] font-semibold text-[#3E7A54]">
-                        ≈ your usual · {raw.usual.foodDescription}
-                      </p>
-                    ) : null;
-                  })()}
-                </div>
-                {editing ? (
-                  <span className="flex items-center gap-2">
-                    <button
-                      onClick={() => bumpScale(msg.id, i, -1, items.length)}
-                      className="h-[26px] w-[26px] rounded-[8px] border border-[#D9D7DC] bg-card text-[15px] leading-none text-[#8C2F51]"
-                    >
-                      −
-                    </button>
-                    <span className="min-w-8 text-center text-[13.5px] font-bold tabular-nums text-[#8C2F51]">
-                      {it.calories}
-                    </span>
-                    <button
-                      onClick={() => bumpScale(msg.id, i, 1, items.length)}
-                      className="h-[26px] w-[26px] rounded-[8px] border border-[#D9D7DC] bg-card text-[15px] leading-none text-[#8C2F51]"
-                    >
-                      +
-                    </button>
-                  </span>
-                ) : (
-                  <span className="text-[13.5px] font-semibold tabular-nums text-foreground">
-                    {it.calories}
-                  </span>
-                )}
-              </div>
-            ))}
-
-          {kind === "food" && items.length > 0 && (
-            <div className="flex items-center justify-between py-[11px]">
-              <span
-                className="text-sm font-bold text-foreground"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                Total · {totals.p}P / {totals.c}C / {totals.f}F
-              </span>
-              <span
-                className="text-[17px] font-bold tabular-nums text-foreground"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                {totalKcal.toLocaleString()} kcal
-              </span>
-            </div>
+          {kind === "food" && (
+            <FoodCardBody
+              items={(data.items ?? []) as FoodCardItem[]}
+              scales={itemScales[msg.id]}
+              editing={editing}
+              pending={status === "pending"}
+              collapsed={typeof data.collapsed === "number" ? data.collapsed : undefined}
+              onBump={(i, dir) => bumpScale(msg.id, i, dir, items.length)}
+              onSetAll={(factor) => setAllScales(msg.id, items.length, factor)}
+              onUseLastTime={(i, factor) => applyLastTime(msg.id, i, factor, items.length)}
+            />
           )}
 
           {(kind === "routine" || kind === "routine_update") && (
@@ -1437,48 +1383,13 @@ export default function ChatPage() {
                   : "Confirm"}
             </button>
             {kind === "food" && (
-              <button
-                onClick={() => setEditingCard(editing ? null : msg.id)}
-                className="tap-scale flex-1 rounded-[10px] border border-[#D9D7DC] py-[11px] text-[13px] font-semibold text-foreground"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                {editing ? "Done" : "Edit"}
-              </button>
+              <FoodCardActions
+                items={(data.items ?? []) as FoodCardItem[]}
+                editing={editing}
+                onToggleEdit={() => setEditingCard(editing ? null : msg.id)}
+                onResolve={(st) => resolveCard(msg.id, st)}
+              />
             )}
-            {/* v4: single-item card matching a saved usual — the zero-drift
-                path: log the usual's exact macros, discard the estimate */}
-            {kind === "food" &&
-              items.length === 1 &&
-              (() => {
-                const usual = (data.items as { usual?: Record<string, unknown> }[])?.[0]?.usual;
-                if (!usual) return null;
-                return (
-                  <button
-                    onClick={async () => {
-                      try {
-                        const res = await fetch("/api/health/favorites", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            ...usual,
-                            logNow: true,
-                            loggedAt: (data.items as { loggedAt?: string }[])?.[0]?.loggedAt,
-                          }),
-                        });
-                        if (!res.ok) throw new Error();
-                        await resolveCard(msg.id, "rejected");
-                        toast.success("Logged your usual — exact saved macros");
-                      } catch {
-                        toast.error("Couldn't log the usual");
-                      }
-                    }}
-                    className="flex-1 rounded-[10px] border border-[#BFDCC9] bg-[#EAF3ED] py-[11px] text-[13px] font-semibold text-[#3E7A54]"
-                    style={{ fontFamily: "var(--font-display)" }}
-                  >
-                    Log usual
-                  </button>
-                );
-              })()}
             <button
               onClick={() => resolveCard(msg.id, "rejected")}
               className="tap-scale flex-1 rounded-[10px] border border-border py-[11px] text-[13px] font-semibold text-muted-foreground"
@@ -1487,6 +1398,9 @@ export default function ChatPage() {
               Reject
             </button>
           </div>
+        )}
+        {kind === "food" && status === "pending" && (
+          <SaveAsUsualOffer items={(data.items ?? []) as FoodCardItem[]} />
         )}
         {/* design: the verdict strip arrives with fadeUp .35s — but only
             when HE just decided it, not for every old card in the thread */}

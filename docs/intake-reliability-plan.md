@@ -96,7 +96,7 @@ proteinG, carbsG, fatG, notes, source)`. No per-item provenance beyond
 | The usuals shelf is unused | `favorite_foods` has 2 rows, both label products, `usageCount` 1 each. `matchUsual` only ever sees those two. |
 | Repeats are rare as strings, common as foods | 653 distinct descriptions of 674 (3.3 % exact repeats after folding). Grouping rows by their first two words puts 137 rows (20 %) into 14 groups — but that grouping mixes real portion and recipe differences with estimate drift (the reviewer's regrouping of the same rows gave spreads anywhere from 26 % to 144 %), so it motivates measuring and proves nothing. The measurement is the harness's paired twins: the same food and portion phrased two ways. |
 | Descriptions are already consistently shaped | 97 % start with a capital, 88 % carry a portion in parentheses, 95 % contain a digit, average 53 characters, 1 trailing punctuation mark, 0 untrimmed. Normalisation is a small job; `source` is the real inconsistency. |
-| Meal type mostly follows the clock | Bogotá hours: lunch 200/226 at 10–13 h; dinner 300/333 after 17 h; snack 54/76 at 14–16 h. Off-pattern rows (16 breakfasts after 14 h, 33 dinners before 17 h) coincide with back-dated logs — 97 of 580 voice rows have `loggedAt` more than 2 minutes from `createdAt`. The code already honours a per-item `loggedAt` (`lib/food-timing.ts`: an item's own time wins, the message-level phrase only fills items without one) and the model stamps every item — but with the same time, so "eggs this morning and a sandwich at lunch" lands both at 08:00. That is a tool-description fix, not a timing-code fix. |
+| Meal type mostly follows the clock | Most rows' meal type agrees with the prompt's clock rule; the ones that do not are mostly back-dated logs (a meal told hours later). The code already honours a per-item `loggedAt` (`lib/food-timing.ts`: an item's own time wins, the message-level phrase only fills items without one) and the model stamps every item — but with the same time, so "eggs this morning and a sandwich at lunch" lands both at 08:00. That is a tool-description fix, not a timing-code fix. |
 | No confidence signal exists anywhere | The tool schema has no confidence field; the card shows a number with no hint of how sure it is. |
 | The card's only portion fix is slow | 0.25× steps per item; four taps to double a plate, no card-level fix, no "last time this was …". |
 | The input bill is mostly history and echoed reasoning, not the prompt | `ai_usage_events`: 157 chat calls averaging 9,473 input tokens (~$0.023); since 2026-10-01 the average is 15,476 input tokens / $0.035 a call. `CHAT_SYSTEM_PROMPT` is ≈ 2.7k of that and the tool schemas ≈ 2.7k (≈ 28 % together); the rest is the 12-row history and the reasoning items echoed back each loop turn. Food is the dominant proposal kind (77 of 108 saved cards). Any Phase 3 item that adds prompt text is measured against the harness's tokens-per-call column; the parked luna food lane (deferred 2026-08-29, his call) is the real cost lever and is NOT built here. |
@@ -129,7 +129,7 @@ proteinG, carbsG, fatG, notes, source)`. No per-item provenance beyond
 ### Decisions (defaults taken; his word can change any)
 
 - **D1 — no backfill of `source` (decision stands; the reason was wrong).** Proposal rows DO link to their user message — same chat, adjacent, and 83 of 86 food proposals have a user row with `meta.source` within 5 minutes; 77 of 77 saved proposals match a `food_logs` row by description and time. So ~77 rows since the chat loop ARE backfillable (chat vs voice vs photo); the other ~500 predate it and are not. Default: leave history as it is and stamp new rows correctly; the 77-row backfill is a one-off he can ask for.
-- **D2 — reconciliation: PROVISIONAL until the Phase 2 numbers.** The harness reports, per mismatched item, which side is closer to the reference. The reviewer's case for the other direction is strong for the items that matter: the model recalls kcal-per-typical-serving more reliably than macro grams of mixed dishes; 4/4/9 ignores fibre (≈ 2 kcal/g) and alcohol (7 kcal/g); the mismatch rate is 5.9 % for voice rows, 3.0 % mcp, 21.6 % photo (n = 18). Likely landing: the MODEL reconciles (a schema rule plus confidence), the deterministic check stays as a FLAG on the card, the side is picked by item class (drink / alcohol / label-like → kcal; otherwise macros), and `notes` keeps "model said N". Decided in Phase 3 from the table.
+- **D2 — reconciliation: DECIDED from the numbers (Phase 3): never rewrite a number.** On the frozen before/after runs, 2 of 158 items of 30 kcal or more disagreed with their own macros by more than 15 %, and where an item-level reference exists the kcal side was the right one (two tajadas: 210 kcal vs 4P+4C+9F = 253, reference 212). The deterministic check is a FLAG on the card, with a 30 kcal floor (a 2 kcal coffee is 0 by the formula) and alcohol exempt (7 kcal/g the formula cannot see). `docs/food-accuracy.md` has the table.
 - **D3 — history anchor, gated so it cannot feed on itself** (reviewer's point: word-overlap matching ignores portion, so one-arepa history would anchor a two-arepa plate, and after a few confirms the median would simply be the model's own output). Window 400 rows, 0.8 word-overlap threshold. The CARD shows "last time: N kcal" from 1 match. The PROMPT is given the anchor only when the matches span ≥ 3 distinct DAYS, their kcal spread is ≤ 25 %, and the utterance carries no quantity that differs from the matched rows; rows whose kcal the D2 check rewrote are excluded. The harness runs with the anchor on and off. "Save as usual" counts distinct days, not rows (one three-item lunch is three rows).
 - **D4 — portion chips** ½× · 1.5× · 2× at card level; per-item steppers stay.
 - **D5 — confidence** is model-declared per item plus a history-spread rule; shown only when it is not "high".
@@ -236,6 +236,19 @@ additive):
   last7d}, appleHealthWorkouts: {lastAt, last7d, lastImportAt, skipped7d}}`,
   drawn as compact rows (`components/intake/sync-status-rows.tsx`) under the
   Devices card: label · state chip · one line.
+
+**Watch queue, drained in pieces** (added 2026-10-20 from Lane A's security
+review): the wrist sends its WHOLE offline queue in one request
+(`WorkoutSyncFlight.run` → `api.syncWorkouts(pending)`), and the hosting
+refuses bodies over ~4.5 MB. A 12-hour hike with heart rate every second is
+about 5 MB on its own; after the refusal the watch resends the same queue
+forever and nothing syncs again. Fix: greedy batches under ~3 MB measured on
+the encoded JSON (one item per request when an item is big), each item
+removed from the queue only after ITS response; a single item that is still
+refused stays, is marked "too large to sync" with a visible state and a tap
+for details, and the rest of the queue carries on behind it. Request and
+response shapes unchanged. A DEBUG seam and a simulator smoke for a queue of
+three large items where one alone exceeds the cap; both Xcode schemes build.
 
 **Watch** (`AppModel.drainQueue` + `SettingsView`, small): a `ClientError.server`
 with a status sets `.failed("server <status>: <message>")` instead of
@@ -392,7 +405,7 @@ then Actions → TestFlight → Run workflow. Listed first in his checklist.
 ### The path today
 
 **Weight**: RENPHO scale → Renpho Health app → Apple Health (weight, and
-per the 10-04 evidence body fat/BMI/lean mass are written but never arrive) →
+body fat arrives only sometimes) →
 iPhone companion `drainWeighIns()` (anchored) → `POST /api/mobile/health/body`
 → `ingestBodySamples` (±10 min / ±0.3 kg near-twin merge) → `announceWeighIn`
 → `notify("weighIn")` (weight only).
@@ -413,10 +426,10 @@ calls `POST /api/health/body/sync` (a no-op while off) then reloads.
 weigh-in card ("Add its RENPHO report"), visible only if he opens Body and the
 newest weigh-in has no fat %.
 
-**Evidence from the copy:** weigh-ins keep arriving through Apple Health (last
-2026-10-08); the last row with any composition is 2026-10-04 (his hand-typed
-report). `body_sync_runs`: two backfill runs, nothing since. Settings → Devices
-says nothing about RENPHO at all.
+**Evidence from the copy:** weigh-ins keep arriving through Apple Health; the
+newest row with composition is about two weeks older than the newest weight.
+`body_sync_runs`: two backfill runs, nothing since. Settings → Devices says
+nothing about RENPHO at all.
 
 ### Plan (Phase 6)
 
@@ -452,8 +465,8 @@ says nothing about RENPHO at all.
 
 ### Decisions
 
-- **D14 — nudge window, moved to when he actually weighs in.** The reviewer checked his last 90 days: weigh-ins cluster at 11:00–14:00 local, none between 17:00 and 21:59, and Sunday is his second-rarest day — so a Sunday-evening push would have landed beside two "Weekly report ready" pushes and asked for a weigh-in at the wrong time. New default: **Saturday 10:00–12:59 local, with a Monday 10:00–12:59 catch-up**, 7-day threshold, one per week, category default on. The once-a-week key is anchored to that Saturday's week so the Monday catch-up cannot fire a second time (the old key changed over at Monday).
-- **D15 — "Pull now" only when the sync is enabled**; otherwise the row says Off and how to turn it on, and the nudge copy never says "or pull now". The second-account step is his (deferred item 2026-10-04, parked on his word; this lane does not reopen it, it only makes the state visible and the weekly ask real). **"Composition" is an explicit column set** — body fat %, muscle mass, fat mass, skeletal muscle, body water, protein, bone, visceral fat, BMR — and NOT BMI (derived, it rides with weight). The premise "composition never arrives via Apple Health" was wrong: four Apple Health rows carry body fat (09-12, 09-19 ×2, 10-03). The banner has two states — "no weigh-in in N days" vs "weight arrived, no report".
+- **D14 — nudge window, moved to when he actually weighs in.** His weigh-ins cluster late morning on weekdays, so a Sunday-evening push would have asked at the wrong time and landed beside the two "Weekly report ready" pushes. New default: **Saturday 10:00–12:59 local, with a Monday 10:00–12:59 catch-up**, 7-day threshold, one per week, category default on. The once-a-week key is anchored to that Saturday's week so the Monday catch-up cannot fire a second time (the old key changed over at Monday).
+- **D15 — "Pull now" only when the sync is enabled**; otherwise the row says Off and how to turn it on, and the nudge copy never says "or pull now". The second-account step is his (deferred item 2026-10-04, parked on his word; this lane does not reopen it, it only makes the state visible and the weekly ask real). **"Composition" is an explicit column set** — body fat %, muscle mass, fat mass, skeletal muscle, body water, protein, bone, visceral fat, BMR — and NOT BMI (derived, it rides with weight). The premise "composition never arrives via Apple Health" was wrong: several Apple Health rows do carry body fat. The banner has two states — "no weigh-in in N days" vs "weight arrived, no report".
 
 ### What Michael will see
 
@@ -501,8 +514,8 @@ says nothing about RENPHO at all.
 The review confirmed the W1–W4 findings that rest on code and data (batch
 default "voice", no source from the client, the no-op sanitizer, the two-row
 favourites, 580/51/24/19, the never-set `.failed`, no `HKWorkout` read, one
-transport, no `aps-environment`, the empty push tables, composition last on
-10-04) and overturned five claims; each is corrected in place above and the
+transport, no `aps-environment`, the empty push tables, composition older than
+weight) and overturned five claims; each is corrected in place above and the
 decisions it changed are rewritten (D1, D2, D3, D7–D11, D13–D15, Phase 3 items
 1, 2, 3 and 7). In plain terms:
 
@@ -555,3 +568,51 @@ floor and nothing is rewritten; **(2) 95.5 % of plain food logs first read
 `today_summary`**, so every log is two model requests and 15k input tokens on
 a fresh chat — a prompt rule ("no read before a plain log") is the largest
 cost and latency lever found, and Phase 3 measures it.
+
+---
+
+## Changed after the independent review of d3f537a (2026-10-20)
+
+The review reproduced every baseline table byte for byte and found the
+instrument itself needed fixing before any before/after could be trusted.
+Folded in Phase 3:
+
+- **Two holes in the harness's safety.** A `?host=` in the database URL
+  slipped past the "local database only" check (fixed: the URL is parsed the
+  way the database driver parses it, any connection override is refused, and
+  the server is asked where it actually answered from), and nothing stopped
+  the harness from being pointed at the live site (fixed: the server address
+  must be this machine, and after seeding the harness proves that server and
+  harness see the same rows before spending anything). The local PIN is no
+  longer written into the script.
+- **A fair before/after.** Both runs now go against a frozen evaluation
+  database (`pitaya_lane_d_eval`: the schema, his settings row, the
+  synthetic seeds, none of his food, chats or usuals), the BEFORE from a
+  checkout of the baseline commit and the AFTER from the Phase 3 tree, with
+  the commit, the database's row counts and the model observed stamped on
+  every table. Seeds are removed before and after by tag, chats by the ids
+  the server reported, and an interrupted run cleans up after itself.
+- **Fair scoring.** An utterance that gets no card (an error, a timeout, a
+  question back) counts as a miss, and the card rate sits beside every rate,
+  so a prompt cannot look better by refusing hard items. Raw answers are kept
+  so old runs are re-scored, never re-described.
+- **References cited, portions honest.** Every reference row now cites a USDA
+  FoodData Central id, a branded label in the same database, or a stated
+  recipe of cited components. Three Colombian portions were below a typical
+  serving (a bowl of soup, two tajadas, the bandeja's chicharrón, maduro and
+  chorizo) and had manufactured most of the baseline's +19 % bias; they are
+  corrected, and ten Colombian fixtures now state the amount outright so the
+  score no longer rests on portion guesses. The prompt's Colombian table was
+  rewritten from the same cited values; the earlier version leaned toward
+  undercounting.
+- **Same units for consistency.** Twins are reported as a pair CV, the same
+  unit as the noise floor, and a twin gain smaller than the noise floor's mean
+  is not claimed.
+- **Cost per stage, tools by name, time to the card**, and the two-turn
+  corrections are checked against the rows actually saved.
+- **Privacy.** Specifics about his weigh-in habits and reading dates are
+  removed from this document (they remain in two earlier commits on this
+  branch — a squash merge keeps them out of `main`).
+- **Speech was not tested.** The "dictated transcript" fixtures are typed
+  text shaped like transcripts; the microphone and the recogniser need his
+  voice and are on his checklist.

@@ -120,3 +120,56 @@ describe("normalizeFoodItemsWithTiming", () => {
     expect(normalizeFoodItemsWithTiming(null, "x", TZ, NOW)).toEqual([]);
   });
 });
+
+// ─── meal words vs the model's noon default (2026-10-18) ─────────────────
+import { mealWordHour, reconcileLoggedAtWithMealWord } from "@/lib/food-timing";
+
+describe("mealWordHour", () => {
+  it("reads one meal word in either language", () => {
+    expect(mealWordHour("yesterday for dinner I had chicken")).toBe(20);
+    expect(mealWordHour("anoche comí una bandeja paisa")).toBe(20);
+    expect(mealWordHour("para el desayuno dos huevos")).toBe(8);
+    expect(mealWordHour("lunch was chicken and rice")).toBe(13);
+  });
+  it("stays out of it when there is no meal word, or two different ones", () => {
+    expect(mealWordHour("200 g chicken with rice")).toBeNull();
+    expect(mealWordHour("eggs this morning and a sandwich at lunch")).toBeNull();
+  });
+});
+
+describe("reconcileLoggedAtWithMealWord — 'yesterday for dinner' is not noon", () => {
+  const noonYesterday = "2026-10-16T17:00:00.000Z"; // 12:00 Bogotá
+  it("moves a stamp at exactly noon to the meal's hour on the same local day", () => {
+    const [it_] = reconcileLoggedAtWithMealWord([{ loggedAt: noonYesterday }], "Yesterday for dinner I had chicken", TZ);
+    expect(it_.loggedAt).toBe("2026-10-17T01:00:00.000Z"); // 20:00 Bogotá on Oct 16
+  });
+  it("leaves a stamp that was actually said alone", () => {
+    const said = "2026-10-16T17:30:00.000Z";
+    expect(reconcileLoggedAtWithMealWord([{ loggedAt: said }], "dinner at 12:30", TZ)[0].loggedAt).toBe(said);
+  });
+  it("does nothing without a single meal word, or without a stamp", () => {
+    expect(reconcileLoggedAtWithMealWord([{ loggedAt: noonYesterday }], "chicken with rice", TZ)[0].loggedAt).toBe(noonYesterday);
+    expect(reconcileLoggedAtWithMealWord([{}], "dinner", TZ)[0]).toEqual({});
+  });
+});
+
+// ─── a meal is never eaten in the future (2026-10-20) ─────────────────────
+import { pullFutureMealsBack } from "@/lib/food-timing";
+
+describe("pullFutureMealsBack — 'at 7pm I ate', said at 8 am, is last night", () => {
+  const eightAm = new Date("2026-10-20T13:00:00Z"); // 08:00 Bogotá
+  it("moves a stamp hours ahead of now back one day", () => {
+    const [it_] = pullFutureMealsBack([{ loggedAt: "2026-10-21T00:00:00.000Z" }], "at 7pm I ate two empanadas", eightAm);
+    expect(it_.loggedAt).toBe("2026-10-20T00:00:00.000Z"); // 19:00 Bogotá on Oct 19
+  });
+  it("leaves a stamp in the past, or within 15 minutes ahead, alone", () => {
+    expect(pullFutureMealsBack([{ loggedAt: "2026-10-20T12:30:00.000Z" }], "eggs", eightAm)[0].loggedAt).toBe("2026-10-20T12:30:00.000Z");
+    expect(pullFutureMealsBack([{ loggedAt: "2026-10-20T13:10:00.000Z" }], "eggs", eightAm)[0].loggedAt).toBe("2026-10-20T13:10:00.000Z");
+  });
+  it("respects an explicit date in the message", () => {
+    expect(pullFutureMealsBack([{ loggedAt: "2026-10-21T00:00:00.000Z" }], "on 2026-10-20 at 7pm", eightAm)[0].loggedAt).toBe("2026-10-21T00:00:00.000Z");
+  });
+  it("passes items without a stamp through", () => {
+    expect(pullFutureMealsBack([{}], "eggs", eightAm)).toEqual([{}]);
+  });
+});

@@ -8,8 +8,23 @@ import { createConversation, touchConversation, writeAiTitle } from "@/lib/chat-
 import { buildChatUserContent, photoPlaceholder, sanitizeImages } from "@/lib/chat-photos";
 import { proposalKindFor, sanitizeProposalArgs } from "@/lib/chat-tools";
 import { type AppDataArgs, executeAppData } from "@/lib/ai/data-access";
-import { normalizeFoodItemsWithTiming } from "@/lib/food-timing";
-import { matchUsual } from "@/lib/food-match";
+import {
+  normalizeFoodItemsWithTiming,
+  pullFutureMealsBack,
+  reconcileLoggedAtWithMealWord,
+} from "@/lib/food-timing";
+import {
+  anchorEligible,
+  foodNameOf,
+  matchHistory,
+  matchUsual,
+  mentionsUsual,
+  usualPromotionEligible,
+  usualsPromptNote,
+  type HistoryRow,
+} from "@/lib/food-match";
+import { checkFoodItems } from "@/lib/food-check";
+import { sourceFromChat } from "@/lib/food-normalize";
 import { classifyOpenAIError, recordAIUsage } from "@/lib/ai-usage";
 
 // Chat 2b — the Responses-API agentic loop with SSE streaming.
@@ -139,6 +154,34 @@ export async function POST(request: NextRequest) {
       : Promise.resolve([]),
   ]);
 
+  // ── intake lane 2026-10-18: his recent food rows, for the card's "last
+  // time" and the model's consistency anchor (lib/food-match.ts matchHistory).
+  // Started here so it overlaps the history read; never blocks the turn.
+  const HISTORY_ROWS = 400;
+  const historyRowsPromise: Promise<HistoryRow[]> = prisma.foodLog
+    .findMany({
+      orderBy: { loggedAt: "desc" },
+      take: HISTORY_ROWS,
+      select: { foodDescription: true, calories: true, proteinG: true, carbsG: true, fatG: true, loggedAt: true },
+    })
+    .catch(() => [] as HistoryRow[]);
+  // His usuals reach the model when the message asks for one ("my usual …",
+  // "lo de siempre") OR names one by its own words — the list costs a few
+  // dozen tokens and only on those turns (lib/food-match.ts).
+  const usualsForPrompt = prisma.favoriteFoods
+    .findMany({
+      orderBy: { usageCount: "desc" },
+      take: 20,
+      select: { foodDescription: true, calories: true, proteinG: true, carbsG: true, fatG: true, kind: true, servingLabel: true },
+    })
+    .then((favs) =>
+      favs.length > 0 && (mentionsUsual(message) || matchUsual(message, favs.map((f, i) => ({ id: String(i), foodDescription: f.foodDescription }))))
+        ? favs
+        : []
+    )
+    .catch(() => []);
+  // ── end intake lane ──
+
   // A known chat continues. No id (he tapped "New chat", or the quiet-gap
   // rule on the client started one) or an id that is gone → a new chat,
   // named from these first words until the first exchange can name it better.
@@ -168,10 +211,39 @@ export async function POST(request: NextRequest) {
       ? "Spanish (Español)"
       : "English";
 
+  // ── intake lane 2026-10-18: the consistency anchor (decision D3). Only a
+  // food he has logged on three different days, with a stable number, and
+  // only when this message states no amount that could differ — otherwise
+  // the model's own output would end up anchoring itself.
+  let anchorNote = "";
+  let anchor: { name: string; days: number; medianKcal: number; proteinG: number; carbsG: number; fatG: number } | null = null;
+  const foodHistory = await historyRowsPromise;
+  if (foodHistory.length > 0 && images.length === 0) {
+    const match = matchHistory(message, foodHistory, { timeZone, mode: "message" });
+    if (anchorEligible(match, message)) {
+      anchor = {
+        name: foodNameOf(match.matchedDescription),
+        days: match.days,
+        medianKcal: match.medianKcal,
+        proteinG: match.medianProteinG,
+        carbsG: match.medianCarbsG,
+        fatG: match.medianFatG,
+      };
+      anchorNote =
+        `\n\n[Consistency anchor: he has logged "${anchor.name}" on ${anchor.days} different days with a stable estimate — ` +
+        `median ${anchor.medianKcal} kcal, ${anchor.proteinG}P / ${anchor.carbsG}C / ${anchor.fatG}F. ` +
+        `If this message is that same food at the same portion, use those numbers; if it states a different amount, scale from them.]`;
+    }
+  }
+  const usualsNote = usualsPromptNote(await usualsForPrompt);
+  // ── end intake lane ──
+
   const instructions =
     CHAT_SYSTEM_PROMPT.replace(/\{\{RESPONSE_LANGUAGE\}\}/g, aiLanguage) +
     buildDateContext(now, timeZone) +
-    (historyRows.length === 0 ? NEW_CHAT_NOTE : "");
+    (historyRows.length === 0 ? NEW_CHAT_NOTE : "") +
+    anchorNote +
+    usualsNote;
 
   // Thread history (persisted rolling chat). Proposals compress to one line
   // so the model knows what happened without re-parsing card payloads.
@@ -195,7 +267,20 @@ export async function POST(request: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (payload: object) => controller.enqueue(encoder.encode(sse(payload)));
+      // A client that leaves after `done` (the eval harness did; a user who
+      // navigates away does) closes the stream while the title is still
+      // coming — enqueue then throws "Controller is already closed" inside
+      // the catch path and the log fills with it (2026-10-17). Sending into a
+      // closed stream is a no-op, not an error.
+      let closed = false;
+      const send = (payload: object) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(sse(payload)));
+        } catch {
+          closed = true;
+        }
+      };
       let totalIn = 0;
       let totalOut = 0;
 
@@ -290,12 +375,32 @@ export async function POST(request: NextRequest) {
               // Zero-filled measurement fields never reach the card or the DB.
               args = sanitizeProposalArgs(call.name, args);
               if (call.name === "log_food") {
-                const items = normalizeFoodItemsWithTiming(
-                  args.items as never,
+                // ── intake lane 2026-10-18 ──
+                // 1. types, a 30 kcal-floored kcal/macro FLAG (never a rewrite —
+                //    docs/food-accuracy.md), and a component listed twice is
+                //    collapsed (lib/food-check.ts);
+                // 2. a meal word beats the prompt's "date without time → 12:00";
+                // 3. the card learns the row's source (chat | voice | photo).
+                const checked = checkFoodItems(args.items);
+                // 4. a meal is never eaten in the future ("at 7pm" said at 8 am = last night).
+                const items = pullFutureMealsBack(
+                  reconcileLoggedAtWithMealWord(
+                    normalizeFoodItemsWithTiming(checked.items as never, message, timeZone, now) as Array<
+                      Record<string, unknown> & { loggedAt?: string }
+                    >,
+                    message,
+                    timeZone
+                  ),
                   message,
-                  timeZone,
                   now
                 );
+                args = {
+                  ...args,
+                  source: sourceFromChat(source),
+                  ...(checked.collapsed > 0 ? { collapsed: checked.collapsed } : {}),
+                  ...(anchor ? { anchor } : {}),
+                };
+                // ── end intake lane ──
                 // v4 (token ROI): fuzzy-match each item against saved usuals
                 // so the card can offer the zero-token path. Deterministic,
                 // one small query, never blocks the proposal.
@@ -327,6 +432,23 @@ export async function POST(request: NextRequest) {
                 } catch {
                   // favorites unavailable — the card just shows no shortcut
                 }
+                // ── intake lane 2026-10-18: "last time: N kcal" from his own
+                // rows, and whether this repeat has earned a "Save as usual"
+                // offer (D3: three different days, stable number, no usual yet).
+                try {
+                  if (foodHistory.length > 0) {
+                    annotated = annotated.map((it) => {
+                      const desc = String(it.foodDescription ?? "");
+                      const history = desc ? matchHistory(desc, foodHistory, { timeZone, mode: "item" }) : null;
+                      if (!history) return it;
+                      const promote = !it.usual && usualPromotionEligible(history);
+                      return { ...it, history, ...(promote ? { suggestUsual: true } : {}) };
+                    });
+                  }
+                } catch {
+                  // history unavailable — the card just shows no "last time"
+                }
+                // ── end intake lane ──
                 args = { ...args, items: annotated };
               }
               // Same ordering guard as the assistant row — a proposal must
@@ -415,8 +537,18 @@ export async function POST(request: NextRequest) {
         const { userMessage } = classifyOpenAIError(error);
         send({ type: "error", message: userMessage });
       } finally {
-        controller.close();
+        if (!closed) {
+          closed = true;
+          try {
+            controller.close();
+          } catch {
+            // already closed by the client
+          }
+        }
       }
+    },
+    cancel() {
+      // the client went away; nothing more may be enqueued
     },
   });
 

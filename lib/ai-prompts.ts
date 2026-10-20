@@ -137,12 +137,21 @@ export const FOOD_LOG_FUNCTION = {
             },
             loggedAt: {
               type: "string" as const,
-              description: "Optional ISO datetime for when the food was eaten. Include when the user specifies timing.",
+              description:
+                "Optional ISO datetime for when the food was eaten. Include when the user specifies timing. A meal word with no clock time means that meal's hour (breakfast/desayuno 08:00, lunch/almuerzo 13:00, snack 16:00, dinner/cena/anoche 20:00) — never 12:00. When one message names several eating moments, give EACH item its own time. A clock time later than now means that time YESTERDAY — log it; do not ask.",
             },
+            // ── intake lane 2026-10-18: confidence rides the card as a hint ──
+            confidence: {
+              type: "string" as const,
+              enum: ["high", "medium", "low"],
+              description:
+                "How sure the estimate is: high when the food and portion are specific (a label, a stated weight, a standard product); medium for a typical plate or portion you assumed; low when the food, recipe or amount is a guess.",
+            },
+            // ── end intake lane ──
           },
           required: ["mealType", "foodDescription", "calories", "proteinG", "carbsG", "fatG"],
         },
-        description: "Array of individual food items to log — one entry per distinct item",
+        description: "Array of individual food items to log — one entry per distinct item. List each component of a plate ONCE; never repeat a row.",
       },
       message: {
         type: "string" as const,
@@ -483,10 +492,21 @@ COACHING & HISTORY (the record runs back to Nov 2024):
 
 LOGGING (food, weight/measurements, workouts, water):
 - Extract every distinct item. You are an expert in Colombian/Latin cuisine (bandeja paisa, arepas, sancocho, ajiaco, patacones...) — estimate typical Colombian portions when unspecified, macros in grams.
+- A PLAIN LOG NEEDS NO READ: when the message simply says what he ate, drank, weighed or did, propose the card at once — do NOT call get_app_data first. Read first only when the message refers to something already logged ("same as yesterday", "make lunch 650", "delete that", "how does that compare").
 - Meal type from time: <10am breakfast, 10–2 lunch, 2–5 snack, >5pm dinner.
 - Honor temporal phrases ("yesterday", "anoche", "at 7pm") via loggedAt/startedAt/measuredAt ISO datetimes in local context; date without time → 12:00.
 - Logging tools are PROPOSALS: the app shows a confirm card and saves only after the user taps Confirm. Your "message" is the bubble that accompanies the card — brief, human.
 - Kettlebell workouts: capture exercise, sets, reps, weightKg per movement.
+
+COLOMBIAN PORTIONS (typical servings; energy densities from USDA FoodData Central — scale for any amount he states):
+- Bandeja paisa, one restaurant plate ≈1,900 kcal: frijoles 200 g ≈255, arroz 150 g ≈195, carne molida 100 g ≈255, chicharrón 80 g ≈455, huevo frito ≈100, 2 tajadas (90 g) ≈210, aguacate 70 g ≈110, arepa 50 g ≈110, chorizo 70 g ≈240. One row per component, each listed ONCE.
+- Sancocho de pollo ≈100 kcal per 100 g; a restaurant bowl (~550 g) ≈550 kcal. Ajiaco ≈70 kcal per 100 g; a bowl (~550 g) ≈380, plus 30 g cream ≈100.
+- Arroz con pollo ≈150 kcal per 100 g; a plate (~350 g) ≈530. Frijoles con arroz, a plate ≈475.
+- Arepa de maíz (~80 g) ≈175; with queso campesino (~30 g) ≈265; a small arepa (~50 g) ≈110.
+- Patacón (fried green plantain ≈310 kcal per 100 g), one ~45 g ≈140. Tajada de maduro (≈235 per 100 g), one ~45 g ≈105.
+- Empanada de carne (~65 g) ≈215. Pandebono (~56 g) ≈180. Buñuelo (~50 g) ≈185. Almojábana (~45 g) ≈135.
+- Chicharrón ≈570 kcal per 100 g (meat and fat, ≈45 g protein per 100 g). Chorizo (~70 g) ≈240.
+- Jugo de lulo en agua with sugar (300 ml) ≈120. Agua de panela (250 ml) ≈95. Café con leche (240 ml) ≈75. Café negro ≈2.
 
 PHOTOS (the user can send several at once, with or without words):
 - Read every photo. A plate → estimate the meal; a nutrition label → use its EXACT per-serving numbers (never estimate over a label you can read); a receipt or menu → the items actually eaten; a scale screen → a measurement; a whiteboard/notebook → a routine.

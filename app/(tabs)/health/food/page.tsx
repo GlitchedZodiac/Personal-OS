@@ -517,6 +517,11 @@ export default function FoodPage() {
                         usual
                       </span>
                     )}
+                    {entry.source === "label" && (
+                      <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-[#8C2F51]">
+                        label
+                      </span>
+                    )}
                     {(entry.source === "ai" || entry.source === "chat") && (
                       <span className="rounded-full bg-[#EAF3ED] px-1.5 py-px text-[10px] font-semibold text-[#3E7A54]">
                         via chat ✓

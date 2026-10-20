@@ -4,6 +4,7 @@ import { getDateStringInTimeZone } from "@/lib/timezone";
 import { getUtcDayBounds } from "@/lib/utils";
 import { getUtcDayBoundsForTimeZone } from "@/lib/timezone";
 import { getUserTimeZone } from "@/lib/server-timezone";
+import { normalizeFoodDescription, normalizeFoodSource } from "@/lib/food-normalize";
 
 // GET - List food entries with filters
 export async function GET(request: NextRequest) {
@@ -95,17 +96,22 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    const foodDescription = normalizeFoodDescription(body.foodDescription);
+    if (!foodDescription) {
+      return NextResponse.json({ error: "foodDescription required" }, { status: 400 });
+    }
     const entry = await prisma.foodLog.create({
       data: {
         loggedAt: body.loggedAt ? new Date(body.loggedAt) : undefined,
         mealType: body.mealType,
-        foodDescription: body.foodDescription,
+        foodDescription,
         calories: body.calories || 0,
         proteinG: body.proteinG || 0,
         carbsG: body.carbsG || 0,
         fatG: body.fatG || 0,
         notes: body.notes || null,
-        source: body.source || "manual",
+        // 2026-10-18: a closed vocabulary (lib/food-normalize.ts); the form's default stays "manual".
+        source: normalizeFoodSource(body.source, "manual"),
       },
     });
 

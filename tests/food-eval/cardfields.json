@@ -1,0 +1,2076 @@
+{
+  "meta": {
+    "tag": "cardfields",
+    "startedAt": "2026-10-20T14:31:17.872Z",
+    "localDay": "2026-10-20",
+    "localHour": 9,
+    "timeZone": "America/Bogota",
+    "model": "gpt-5.6-terra",
+    "reasoning": "low",
+    "temperature": "not set by the route (API default)",
+    "base": "http://localhost:3145",
+    "fixtureCount": 11,
+    "consistencyCount": 0,
+    "repeat": 1,
+    "concurrency": 3,
+    "synthetic": true,
+    "historySeeded": true,
+    "fingerprint": {
+      "serverTree": "lane-d-intake-reliability",
+      "commit": "d3f537a",
+      "dirty": true,
+      "treeHash": "f474fbcc14a7",
+      "db": {
+        "db": "pitaya_lane_d_eval",
+        "food_logs": 0,
+        "favorite_foods": 0,
+        "chat_conversations": 0,
+        "user_settings": 1
+      },
+      "modelsObserved": [
+        "gpt-5.6-terra"
+      ]
+    },
+    "finishedAt": "2026-10-20T14:31:41.959Z",
+    "complete": true,
+    "stageErrors": {},
+    "rescoredAt": "2026-10-20T14:32:01.673Z"
+  },
+  "infraErrors": [],
+  "groups": [
+    {
+      "group": "colombian",
+      "n": 4,
+      "cards": 4,
+      "itemsOk": 100,
+      "kcal": 100,
+      "protein": 100,
+      "carbs": 100,
+      "fat": 75,
+      "allFour": 75,
+      "medAbsKcalErr": 2.9,
+      "medKcalBias": 2.4,
+      "macroSane": 100,
+      "mealOk": 100,
+      "timeOk": null,
+      "usualOk": null,
+      "medMs": 4057,
+      "medMsToCard": 4056
+    },
+    {
+      "group": "gym",
+      "n": 2,
+      "cards": 2,
+      "itemsOk": 100,
+      "kcal": 100,
+      "protein": 100,
+      "carbs": 100,
+      "fat": 100,
+      "allFour": 100,
+      "medAbsKcalErr": 1.8,
+      "medKcalBias": 1.2,
+      "macroSane": 100,
+      "mealOk": 100,
+      "timeOk": null,
+      "usualOk": null,
+      "medMs": 3448.5,
+      "medMsToCard": 3446.5
+    },
+    {
+      "group": "quantities",
+      "n": 1,
+      "cards": 1,
+      "itemsOk": 100,
+      "kcal": 100,
+      "protein": 100,
+      "carbs": 100,
+      "fat": 100,
+      "allFour": 100,
+      "medAbsKcalErr": 0.8,
+      "medKcalBias": 0.8,
+      "macroSane": 100,
+      "mealOk": 100,
+      "timeOk": null,
+      "usualOk": null,
+      "medMs": 3218,
+      "medMsToCard": 3215
+    },
+    {
+      "group": "temporal",
+      "n": 1,
+      "cards": 1,
+      "itemsOk": 100,
+      "kcal": 100,
+      "protein": 100,
+      "carbs": 100,
+      "fat": 100,
+      "allFour": 100,
+      "medAbsKcalErr": 1.2,
+      "medKcalBias": -1.2,
+      "macroSane": 100,
+      "mealOk": 100,
+      "timeOk": null,
+      "usualOk": null,
+      "medMs": 5048,
+      "medMsToCard": 5047
+    },
+    {
+      "group": "transcript",
+      "n": 3,
+      "cards": 3,
+      "itemsOk": 100,
+      "kcal": 100,
+      "protein": 100,
+      "carbs": 100,
+      "fat": 100,
+      "allFour": 100,
+      "medAbsKcalErr": 0.2,
+      "medKcalBias": 0,
+      "macroSane": 66.7,
+      "mealOk": 100,
+      "timeOk": null,
+      "usualOk": null,
+      "medMs": 3849,
+      "medMsToCard": 3847
+    },
+    {
+      "group": "ALL",
+      "n": 11,
+      "cards": 11,
+      "itemsOk": 100,
+      "kcal": 100,
+      "protein": 100,
+      "carbs": 100,
+      "fat": 90.9,
+      "allFour": 90.9,
+      "medAbsKcalErr": 0.8,
+      "medKcalBias": 0,
+      "macroSane": 90.9,
+      "mealOk": 100,
+      "timeOk": null,
+      "usualOk": null,
+      "medMs": 3849,
+      "medMsToCard": 3847
+    }
+  ],
+  "paired": {
+    "pairs": [
+      {
+        "id": "F01",
+        "twinOf": "A01",
+        "kind": "transcript",
+        "kcalA": 265,
+        "kcalB": 320,
+        "bothCarded": true,
+        "cvPct": 9.4,
+        "bothInRange": true,
+        "itemsAgree": true
+      },
+      {
+        "id": "F04",
+        "twinOf": "A06",
+        "kind": "transcript",
+        "kcalA": 455,
+        "kcalB": 465,
+        "bothCarded": true,
+        "cvPct": 1.1,
+        "bothInRange": true,
+        "itemsAgree": true
+      },
+      {
+        "id": "F10",
+        "twinOf": "A02",
+        "kind": "transcript",
+        "kcalA": 1930,
+        "kcalB": 1930,
+        "bothCarded": true,
+        "cvPct": 0,
+        "bothInRange": true,
+        "itemsAgree": true
+      }
+    ],
+    "n": 3,
+    "scored": 3,
+    "medianCvPct": 1.1,
+    "meanCvPct": 3.5,
+    "p90CvPct": 9.4,
+    "shareBothInRange": 100,
+    "shareItemsAgree": 100
+  },
+  "noiseFloor": {
+    "fixtures": [],
+    "medianCvPct": null,
+    "meanCvPct": null,
+    "p90CvPct": null,
+    "shareAllInRange": null,
+    "within10Kcal": 0,
+    "cvUnder10": 0
+  },
+  "d2": {
+    "singleItemUtterances": 4,
+    "mismatched": 0,
+    "kcalCloser": 0,
+    "macroCloser": 0,
+    "rows": [],
+    "itemsChecked": 33,
+    "itemsMismatched": 1,
+    "alcoholItems": 0,
+    "itemsMismatchedShare": 3
+  },
+  "phase3": {
+    "confidenceOnItems": 100,
+    "sourceChat": 100,
+    "historyExpected": 3,
+    "historyOk": 3,
+    "anchorExpected": 5,
+    "anchorOk": 5,
+    "anchorsInjected": [
+      "A01"
+    ],
+    "suggestUsualCards": [
+      "A01",
+      "C01",
+      "F01"
+    ],
+    "collapsedCards": [],
+    "flaggedItems": 1
+  },
+  "labels": null,
+  "probes": null,
+  "corrections": null,
+  "cost": {
+    "stages": {
+      "main": {
+        "chatCalls": 11,
+        "meanInputTokens": 8284,
+        "meanOutputTokens": 341,
+        "usdPerChatCall": 0.0207,
+        "usd": 0.233,
+        "bySurface": {
+          "chat": {
+            "surface": "chat",
+            "calls": 11,
+            "input": 91126,
+            "output": 3750,
+            "usd": 0.227252
+          },
+          "chat-title": {
+            "surface": "chat-title",
+            "calls": 11,
+            "input": 2291,
+            "output": 93,
+            "usd": 0.005698
+          }
+        }
+      }
+    },
+    "totalUsd": 0.233,
+    "latencyMs": {
+      "median": 3849,
+      "p90": 6906,
+      "medianToCard": 3847
+    },
+    "readFirst": 0,
+    "toolTally": {}
+  },
+  "errors": [],
+  "scores": [
+    {
+      "id": "A01",
+      "group": "colombian",
+      "twinOf": null,
+      "ms": 2974,
+      "msToCard": 2972,
+      "error": null,
+      "cardCount": 1,
+      "items": 1,
+      "carded": true,
+      "tools": 0,
+      "toolNames": [],
+      "reply": "",
+      "infra": false,
+      "raw": {
+        "proposals": [
+          {
+            "id": "e10dc759-dc8c-4936-9343-dcb931596132",
+            "kind": "food",
+            "data": {
+              "items": [
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Arepa con queso (1 arepa)",
+                  "calories": 320,
+                  "proteinG": 10,
+                  "carbsG": 38,
+                  "fatG": 12,
+                  "flags": [],
+                  "notes": "Standard portion; matches your usual arepa con queso estimate.",
+                  "loggedAt": "2026-10-20T13:00:00.000Z",
+                  "confidence": "high",
+                  "history": {
+                    "count": 3,
+                    "days": 3,
+                    "medianKcal": 320,
+                    "medianProteinG": 10,
+                    "medianCarbsG": 38,
+                    "medianFatG": 12,
+                    "spreadPct": 3,
+                    "lastKcal": 320,
+                    "lastAt": "2026-10-15T14:31:18.152Z",
+                    "matchedDescription": "Arepa con queso (1, ~80 g, queso campesino)"
+                  },
+                  "suggestUsual": true
+                }
+              ],
+              "message": "Breakfast logged: 1 arepa con queso — 320 kcal.",
+              "source": "chat",
+              "anchor": {
+                "name": "Arepa con queso",
+                "days": 3,
+                "medianKcal": 320,
+                "proteinG": 10,
+                "carbsG": 38,
+                "fatG": 12
+              }
+            }
+          }
+        ],
+        "reply": "",
+        "tools": [],
+        "ms": 2974,
+        "msToCard": 2972,
+        "error": null
+      },
+      "totals": {
+        "kcal": 320,
+        "proteinG": 10,
+        "carbsG": 38,
+        "fatG": 12
+      },
+      "ref": {
+        "kcal": 265,
+        "proteinG": 10,
+        "carbsG": 31,
+        "fatG": 11
+      },
+      "inRange": {
+        "kcal": true,
+        "proteinG": true,
+        "carbsG": true,
+        "fatG": true
+      },
+      "errPct": {
+        "kcal": 20.8,
+        "proteinG": 0,
+        "carbsG": 22.6,
+        "fatG": 9.1
+      },
+      "itemsOk": true,
+      "macroSane": true,
+      "mealOk": true,
+      "timeOk": null,
+      "usualOk": null,
+      "perItem": [
+        {
+          "desc": "Arepa con queso (1 arepa)",
+          "kcal": 320,
+          "macroKcal": 300,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T13:00:00.000Z",
+          "usual": false,
+          "confidence": "high",
+          "alcohol": false
+        }
+      ],
+      "macroKcalInRange": true,
+      "macroKcalErrPct": 13.2,
+      "mealExpected": "breakfast",
+      "mealGot": "breakfast",
+      "usualMatched": false,
+      "source": "chat",
+      "sourceOk": true,
+      "confidenceShare": 100,
+      "historyPresent": true,
+      "historyOk": true,
+      "anchorPresent": true,
+      "anchorOk": true,
+      "suggestUsual": 1,
+      "collapsed": 0,
+      "flagged": 0,
+      "hasAlcohol": false,
+      "itemsSane": true
+    },
+    {
+      "id": "A02",
+      "group": "colombian",
+      "twinOf": null,
+      "ms": 7341,
+      "msToCard": 7340,
+      "error": null,
+      "cardCount": 1,
+      "items": 9,
+      "carded": true,
+      "tools": 0,
+      "toolNames": [],
+      "reply": "",
+      "infra": false,
+      "raw": {
+        "proposals": [
+          {
+            "id": "c1a49914-e7ff-4114-9523-f4df5d126781",
+            "kind": "food",
+            "data": {
+              "items": [
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Frijoles (bandeja paisa, ~200 g)",
+                  "calories": 255,
+                  "proteinG": 18,
+                  "carbsG": 46,
+                  "fatG": 2,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "White rice (bandeja paisa, ~150 g cooked)",
+                  "calories": 195,
+                  "proteinG": 4,
+                  "carbsG": 42,
+                  "fatG": 0,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium",
+                  "history": {
+                    "count": 1,
+                    "days": 1,
+                    "medianKcal": 205,
+                    "medianProteinG": 4,
+                    "medianCarbsG": 45,
+                    "medianFatG": 0.5,
+                    "spreadPct": 0,
+                    "lastKcal": 205,
+                    "lastAt": "2026-10-11T14:31:18.230Z",
+                    "matchedDescription": "White rice (1 cup, ~160 g)"
+                  }
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Ground beef (bandeja paisa, ~100 g)",
+                  "calories": 255,
+                  "proteinG": 26,
+                  "carbsG": 0,
+                  "fatG": 17,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Chicharrón (bandeja paisa, ~80 g)",
+                  "calories": 455,
+                  "proteinG": 36,
+                  "carbsG": 0,
+                  "fatG": 36,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Fried egg (bandeja paisa, 1 egg)",
+                  "calories": 100,
+                  "proteinG": 6,
+                  "carbsG": 0,
+                  "fatG": 8,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Fried sweet plantain slices (bandeja paisa, ~90 g / 2 slices)",
+                  "calories": 210,
+                  "proteinG": 1,
+                  "carbsG": 36,
+                  "fatG": 8,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Avocado (bandeja paisa, ~70 g)",
+                  "calories": 110,
+                  "proteinG": 1,
+                  "carbsG": 6,
+                  "fatG": 10,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Corn arepa (bandeja paisa, ~50 g)",
+                  "calories": 110,
+                  "proteinG": 2,
+                  "carbsG": 22,
+                  "fatG": 1,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Chorizo (bandeja paisa, ~70 g)",
+                  "calories": 240,
+                  "proteinG": 12,
+                  "carbsG": 2,
+                  "fatG": 20,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                }
+              ],
+              "message": "Bandeja paisa logged for lunch — estimated 1,930 kcal. A proper plate, not a light administrative task.",
+              "source": "chat"
+            }
+          }
+        ],
+        "reply": "",
+        "tools": [],
+        "ms": 7341,
+        "msToCard": 7340,
+        "error": null
+      },
+      "totals": {
+        "kcal": 1930,
+        "proteinG": 106,
+        "carbsG": 154,
+        "fatG": 102
+      },
+      "ref": {
+        "kcal": 1934,
+        "proteinG": 111,
+        "carbsG": 151,
+        "fatG": 97
+      },
+      "inRange": {
+        "kcal": true,
+        "proteinG": true,
+        "carbsG": true,
+        "fatG": true
+      },
+      "errPct": {
+        "kcal": -0.2,
+        "proteinG": -4.5,
+        "carbsG": 2,
+        "fatG": 5.2
+      },
+      "itemsOk": true,
+      "macroSane": true,
+      "mealOk": true,
+      "timeOk": null,
+      "usualOk": null,
+      "perItem": [
+        {
+          "desc": "Frijoles (bandeja paisa, ~200 g)",
+          "kcal": 255,
+          "macroKcal": 274,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "White rice (bandeja paisa, ~150 g cooked)",
+          "kcal": 195,
+          "macroKcal": 184,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Ground beef (bandeja paisa, ~100 g)",
+          "kcal": 255,
+          "macroKcal": 257,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Chicharrón (bandeja paisa, ~80 g)",
+          "kcal": 455,
+          "macroKcal": 468,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Fried egg (bandeja paisa, 1 egg)",
+          "kcal": 100,
+          "macroKcal": 96,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Fried sweet plantain slices (bandeja paisa, ~90 g / 2 slices",
+          "kcal": 210,
+          "macroKcal": 220,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Avocado (bandeja paisa, ~70 g)",
+          "kcal": 110,
+          "macroKcal": 118,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Corn arepa (bandeja paisa, ~50 g)",
+          "kcal": 110,
+          "macroKcal": 105,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Chorizo (bandeja paisa, ~70 g)",
+          "kcal": 240,
+          "macroKcal": 236,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        }
+      ],
+      "macroKcalInRange": true,
+      "macroKcalErrPct": 1.2,
+      "mealExpected": "lunch",
+      "mealGot": "lunch",
+      "usualMatched": false,
+      "source": "chat",
+      "sourceOk": true,
+      "confidenceShare": 100,
+      "historyPresent": true,
+      "historyOk": null,
+      "anchorPresent": false,
+      "anchorOk": null,
+      "suggestUsual": 0,
+      "collapsed": 0,
+      "flagged": 0,
+      "hasAlcohol": false,
+      "itemsSane": true
+    },
+    {
+      "id": "A03",
+      "group": "colombian",
+      "twinOf": null,
+      "ms": 4066,
+      "msToCard": 4065,
+      "error": null,
+      "cardCount": 1,
+      "items": 1,
+      "carded": true,
+      "tools": 0,
+      "toolNames": [],
+      "reply": "",
+      "infra": false,
+      "raw": {
+        "proposals": [
+          {
+            "id": "89164570-eb92-479a-b3a4-33672495ca44",
+            "kind": "food",
+            "data": {
+              "items": [
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Sancocho de pollo (1 restaurant-style bowl, ~550 g)",
+                  "calories": 550,
+                  "proteinG": 38,
+                  "carbsG": 55,
+                  "fatG": 18,
+                  "flags": [],
+                  "notes": "Typical Colombian chicken sancocho bowl; estimate includes chicken, potato/yuca/plantain, and broth.",
+                  "loggedAt": "2026-10-20T14:31:00.000Z",
+                  "confidence": "medium",
+                  "history": {
+                    "count": 1,
+                    "days": 1,
+                    "medianKcal": 380,
+                    "medianProteinG": 22,
+                    "medianCarbsG": 45,
+                    "medianFatG": 11,
+                    "spreadPct": 0,
+                    "lastKcal": 380,
+                    "lastAt": "2026-10-05T14:31:18.251Z",
+                    "matchedDescription": "Sancocho de pollo (1 bowl)"
+                  }
+                }
+              ],
+              "message": "Sancocho logged — 550 kcal. Proper breakfast chaos; I respect it.",
+              "source": "chat"
+            }
+          }
+        ],
+        "reply": "",
+        "tools": [],
+        "ms": 4066,
+        "msToCard": 4065,
+        "error": null
+      },
+      "totals": {
+        "kcal": 550,
+        "proteinG": 38,
+        "carbsG": 55,
+        "fatG": 18
+      },
+      "ref": {
+        "kcal": 554,
+        "proteinG": 30,
+        "carbsG": 84,
+        "fatG": 11
+      },
+      "inRange": {
+        "kcal": true,
+        "proteinG": true,
+        "carbsG": true,
+        "fatG": false
+      },
+      "errPct": {
+        "kcal": -0.7,
+        "proteinG": 26.7,
+        "carbsG": -34.5,
+        "fatG": 63.6
+      },
+      "itemsOk": true,
+      "macroSane": true,
+      "mealOk": true,
+      "timeOk": null,
+      "usualOk": null,
+      "perItem": [
+        {
+          "desc": "Sancocho de pollo (1 restaurant-style bowl, ~550 g)",
+          "kcal": 550,
+          "macroKcal": 534,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T14:31:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        }
+      ],
+      "macroKcalInRange": true,
+      "macroKcalErrPct": -3.6,
+      "mealExpected": "breakfast",
+      "mealGot": "breakfast",
+      "usualMatched": false,
+      "source": "chat",
+      "sourceOk": true,
+      "confidenceShare": 100,
+      "historyPresent": true,
+      "historyOk": true,
+      "anchorPresent": false,
+      "anchorOk": true,
+      "suggestUsual": 0,
+      "collapsed": 0,
+      "flagged": 0,
+      "hasAlcohol": false,
+      "itemsSane": true
+    },
+    {
+      "id": "A06",
+      "group": "colombian",
+      "twinOf": null,
+      "ms": 4048,
+      "msToCard": 4047,
+      "error": null,
+      "cardCount": 1,
+      "items": 2,
+      "carded": true,
+      "tools": 0,
+      "toolNames": [],
+      "reply": "",
+      "infra": false,
+      "raw": {
+        "proposals": [
+          {
+            "id": "bdc7e3d7-4f08-4a65-b251-7d4f9fbed85d",
+            "kind": "food",
+            "data": {
+              "items": [
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Patacones fritos (~3 medianos, ~135 g)",
+                  "calories": 420,
+                  "proteinG": 3,
+                  "carbsG": 59,
+                  "fatG": 20,
+                  "flags": [],
+                  "notes": "Estimado usando patacones medianos fritos.",
+                  "loggedAt": "2026-10-20T14:31:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Hogao (~3 cucharadas)",
+                  "calories": 45,
+                  "proteinG": 1,
+                  "carbsG": 5,
+                  "fatG": 2,
+                  "flags": [],
+                  "notes": "Porción estimada como acompañamiento.",
+                  "loggedAt": "2026-10-20T14:31:00.000Z",
+                  "confidence": "medium"
+                }
+              ],
+              "message": "Logged: 3 patacones with hogao — ~465 kcal total. Crispy little calorie sponges, but worth it.",
+              "source": "chat"
+            }
+          }
+        ],
+        "reply": "",
+        "tools": [],
+        "ms": 4048,
+        "msToCard": 4047,
+        "error": null
+      },
+      "totals": {
+        "kcal": 465,
+        "proteinG": 4,
+        "carbsG": 64,
+        "fatG": 22
+      },
+      "ref": {
+        "kcal": 443,
+        "proteinG": 2,
+        "carbsG": 68,
+        "fatG": 18
+      },
+      "inRange": {
+        "kcal": true,
+        "proteinG": true,
+        "carbsG": true,
+        "fatG": true
+      },
+      "errPct": {
+        "kcal": 5,
+        "proteinG": 100,
+        "carbsG": -5.9,
+        "fatG": 22.2
+      },
+      "itemsOk": true,
+      "macroSane": true,
+      "mealOk": true,
+      "timeOk": null,
+      "usualOk": null,
+      "perItem": [
+        {
+          "desc": "Patacones fritos (~3 medianos, ~135 g)",
+          "kcal": 420,
+          "macroKcal": 428,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T14:31:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Hogao (~3 cucharadas)",
+          "kcal": 45,
+          "macroKcal": 42,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T14:31:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        }
+      ],
+      "macroKcalInRange": true,
+      "macroKcalErrPct": 6.1,
+      "mealExpected": "breakfast",
+      "mealGot": "breakfast",
+      "usualMatched": false,
+      "source": "chat",
+      "sourceOk": true,
+      "confidenceShare": 100,
+      "historyPresent": false,
+      "historyOk": null,
+      "anchorPresent": false,
+      "anchorOk": true,
+      "suggestUsual": 0,
+      "collapsed": 0,
+      "flagged": 0,
+      "hasAlcohol": false,
+      "itemsSane": true
+    },
+    {
+      "id": "B01",
+      "group": "gym",
+      "twinOf": null,
+      "ms": 3645,
+      "msToCard": 3644,
+      "error": null,
+      "cardCount": 1,
+      "items": 2,
+      "carded": true,
+      "tools": 0,
+      "toolNames": [],
+      "reply": "",
+      "infra": false,
+      "raw": {
+        "proposals": [
+          {
+            "id": "95b8a75a-9af7-4750-81ce-694c196841c8",
+            "kind": "food",
+            "data": {
+              "items": [
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Whey protein powder, 1 scoop",
+                  "calories": 120,
+                  "proteinG": 24,
+                  "carbsG": 3,
+                  "fatG": 2,
+                  "flags": [],
+                  "notes": "Assumed standard whey scoop (~30 g).",
+                  "loggedAt": "2026-10-20T14:31:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Whole milk, 250 ml",
+                  "calories": 153,
+                  "proteinG": 8,
+                  "carbsG": 12,
+                  "fatG": 8.3,
+                  "flags": [],
+                  "notes": "250 ml whole milk.",
+                  "loggedAt": "2026-10-20T14:31:00.000Z",
+                  "confidence": "high"
+                }
+              ],
+              "message": "Protein shake logged: 273 kcal total, with 32 g protein. Solid start.",
+              "source": "chat"
+            }
+          }
+        ],
+        "reply": "",
+        "tools": [],
+        "ms": 3645,
+        "msToCard": 3644,
+        "error": null
+      },
+      "totals": {
+        "kcal": 273,
+        "proteinG": 32,
+        "carbsG": 15,
+        "fatG": 10.3
+      },
+      "ref": {
+        "kcal": 265,
+        "proteinG": 31,
+        "carbsG": 14,
+        "fatG": 9
+      },
+      "inRange": {
+        "kcal": true,
+        "proteinG": true,
+        "carbsG": true,
+        "fatG": true
+      },
+      "errPct": {
+        "kcal": 3,
+        "proteinG": 3.2,
+        "carbsG": 7.1,
+        "fatG": 14.4
+      },
+      "itemsOk": true,
+      "macroSane": true,
+      "mealOk": true,
+      "timeOk": null,
+      "usualOk": null,
+      "perItem": [
+        {
+          "desc": "Whey protein powder, 1 scoop",
+          "kcal": 120,
+          "macroKcal": 126,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T14:31:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Whole milk, 250 ml",
+          "kcal": 153,
+          "macroKcal": 155,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T14:31:00.000Z",
+          "usual": false,
+          "confidence": "high",
+          "alcohol": false
+        }
+      ],
+      "macroKcalInRange": true,
+      "macroKcalErrPct": 5.9,
+      "mealExpected": "breakfast",
+      "mealGot": "breakfast",
+      "usualMatched": false,
+      "source": "chat",
+      "sourceOk": true,
+      "confidenceShare": 100,
+      "historyPresent": false,
+      "historyOk": null,
+      "anchorPresent": false,
+      "anchorOk": true,
+      "suggestUsual": 0,
+      "collapsed": 0,
+      "flagged": 0,
+      "hasAlcohol": false,
+      "itemsSane": true
+    },
+    {
+      "id": "B03",
+      "group": "gym",
+      "twinOf": null,
+      "ms": 3252,
+      "msToCard": 3249,
+      "error": null,
+      "cardCount": 1,
+      "items": 2,
+      "carded": true,
+      "tools": 0,
+      "toolNames": [],
+      "reply": "",
+      "infra": false,
+      "raw": {
+        "proposals": [
+          {
+            "id": "378dc353-ac2f-4df0-98e7-60babb8f3f88",
+            "kind": "food",
+            "data": {
+              "items": [
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Grilled chicken breast (~200 g)",
+                  "calories": 330,
+                  "proteinG": 62,
+                  "carbsG": 0,
+                  "fatG": 7,
+                  "flags": [],
+                  "notes": "Assumed skinless grilled chicken breast, cooked weight.",
+                  "loggedAt": "2026-10-20T14:31:00.000Z",
+                  "confidence": "high",
+                  "history": {
+                    "count": 1,
+                    "days": 1,
+                    "medianKcal": 330,
+                    "medianProteinG": 62,
+                    "medianCarbsG": 0,
+                    "medianFatG": 7,
+                    "spreadPct": 0,
+                    "lastKcal": 330,
+                    "lastAt": "2026-10-11T14:31:18.223Z",
+                    "matchedDescription": "Grilled chicken breast (~200 g)"
+                  }
+                },
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "White rice (1 cup cooked)",
+                  "calories": 205,
+                  "proteinG": 4,
+                  "carbsG": 45,
+                  "fatG": 0,
+                  "flags": [],
+                  "notes": "Assumed one standard cup of cooked white rice.",
+                  "loggedAt": "2026-10-20T14:31:00.000Z",
+                  "confidence": "high",
+                  "history": {
+                    "count": 1,
+                    "days": 1,
+                    "medianKcal": 205,
+                    "medianProteinG": 4,
+                    "medianCarbsG": 45,
+                    "medianFatG": 0.5,
+                    "spreadPct": 0,
+                    "lastKcal": 205,
+                    "lastAt": "2026-10-11T14:31:18.230Z",
+                    "matchedDescription": "White rice (1 cup, ~160 g)"
+                  }
+                }
+              ],
+              "message": "Solid, simple fuel: chicken 330 kcal + rice 205 kcal — 535 kcal total, with 66 g protein.",
+              "source": "chat"
+            }
+          }
+        ],
+        "reply": "",
+        "tools": [],
+        "ms": 3252,
+        "msToCard": 3249,
+        "error": null
+      },
+      "totals": {
+        "kcal": 535,
+        "proteinG": 66,
+        "carbsG": 45,
+        "fatG": 7
+      },
+      "ref": {
+        "kcal": 538,
+        "proteinG": 66,
+        "carbsG": 45,
+        "fatG": 8
+      },
+      "inRange": {
+        "kcal": true,
+        "proteinG": true,
+        "carbsG": true,
+        "fatG": true
+      },
+      "errPct": {
+        "kcal": -0.6,
+        "proteinG": 0,
+        "carbsG": 0,
+        "fatG": -12.5
+      },
+      "itemsOk": true,
+      "macroSane": true,
+      "mealOk": true,
+      "timeOk": null,
+      "usualOk": null,
+      "perItem": [
+        {
+          "desc": "Grilled chicken breast (~200 g)",
+          "kcal": 330,
+          "macroKcal": 311,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T14:31:00.000Z",
+          "usual": false,
+          "confidence": "high",
+          "alcohol": false
+        },
+        {
+          "desc": "White rice (1 cup cooked)",
+          "kcal": 205,
+          "macroKcal": 196,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T14:31:00.000Z",
+          "usual": false,
+          "confidence": "high",
+          "alcohol": false
+        }
+      ],
+      "macroKcalInRange": true,
+      "macroKcalErrPct": -5.8,
+      "mealExpected": "breakfast",
+      "mealGot": "breakfast",
+      "usualMatched": false,
+      "source": "chat",
+      "sourceOk": true,
+      "confidenceShare": 100,
+      "historyPresent": true,
+      "historyOk": true,
+      "anchorPresent": false,
+      "anchorOk": true,
+      "suggestUsual": 0,
+      "collapsed": 0,
+      "flagged": 0,
+      "hasAlcohol": false,
+      "itemsSane": true
+    },
+    {
+      "id": "C01",
+      "group": "quantities",
+      "twinOf": null,
+      "ms": 3218,
+      "msToCard": 3215,
+      "error": null,
+      "cardCount": 1,
+      "items": 1,
+      "carded": true,
+      "tools": 0,
+      "toolNames": [],
+      "reply": "",
+      "infra": false,
+      "raw": {
+        "proposals": [
+          {
+            "id": "70f2032b-b6e7-4926-9490-325d4e585ee9",
+            "kind": "food",
+            "data": {
+              "items": [
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Half arepa de maíz with queso campesino (~40 g arepa + 15 g cheese)",
+                  "calories": 133,
+                  "proteinG": 5,
+                  "carbsG": 18,
+                  "fatG": 5,
+                  "flags": [],
+                  "notes": "Estimated as half of a typical arepa with cheese.",
+                  "loggedAt": "2026-10-20T14:31:00.000Z",
+                  "confidence": "medium",
+                  "history": {
+                    "count": 3,
+                    "days": 3,
+                    "medianKcal": 320,
+                    "medianProteinG": 10,
+                    "medianCarbsG": 38,
+                    "medianFatG": 12,
+                    "spreadPct": 3,
+                    "lastKcal": 320,
+                    "lastAt": "2026-10-15T14:31:18.152Z",
+                    "matchedDescription": "Arepa con queso (1, ~80 g, queso campesino)"
+                  },
+                  "suggestUsual": true
+                }
+              ],
+              "message": "Half an arepa con queso for breakfast — ~133 kcal.",
+              "source": "chat"
+            }
+          }
+        ],
+        "reply": "",
+        "tools": [],
+        "ms": 3218,
+        "msToCard": 3215,
+        "error": null
+      },
+      "totals": {
+        "kcal": 133,
+        "proteinG": 5,
+        "carbsG": 18,
+        "fatG": 5
+      },
+      "ref": {
+        "kcal": 132,
+        "proteinG": 5,
+        "carbsG": 15,
+        "fatG": 6
+      },
+      "inRange": {
+        "kcal": true,
+        "proteinG": true,
+        "carbsG": true,
+        "fatG": true
+      },
+      "errPct": {
+        "kcal": 0.8,
+        "proteinG": 0,
+        "carbsG": 20,
+        "fatG": -16.7
+      },
+      "itemsOk": true,
+      "macroSane": true,
+      "mealOk": true,
+      "timeOk": null,
+      "usualOk": null,
+      "perItem": [
+        {
+          "desc": "Half arepa de maíz with queso campesino (~40 g arepa + 15 g ",
+          "kcal": 133,
+          "macroKcal": 137,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T14:31:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        }
+      ],
+      "macroKcalInRange": true,
+      "macroKcalErrPct": 3.8,
+      "mealExpected": "breakfast",
+      "mealGot": "breakfast",
+      "usualMatched": false,
+      "source": "chat",
+      "sourceOk": true,
+      "confidenceShare": 100,
+      "historyPresent": true,
+      "historyOk": null,
+      "anchorPresent": false,
+      "anchorOk": null,
+      "suggestUsual": 1,
+      "collapsed": 0,
+      "flagged": 0,
+      "hasAlcohol": false,
+      "itemsSane": true
+    },
+    {
+      "id": "E05",
+      "group": "temporal",
+      "twinOf": null,
+      "ms": 5048,
+      "msToCard": 5047,
+      "error": null,
+      "cardCount": 1,
+      "items": 3,
+      "carded": true,
+      "tools": 0,
+      "toolNames": [],
+      "reply": "",
+      "infra": false,
+      "raw": {
+        "proposals": [
+          {
+            "id": "7f3c983c-cb36-4fac-b235-1c319efb4ee7",
+            "kind": "food",
+            "data": {
+              "items": [
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "2 huevos, preparación no especificada",
+                  "calories": 144,
+                  "proteinG": 13,
+                  "carbsG": 1,
+                  "fatG": 10,
+                  "flags": [],
+                  "notes": "Estimación para 2 huevos grandes.",
+                  "loggedAt": "2026-10-20T13:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Arepa de maíz (~80 g)",
+                  "calories": 175,
+                  "proteinG": 4,
+                  "carbsG": 36,
+                  "fatG": 2,
+                  "flags": [],
+                  "notes": "Porción típica de arepa mediana.",
+                  "loggedAt": "2026-10-20T13:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Queso campesino (~30 g)",
+                  "calories": 90,
+                  "proteinG": 6,
+                  "carbsG": 1,
+                  "fatG": 7,
+                  "flags": [],
+                  "notes": "Estimación de queso dentro de la arepa.",
+                  "loggedAt": "2026-10-20T13:00:00.000Z",
+                  "confidence": "medium"
+                }
+              ],
+              "message": "Desayuno anotado: 2 huevos (144 kcal), arepa (175) y queso (90). Total: 409 kcal.",
+              "source": "chat"
+            }
+          }
+        ],
+        "reply": "",
+        "tools": [],
+        "ms": 5048,
+        "msToCard": 5047,
+        "error": null
+      },
+      "totals": {
+        "kcal": 409,
+        "proteinG": 23,
+        "carbsG": 38,
+        "fatG": 19
+      },
+      "ref": {
+        "kcal": 414,
+        "proteinG": 20,
+        "carbsG": 32,
+        "fatG": 22
+      },
+      "inRange": {
+        "kcal": true,
+        "proteinG": true,
+        "carbsG": true,
+        "fatG": true
+      },
+      "errPct": {
+        "kcal": -1.2,
+        "proteinG": 15,
+        "carbsG": 18.8,
+        "fatG": -13.6
+      },
+      "itemsOk": true,
+      "macroSane": true,
+      "mealOk": true,
+      "timeOk": null,
+      "usualOk": null,
+      "perItem": [
+        {
+          "desc": "2 huevos, preparación no especificada",
+          "kcal": 144,
+          "macroKcal": 146,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T13:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Arepa de maíz (~80 g)",
+          "kcal": 175,
+          "macroKcal": 178,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T13:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Queso campesino (~30 g)",
+          "kcal": 90,
+          "macroKcal": 91,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T13:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        }
+      ],
+      "macroKcalInRange": true,
+      "macroKcalErrPct": 0.2,
+      "mealExpected": "breakfast",
+      "mealGot": "breakfast",
+      "usualMatched": false,
+      "source": "chat",
+      "sourceOk": true,
+      "confidenceShare": 100,
+      "historyPresent": false,
+      "historyOk": null,
+      "anchorPresent": false,
+      "anchorOk": null,
+      "suggestUsual": 0,
+      "collapsed": 0,
+      "flagged": 0,
+      "hasAlcohol": false,
+      "itemsSane": true
+    },
+    {
+      "id": "F01",
+      "group": "transcript",
+      "twinOf": "A01",
+      "ms": 3014,
+      "msToCard": 3013,
+      "error": null,
+      "cardCount": 1,
+      "items": 1,
+      "carded": true,
+      "tools": 0,
+      "toolNames": [],
+      "reply": "",
+      "infra": false,
+      "raw": {
+        "proposals": [
+          {
+            "id": "c45aaf2c-ce58-40e1-91b4-33fccbbacff7",
+            "kind": "food",
+            "data": {
+              "items": [
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Arepa de maíz con queso campesino (~80 g arepa + 30 g cheese)",
+                  "calories": 265,
+                  "proteinG": 9,
+                  "carbsG": 35,
+                  "fatG": 10,
+                  "flags": [],
+                  "notes": "One typical arepa with cheese",
+                  "loggedAt": "2026-10-20T13:00:00.000Z",
+                  "confidence": "medium",
+                  "history": {
+                    "count": 3,
+                    "days": 3,
+                    "medianKcal": 320,
+                    "medianProteinG": 10,
+                    "medianCarbsG": 38,
+                    "medianFatG": 12,
+                    "spreadPct": 3,
+                    "lastKcal": 320,
+                    "lastAt": "2026-10-15T14:31:18.152Z",
+                    "matchedDescription": "Arepa con queso (1, ~80 g, queso campesino)"
+                  },
+                  "suggestUsual": true
+                }
+              ],
+              "message": "Breakfast logged: 1 arepa con queso — 265 kcal.",
+              "source": "chat"
+            }
+          }
+        ],
+        "reply": "",
+        "tools": [],
+        "ms": 3014,
+        "msToCard": 3013,
+        "error": null
+      },
+      "totals": {
+        "kcal": 265,
+        "proteinG": 9,
+        "carbsG": 35,
+        "fatG": 10
+      },
+      "ref": {
+        "kcal": 265,
+        "proteinG": 10,
+        "carbsG": 31,
+        "fatG": 11
+      },
+      "inRange": {
+        "kcal": true,
+        "proteinG": true,
+        "carbsG": true,
+        "fatG": true
+      },
+      "errPct": {
+        "kcal": 0,
+        "proteinG": -10,
+        "carbsG": 12.9,
+        "fatG": -9.1
+      },
+      "itemsOk": true,
+      "macroSane": true,
+      "mealOk": true,
+      "timeOk": null,
+      "usualOk": null,
+      "perItem": [
+        {
+          "desc": "Arepa de maíz con queso campesino (~80 g arepa + 30 g cheese",
+          "kcal": 265,
+          "macroKcal": 266,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T13:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        }
+      ],
+      "macroKcalInRange": true,
+      "macroKcalErrPct": 0.4,
+      "mealExpected": "breakfast",
+      "mealGot": "breakfast",
+      "usualMatched": false,
+      "source": "chat",
+      "sourceOk": true,
+      "confidenceShare": 100,
+      "historyPresent": true,
+      "historyOk": null,
+      "anchorPresent": false,
+      "anchorOk": null,
+      "suggestUsual": 1,
+      "collapsed": 0,
+      "flagged": 0,
+      "hasAlcohol": false,
+      "itemsSane": true
+    },
+    {
+      "id": "F04",
+      "group": "transcript",
+      "twinOf": "A06",
+      "ms": 3849,
+      "msToCard": 3847,
+      "error": null,
+      "cardCount": 1,
+      "items": 2,
+      "carded": true,
+      "tools": 0,
+      "toolNames": [],
+      "reply": "",
+      "infra": false,
+      "raw": {
+        "proposals": [
+          {
+            "id": "6d403a62-3345-4d6a-a223-7fae9d47bf8f",
+            "kind": "food",
+            "data": {
+              "items": [
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Patacones fritos (~3 unidades, 135 g total)",
+                  "calories": 420,
+                  "proteinG": 2,
+                  "carbsG": 57,
+                  "fatG": 21,
+                  "flags": [],
+                  "notes": "Estimado con patacones medianos fritos.",
+                  "loggedAt": "2026-10-20T14:31:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "breakfast",
+                  "foodDescription": "Hogao (~50 g)",
+                  "calories": 35,
+                  "proteinG": 1,
+                  "carbsG": 5,
+                  "fatG": 2,
+                  "flags": [
+                    {
+                      "kind": "macro_mismatch",
+                      "macroKcal": 42,
+                      "pct": 20
+                    }
+                  ],
+                  "notes": "Porción estimada para acompañar los patacones.",
+                  "loggedAt": "2026-10-20T14:31:00.000Z",
+                  "confidence": "medium"
+                }
+              ],
+              "message": "Listo: 3 patacones con hogao — ~455 kcal en total.",
+              "source": "chat"
+            }
+          }
+        ],
+        "reply": "",
+        "tools": [],
+        "ms": 3849,
+        "msToCard": 3847,
+        "error": null
+      },
+      "totals": {
+        "kcal": 455,
+        "proteinG": 3,
+        "carbsG": 62,
+        "fatG": 23
+      },
+      "ref": {
+        "kcal": 443,
+        "proteinG": 2,
+        "carbsG": 68,
+        "fatG": 18
+      },
+      "inRange": {
+        "kcal": true,
+        "proteinG": true,
+        "carbsG": true,
+        "fatG": true
+      },
+      "errPct": {
+        "kcal": 2.7,
+        "proteinG": 50,
+        "carbsG": -8.8,
+        "fatG": 27.8
+      },
+      "itemsOk": true,
+      "macroSane": true,
+      "mealOk": true,
+      "timeOk": null,
+      "usualOk": null,
+      "perItem": [
+        {
+          "desc": "Patacones fritos (~3 unidades, 135 g total)",
+          "kcal": 420,
+          "macroKcal": 425,
+          "sane": true,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T14:31:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Hogao (~50 g)",
+          "kcal": 35,
+          "macroKcal": 42,
+          "sane": false,
+          "mealType": "breakfast",
+          "loggedAt": "2026-10-20T14:31:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        }
+      ],
+      "macroKcalInRange": true,
+      "macroKcalErrPct": 5.4,
+      "mealExpected": "breakfast",
+      "mealGot": "breakfast",
+      "usualMatched": false,
+      "source": "chat",
+      "sourceOk": true,
+      "confidenceShare": 100,
+      "historyPresent": false,
+      "historyOk": null,
+      "anchorPresent": false,
+      "anchorOk": null,
+      "suggestUsual": 0,
+      "collapsed": 0,
+      "flagged": 1,
+      "hasAlcohol": false,
+      "itemsSane": false
+    },
+    {
+      "id": "F10",
+      "group": "transcript",
+      "twinOf": "A02",
+      "ms": 6906,
+      "msToCard": 6905,
+      "error": null,
+      "cardCount": 1,
+      "items": 9,
+      "carded": true,
+      "tools": 0,
+      "toolNames": [],
+      "reply": "",
+      "infra": false,
+      "raw": {
+        "proposals": [
+          {
+            "id": "16159762-73e2-4c0e-b4ae-3a6a2e300a4d",
+            "kind": "food",
+            "data": {
+              "items": [
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Frijoles (bandeja paisa, ~200 g)",
+                  "calories": 255,
+                  "proteinG": 18,
+                  "carbsG": 46,
+                  "fatG": 1,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "White rice (bandeja paisa, ~150 g)",
+                  "calories": 195,
+                  "proteinG": 4,
+                  "carbsG": 43,
+                  "fatG": 0,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium",
+                  "history": {
+                    "count": 1,
+                    "days": 1,
+                    "medianKcal": 205,
+                    "medianProteinG": 4,
+                    "medianCarbsG": 45,
+                    "medianFatG": 0.5,
+                    "spreadPct": 0,
+                    "lastKcal": 205,
+                    "lastAt": "2026-10-11T14:31:18.230Z",
+                    "matchedDescription": "White rice (1 cup, ~160 g)"
+                  }
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Ground beef (bandeja paisa, ~100 g)",
+                  "calories": 255,
+                  "proteinG": 26,
+                  "carbsG": 0,
+                  "fatG": 17,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Chicharrón (bandeja paisa, ~80 g)",
+                  "calories": 455,
+                  "proteinG": 36,
+                  "carbsG": 0,
+                  "fatG": 36,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Fried egg (bandeja paisa, 1 egg)",
+                  "calories": 100,
+                  "proteinG": 6,
+                  "carbsG": 0,
+                  "fatG": 8,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Fried ripe plantain slices / tajadas (bandeja paisa, ~90 g)",
+                  "calories": 210,
+                  "proteinG": 1,
+                  "carbsG": 40,
+                  "fatG": 6,
+                  "flags": [],
+                  "notes": "About 2 tajadas",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Avocado (bandeja paisa, ~70 g)",
+                  "calories": 110,
+                  "proteinG": 1,
+                  "carbsG": 6,
+                  "fatG": 10,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Corn arepa (bandeja paisa, ~50 g)",
+                  "calories": 110,
+                  "proteinG": 2,
+                  "carbsG": 23,
+                  "fatG": 1,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                },
+                {
+                  "mealType": "lunch",
+                  "foodDescription": "Chorizo (bandeja paisa, ~70 g)",
+                  "calories": 240,
+                  "proteinG": 13,
+                  "carbsG": 2,
+                  "fatG": 20,
+                  "flags": [],
+                  "notes": "Typical restaurant bandeja paisa portion",
+                  "loggedAt": "2026-10-19T18:00:00.000Z",
+                  "confidence": "medium"
+                }
+              ],
+              "message": "The full bandeja is in: ~1,930 kcal, 107 g protein. A glorious logistical error of a lunch.",
+              "source": "chat"
+            }
+          }
+        ],
+        "reply": "",
+        "tools": [],
+        "ms": 6906,
+        "msToCard": 6905,
+        "error": null
+      },
+      "totals": {
+        "kcal": 1930,
+        "proteinG": 107,
+        "carbsG": 160,
+        "fatG": 99
+      },
+      "ref": {
+        "kcal": 1934,
+        "proteinG": 111,
+        "carbsG": 151,
+        "fatG": 97
+      },
+      "inRange": {
+        "kcal": true,
+        "proteinG": true,
+        "carbsG": true,
+        "fatG": true
+      },
+      "errPct": {
+        "kcal": -0.2,
+        "proteinG": -3.6,
+        "carbsG": 6,
+        "fatG": 2.1
+      },
+      "itemsOk": true,
+      "macroSane": true,
+      "mealOk": true,
+      "timeOk": null,
+      "usualOk": null,
+      "perItem": [
+        {
+          "desc": "Frijoles (bandeja paisa, ~200 g)",
+          "kcal": 255,
+          "macroKcal": 265,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "White rice (bandeja paisa, ~150 g)",
+          "kcal": 195,
+          "macroKcal": 188,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Ground beef (bandeja paisa, ~100 g)",
+          "kcal": 255,
+          "macroKcal": 257,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Chicharrón (bandeja paisa, ~80 g)",
+          "kcal": 455,
+          "macroKcal": 468,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Fried egg (bandeja paisa, 1 egg)",
+          "kcal": 100,
+          "macroKcal": 96,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Fried ripe plantain slices / tajadas (bandeja paisa, ~90 g)",
+          "kcal": 210,
+          "macroKcal": 218,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Avocado (bandeja paisa, ~70 g)",
+          "kcal": 110,
+          "macroKcal": 118,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Corn arepa (bandeja paisa, ~50 g)",
+          "kcal": 110,
+          "macroKcal": 109,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        },
+        {
+          "desc": "Chorizo (bandeja paisa, ~70 g)",
+          "kcal": 240,
+          "macroKcal": 240,
+          "sane": true,
+          "mealType": "lunch",
+          "loggedAt": "2026-10-19T18:00:00.000Z",
+          "usual": false,
+          "confidence": "medium",
+          "alcohol": false
+        }
+      ],
+      "macroKcalInRange": true,
+      "macroKcalErrPct": 1.3,
+      "mealExpected": "lunch",
+      "mealGot": "lunch",
+      "usualMatched": false,
+      "source": "chat",
+      "sourceOk": true,
+      "confidenceShare": 100,
+      "historyPresent": true,
+      "historyOk": null,
+      "anchorPresent": false,
+      "anchorOk": null,
+      "suggestUsual": 0,
+      "collapsed": 0,
+      "flagged": 0,
+      "hasAlcohol": false,
+      "itemsSane": true
+    }
+  ],
+  "runs": [],
+  "stages": {
+    "main": {
+      "from": "2026-10-20T14:31:18.259Z",
+      "to": "2026-10-20T14:31:41.849Z",
+      "usage": {
+        "chat": {
+          "surface": "chat",
+          "calls": 11,
+          "input": 91126,
+          "output": 3750,
+          "usd": 0.227252
+        },
+        "chat-title": {
+          "surface": "chat-title",
+          "calls": 11,
+          "input": 2291,
+          "output": 93,
+          "usd": 0.005698
+        }
+      }
+    }
+  }
+}

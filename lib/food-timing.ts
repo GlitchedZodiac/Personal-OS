@@ -1,6 +1,7 @@
 import {
   addDaysToDateString,
   getDateStringInTimeZone,
+  getZonedDateParts,
   zonedLocalDateTimeToUtc,
 } from "@/lib/timezone";
 
@@ -170,5 +171,79 @@ export function normalizeFoodItemsWithTiming(
     }
 
     return typed;
+  });
+}
+
+// ─── Meal words vs the model's clock (2026-10-18) ─────────────────────────
+//
+// The prompt tells the model "date without time → 12:00". The Phase 2
+// baseline showed it following that rule even when the message named a meal
+// ("yesterday for dinner" stamped 12:00). The model's own `loggedAt` wins
+// over the message-level inference above, so the correction has to look at
+// the stamp itself: a stamp at exactly 12:00:00 local is the rule's default,
+// not a time anyone said; when the message names a meal, that meal's hour
+// replaces it. A stamp at any other minute is left alone.
+
+const MEAL_HOURS: Array<[RegExp, number]> = [
+  [/\b(breakfast|desayuno|this morning|esta ma(?:n|ñ)ana|morning)\b/i, 8],
+  [/\b(lunch|almuerzo|this afternoon|esta tarde)\b/i, 13],
+  [/\b(snack|merienda|onces)\b/i, 16],
+  [/\b(dinner|cena|tonight|esta noche|last night|anoche)\b/i, 20],
+];
+
+/** The hour a meal word implies, or null when the message names none (or several). */
+export function mealWordHour(message: string): number | null {
+  const hits = MEAL_HOURS.filter(([re]) => re.test(message)).map(([, h]) => h);
+  const distinct = [...new Set(hits)];
+  return distinct.length === 1 ? distinct[0] : null;
+}
+
+/**
+ * Replace the rule's 12:00:00 default with the meal word's hour, item by
+ * item, keeping each item's own local day. Items whose stamp is not exactly
+ * noon, or messages with no single meal word, are returned unchanged.
+ */
+export function reconcileLoggedAtWithMealWord<T extends { loggedAt?: string }>(
+  items: T[],
+  message: string,
+  timeZone: string
+): T[] {
+  const hour = mealWordHour(message);
+  if (hour === null || hour === 12) return items;
+  return items.map((item) => {
+    if (typeof item.loggedAt !== "string") return item;
+    const at = new Date(item.loggedAt);
+    if (!Number.isFinite(at.getTime())) return item;
+    const parts = getZonedDateParts(at, timeZone);
+    if (parts.hour !== 12 || parts.minute !== 0 || parts.second !== 0) return item;
+    const day = getDateStringInTimeZone(at, timeZone);
+    return { ...item, loggedAt: zonedLocalDateTimeToUtc(day, timeZone, hour, 0, 0).toISOString() };
+  });
+}
+
+// ─── A meal is never eaten in the future (2026-10-20) ─────────────────────
+//
+// "At 7pm I ate two empanadas", said at 8 am, means last night. The clock
+// rules above (and the model, following them) put it at 19:00 TODAY — a meal
+// eleven hours from now. Food logs record what was eaten, so a stamp more
+// than 15 minutes ahead of now is moved back one day; a stamp carrying an
+// explicit date in the message ("2026-10-21") is left alone.
+
+const FUTURE_SLACK_MS = 15 * 60_000;
+
+export function pullFutureMealsBack<T extends { loggedAt?: string }>(
+  items: T[],
+  message: string,
+  now: Date
+): T[] {
+  if (/\b20\d{2}-\d{2}-\d{2}\b/.test(message)) return items;
+  return items.map((item) => {
+    if (typeof item.loggedAt !== "string") return item;
+    const at = new Date(item.loggedAt);
+    if (!Number.isFinite(at.getTime()) || at.getTime() - now.getTime() <= FUTURE_SLACK_MS) return item;
+    // whole days back until it is no longer ahead of now (normally one)
+    let t = at.getTime();
+    while (t - now.getTime() > FUTURE_SLACK_MS) t -= 86_400_000;
+    return { ...item, loggedAt: new Date(t).toISOString() };
   });
 }

@@ -1,269 +1,269 @@
 # Food accuracy — how it is measured, and the numbers
 
-Lane D (intake reliability), 2026-10-17. Michael's ask: *"pressure test
-against the chat and speech to text and photo app to get more accurate on the
-calories for food, storing the meals and data more consistently."* This
-document is the measurement half of that: a repeatable eval of the real
-food-logging path, its baseline before any change, and (Phase 3) the same
-tables after. The plan and the gaps it rests on are in
+Lane D (intake reliability). Michael's ask: *"pressure test against the chat
+and speech to text and photo app to get more accurate on the calories for
+food, storing the meals and data more consistently."* This document is the
+measurement half: a repeatable eval of the real food-logging path, the same
+fixtures run against the code before Phase 3 and after it, and what changed.
+The plan and the gaps it rests on are in
 [`intake-reliability-plan.md`](intake-reliability-plan.md) §W1.
+
+## What he will notice
+
+- **Colombian dishes come back the same way every time.** A bandeja paisa
+  used to come back as 1,250 kcal one time and 3,170 the next (every
+  component listed twice); sancocho, patacones and empanadas wandered by
+  10–20 %. Now the same message gives the same card, and the numbers sit on
+  USDA-based values for a typical restaurant serving.
+- **Logging is faster and about half the price.** The assistant no longer
+  reads his whole day before writing a plain food card: the card arrives in
+  about 3½ seconds instead of 5, and each log costs about 40 % less.
+- **Times make sense.** "Yesterday for dinner" lands at 8 pm, not noon;
+  "at 7 pm I had…" said in the morning lands last night, not tonight.
+- **"My usual" works in any wording or language**, and the card offers his
+  saved usual's exact numbers.
+- **The card is easier to fix**: ½× · 1× · 1.5× · 2× chips, "last time: N
+  kcal" under foods he has logged before, a quiet "roughly / a guess" hint,
+  and — after the same food on three different days — "save it as a usual?",
+  which saves only if he taps it.
+- **Rows remember how they came in** (chat, voice, photo, label, usual,
+  Claude, typed), from now on.
+
+What was **not** tested here: the microphone and the speech recogniser (the
+"dictated" fixtures are typed text shaped like transcripts — real speech
+needs his voice), and real plates in photos (no food photos were downloaded;
+only the failure modes were probed). Both are on his checklist.
 
 ## What is measured, and how
 
-**The path under test is the real one.** `scripts/food-eval.mjs` logs in with
-the PIN, posts each utterance to `POST /api/ai/chat/stream` on a dev server
-exactly as the chat screen does (a fresh chat per utterance, `source: "text"`,
-`timeZone: America/Bogota`), reads the SSE stream, and scores the `log_food`
-proposal cards it gets back. Nothing is mocked and no prompt is bypassed — the
-numbers are what the card would have shown him.
+**The path under test is the real one.** `scripts/food-eval.mjs` logs in
+with the lane's PIN (read from `.env.local`, never written in the script),
+posts each utterance to `POST /api/ai/chat/stream` exactly as the chat screen
+does (a fresh chat per utterance, `source: "text"`, `timeZone:
+America/Bogota`), reads the stream, and scores the `log_food` cards. Nothing
+is mocked and no prompt is bypassed.
 
-**Fixed conditions, stated in every table.** Model `gpt-5.6-terra`
-(`CHAT_MODEL`, the registry default; `OPENAI_MODEL` unset), `reasoning: low`,
-no temperature set by the route (the API default), the system prompt and tool
-set as of the commit in the table header, and the run's local clock (meal type
-without an explicit meal word follows the prompt's clock rule). The seeded
-usual and history rows are identical in every run, so Phase 3 is a true
-before/after on the same fixtures.
+**A frozen evaluation database, and the same harness for both sides.** Both
+runs go against `pitaya_lane_d_eval`: the schema, his settings row (targets,
+timezone, language) and the run's synthetic seeds — none of his food, chats
+or usuals, so his real history cannot help or hurt either side. The BEFORE
+server runs a checkout of the baseline commit (`d3f537a`), the AFTER server
+this tree; one harness scores both. Every table carries the server's commit
+(and a hash of any uncommitted changes), the database's row counts and the
+model observed in the usage log. Seeds are removed before and after by tag,
+chats by the ids the server reported; an interrupted run cleans up after
+itself.
 
-**Fixtures are synthetic** (`tests/food-eval/fixtures.mjs`, 67 utterances +
-3 two-turn corrections + 6 labels + 2 photo probes). They mirror the SHAPE of
-how he logs — Colombian staples, gym food, quantities, EN/ES mixing, dictated
-transcripts with fillers — and none is a row from his history. The repo is
-public; his data stays out of it.
+**Safety.** The harness refuses a database URL that can reach beyond this
+machine (including a `?host=` override, the bypass the review found), asks
+the database where it actually answered from, refuses a server address that
+is not this machine, and — after seeding — proves the server and the harness
+see the same rows before it spends anything.
 
-**References are public nutrient values** (`tests/food-eval/foods.mjs`, printed
-to `tests/food-eval/reference.md`): per-100 g figures of the kind in USDA
-FoodData Central and Colombian food-composition tables, multiplied by the
-stated portion. Two honest references for "a bowl of sancocho" differ by
-15–20 %, so acceptance is a BAND, not a point: kcal −25 % / +30 %, each macro
-−40 % / +50 % with a 4 g floor; composite dishes (bandeja paisa, sancocho,
-ajiaco, arroz con pollo) −30 % / +35 % and −50 % / +60 %. The bands are what
-"accurate" means below; the median absolute error is reported beside them so
-the band's width never hides a drift.
+**Fixed conditions.** Model `gpt-5.6-terra` (the registry default, confirmed
+from the usage log), `reasoning: low`, no temperature set by the route (the
+API default). Meal type without a meal word follows the prompt's clock rule
+at the run's local time; a stated clock time later than the run clock means
+the day before.
+
+**Fixtures are synthetic** (`tests/food-eval/fixtures.mjs`): 78 utterances, 3
+two-turn corrections, 6 labels, 2 photo probes, in the shapes he logs —
+Colombian staples (24, ten with the amount stated), gym food, quantities,
+mixed meals, temporal phrases, typed-transcript twins, a usual by nickname.
+None is a row from his history; the repo is public.
+
+**References are cited** (`tests/food-eval/foods.mjs`, printed to
+`tests/food-eval/reference.md`): a USDA FoodData Central id for every
+generic food, a branded label in the same database for whey isolate and the
+Colombian cheese breads, and a stated recipe of cited components for
+sancocho, ajiaco, arroz con pollo, buñuelo, hogao and the drinks. Portions a
+fixture does not state use a typical serving written into the fixture (a
+550 g bowl of soup, a 45 g tajada); those are assumptions, which is why ten
+Colombian fixtures state the amount and are scored without them.
+Acceptance is a band: kcal −25 % / +30 %, each macro −40 % / +50 % with a
+4 g floor; unstated composite dishes −30 % / +35 % and −50 % / +60 %.
 
 **Metrics.**
-- *Accuracy*: per utterance, the card's totals vs the band (kcal, P, C, F,
-  and all four), the median absolute kcal error, and the median signed bias.
-- *Consistency — primary*: PAIRED TWINS. Fifteen pairs say the same food at
-  the same portion two ways — twelve as a dictated transcript (fillers,
-  numbers as words, no punctuation, EN/ES) and three as a paraphrase (a terse
-  list vs a named meal; the same plate inside "yesterday for dinner"). Per
-  pair: the kcal spread as a share of the pair's mean, whether both landed in
-  band, and whether the item count agreed. This is the variation he actually
-  meets; he never sends the same text twice (3 % exact repeats).
-- *Consistency — noise floor*: 20 utterances run 3 times each with identical
-  text; the kcal coefficient of variation per utterance (population SD /
-  mean), its median and p90, and the share whose 3 runs all landed in band.
-  Labelled a noise floor because it measures only the model's own sampling
-  (the route runs reasoning `low` with no temperature control) — it says how
-  much of a twin's spread is dice rather than phrasing.
-- *Macro sanity*: 4P + 4C + 9F within 15 % of the item's own kcal, per item;
-  items that name a drink with alcohol are exempt (7 kcal/g the formula
-  cannot see) and counted separately.
-- *D2 evidence*: for items whose kcal and 4P + 4C + 9F disagree, which side is
-  closer to the reference (item-level references exist for single-item
-  utterances) — the question decision D2 was waiting on.
-- *Item splitting*: the item count against the fixture's expected count or range.
-- *Meal type and time*: `mealType` against the stated meal (or the clock rule),
-  `loggedAt` against the stated day and hour for temporal phrases.
-- *Usual matching*: a seeded favourite ("Mi batido verde de la mañana") named
-  exactly, with a word changed, and paraphrased in English.
-- *Corrections*: three two-turn flows ("make lunch 650", "actually make that
-  three eggs", "that shake was 300 calories") — does the second turn produce
-  the right card kind with the right number.
-- *Labels*: six synthetic Nutrition Facts / Información Nutricional panels
-  rendered by Playwright at two resolutions → `POST /api/health/food/scan-label`,
-  exact match per field; two of them also through the chat with "two
-  servings" / "una porción y media".
-- *Photo path*: failure modes only — an image of coloured shapes and a 1 × 1
-  blank, each sent with no words. The question is whether a meal is invented.
-  No meal photos were downloaded (decision D6: file downloads need his word);
-  **photo accuracy on real plates is on his checklist, not in this table.**
-- *Cost and latency*: chat calls, mean input and output tokens per call and $
-  per call from `ai_usage_events` (the first row of every table, because
-  anything that adds prompt text is read against it), median/p90 wall-clock
-  from send to the card, and how often the model read data (`get_app_data`)
-  before proposing.
+- *Accuracy*: rates over EVERY utterance sent — no card (an error, a
+  timeout, a question back) is a miss — with the card rate beside them;
+  median absolute kcal error and signed bias over the carded ones. A refused
+  connection is the infrastructure's failure, not the model's: it is
+  reported and the affected turns are re-run.
+- *Consistency, primary*: 15 twin pairs (the same food and portion phrased
+  two ways). Pair CV = |a−b| / (a+b), both in band, items agree.
+- *Consistency, noise floor*: 20 utterances × 3 identical runs, CV in the
+  same unit. A twin difference smaller than the noise floor's mean is dice,
+  not phrasing, and is not claimed.
+- *Macro sanity*: an item of 30 kcal or more whose kcal and 4P + 4C + 9F
+  differ by more than 15 % (alcohol exempt), and which side is closer to the
+  reference (decision D2).
+- *Item splitting, meal type, time, usual matching*.
+- *Card fields* (after only): confidence, source, "last time", the anchor
+  gate, save-as-usual offers, rows folded as duplicates, flags.
+- *Corrections*: three two-turn flows, each edit checked against the row it
+  names among the rows actually saved.
+- *Labels*: six synthetic panels at two resolutions →
+  `POST /api/health/food/scan-label`, exact per field; two through the chat
+  with a servings multiplier.
+- *Photo path*: failure modes only.
+- *Cost and latency*: chat calls, input/output tokens and $ per call for
+  each stage's own time window; time to the card; which tools the model
+  called before proposing, by name.
 
-**Everything the run creates is deleted afterwards** — the seeded usual, the
-seeded history rows, the chats, any rows a correction flow saved — and the
-harness refuses to run against a database that is not on loopback. Table
-counts before and after the smoke run were identical (food 674 / favourites 2
-/ chats 34 / messages 264).
-
-**Run it:** `npm run dev -- --port 3104` against a local copy, then
-`node scripts/food-eval.mjs --tag <name>` (≈ 130 chat calls, ≈ $4; `--limit`,
-`--only A,B`, `--skip-labels`, `--skip-photos`, `--skip-corrections`, `--dry`).
-It is never part of `vitest` — it spends real money. The committed outputs
-are `tests/food-eval/baseline.{json,md}` (frozen) and `last-run.{json,md}`.
-
-The tables of a saved run can be regenerated with the current metric code
-(`node scripts/food-eval.mjs --resummarize tests/food-eval/baseline.json --tag baseline`),
-which is how the baseline below carries the twin-first metrics the review
-asked for without re-spending the run.
+**Run it:** two dev servers against the eval database (BEFORE on a checkout
+of the baseline commit, AFTER on this tree), then
+`DATABASE_URL=<eval db> node scripts/food-eval.mjs --base <server> --tag <name>`
+(≈ 130 chat calls). `--stages a,b --merge <run.json>` re-runs only those
+stages into an existing run; `--resummarize <run.json>` re-scores a saved run
+from its raw answers. It is never part of `vitest` — it spends money.
 
 ---
 
-## Baseline — 2026-10-17, before any change
+## Before and after — frozen evaluation database, 2026-10-20
 
-`gpt-5.6-terra` · reasoning `low` · no temperature set · commit `63b0dc2` · run
-clock Saturday 20:00 Bogotá · 67 utterances, 20 × 3 noise floor, 3 corrections,
-6 labels × 2 resolutions, 2 label-through-chat, 2 photo probes · synthetic only.
-Full tables: [`tests/food-eval/baseline.md`](../tests/food-eval/baseline.md);
-raw summary: `baseline.json`.
+Both runs: database `pitaya_lane_d_eval` (0 food rows, 0 usuals, 0 chats
+before seeding; his settings row only), model observed `gpt-5.6-terra`,
+reasoning `low`, run clock 09:00–10:20 Bogotá, 78 utterances + 20 × 3 noise
+floor + 3 corrections + 6 labels × 2 + 2 label-through-chat + 2 photo probes,
+the same harness and fixtures. **BEFORE** = server at `d3f537a` (clean
+checkout). **AFTER** = this commit's tree. Full tables:
+[`tests/food-eval/before.md`](../tests/food-eval/before.md),
+[`tests/food-eval/after.md`](../tests/food-eval/after.md); raw answers in the
+`.json` beside them.
 
-### Cost per call
+Two runs were disturbed by another process restarting every dev server on
+the machine (followup filed). The harness classed the lost turns as
+infrastructure, not model, failures: BEFORE's repeats, corrections, labels and
+photos were re-run into the same file (`--stages … --merge`), and AFTER resends
+any turn whose connection dropped. Both final files report **0** lost turns.
 
-| chat calls | mean input tokens / call | mean output tokens / call | $ per chat call | run total $ | median s to card | p90 s | utterances that read data first |
+### Cost and speed
+
+| | chat calls (main pass) | input tokens / call | output tokens / call | $ / call | read data before proposing | time to the card (median) | turn p90 |
 |---|---|---|---|---|---|---|---|
-| 117 | 15,220 | 316 | 0.034 | 4.10 | 4.4 | 5.1 | **95.5 %** |
+| BEFORE | 78 | 15,121 | 305 | 0.0339 | **95.9 %** (`today_summary` ×67) | 5.3 s | 8.0 s |
+| AFTER | 78 | **8,282** | 260 | **0.0197** | **0 %** | **3.6 s** | 5.3 s |
 
-**The cost finding.** Every chat here was a FRESH chat — no history at all —
-and still averaged 15,220 input tokens. The reason is in the last column: on
-63 of 66 utterances the model called `get_app_data today_summary` before
-proposing, so a plain "two eggs and an arepa" is two model requests, the
-second carrying the first's output, the read result and the echoed reasoning.
-The system prompt and tool schemas (≈ 5.4k) are paid twice. Not reading before
-a plain food log is the largest single lever on both cost and latency this
-lane has found — it is a prompt rule, and it is measured in Phase 3 against
-this row. (The parked cheaper-model food lane remains his call and is not
-built.) A new chat also costs one title call, ≈ $0.0005.
+The whole run: $4.43 → $2.66. The prompt grew by about 900 tokens (the
+Colombian table, the read rule, two tool descriptions); dropping the read that
+preceded almost every log removed a whole second model request, worth about
+7,000 tokens. The two-turn corrections still read (they must find the row to
+edit): 11,261 tokens a call after, 14,196 before.
 
-### Accuracy by group
+### Accuracy — rates over every utterance sent (no card = a miss)
 
-| group | n | items split ok | kcal in band | P | C | F | all four | median \|kcal err\| | median kcal bias | items: macros≈kcal | meal type | time | usual |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| colombian | 14 | 92.9 % | **71.4 %** | 92.9 % | 85.7 % | 85.7 % | 57.1 % | 19.7 % | **+19.1 %** | 92.9 % | 100 % | — | — |
-| gym | 12 | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % | 0.8 % | 0 % | 100 % | 100 % | — | — |
-| quantities | 10 | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % | 0.8 % | 0 % | 100 % | 100 % | — | — |
-| mixed | 10 | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % | 5.5 % | +2.2 % | 80 % | 100 % | — | — |
-| temporal | 6 | 100 % | 83.3 % | 100 % | 100 % | 100 % | 83.3 % | 2.6 % | +1.4 % | 100 % | 100 % | 80 % | — |
-| transcript | 12 | 100 % | 100 % | 91.7 % | 100 % | 100 % | 91.7 % | 9.4 % | 0 % | 91.7 % | 100 % | — | — |
-| usual | 2 | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % | 0 % | 0 % | 100 % | 0 % | — | 100 % |
-| **ALL** | **66** | **98.5 %** | **92.4 %** | 97 % | 97 % | 97 % | **87.9 %** | **3.7 %** | +0.6 % | 93.8 % | 97 % | 80 % | 100 % |
+| group | cards | kcal in band | all four in band | items split | median \|kcal err\| | median bias | meal type | time | usual |
+|---|---|---|---|---|---|---|---|---|---|
+| colombian (14) | 14 → 14 | 78.6 → **100 %** | 57.1 → 78.6 % | 100 → 100 % | 16.5 → **0.8 %** | +2.8 → +0.3 % | 100 → 100 % | — | — |
+| colombian, amount stated (10) | 10 → 10 | 80 → **100 %** | 60 → 70 % | 100 → 100 % | 14.5 → **0.3 %** | +6.2 → 0 % | 100 → 100 % | — | — |
+| gym (12) | 12 → 12 | 91.7 → 91.7 % | 91.7 → 91.7 % | 100 → 100 % | 2.3 → 2.3 % | +0.2 → +1.0 % | 100 → 100 % | — | — |
+| quantities (10) | 10 → 10 | 100 → 100 % | 100 → 100 % | 100 → 100 % | 1.6 → 1.4 % | 0 → +0.6 % | 100 → 100 % | — | — |
+| mixed (10) | 10 → 10 | 100 → 100 % | 90 → 90 % | 100 → 100 % | 8.2 → 2.2 % | +3.9 → +2.1 % | 90 → 100 % | — | — |
+| temporal (7) | **5 → 7** | 71.4 → **100 %** | 71.4 → 85.7 % | 71.4 → 100 % | 0.8 → 0.7 % | −0.8 → −0.6 % | 71.4 → 100 % | **40 → 100 %** | — |
+| typed transcripts (12) | 12 → 12 | 100 → 100 % | 100 → 100 % | 100 → 100 % | 6.0 → 1.7 % | +4.4 → +0.1 % | 100 → 100 % | — | — |
+| usual (3) | **1 → 3** | 33.3 → **100 %** | 33.3 → 100 % | 33.3 → 100 % | 0 → 0 % | 0 → 0 % | 33.3 → 100 % | — | **33.3 → 100 %** |
+| **ALL (78)** | **74 → 78** | **87.2 → 98.7 %** | **79.5 → 88.5 %** | 94.9 → 100 % | **6.3 → 1.2 %** | +0.4 → +0.2 % | 93.6 → 100 % | **40 → 100 %** | 33.3 → 100 % |
 
-(67 utterances were sent; G03 — the usual paraphrased in English — produced no
-card and is listed under misses rather than scored.)
+**BEFORE's four misses** got no card at all: "anoche comí una bandeja paisa"
+(an empty answer), "a las 2pm me comí un sancocho" said at 9 am (it asked
+whether that was yesterday), and two of the three usual requests (it asked
+what was in the shake). **AFTER has no misses.** One utterance is still out of
+band on kcal: "a can of tuna in water with a green salad" (200 vs a reference
+of 119 — a can's drained weight is the assumption; out of band before as
+well). The "all four" gap is macros on Colombian composites and the cheese
+breads (sancocho's carbs, pandebono's protein): the kcal is right and the
+split between protein, carbs and fat differs from the cited recipe or label —
+where two honest recipes differ as much.
 
-**What the misses are.** Every kcal miss is a Colombian composite or fried
-dish, and every one is HIGH: sancocho +44 % (twice — A03 and E06), ajiaco
-+43 %, two tajadas de maduro +40 %, and a bandeja paisa at +84 % because the
-card listed every component **twice** (16 rows, 3,090 kcal — the only item-
-split miss too). Gym food, measured quantities and mixed plates sit on the
-reference almost exactly (median error under 1 % for gym and quantities). The
-Colombian median bias of +19 % is the thing to fix; the rest is already good.
-The two "meal type" misses in the usual group are the fixture's, not the
-model's: "mi batido de la mañana" at 8 pm was filed as breakfast, which is
-what the saved usual says.
+**Read this honestly.** The Colombian gains are partly by construction: the
+prompt now carries the same USDA densities and typical servings that the
+references use, so "in band" there means "the model applies the table
+faithfully and the same way every time". It does not prove that a typical
+serving is HIS serving. The stated-amount fixtures (10) are the fairer test,
+and they moved from 80 % to 100 % in band with a median error of 0.3 %.
+Whether his own bowls are bigger or smaller than a restaurant's is the
+checklist's question.
 
-### Consistency — primary: paired twins
+### Consistency
 
-15 pairs · median kcal spread **2.2 %**, p90 11.3 % · spread ≤ 10 % on 86.7 %,
-≤ 20 % on 93.3 % · both in band on **93.3 %** · same item count on 80 %.
-
-| pair | kind | kcal (twin / clean) | spread % | both in band | items agree |
+| | pair CV median | pair CV mean | p90 | both twins in band | same item count |
 |---|---|---|---|---|---|
-| D07 ↔ D01 eggs, arepa, coffee | paraphrase | 326 / 326 | 0 % | yes | yes |
-| D08 ↔ D02 chicken, rice, avocado, salad | paraphrase | 740 / 700 | 5.6 % | yes | yes |
-| E01 ↔ B03 200 g chicken + rice, "yesterday for dinner" | paraphrase | 535 / 535 | 0 % | yes | yes |
-| F01 ↔ A01 arepa con queso | transcript | 250 / 280 | 11.3 % | yes | yes |
-| F02 ↔ D01 dos huevos una arepa y un café | transcript | 296 / 326 | 9.6 % | yes | yes |
-| F03 ↔ B03 two hundred grams of chicken… | transcript | 535 / 535 | 0 % | yes | yes |
-| F04 ↔ A06 tres patacones con hogao | transcript | 455 / 430 | 5.6 % | yes | no |
-| F05 ↔ B01 protein shake, whey + milk | transcript | 273 / 275 | 0.7 % | yes | yes |
-| F06 ↔ C03 a cup and a half of rice | transcript | 308 / 308 | 0 % | yes | yes |
-| F07 ↔ A04 dos empanadas con ají | transcript | 440 / 450 | 2.2 % | yes | no |
-| F08 ↔ B07 four scrambled eggs | transcript | 288 / 288 | 0 % | yes | yes |
-| F09 ↔ D02 lunch was uh grilled chicken… | transcript | 660 / 700 | 5.9 % | yes | yes |
-| F10 ↔ A02 bandeja paisa | transcript | 1,925 / 3,090 | **46.5 %** | **no** | no |
-| F11 ↔ C07 one and a half scoops of whey | transcript | 180 / 180 | 0 % | yes | yes |
-| F12 ↔ A08 buñuelo, almojábana, agua de panela | transcript | 520 / 500 | 3.9 % | yes | yes |
+| **Twins** (15 pairs, primary) BEFORE | 0 % | 3.7 % | 15.3 % | 93.3 % | 86.7 % |
+| AFTER | 0 % | 2.0 % | 8.9 % | **100 %** | **100 %** |
 
-Phrasing barely moves the number: dictated fillers, Spanish, numbers as words
-and terse lists all land within a few per cent of the clean twin. The one
-real spread is the bandeja paisa, and it is the doubled card again, not the
-phrasing. The three "items agree: no" are compound dishes split differently
-(patacones + hogao as one row or two; empanadas with ají) — a presentation
-choice, not an error.
+| | CV median | CV mean | p90 | within 10 kcal | every run in band |
+|---|---|---|---|---|---|
+| **Noise floor** (20 × 3 identical text) BEFORE | 0.4 % | **5.0 %** | 18.7 % | 13/20 | 95 % |
+| AFTER | 0 % | **0.5 %** | 2.7 % | **18/20** | **100 %** |
 
-### Consistency — noise floor (same text × 3)
+Pair CV and noise-floor CV are the same unit (|a−b| / (a+b) is the CV of two
+values). The twins' mean moved 3.7 → 2.0 %, which is inside BEFORE's own
+sampling noise (5.0 %), so **no phrasing gain is claimed**. What did change is
+the noise itself. BEFORE gave the same bandeja paisa as 1,250, 3,170 and
+1,250 kcal (CV 48 %), patacones 360 / 410 / 555, an arepa con queso 220 / 290
+/ 280. AFTER gives none of the 20 a CV above 3 %. That, and both twins of
+every pair now in band, is the consistency he asked for ("the same food,
+the same number").
 
-Median CV **0.5 %**, p90 15.2 % · CV ≤ 10 % on 85 % · all 3 runs in band on 80 %.
-Seventeen of twenty utterances come back the same to within a few kcal; the
-three that wander are the Colombian composites — bandeja paisa 3,090 / 1,515 /
-1,665 (CV 34 %, the first a doubled card), patacones con hogao 430 / 350 / 510
-(15 %), two empanadas 450 / 500 / 370 (12 %), sancocho 550 / 520 / 650 (10 %).
-So the dice are small except exactly where the portion knowledge is weak.
+### Calories vs macros (decision D2) — the verdict
 
-### Calories vs macros — the D2 evidence
+158 items of 30 kcal or more checked (alcohol exempt): **2 disagree** by more
+than 15 % (BEFORE: 0 of 132). The only single-item one is two tajadas de
+maduro (210 kcal; 4P + 4C + 9F = 253; reference 212) — the **kcal side** was
+right. Over every utterance the kcal figure is the closer of the two. So D2
+lands as: **never rewrite a number**; the check is a flag on the card ("kcal
+and macros disagree"), with a 30 kcal floor and alcohol exempt.
 
-135 items checked (4 alcohol items exempt). **Four disagree by more than
-15 %, and all four are items under 20 kcal**: black coffee at 2 kcal against
-0 by the formula (three times), a spoon of ají at 10 against 8. No item with
-a real calorie count disagreed with its own macros. Over every utterance the
-median |error| against the reference is 3.7 % for the card's kcal and 7.1 %
-for 4P + 4C + 9F — the kcal figure is the better of the two when they differ
-at all. The historical 1-in-7 mismatch in his table (rows from Feb–Oct, older
-prompts and models) does not reproduce on today's model.
+### Card fields (new in Phase 3)
 
-**D2 verdict (replaces the provisional default).** Do not rewrite anything.
-The deterministic check becomes a FLAG only, with an absolute floor (items
-under 30 kcal are not judged), alcohol exempt, shown on the card only when it
-trips; nothing is added to the prompt for a problem that measures at 0 %.
-Revisit if Phase 3's after-run shows real mismatches.
+Measured on the final matcher with the 11 fixtures that carry seeded history
+([`tests/food-eval/cardfields.md`](../tests/food-eval/cardfields.md); the
+model's input is identical to the full AFTER run — the history anchor still
+reaches the model only for A01 — so only these annotations were re-measured):
+confidence on 100 % of items · `source: "chat"` on 100 % of typed cards ·
+"last time" on 3 / 3 items whose food has seeded history (arepa con queso,
+sancocho, chicken breast; plain white rice also finds plain white rice) ·
+the anchor reached the model only for the one food eligible under D3 (arepa
+con queso: three different days, stable number, no amount stated) and stayed
+off for the four that were not · "save it as a usual?" offered on the three
+arepa cards and nowhere else · no card folded (two identical empanadas stay
+two rows; the doubled bandeja no longer occurs) · 1 item flagged.
 
-### Labels
+The full AFTER run first showed two false "last time" hits — a hogao row
+borrowing "Patacones con hogao" and a bandeja's plain arepa borrowing "Arepa
+con queso" (the usuals matcher's containment rule, reused). The history
+matcher now groups rows by food, requires the names to be essentially the
+same (portion, vessel and default-variety words ignored), and for the
+prompt anchor requires the whole saved name inside the message and only one
+food to qualify. "use it" is offered only when last time's number is within
+⅔×–1.5× of this item, so a half arepa is never scaled to a whole one.
 
-12 of 12 reads exact on every field — product, serving as printed, servings
-per container, kcal, P, C, F — at both resolutions, EN and ES panels,
-`confident: true`, 1.0–1.4 s each. Through the chat with a multiplier: "this
-label, I had two scoops" → 240 / 50 / 6 / 2 (exact ×2); "esta etiqueta, me
-comí una porción y media" → 165 / 22.5 / 9 / 4.5 (exact ×1.5). The label path
-has no accuracy problem on clean panels; a blurry phone shot is his checklist
-item.
+### Labels, photos, corrections — unchanged and good
 
-### Photo path — failure modes
+Labels 12 / 12 exact on every field at both resolutions, before and after;
+"two scoops" and "una porción y media" scaled exactly (240 / 240,
+165 / 165). Photo probes: nothing invented either side. Corrections 3 / 3
+both sides, now checked against the rows actually saved ("make lunch 650":
+the edited row plus the untouched one total exactly 650).
 
-Coloured shapes with no words: no card, "it's just colored shapes, not a
-recognizable meal or label". A blank 1 × 1 image: no card, "I didn't receive a
-visible image". Nothing was invented. Real-plate accuracy is his to judge
-(decision D6: no photo downloads).
+### What changed in Phase 3, and which row of the tables it moved
 
-### Corrections (two turns)
+| change | where | moved |
+|---|---|---|
+| "A plain log needs no read" | `lib/ai-prompts.ts` CHAT_SYSTEM_PROMPT | read-first 96 → 0 %, tokens −45 %, time to card −1.7 s |
+| Colombian portions from cited USDA values | `lib/ai-prompts.ts` | Colombian error 16.5 → 0.8 %, noise floor 5.0 → 0.5 % |
+| Each component once; a repeated whole list folded | prompt + `lib/food-check.ts` | the doubled bandeja (1,250 / 3,170 kcal) gone |
+| A meal word beats "noon"; a later clock time means yesterday | tool description + `lib/food-timing.ts` | time 40 → 100 % |
+| His usuals handed to the model when asked for or named | `lib/food-match.ts` + route | usual 1/3 → 3/3 |
+| Confidence per item | tool schema | 0 → 100 % of items |
+| kcal/macro flag (no rewrite), history "last time", gated anchor, save-as-usual offer, `source` stamping, description tidy, ½× / 1.5× / 2× chips | `lib/food-check.ts`, `lib/food-normalize.ts`, `lib/food-match.ts`, routes, `components/intake/food-card.tsx` | unit-tested; card fields table |
 
-| | turn 1 | turn 2 | result |
-|---|---|---|---|
-| H01 | lunch: 200 g chicken + a cup of rice (saved) | "make lunch 650" | **pass** — one row edited so the lunch totals 650 |
-| H02 | two eggs and an arepa (pending) | "actually make that three eggs" | **pass** — a fresh card at 380 kcal (reference 408) |
-| H03 | a protein shake with milk (saved) | "that shake was 300 calories, not what you put" | **unclear** — the shake was saved as two rows and the model edited one of them to 180; the check assumed one row. The harness will compare the implied total in Phase 3. |
+## The first baseline (2026-10-17) — superseded
 
-### Other things the baseline shows
-
-- **`loggedAt` is on every item** (139 / 139) — the model stamps it itself, so
-  the per-item path in `lib/food-timing.ts` is live. The one time miss is
-  "yesterday for dinner" stamped at **12:00** (the prompt's "date without time
-  → 12:00") instead of 20:00; the message-level rule would have said 20:00 but
-  the model's explicit time wins. A tool-description fix (Phase 3 item 7).
-- **No confidence field exists** (0 / 139), as expected.
-- **The usual matched twice** (exact text, and "el batido verde de la mañana de
-  siempre") with the saved 310 kcal carried; the English paraphrase produced
-  no card — the model read his data twice and answered that no such shake was
-  saved, because usuals are not something it is told about and the matcher is
-  word-overlap in one language.
-
-### Phase 3 targets, from this baseline
-
-| # | what the baseline shows | the change | target in the after-run |
-|---|---|---|---|
-| 1 | Colombian composites +19 % median bias; sancocho/ajiaco +43 %, tajadas +40 % | a compact portion-and-kcal table for ~12 dishes in the prompt (tokens measured) | colombian kcal in band ≥ 90 %, bias within ±10 %, ALL ≥ 95 % |
-| 2 | a card listed every bandeja component twice | deterministic duplicate-row check at proposal time (same description and kcal → flag/collapse) | 0 doubled cards; bandeja noise-floor CV < 15 % |
-| 3 | 95.5 % of logs read `today_summary` first; 15.2k input tokens on a fresh chat | prompt rule: no `get_app_data` before a plain food log | read-first ≤ 10 %, input tokens −40 %, median latency −1.5 s, accuracy unchanged |
-| 4 | "for dinner" stamped 12:00 | `loggedAt` tool description: a meal word means that meal's hour; per-item times for mixed messages | time 100 % |
-| 5 | the usual missed in the other language; the model does not know usuals exist | match usuals and history before the turn and tell the model when one matches | G03 → the usual's card |
-| 6 | 5 fixtures have seeded history (arepa con queso ×3 days, patacones, shake, sancocho, chicken + rice) | `history` annotation on the card; prompt anchor only under the D3 gate | 5 / 5 annotated; anchor injected for the arepa only |
-| 7 | no confidence field | optional `confidence` per item | present on 100 % of items |
-| — | labels, photos, gym, quantities, mixed, twins | no change needed | hold at 100 % / 2.2 % spread |
-
-Everything else in Phase 3 — `source` stamping, normalisation, the ½× / 1.5× /
-2× chips, "Save as usual" — is deterministic and unit-tested rather than
-measured here.
+The Phase 2 numbers in [`tests/food-eval/baseline.md`](../tests/food-eval/baseline.md)
+were measured against the lane's copy of his real data, with uncited
+references and three Colombian portions below a typical serving, and they
+dropped no-card utterances from the denominators. Its headline "+19 %
+Colombian bias" was mostly those references (the model's 550 kcal sancocho
+was right; the reference said 383). The tables above replace it; the file is
+kept as a record.

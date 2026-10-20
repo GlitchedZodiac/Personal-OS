@@ -92,8 +92,9 @@ export async function POST(request: NextRequest) {
           proteinG: round(proteinG),
           carbsG: round(carbsG),
           fatG: round(fatG),
-          // Drives the design's "usual" pill on the Food timeline.
-          source: "usual",
+          // Drives the design's "usual" pill on the Food timeline; a scanned
+          // label logged from its reading is "label" (2026-10-18, intake lane).
+          source: isProduct && servingLabel ? "label" : "usual",
           notes: servingNote,
         },
       });
