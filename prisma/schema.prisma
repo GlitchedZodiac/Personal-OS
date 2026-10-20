@@ -1274,6 +1274,20 @@ model PersonalRecord {
 // One-time OAuth authorization codes (2026-08-29, the Claude connector's
 // sign-in flow). Short-lived, single-use; the real credential they exchange
 // into is a DeviceSession.
+// Wrong-PIN counters shared by every serverless instance (audit 2026-10,
+// SEC-005 / PLAN D2). key = "<door>:<client bucket>" or "<door>:*" for the
+// door-wide count. Written atomically by lib/rate-limit-store.ts; pruned daily.
+model RateLimitBucket {
+  key          String    @id
+  attempts     Int
+  resetAt      DateTime
+  blockedUntil DateTime?
+  updatedAt    DateTime
+
+  @@index([resetAt])
+  @@map("rate_limit_buckets")
+}
+
 // The Claude connector's paper trail (2026-10, SEC-013): one row per MCP
 // tool call that can add, change or remove data. Summary is redacted and
 // bounded (lib/mcp/audit.ts); readable via query_data `mcp_audit`.

@@ -41,8 +41,11 @@ else.
 3. **Redeploy** — Vercel does not redeploy when a variable changes. Open the
    app once on each device and unlock. The watch, the iPhone app and the
    Claude connector keep working without re-pairing.
-4. **Change your PIN** in Settings → right after the redeploy. 6–8 digits if
-   you can; a longer PIN is a hundred to ten thousand times harder to guess.
+4. **Change your PIN** in Settings → right after the redeploy. A new PIN must
+   be **6 to 8 digits** — the watch, the iPhone and the web all take up to 8.
+   Even with the lock, a patient attacker can try about 50 PINs an hour at
+   each public door: a 4-digit PIN would last about two days, a 6-digit one
+   over a year.
 5. **Look at who is signed in.** Settings → Devices, and Settings → Claude
    connector: revoke anything you do not recognise. For the full list, open
    the Supabase SQL editor and run:
@@ -159,8 +162,10 @@ pasted into a file in the repo.
   every successful sign-in sets. Any other device gets "too many attempts"
   without the PIN even being checked, however many addresses it comes from.
   So a flood cannot lock you out of your own phone or Mac, and it cannot
-  use the lock to guess either. Pairing a NEW watch or phone waits until the
-  hour is over. The numbers can be changed in Vercel with
+  use the lock to guess either. The web sign-in and device pairing are
+  counted separately, so if someone floods pairing, pairing a NEW watch or
+  phone waits until the hour is over. The counts are kept in the database,
+  so they hold across every server instance and restart. The numbers can be changed in Vercel with
   `AUTH_GLOBAL_MAX_FAILURES` and `AUTH_GLOBAL_WINDOW_MINUTES`. The best
   protection of all is a longer PIN: 6–8 digits instead of 4 makes guessing
   a hundred to ten thousand times harder.

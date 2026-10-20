@@ -1,5 +1,5 @@
 import { after, NextRequest } from "next/server";
-import { checkRateLimit, type RateLimitCheck } from "@/lib/auth";
+import { checkRateLimit, type RateLimitCheck } from "@/lib/rate-limit";
 import { notify } from "@/lib/notify";
 import { verifyPin } from "@/lib/pin-auth";
 
@@ -42,17 +42,17 @@ export async function alertPinLockout(
 }
 
 export async function attemptPin(request: NextRequest, scope: string, pin: unknown): Promise<PinAttempt> {
-  const limit: RateLimitCheck = checkRateLimit(request, scope);
+  const limit: RateLimitCheck = await checkRateLimit(request, scope);
   if (!limit.allowed && !limit.exemptIfCorrect) {
     return { status: "locked", retryAfterSeconds: limit.retryAfterSeconds };
   }
 
   if (await verifyPin(pin)) {
-    limit.reset();
+    await limit.reset();
     return { status: "ok" };
   }
 
-  const failure = limit.registerFailure();
+  const failure = await limit.registerFailure();
   if (failure.globalLockTriggered) {
     after(() => alertPinLockout(scope, failure));
   }

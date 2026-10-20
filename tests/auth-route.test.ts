@@ -35,6 +35,7 @@ function post(path: string, body: unknown, ip = "9.9.9.9") {
 }
 
 beforeEach(() => {
+  vi.stubEnv("RATE_LIMIT_STORE", "memory");
   delete rows.default;
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("APP_PIN", "2468");
@@ -91,13 +92,17 @@ describe("POST /api/auth", () => {
 describe("POST /api/auth/update-pin", () => {
   it("changes the stored PIN, requires the current one, and touches no file", async () => {
     rows.default = { pinHash: hashPin("2468") };
-    const bad = await changePin(post("/api/auth/update-pin", { currentPin: "0000", newPin: "1357" }, "5.5.5.1"));
+    const bad = await changePin(post("/api/auth/update-pin", { currentPin: "0000", newPin: "135791" }, "5.5.5.1"));
     expect(bad.status).toBe(401);
     const shape = await changePin(post("/api/auth/update-pin", { currentPin: "2468", newPin: "12" }, "5.5.5.1"));
     expect(shape.status).toBe(400);
-    const ok = await changePin(post("/api/auth/update-pin", { currentPin: "2468", newPin: "1357" }, "5.5.5.1"));
+    // D12: a new PIN is 6–8 digits; a 4-digit one is refused with a message that says so.
+    const four = await changePin(post("/api/auth/update-pin", { currentPin: "2468", newPin: "1357" }, "5.5.5.1"));
+    expect(four.status).toBe(400);
+    expect((await four.json()).error).toBe("New PIN must be 6 to 8 digits");
+    const ok = await changePin(post("/api/auth/update-pin", { currentPin: "2468", newPin: "135791" }, "5.5.5.1"));
     expect(ok.status).toBe(200);
-    expect((await login(post("/api/auth", { pin: "1357" }, "5.5.5.2"))).status).toBe(200);
+    expect((await login(post("/api/auth", { pin: "135791" }, "5.5.5.2"))).status).toBe(200);
     expect((await login(post("/api/auth", { pin: "2468" }, "5.5.5.2"))).status).toBe(401);
     // The old handler imported fs/promises and called writeFile on .env.local; both are gone.
     const src = await import("node:fs").then((fs) => fs.readFileSync("app/api/auth/update-pin/route.ts", "utf8"));

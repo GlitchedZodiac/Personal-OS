@@ -30,7 +30,8 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { attemptPin } from "@/lib/pin-attempt";
-import { createKnownDeviceToken, globalLoginLimits } from "@/lib/auth";
+import { createKnownDeviceToken } from "@/lib/auth";
+import { globalLoginLimits } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { hashPin } from "@/lib/security";
 
@@ -42,6 +43,7 @@ const req = (ip: string, known = false) =>
   });
 
 beforeEach(() => {
+  vi.stubEnv("RATE_LIMIT_STORE", "memory");
   vi.stubEnv("AUTH_COOKIE_SECRET", STRONG);
   vi.stubEnv("APP_AUTH_SECRET", STRONG);
   vi.stubEnv("APP_PIN", "2468");

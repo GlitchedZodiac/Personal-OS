@@ -30,8 +30,13 @@ export async function POST(request: NextRequest) {
     const currentPin = typeof body.currentPin === "string" ? body.currentPin : "";
     const newPin = typeof body.newPin === "string" ? body.newPin : "";
 
-    if (!/^\d{4,8}$/.test(newPin)) {
-      return NextResponse.json({ error: "New PIN must be 4 to 8 digits" }, { status: 400 });
+    // A NEW PIN is 6–8 digits (PLAN D12, 2026-10). The door-wide lock still
+    // lets a patient attacker try ~50 PINs an hour at each public door; that
+    // is about two days for 4 digits and over a year for 6. Existing 4-digit
+    // PINs keep working until he changes them. Every pad (web, iPhone, watch)
+    // takes up to 8 digits.
+    if (!/^\d{6,8}$/.test(newPin)) {
+      return NextResponse.json({ error: "New PIN must be 6 to 8 digits" }, { status: 400 });
     }
 
     const attempt = await attemptPin(request, "auth-update-pin", currentPin);
