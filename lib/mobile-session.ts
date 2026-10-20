@@ -110,10 +110,25 @@ async function rekeyAccessToken(match: SessionMatch, token: string): Promise<Ses
   });
 }
 
-export async function refreshDeviceSession(refreshToken: string) {
+/** Lifetimes a refresh renews to, per kind — a refresh never shortens a connector to a phone's TTLs. */
+const REFRESH_TTLS: Record<SessionKind, { access: number; refresh: number }> = {
+  device: { access: SESSION_TTL_DAYS, refresh: REFRESH_TTL_DAYS },
+  connector: { access: 30, refresh: 365 },
+};
+
+/**
+ * Rotate a refresh token. Each refresh door accepts only its own kind
+ * (review of 3b): /api/mobile/auth/refresh rotates device sessions,
+ * /api/oauth/token rotates connector sessions — a watch's refresh token
+ * cannot become a connector token, nor the other way round.
+ */
+export async function refreshDeviceSession(refreshToken: string, kind: SessionKind = "device") {
   if (!refreshToken) return null;
   const match = await findLiveSession("refreshTokenHash", refreshToken, "refreshExpiresAt");
   if (!match) return null;
+  const isConnector = match.row.deviceType === "mcp";
+  if (kind === "connector" ? !isConnector : isConnector) return null;
+  const ttl = REFRESH_TTLS[kind];
 
   const nextAccessToken = createOpaqueToken();
   const nextRefreshToken = createOpaqueToken();
@@ -126,8 +141,8 @@ export async function refreshDeviceSession(refreshToken: string) {
     data: {
       tokenHash: hashOpaqueToken(nextAccessToken),
       refreshTokenHash: hashOpaqueToken(nextRefreshToken),
-      expiresAt: addDays(SESSION_TTL_DAYS),
-      refreshExpiresAt: addDays(REFRESH_TTL_DAYS),
+      expiresAt: addDays(ttl.access),
+      refreshExpiresAt: addDays(ttl.refresh),
       lastSeenAt: new Date(),
       keyVersion: CURRENT_KEY_VERSION,
       refreshKeyVersion: CURRENT_KEY_VERSION,

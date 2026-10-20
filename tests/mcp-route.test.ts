@@ -92,6 +92,12 @@ describe("POST /api/mcp — who may open the connector door", () => {
     const declared = await POST(post({ authorization: "Bearer mcp-token", "content-length": String(10 * 1024 * 1024) }));
     expect(declared.status).toBe(413);
   });
+  it("counts BYTES, not characters: 100k three-byte characters (~300 KB) are refused (review of 3b)", async () => {
+    const wide = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping", params: { pad: "€".repeat(100_000) } });
+    expect(wide.length).toBeLessThan(256 * 1024); // the old character count let this through
+    const res = await POST(post({ authorization: "Bearer mcp-token" }, wide));
+    expect(res.status).toBe(413);
+  });
 });
 
 describe("device routes — the other side of the kind check (SEC-019)", () => {

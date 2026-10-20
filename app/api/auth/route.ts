@@ -4,6 +4,7 @@ import {
   clearAuthCookie,
   getAuthCookie,
   setAuthCookie,
+  setKnownDeviceCookie,
   verifyAuthToken,
 } from "@/lib/auth";
 import { pinConfigured } from "@/lib/pin-auth";
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest) {
     if (attempt.status === "ok") {
       const response = NextResponse.json({ success: true });
       setAuthCookie(response);
+      setKnownDeviceCookie(response);
       return response;
     }
     return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });

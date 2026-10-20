@@ -7,7 +7,8 @@ export async function POST(request: NextRequest) {
     const refreshToken =
       typeof body.refreshToken === "string" ? body.refreshToken : "";
 
-    const refreshed = await refreshDeviceSession(refreshToken);
+    // Device sessions only — a connector's refresh token is refused here.
+    const refreshed = await refreshDeviceSession(refreshToken, "device");
     if (!refreshed) {
       return NextResponse.json(
         { error: "Refresh token is invalid or expired" },

@@ -4,9 +4,10 @@ import { notify } from "@/lib/notify";
 import { verifyPin } from "@/lib/pin-auth";
 
 // One PIN attempt, the same way at every PIN door (web login, PIN change,
-// device pairing): the limiter first, then the stored PIN. Carries the
-// review's two rules for the global lock — a clean client may still present
-// the CORRECT PIN during a lock, and tripping the lock raises a system alert
+// device pairing): the limiter first, then the stored PIN. During a global
+// lock only a KNOWN DEVICE (lib/auth known-device marker, PLAN D2b) with no
+// wrong guesses of its own gets a real check; every other caller gets 429
+// without the PIN being looked at. Tripping the lock raises a system alert
 // so Michael learns someone is hammering the door.
 
 export type PinAttempt =
@@ -55,8 +56,8 @@ export async function attemptPin(request: NextRequest, scope: string, pin: unkno
   if (failure.globalLockTriggered) {
     after(() => alertPinLockout(scope, failure));
   }
-  // A wrong guess from a clean client during a lock gets the lock's answer,
-  // not "wrong": nothing is learned, and the client is now blocked.
+  // A wrong guess from the known device during a lock spends its exemption
+  // for the rest of the lock (answered as the lock answers).
   if (limit.exemptIfCorrect) {
     return { status: "locked", retryAfterSeconds: Math.max(failure.retryAfterSeconds, 1) };
   }

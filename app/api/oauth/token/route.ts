@@ -76,7 +76,8 @@ export async function POST(request: NextRequest) {
 
   if (grant === "refresh_token") {
     if (!p.refresh_token) return err("invalid_request", "refresh_token is required");
-    const rotated = await refreshDeviceSession(p.refresh_token);
+    // Connector sessions only — a watch's refresh token is refused here.
+    const rotated = await refreshDeviceSession(p.refresh_token, "connector");
     if (!rotated) return err("invalid_grant", "Refresh token is invalid or expired");
     return NextResponse.json(
       {

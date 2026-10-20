@@ -12,6 +12,8 @@
 // this shape — it adds a user id to the code and the session.
 
 import crypto from "crypto";
+import { lookup } from "node:dns/promises";
+import net from "node:net";
 import { prisma } from "@/lib/prisma";
 import { createOpaqueToken, hashOpaqueToken, signCompact, verifyCompact } from "@/lib/security";
 
@@ -75,6 +77,7 @@ export function isPublicHttpsUrl(raw: string): boolean {
     return false;
   }
   if (url.protocol !== "https:") return false;
+  if (url.port && url.port !== "443") return false; // the standard port only
   const host = url.hostname.toLowerCase().replace(/\.$/, "");
   if (!host || host === "localhost") return false;
   if (host.startsWith("[") || host.includes(":")) return false; // IPv6 literal
@@ -84,8 +87,48 @@ export function isPublicHttpsUrl(raw: string): boolean {
   return true;
 }
 
+/** Is this address loopback, private, link-local, CGNAT, multicast or unspecified? */
+export function isPrivateAddress(address: string): boolean {
+  const family = net.isIP(address);
+  if (family === 4) {
+    const [a, b] = address.split(".").map(Number);
+    return (
+      a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19))
+    );
+  }
+  if (family === 6) {
+    const a = address.toLowerCase();
+    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(a);
+    if (mapped) return isPrivateAddress(mapped[1]);
+    return a === "::" || a === "::1" || /^f[cd]/.test(a) || /^fe[89ab]/.test(a) || /^ff/.test(a);
+  }
+  return true; // not an IP at all: refuse
+}
+
+/**
+ * The hostname resolves only to public addresses (review of 3b: *.nip.io,
+ * localtest.me and friends name private addresses with public-looking text).
+ * Residual, stated honestly: DNS can change between this lookup and the
+ * fetch (rebinding). The impact stays low — approve is cookie-gated, the
+ * certificate must validate for the name, and redirects are refused.
+ */
+export async function resolvesPublicly(hostname: string): Promise<boolean> {
+  try {
+    const addresses = await lookup(hostname, { all: true, verbatim: true });
+    return addresses.length > 0 && addresses.every((a) => !isPrivateAddress(a.address));
+  } catch {
+    return false;
+  }
+}
+
 async function cimdRedirectUris(clientIdUrl: string): Promise<string[] | null> {
   if (!isPublicHttpsUrl(clientIdUrl)) return null;
+  if (!(await resolvesPublicly(new URL(clientIdUrl).hostname))) return null;
   const cached = cimdCache.get(clientIdUrl);
   if (cached && Date.now() - cached.at < CIMD_CACHE_MS) return cached.uris;
   let uris: string[] | null = null;

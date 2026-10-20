@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireConnectorSession } from "@/lib/mobile-session";
 import { handleMcpMessage } from "@/lib/mcp/server";
+import { readJsonCapped } from "@/lib/request-body";
 
 export const maxDuration = 60;
 
@@ -46,20 +47,15 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > MAX_BODY_BYTES) {
-    return rpcError(413, -32600, `Request body too large (max ${MAX_BODY_BYTES} bytes)`);
+  // Bytes, not characters (review of 3b: 600 KB of 3-byte characters passed
+  // a character count), read from the stream with the cap enforced as it goes.
+  const read = await readJsonCapped(request, MAX_BODY_BYTES);
+  if (!read.ok) {
+    return read.status === 413
+      ? rpcError(413, -32600, `Request body too large (max ${MAX_BODY_BYTES} bytes)`)
+      : rpcError(400, -32700, "Parse error");
   }
-  let raw: unknown;
-  try {
-    const text = await request.text();
-    if (text.length > MAX_BODY_BYTES) {
-      return rpcError(413, -32600, `Request body too large (max ${MAX_BODY_BYTES} bytes)`);
-    }
-    raw = JSON.parse(text);
-  } catch {
-    return rpcError(400, -32700, "Parse error");
-  }
+  const raw: unknown = read.value;
 
   const { status, body } = await handleMcpMessage(raw, {
     sessionId: auth.session.id,

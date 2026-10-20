@@ -34,6 +34,8 @@ export interface AppDataArgs {
 export interface AppDataContext {
   timeZone: string;
   todayStr: string;
+  /** When set, the `settings` dataset returns only these keys ("a.b" = one sub-key). */
+  settingsKeys?: readonly string[];
 }
 
 function clampInt(value: unknown, fallback: number, min: number, max: number) {
@@ -203,7 +205,21 @@ async function runCurated(
         where: { id: "default" },
         select: { data: true },
       });
-      return { settings: row?.data ?? {} };
+      const data = (row?.data ?? {}) as Record<string, unknown>;
+      // A caller may narrow the blob to named keys ("a.b" reaches one level
+      // in) — the Claude connector does (lib/mcp/tools MCP_SETTINGS_KEYS).
+      if (!ctx.settingsKeys) return { settings: data };
+      const narrowed: Record<string, unknown> = {};
+      for (const key of ctx.settingsKeys) {
+        const [head, sub] = key.split(".");
+        const value = data[head];
+        if (value === undefined) continue;
+        if (!sub) narrowed[head] = value;
+        else if (value && typeof value === "object" && sub in (value as object)) {
+          narrowed[head] = { ...((narrowed[head] as object) ?? {}), [sub]: (value as Record<string, unknown>)[sub] };
+        }
+      }
+      return { settings: narrowed };
     }
     case "finance_summary": {
       // Reuses the exact function the Finances screen calls, so the AI's

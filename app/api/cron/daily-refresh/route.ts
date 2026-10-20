@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getDateStringInTimeZone, getZonedDateParts } from "@/lib/timezone";
 import { getUserTimeZone } from "@/lib/server-timezone";
 import { pruneVoiceAudio } from "@/lib/voice-audit";
+import { pruneMcpAudit } from "@/lib/mcp/audit";
 
 const RUN_HOUR = 2;
 const RUN_WINDOW_MINUTES = 15;
@@ -106,6 +107,8 @@ export async function GET(request: NextRequest) {
 
     // Wrist voice recordings past their keep window (the text audit stays).
     const voiceAudioPruned = await pruneVoiceAudio(now).catch(() => 0);
+    // The connector's trail is kept 180 days (lib/mcp/audit.ts).
+    const mcpAuditPruned = await pruneMcpAudit(now).catch(() => 0);
 
     const settingsData =
       (settingsRow?.data as Record<string, unknown> | null) ?? {};
@@ -147,6 +150,7 @@ export async function GET(request: NextRequest) {
         cacheDeleted: staleCacheDelete.count,
         remindersDeleted: staleReminderDelete.count,
         voiceRecordingsPruned: voiceAudioPruned,
+        mcpAuditPruned,
       },
     });
   } catch (error) {

@@ -21,7 +21,7 @@ vi.mock("@/lib/prisma", () => ({
 
 import { POST as login, GET as status } from "@/app/api/auth/route";
 import { POST as changePin } from "@/app/api/auth/update-pin/route";
-import { verifyAuthToken } from "@/lib/auth";
+import { verifyAuthToken, verifyKnownDeviceToken } from "@/lib/auth";
 import { hashPin } from "@/lib/security";
 
 const STRONG = crypto.randomBytes(32).toString("hex");
@@ -66,6 +66,12 @@ describe("POST /api/auth", () => {
     const cookie = res.cookies.get("auth")?.value;
     expect(cookie).toBeTruthy();
     expect(verifyAuthToken(cookie)).toBe(true);
+    // The known-device marker (PLAN D2b) rides every successful sign-in, and
+    // is not usable as a session cookie.
+    const marker = res.cookies.get("pitaya_known_device")?.value;
+    expect(verifyKnownDeviceToken(marker)).toBe(true);
+    expect(verifyAuthToken(marker)).toBe(false);
+    expect(verifyKnownDeviceToken(cookie)).toBe(false);
     expect(rows.default?.pinHash.startsWith("scrypt$1$")).toBe(true);
     const wrong = await login(post("/api/auth", { pin: "0000" }, "1.2.3.5"));
     expect(wrong.status).toBe(401);

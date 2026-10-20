@@ -215,3 +215,23 @@ describe("the re-key race", () => {
     expect([a, b].filter(Boolean)).toHaveLength(1);
   });
 });
+
+describe("refresh doors accept only their own kind (review of 3b)", () => {
+  it("a watch refresh token cannot be rotated at the connector door, nor a connector's at the device door", async () => {
+    afterRollout();
+    rows().push({ id: "watch", deviceType: "apple_watch", tokenHash: "a", refreshTokenHash: hashOpaqueToken("w-refresh"), revokedAt: null, expiresAt: future(), refreshExpiresAt: future(), keyVersion: 2, refreshKeyVersion: 2 } as Row);
+    rows().push({ id: "conn", deviceType: "mcp", tokenHash: "b", refreshTokenHash: hashOpaqueToken("c-refresh"), revokedAt: null, expiresAt: future(), refreshExpiresAt: future(), keyVersion: 2, refreshKeyVersion: 2 } as Row);
+    expect(await refreshDeviceSession("w-refresh", "connector")).toBeNull();
+    expect(await refreshDeviceSession("c-refresh", "device")).toBeNull();
+    expect((await refreshDeviceSession("w-refresh", "device"))?.session.id).toBe("watch");
+    expect((await refreshDeviceSession("c-refresh", "connector"))?.session.id).toBe("conn");
+  });
+  it("a connector refresh keeps the connector's lifetimes (30 / 365 days), not a phone's", async () => {
+    afterRollout();
+    rows().push({ id: "conn", deviceType: "mcp", tokenHash: "b", refreshTokenHash: hashOpaqueToken("c-refresh"), revokedAt: null, expiresAt: future(), refreshExpiresAt: future(), keyVersion: 2, refreshKeyVersion: 2 } as Row);
+    await refreshDeviceSession("c-refresh", "connector");
+    const days = (d: unknown) => Math.round(((d as Date).getTime() - Date.now()) / 86_400_000);
+    expect(days(rows()[0].expiresAt)).toBe(30);
+    expect(days(rows()[0].refreshExpiresAt)).toBe(365);
+  });
+});

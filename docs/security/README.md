@@ -114,7 +114,6 @@ pasted into a file in the repo.
 | `RENPHO_EMAIL` / `RENPHO_PASSWORD` | The scale's cloud (sync is OFF) | Change the RENPHO account password; a login from the server signs the phone app out, so use a separate account if you ever switch it on |
 | `GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN/USER_EMAIL` (if listed) | A second, older Gmail path (`/api/finance/inbox/fetch`) | Revoke the grant in your Google account → Security → Third-party access; a follow-up is filed to retire the route |
 | `ASC_KEY_P8` / `ASC_KEY_ID` (GitHub → Settings → Secrets → Actions) | Uploading builds to TestFlight from CI | App Store Connect → Users and Access → Integrations → revoke the key, make a new one, paste the `.p8` text into the GitHub secret |
-| `HEALTH_INGEST_TOKEN` (also in the Shortcut) | see above | — |
 
 ## If a token or secret leaks
 
@@ -150,14 +149,21 @@ pasted into a file in the repo.
   your Claude gets a clear "finance is off" answer instead of your money.
   Health, training, spirit and journal are always readable through the
   connector. Turn it on only if you want Claude to see accounts, transactions,
-  budgets and pockets.
+  budgets and pockets. Every call the connector makes — reads included — is
+  logged (what kind of request, never its words) and kept 180 days; your
+  Claude can read that log back as `mcp_audit`.
 - **The wrong-PIN lock.** Fifty wrong PINs in an hour, from anyone, lock the
   door for the rest of the hour and send you a system alert ("Someone is
-  hammering the PIN"). Your own device still gets in with the right PIN as
-  long as it made no wrong guesses itself. The numbers can be changed in
-  Vercel with `AUTH_GLOBAL_MAX_FAILURES` and `AUTH_GLOBAL_WINDOW_MINUTES`.
-  The best protection of all is a longer PIN: 6–8 digits instead of 4 makes
-  guessing a hundred to ten thousand times harder.
+  hammering the PIN"). While it is locked, only a browser you have already
+  signed in on gets to try — it carries a signed "known device" marker that
+  every successful sign-in sets. Any other device gets "too many attempts"
+  without the PIN even being checked, however many addresses it comes from.
+  So a flood cannot lock you out of your own phone or Mac, and it cannot
+  use the lock to guess either. Pairing a NEW watch or phone waits until the
+  hour is over. The numbers can be changed in Vercel with
+  `AUTH_GLOBAL_MAX_FAILURES` and `AUTH_GLOBAL_WINDOW_MINUTES`. The best
+  protection of all is a longer PIN: 6–8 digits instead of 4 makes guessing
+  a hundred to ten thousand times harder.
 
 ## What to check once a month (two minutes)
 

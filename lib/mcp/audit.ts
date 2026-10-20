@@ -1,76 +1,82 @@
 import { prisma } from "@/lib/prisma";
 
-// The connector's paper trail (2026-10, SEC-013). Every tool that can add,
-// change or remove a row leaves one line here: which tool, when, a short
-// redacted summary of what it was asked, whether it succeeded, and the row it
-// touched when the result says so. Deletes used to leave nothing but a
-// missing row. Readable back through query_data `mcp_audit`.
+// The connector's paper trail (2026-10, SEC-013; reworked after the review of
+// 3b). Every tool call leaves one row: which tool, when, read or write, the
+// SHAPE of what it was asked (argument keys, string lengths, ids and counts —
+// never the text itself: these rows are readable over the connector and by
+// the in-app chat), whether it succeeded, and the id it touched. Kept 180
+// days (pruned by the daily cron).
 
 export interface McpCallContext {
   sessionId?: string;
   deviceLabel?: string;
 }
 
-const MAX_STRING = 80;
-const MAX_SUMMARY = 500;
+export const MCP_AUDIT_KEEP_DAYS = 180;
+const MAX_SUMMARY = 600;
 
-function truncateStrings(value: unknown, depth = 0): unknown {
-  if (typeof value === "string") return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}…` : value;
-  if (depth > 3) return "…";
-  if (Array.isArray(value)) return value.slice(0, 10).map((v) => truncateStrings(v, depth + 1));
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .slice(0, 20)
-        .map(([k, v]) => [k, truncateStrings(v, depth + 1)])
-    );
+/** Argument values that are identifiers or fixed vocabulary, never his words. */
+const VERBATIM_KEYS = new Set([
+  "id", "workoutId", "trailId", "pageId", "entity", "dataset", "mealType", "kind",
+  "workoutType", "replaceWeek", "force", "days", "limit", "from", "to", "weekStart",
+]);
+
+function shapeOf(key: string, value: unknown, depth: number): string {
+  if (value === null || value === undefined) return `${key}:null`;
+  if (VERBATIM_KEYS.has(key) && (typeof value === "string" || typeof value === "number" || typeof value === "boolean")) {
+    return `${key}=${String(value).slice(0, 64)}`;
   }
-  return value;
+  if (typeof value === "string") return `${key}:text(${value.length})`;
+  if (typeof value === "number") return `${key}:num`;
+  if (typeof value === "boolean") return `${key}:bool`;
+  if (Array.isArray(value)) return `${key}:list(${value.length})`;
+  if (typeof value === "object") {
+    if (depth >= 1) return `${key}:obj`;
+    const inner = Object.entries(value as Record<string, unknown>).map(([k, v]) => shapeOf(k, v, depth + 1));
+    return `${key}:{${inner.join(",")}}`;
+  }
+  return `${key}:?`;
 }
 
-/** A short, bounded rendering of the arguments — never the full text of anything. */
+/** The shape of the arguments: keys, lengths, ids, counts — no content. */
 export function summarizeArgs(args: unknown): string {
-  let text: string;
-  try {
-    text = JSON.stringify(truncateStrings(args)) ?? "";
-  } catch {
-    text = "[unserialisable]";
-  }
+  if (!args || typeof args !== "object" || Array.isArray(args)) return Array.isArray(args) ? `list(${args.length})` : "";
+  const text = Object.entries(args as Record<string, unknown>).map(([k, v]) => shapeOf(k, v, 0)).join(" ");
   return text.length > MAX_SUMMARY ? `${text.slice(0, MAX_SUMMARY)}…` : text;
 }
 
-/** The id of the row a result says it touched, when it says so plainly. */
+/** The id of the row a result says it touched. */
 export function referencedId(result: unknown): string | null {
   if (!result || typeof result !== "object") return null;
   const r = result as Record<string, unknown>;
-  for (const key of ["deleted", "filed"]) {
-    if (typeof r[key] === "string") return r[key] as string;
-  }
+  if (typeof r.id === "string") return r.id;
   for (const key of ["workout", "entry", "measurement", "recipe", "routine", "reminder", "hymn", "milestone", "logged"]) {
     const v = r[key];
     if (v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string") return (v as { id: string }).id;
   }
+  if (typeof r.filed === "string") return r.filed;
+  if (typeof r.deleted === "string") return r.deleted; // delete_entry returns the id it deleted
   return null;
 }
 
 export async function recordMcpAudit(input: {
   tool: string;
+  kind?: "read" | "write";
   args: unknown;
   result: unknown;
   ctx?: McpCallContext;
 }): Promise<void> {
-  const errorText =
-    input.result && typeof input.result === "object" && typeof (input.result as { error?: unknown }).error === "string"
-      ? String((input.result as { error: string }).error).slice(0, 500)
-      : null;
+  const r = input.result && typeof input.result === "object" ? (input.result as Record<string, unknown>) : null;
+  const errorText = r && typeof r.error === "string" ? String(r.error).slice(0, 300) : null;
+  const count = r && typeof r.count === "number" ? ` → ${r.count} rows` : "";
   try {
     await prisma.mcpAuditEvent.create({
       data: {
         tool: input.tool,
         ok: errorText === null,
-        summary: summarizeArgs(input.args),
+        summary: `${input.kind === "read" ? "read " : ""}${summarizeArgs(input.args)}${count}`.slice(0, MAX_SUMMARY + 40),
         error: errorText,
-        refId: referencedId(input.result),
+        refId: input.kind === "read" ? null : referencedId(input.result),
         sessionId: input.ctx?.sessionId ?? null,
         deviceLabel: input.ctx?.deviceLabel ?? null,
       },
@@ -79,4 +85,11 @@ export async function recordMcpAudit(input: {
     // The trail must never break the tool — but a silent trail is no trail.
     console.warn("[mcp] audit row not written:", error instanceof Error ? error.message : String(error));
   }
+}
+
+/** Retention: rows older than MCP_AUDIT_KEEP_DAYS go (daily cron). */
+export async function pruneMcpAudit(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - MCP_AUDIT_KEEP_DAYS * 24 * 60 * 60 * 1000);
+  const result = await prisma.mcpAuditEvent.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  return result.count;
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authSecretProblems, setAuthCookie } from "@/lib/auth";
+import { authSecretProblems, setAuthCookie, setKnownDeviceCookie } from "@/lib/auth";
 import { ensurePinCredential, pinConfigured } from "@/lib/pin-auth";
 import { attemptPin, lockedResponseInit } from "@/lib/pin-attempt";
 
@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
     await ensurePinCredential(newPin);
     const response = NextResponse.json({ success: true });
     setAuthCookie(response);
+    setKnownDeviceCookie(response);
     return response;
   } catch (error) {
     console.error("Update PIN error:", error instanceof Error ? error.message : error);

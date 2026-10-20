@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
 import { NextRequest } from "next/server";
 
-// The global wrong-PIN lock is also a lever against Michael (review of 3a):
-// a clean client with the CORRECT PIN still gets in during a lock; a wrong
-// guess from a clean client spends its exemption; tripping the lock raises a
-// system alert; the cap and window come from env.
+// The global wrong-PIN lock is also a lever against Michael. During a lock
+// only a KNOWN DEVICE (a browser carrying the signed marker a successful
+// login sets — PLAN D2b) gets a real PIN check; every other caller, however
+// many new IPs it brings, gets 429 and the PIN is never looked at (review of
+// 3b). Tripping the lock raises a system alert; cap and window come from env.
 
 vi.mock("next/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("next/server")>();
@@ -29,13 +30,19 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { attemptPin } from "@/lib/pin-attempt";
-import { globalLoginLimits } from "@/lib/auth";
+import { createKnownDeviceToken, globalLoginLimits } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { hashPin } from "@/lib/security";
 
 const STRONG = crypto.randomBytes(32).toString("hex");
-const req = (ip: string) => new NextRequest("http://localhost/api/auth", { method: "POST", headers: { "x-real-ip": ip } });
+const req = (ip: string, known = false) =>
+  new NextRequest("http://localhost/api/auth", {
+    method: "POST",
+    headers: { "x-real-ip": ip, ...(known ? { cookie: `pitaya_known_device=${createKnownDeviceToken()}` } : {}) },
+  });
 
 beforeEach(() => {
+  vi.stubEnv("AUTH_COOKIE_SECRET", STRONG);
   vi.stubEnv("APP_AUTH_SECRET", STRONG);
   vi.stubEnv("APP_PIN", "2468");
   vi.stubEnv("AUTH_GLOBAL_MAX_FAILURES", "6");
@@ -71,26 +78,45 @@ describe("attemptPin under a global lock", () => {
     expect(notify.mock.calls[0][0].body).toMatch(/6 wrong PINs/);
   });
 
-  it("his own device — no wrong guesses of its own — still gets in with the correct PIN", async () => {
+  it("his own browser — the known-device marker, no wrong guesses of its own — still gets in with the right PIN", async () => {
     const scope = `exempt-${Math.random()}`;
     await floodUntilLocked(scope);
-    expect(await attemptPin(req("203.0.113.9"), scope, "2468")).toEqual({ status: "ok" });
+    expect(await attemptPin(req("203.0.113.9", true), scope, "2468")).toEqual({ status: "ok" });
   });
 
-  it("the attacker's clean client gets one wrong guess, answered as locked, then is blocked for the lock", async () => {
+  it("during a lock, N NEW IPs without the marker get ZERO real PIN checks — the right PIN included", async () => {
+    const scope = `bound-${Math.random()}`;
+    await floodUntilLocked(scope);
+    const lookups = vi.mocked(prisma.authCredential.findUnique);
+    lookups.mockClear();
+    for (let i = 0; i < 200; i++) {
+      expect((await attemptPin(req(`2001:db8:${i.toString(16)}::1`), scope, i === 199 ? "2468" : "0000")).status).toBe("locked");
+    }
+    expect(lookups).not.toHaveBeenCalled(); // the stored PIN was never consulted
+  });
+
+  it("a forged or expired marker is no marker", async () => {
+    const scope = `forged-${Math.random()}`;
+    await floodUntilLocked(scope);
+    const forged = new NextRequest("http://localhost/api/auth", {
+      method: "POST",
+      headers: { "x-real-ip": "203.0.113.50", cookie: "pitaya_known_device=eyJzdWIiOiJwaXRheWEta25vd24tZGV2aWNlIn0.forged" },
+    });
+    expect((await attemptPin(forged, scope, "2468")).status).toBe("locked");
+  });
+
+  it("a marked browser's wrong guess during a lock spends its exemption for the rest of the lock", async () => {
     const scope = `spend-${Math.random()}`;
     await floodUntilLocked(scope);
-    const first = await attemptPin(req("203.0.113.77"), scope, "0000");
-    expect(first.status).toBe("locked"); // not "wrong": nothing learned
-    const second = await attemptPin(req("203.0.113.77"), scope, "2468");
-    expect(second.status).toBe("locked"); // even the right PIN now waits
+    expect((await attemptPin(req("203.0.113.77", true), scope, "0000")).status).toBe("locked");
+    expect((await attemptPin(req("203.0.113.77", true), scope, "2468")).status).toBe("locked");
   });
 
-  it("a client with its own failures in the window is locked out, correct PIN or not", async () => {
+  it("a client with its own failures in the window is locked out, correct PIN or not, marker or not", async () => {
     const scope = `dirty-${Math.random()}`;
-    await attemptPin(req("203.0.113.5"), scope, "0000"); // one of the attacker's hops was 'us'
+    await attemptPin(req("203.0.113.5", true), scope, "0000");
     await floodUntilLocked(scope);
-    expect((await attemptPin(req("203.0.113.5"), scope, "2468")).status).toBe("locked");
+    expect((await attemptPin(req("203.0.113.5", true), scope, "2468")).status).toBe("locked");
   });
 
   it("without a lock the usual answers apply, and a success clears only that client", async () => {
