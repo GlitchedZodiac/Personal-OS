@@ -7,7 +7,7 @@ from the real app. This is the "before" of the convergence described in
 
 ## How this was made
 
-- **Routes** were listed from the filesystem: 67 `page.tsx` files under
+- **Routes** were listed from the filesystem: 64 `page.tsx` files under
   `app/(tabs)`, `app/(desk)`, `app/oauth` and `app/` (two are redirects),
   plus the PIN gate, which is a state rather than a route.
 - **Screenshots** come from `scripts/screenshot-screens.mjs` (Playwright
@@ -18,15 +18,23 @@ from the real app. This is the "before" of the convergence described in
   Every route has all three frames at
   `screen-audit/<slug>--{phone-light,phone-dark,desktop-light}.png`; rows that
   group several routes link the phone-light frame only. Captures over 280 KB
-  are re-encoded as 256-colour PNGs (the set is 213 images, 18.7 MB).
+  are re-encoded as 256-colour PNGs; byte-identical frames (the desk has
+  no Night yet, two routes are redirects) are stored once and the manifest
+  points the duplicate at the kept file (`duplicateOf`).
+- **Before = e6abccc.** The "before" frames were (re)taken from a detached
+  worktree at commit e6abccc — the app as it was before any convergence —
+  so later token changes cannot leak into them.
 - **Data.** The committed images are taken against a synthetic database
-  seeded by `scripts/seed-screens.mjs` — invented but realistic (a
-  ten-month weight series, 121 workouts, 249 meals, a term, a church
-  series, three bank accounts) — because the repository is public. The
+  seeded by `scripts/seed-screens.mjs` — invented but realistic (a nine-month weight series, 125 workouts, about 50 movement records, a notification history, a term, a church series with its weekly questions, three bank accounts; every profile value is invented) — because the repository is public. The
   judgements below were formed against a copy of production (674 meals,
   169 workouts, 88 records, 262 chat messages) kept in an untracked folder;
-  where the two differ in a way that matters it is said.
-- **Dark mode is forced.** `app/globals.css` defines `.dark` tokens, but
+  where the two differ in a way that matters it is said. **One real number
+  shows in every Body frame:** the start point (weight and month) is
+  hard-coded in app logic (`lib/body-view.ts` `BODY_START`) and was already
+  public in the repository; the seed does not and cannot change it.
+  The writer refuses to put anything under `docs/` unless the server
+  carries the seed's marker (`screenSeed`).
+- **Dark mode is forced in the "before" set.** `app/globals.css` defines `.dark` tokens, but
   nothing in the app toggles the class — Settings → Appearance reads
   "Night — next build" and `components/ui/sonner.tsx` calls `useTheme()`
   with no provider. The dark shots add `.dark` to `<html>` and emulate
@@ -85,8 +93,9 @@ is the "clutterry" he means. `/settings/notifications` is 4,109 px because
 "Recently sent" lists every notification ever. `/health/body` is 4,329 px
 (a faithful port, but ten cards). `/trends` runs past the 4,400 px clip.
 
-**S6 · Settings is a wall of text.** Five watch features are rows whose
-"toggle" is the word ON; six data rows each carry a sentence and a button
+**S6 · Settings is a wall of text.** Five watch features are rows ending
+in a read-only status ("ON"/"off" — the design's connection status,
+pitaya-app.dc.html, not a control, though it reads like one); six data rows each carry a sentence and a button
 in one of three styles (outlined, filled, "Archived"); the zone editor,
 the App rows and the System card all have different row heights, paddings
 and type. One line per setting is possible — the rows are one line of
@@ -119,7 +128,7 @@ under the dock.
 **S11 · Competing labels.** Cards carry a kicker, a title, a pill and a
 right-aligned meta line at once (Workouts' "THIS WEEK · OVERVIEW / 6 this
 week", Activity's three-line sub-stats per number). Secondary lines repeat
-the primary ("walk · 3:26 PM · walk · 4,035 steps").
+the primary (a walk's row reads "walk · <time> · walk · <steps>").
 
 **S12 · Icons.** Designed surfaces use `pitaya-icons.tsx` correctly; the
 legacy surfaces use lucide (278) and emoji (Todos, Finance, Plan). The
@@ -131,7 +140,7 @@ sit between 7 and 8 pt — the floor, not the target. The faded feeling is
 the colour roles: `textTertiary #96949B` and `textMuted #66646C` carry
 most labels (Summary uses tertiary thirteen times; Home Grid uses muted
 eight times), and the stat grids put a white value over a grey kicker at
-the same visual weight. 44 `.buttonStyle(.plain)` controls against 21
+the same visual weight. 44 `.buttonStyle(.plain)` controls against 18
 `.pitayaTappable` calls — the rest are CTAs or tiles, but each needs a
 look.
 
@@ -140,6 +149,21 @@ look.
 the standard in practice.
 
 ---
+
+## Phase 2 — the kit (2026-10-20)
+
+The design system in code: one token file (`app/globals.css`, blocks 1–6),
+the kit (`components/ui/*`), the ratchet gate (`npm run design-gate`), and
+Appearance (Day · Night · System). Every kit piece in every state lives at
+`/settings/design` (behind the PIN gate):
+[phone light](screen-audit/settings-design--phone-light.png) ·
+[phone dark](screen-audit/settings-design--phone-dark.png) ·
+[desktop](screen-audit/settings-design--desktop-light.png).
+
+The "before" frames above were taken with `.dark` forced on `<html>`;
+from Phase 2 on, dark frames come from the app's own System appearance
+under an emulated dark phone. Converged screens get "after" frames next to
+their "before" in their own phase.
 
 ## Convergence order
 
@@ -159,13 +183,13 @@ Shots: [phone light](screen-audit/dashboard--phone-light.png) · [phone dark](sc
 
 | Dimension | Finding |
 |---|---|
-| Typography | Hero `0` at 44 px is right; the Train tile crams four facts in two sizes and wraps "9:00 / rope" onto its own line; "tap to flip" 10.5 px under the hero competes with it |
+| Typography | Hero `0` at 44 px is right; the Train tile crams four facts in two sizes and wraps the rope time onto its own line; "tap to flip" 10.5 px under the hero competes with it |
 | Spacing | Cards consistent (16 px gutter, 12 px gaps); habits grid generous while the Train tile is cramped |
 | Colour | On-token except `text-[#8C2F51]` on the Open buttons and `#5E9B72` for "left" — both break in dark (S3) |
 | Components | Hand-rolled tiles, habit ticks, Open buttons; dock + tab bar are the kit's |
 | Dark mode | Ring and cards hold; Open buttons go dark-on-dark; Voice memo button and tick circles stay light |
 | Motion | `page-in` 350 ms + `stagger-children` 450 ms on every load; number changes are instant |
-| Empty state | A zero day shows an empty ring and "0 / 176 g" — honest; no prompt to log |
+| Empty state | A zero day shows an empty ring and "0 / <target> g" bars — honest; no prompt to log |
 | Loading | Skeleton-less: the page pops in whole |
 
 Severity **P1** (it is the hub). Clutter: medium — the Train tile. Debt 116 (hex 47 · px 27 · inline 23 · raw button 14). Ad-hoc: ring, macro bars, tile, habit grid, Open button.
@@ -212,8 +236,8 @@ Shots: [phone light](screen-audit/health-workouts--phone-light.png) · [phone da
 
 | Dimension | Finding |
 |---|---|
-| Typography | Twelve sizes on one page (9.5 · 10 · 10.5 · 11 · 11.5 · 12 · 12.5 · 13 · 13.5 · 15 · 17 · 19 · 22 · 24 · 26); kickers at 10.5 px over values at 19 px; the PR tiles print name 11 px / value 17 px / date 9.5 px, forty-eight times |
-| Spacing | Sections stack with equal gaps so nothing reads as more important than the next; the "9:00 ROPE" stat orphans onto its own row of the overview grid |
+| Typography | Fifteen sizes on one page (9.5 · 10 · 10.5 · 11 · 11.5 · 12 · 12.5 · 13 · 13.5 · 15 · 17 · 19 · 22 · 24 · 26); kickers at 10.5 px over values at 19 px; the PR tiles print name 11 px / value 17 px / date 9.5 px, forty-eight times |
+| Spacing | Sections stack with equal gaps so nothing reads as more important than the next; the rope-time stat orphans onto its own row of the overview grid |
 | Colour | 114 raw hexes; `#8C2F51` for every value, `#5E9B72` for every delta; the HEAVIEST EVER banner is the one designed use of deep raspberry and it works |
 | Components | 31 raw buttons; two button styles in the header, a third ("View activities →") below the overview; the jump-rope tables are hand-built |
 | Dark mode | Banner and charts hold; the two header CTAs (`bg-foreground`) invert correctly; PR tiles and section pills keep light hexes |
@@ -221,7 +245,7 @@ Shots: [phone light](screen-audit/health-workouts--phone-light.png) · [phone da
 | Empty state | A week with no sessions shows zeros, not a prompt |
 | Loading | None — the page waits on two fetches then pops in |
 
-Severity **P1** — his first complaint. Clutter: **high** — 3,988 px: overview (4 stats + an orphan) → two buttons → banner → volume chart → jump-rope sub-dashboard (chart, 3 bests, 2 tables, a paragraph) → by-movement (5 bars) → PR wall (48 tiles) → trails → effort zones. Proposed shape (look plan D8): hero = this week (sessions · volume · the record that moved) + Start/Routines; banner stays; **Records** = six tiles + "All records"; **Jump rope** = one row + its own page; **By movement** = five + more; **Trails** = one row; effort zones leave for the Report. Debt **297** (the worst page). Ad-hoc: overview grid, banner, 3 chart cards, PR tile, trails card, zone bar, rest timer, live session panel.
+Severity **P1** — his first complaint. Clutter: **high** — 3,988 px on the production copy (4,632 px in the seeded "before" frame, which carries a comparable ~50-tile wall): overview (4 stats + an orphan) → two buttons → banner → volume chart → jump-rope sub-dashboard (chart, 3 bests, 2 tables, a paragraph) → by-movement (5 bars) → PR wall (48 tiles) → trails → effort zones. Proposed shape (look plan D8): hero = this week (sessions · volume · the record that moved) + Start/Routines; banner stays; **Records** = six tiles + "All records"; **Jump rope** = one row + its own page; **By movement** = five + more; **Trails** = one row; effort zones leave for the Report. Debt **297** (the worst page). Ad-hoc: overview grid, banner, 3 chart cards, PR tile, trails card, zone bar, rest timer, live session panel.
 
 ### `/health/workouts/activities` — Activities
 Purpose: every session, filterable (All · Gym · Outdoor · Rope).
@@ -229,7 +253,7 @@ Shots: [phone light](screen-audit/health-workouts-activities--phone-light.png) �
 
 | Dimension | Finding |
 |---|---|
-| Typography | Row title 13.5 px / sub 11 px / trailing 13 px — fine; the sub repeats the type ("walk · 3:26 PM · walk · 4,035 steps · 194 kcal") |
+| Typography | Row title 13.5 px / sub 11 px / trailing 13 px — fine; the sub repeats the type ("walk · <time> · walk · <steps> · <kcal>") |
 | Spacing | Rows 64 px, consistent; the list is one long card with no month breaks |
 | Colour | 55 hexes; icon circles in tint/mint — on-design |
 | Components | Chips (one of ten styles), list row (bespoke), count pill |
@@ -269,7 +293,7 @@ Calm and close to the kit: list rows with title/sub, a text "Archive" per row, "
 ### `/health/activity` — Activity (Apple Health steps)
 Shots: [phone light](screen-audit/health-activity--phone-light.png) · [phone dark](screen-audit/health-activity--phone-dark.png) · [desktop](screen-audit/health-activity--desktop-light.png)
 
-Built from the Report's card language (no design slice — deferred-items 2026-10-17). 2,626 px: notice → yesterday hero (deep raspberry) → "Friday vs your week" (four numbers each with three sub-lines) → week card (3 stats, bar chart, 4 sub-cards, a sentence) → History (two chip rows, chart) → Trends table → All time (4 stats, 6 tiles, weekday chart, a paragraph). Typography: 54 arbitrary sizes; the per-number sub-stats (avg · last · vs) are three lines of 10–11 px under every value. Dark: holds except black "Steps" chip. Severity **P1** (data screen). Clutter: high — fold "All time" and "Trends" behind the history chips. Debt 108.
+Built from the Report's card language (no design slice — deferred-items 2026-10-17). The header hard-codes \"APPLE HEALTH · CENTRAL TIME\" (`activity/page.tsx:147`) while the app runs on America/Bogota — filed for main. 2,626 px: notice → yesterday hero (deep raspberry) → "Friday vs your week" (four numbers each with three sub-lines) → week card (3 stats, bar chart, 4 sub-cards, a sentence) → History (two chip rows, chart) → Trends table → All time (4 stats, 6 tiles, weekday chart, a paragraph). Typography: 54 arbitrary sizes; the per-number sub-stats (avg · last · vs) are three lines of 10–11 px under every value. Dark: holds except black "Steps" chip. Severity **P1** (data screen). Clutter: high — fold "All time" and "Trends" behind the history chips. Debt 108.
 
 ### `/health/progress` — Progress photos
 Shots: [phone light](screen-audit/health-progress--phone-light.png) · [phone dark](screen-audit/health-progress--phone-dark.png) · [desktop](screen-audit/health-progress--desktop-light.png)
@@ -284,7 +308,7 @@ The reference for "the data is the hero": a deep-raspberry headline card, then E
 ### `/health/recovery` — Recovery + Readiness
 Shots: [phone light](screen-audit/health-recovery--phone-light.png) · [phone dark](screen-audit/health-recovery--phone-dark.png) · [desktop](screen-audit/health-recovery--desktop-light.png)
 
-Legacy: a blue-tinted score card with a red `25`, blue progress bars, lucide heart/battery, a raw date input + "Refresh". Severity **P3** (stripped surface; recovery lives in the watch and Body). Debt 6 — small, but every pixel is off-identity.
+Legacy: a blue-tinted score card whose number turns red in the recovery state (the seed's "today" is an early morning — breakfast, no water — so the frame shows it), blue progress bars, lucide heart/battery, a raw date input + "Refresh". Severity **P3** (stripped surface; recovery lives in the watch and Body). Debt 6 — small, but every pixel is off-identity.
 
 ### `/health/coach` — Weekly game plan
 Shots: [phone light](screen-audit/health-coach--phone-light.png) · [phone dark](screen-audit/health-coach--phone-dark.png) · [desktop](screen-audit/health-coach--desktop-light.png)
@@ -294,7 +318,7 @@ Legacy: a teal→orange gradient header, pink tiles with teal/yellow lucide icon
 ### `/health/outcomes`, `/health/automations`, `/health/command-center`, `/health/water`
 Shots: [outcomes](screen-audit/health-outcomes--phone-light.png) · [automations](screen-audit/health-automations--phone-light.png) · [command center](screen-audit/health-command-center--phone-light.png) · [water](screen-audit/health-water--phone-light.png) (dark and desktop alongside)
 
-All four are the old app: raw date inputs, generic pill buttons (Preview Run / Run Now / Add Rule / Save Rules — four button styles on one card), form grids of raw selects, "No activity found for this day." in a card, Water's "Total Fluids" tile with a dashed yellow outline (a focus ring that never clears). None is linked from a designed surface. Severity **P3**; converge to the kit for consistency and list as pending slices. Debt 10 · 13 · 12 · 9.
+All four are the old app: raw date inputs, generic pill buttons (Preview Run / Run Now / Add Rule / Save Rules — four button styles on one card), form grids of raw selects, "No activity found for this day." in a card, Water's "Total Fluids" tile in the old blue (`border-blue-500/20 bg-blue-500/5`). None is linked from a designed surface. Severity **P3**; converge to the kit for consistency and list as pending slices. Debt 10 · 13 · 12 · 9.
 
 ---
 
@@ -347,12 +371,12 @@ Shots: [phone light](screen-audit/settings--phone-light.png) · [phone dark](scr
 | Typography | Row labels 12.5 px, values 12 px bold, descriptions 11 px, the zone editor 20 px, the System card 15/13/11 — five row heights on one page |
 | Spacing | The watch card, the five feature rows, the six data rows, the zone card, the App rows and the System card are six different paddings |
 | Colour | The watch card is mint-tinted; the AI/System card uses a teal icon and a teal "Top up" link (old identity); 16 hexes |
-| Components | "ON" text where a switch belongs; three button styles (outlined, filled raspberry, grey "Archived"); 8 raw buttons; lucide icons (6) |
+| Components | The watch rows end in a read-only "ON"/"off" status (the design's, pitaya-app.dc.html) that reads like a toggle — it should look like a status, never a control; three button styles (outlined, filled raspberry, grey "Archived"); 8 raw buttons; lucide icons (6) |
 | Dark mode | Rows hold; the mint watch card and the model-name code block stay light |
 | Motion | `page-in` only |
 | Empty / loading | n/a |
 
-Severity **P1** — "a feeling of a wall of text". Clutter: high — 2,053 px for twenty settings. Proposed: five Sections (Watch · Data · Connections · App · System), every setting a `ListRow` with a one-line title and its control on the right (Switch, value chip or chevron), descriptions behind a Disclosure, the zone editor its own row that opens a sheet, the System card re-tokened. Lane B's Coach section and lane D's RENPHO card get their own named section components. Debt 72.
+Severity **P1** — "a feeling of a wall of text". Clutter: high — 2,053 px for twenty settings. Proposed: five Sections (Watch · Data · Connections · App · System), every setting a `ListRow` with a one-line title and one thing on the right — a `Status` for read-only state (the watch rows: On/Off with the connection), a `Switch` only for something he can change, a value, or a chevron, descriptions behind a Disclosure, the zone editor its own row that opens a sheet, the System card re-tokened. Lane B's Coach section and lane D's RENPHO card get their own named section components. Debt 72.
 
 ### `/settings/notifications` — Notifications
 Shots: [phone light](screen-audit/settings-notifications--phone-light.png) · [phone dark](screen-audit/settings-notifications--phone-dark.png) · [desktop](screen-audit/settings-notifications--desktop-light.png)
@@ -386,7 +410,7 @@ Shots: [phone light](screen-audit/spirit-read--phone-light.png) · [dark](screen
 ### `/spirit/bible`, `/spirit/term`, `/spirit/term/start`, `/spirit/notebook`, `/spirit/notebook/page/[id]`, `/spirit/memory`, `/spirit/church`, `/spirit/library`, `/spirit/track2`, `/spirit/transcript`, `/spirit/settings`
 Shots: [bible](screen-audit/spirit-bible--phone-light.png) · [term](screen-audit/spirit-term--phone-light.png) · [term/start](screen-audit/spirit-term-start--phone-light.png) · [notebook](screen-audit/spirit-notebook--phone-light.png) · [page](screen-audit/spirit-notebook-page-id--phone-light.png) · [memory](screen-audit/spirit-memory--phone-light.png) · [church](screen-audit/spirit-church--phone-light.png) · [library](screen-audit/spirit-library--phone-light.png) · [track2](screen-audit/spirit-track2--phone-light.png) · [transcript](screen-audit/spirit-transcript--phone-light.png) · [settings](screen-audit/spirit-settings--phone-light.png)
 
-All designed (round-2 ports) and visually consistent with each other: kicker + title header, back pill, cards, chips. Shared faults: the design's values typed as hexes (8–58 per page) and sizes (11–35 per page); Notebook stacks three chip rows plus a colour row before the first entry; the notebook page view is 115 hexes (ink rendering + replay bar). Dark: the designed cards hold; chips and tints keep light hexes. Severity **P2** across the set (tokens and chips only; no visual change intended). Debt 40 · 87 · 72 · 73 · 192 · 62 · 122 · 44 · 42 · 39 · 66.
+All designed (round-2 ports) and largely consistent with each other: kicker + title header, back pill, cards, chips. **Church needs care:** its "this week" card reads `weeks[].questions` with no guard, so a series week saved without questions renders the error page instead of the screen (the phase-1 frame showed exactly that, because the first seed omitted them; the seed now carries them) — filed. Shared faults: the design's values typed as hexes (8–58 per page) and sizes (11–35 per page); Notebook stacks three chip rows plus a colour row before the first entry; the notebook page view is 115 hexes (ink rendering + replay bar). Dark: the designed cards hold; chips and tints keep light hexes. Severity **P2** across the set (tokens and chips only; no visual change intended). Debt 40 · 87 · 72 · 73 · 192 · 62 · 122 · 44 · 42 · 39 · 66.
 
 ---
 
@@ -416,7 +440,7 @@ Shots: [phone light](screen-audit/pin-gate--phone-light.png) · [phone dark](scr
 The first thing he sees. Designed (the "fine notebook, not a bank vault" brief); lucide lock/loader icons remain. Severity **P2**.
 
 ### `/oauth/authorize`
-Shots: [phone light](screen-audit/oauth-authorize--phone-light.png) · [dark](screen-audit/oauth-authorize--phone-dark.png) · [desktop](screen-audit/oauth-authorize--desktop-light.png)
+Shots: [phone light](screen-audit/oauth-authorize--phone-dark.png) · [dark](screen-audit/oauth-authorize--phone-dark.png) · [desktop](screen-audit/oauth-authorize--desktop-light.png)
 
 The claude.ai connector consent screen: 16 hexes, 9 sizes, on-brand. Severity **P3**. Debt 30.
 
@@ -435,7 +459,7 @@ inside a live workout were reached by swiping the carousel by hand. Most
 frames were taken on 2026-10-17; Home and the workout list were retaken on
 2026-10-20 after the seed moved to that day.
 Floor: type ≥ 7 pt via `Theme.r3TypeSize`/the wrist scale; every tappable
-≥ 38 pt; no `minimumScaleFactor` below 0.8 (all 30 uses are at 0.8 —
+≥ 38 pt; no `minimumScaleFactor` below 0.8 (all 39 uses are at 0.8 —
 compliant).
 
 | Screen | Frame | Reached by | Findings |
@@ -468,7 +492,7 @@ simulator, before and after.
 Summary for Phase 5: raise the three sub-floor calls; move meaning-bearing
 subs from tertiary/muted to secondary (`#A5A3AA`); hero numerals one step
 up on Summary and the metrics pages; replace the four `.system(size:)`
-labels with Theme faces; check the 23 plain buttons without
+labels with Theme faces; check the 26 plain buttons without
 `pitayaTappable`; adopt `Theme.Motion` everywhere (sixteen ad-hoc
 durations today).
 
@@ -476,78 +500,81 @@ durations today).
 
 ## Appendix A — metrics per route
 
-Generated by `node scripts/design-metrics.mjs` on 2026-10-17 (page file +
-direct component imports; kit excluded). Debt = sum of the seven counts.
+Generated by `node scripts/design-metrics.mjs` on the e6abccc tree (the
+"before" code), with the definitions the gate uses since Phase 2: page
+file + direct component imports, kit excluded, Tailwind palette colours
+and literal motion timings counted. Debt = sum of the eight counts. (The
+"Debt N" figures in the rows above are the phase-1 count, before palette
+classes and literal timings were added to the definition.)
 
-| Route | Lines | Hex | text-[px] | Inline style | Raw button | Raw field | lucide | Motion | Debt |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `/actions` | 26 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | **1** |
-| `/chat` | 3050 | 85 | 78 | 26 | 28 | 5 | 0 | 1 | **223** |
-| `/dashboard` | 1297 | 47 | 27 | 23 | 14 | 3 | 0 | 2 | **116** |
-| `/finances` | 1301 | 0 | 31 | 1 | 11 | 6 | 20 | 10 | **79** |
-| `/finances/budget` | 696 | 0 | 16 | 0 | 8 | 8 | 10 | 2 | **44** |
-| `/finances/goals` | 422 | 0 | 5 | 0 | 12 | 5 | 8 | 1 | **31** |
-| `/finances/import` | 289 | 0 | 6 | 0 | 3 | 4 | 7 | 0 | **20** |
-| `/finances/inbox` | 548 | 0 | 3 | 0 | 1 | 1 | 4 | 0 | **9** |
-| `/finances/merchants` | 90 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
-| `/finances/obligations` | 294 | 0 | 0 | 0 | 1 | 8 | 5 | 0 | **14** |
-| `/finances/pockets` | 394 | 0 | 4 | 0 | 1 | 1 | 4 | 0 | **10** |
-| `/finances/reports` | 147 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
-| `/finances/sources` | 643 | 0 | 3 | 0 | 2 | 4 | 7 | 0 | **16** |
-| `/finances/transactions` | 1012 | 0 | 20 | 0 | 14 | 13 | 13 | 1 | **61** |
-| `/health` | 9 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
-| `/health/activity` | 791 | 31 | 54 | 14 | 9 | 0 | 0 | 0 | **108** |
-| `/health/automations` | 379 | 0 | 8 | 0 | 0 | 0 | 5 | 0 | **13** |
-| `/health/body` | 2658 | 8 | 0 | 182 | 13 | 2 | 0 | 0 | **205** |
-| `/health/body/metric` | 617 | 29 | 16 | 23 | 2 | 0 | 0 | 0 | **70** |
-| `/health/coach` | 282 | 0 | 4 | 0 | 0 | 0 | 10 | 0 | **14** |
-| `/health/command-center` | 163 | 0 | 5 | 0 | 0 | 0 | 7 | 0 | **12** |
-| `/health/food` | 991 | 42 | 38 | 17 | 19 | 2 | 0 | 0 | **118** |
-| `/health/food/history` | 466 | 47 | 25 | 9 | 8 | 0 | 0 | 0 | **89** |
-| `/health/outcomes` | 213 | 0 | 8 | 0 | 0 | 0 | 2 | 0 | **10** |
-| `/health/progress` | 453 | 0 | 2 | 0 | 1 | 2 | 9 | 0 | **14** |
-| `/health/recovery` | 178 | 0 | 1 | 0 | 0 | 0 | 3 | 2 | **6** |
-| `/health/report` | 458 | 32 | 37 | 14 | 3 | 0 | 0 | 0 | **86** |
-| `/health/water` | 338 | 0 | 2 | 0 | 1 | 0 | 6 | 0 | **9** |
-| `/health/workouts` | 2155 | 114 | 111 | 40 | 31 | 0 | 0 | 1 | **297** |
-| `/health/workouts/activities` | 788 | 55 | 20 | 11 | 9 | 0 | 0 | 0 | **95** |
-| `/health/workouts/activities/[id]` | 1470 | 102 | 82 | 14 | 14 | 6 | 0 | 0 | **218** |
-| `/health/workouts/plan` | 2256 | 0 | 23 | 0 | 5 | 0 | 41 | 8 | **77** |
-| `/health/workouts/routines` | 530 | 19 | 22 | 11 | 11 | 8 | 0 | 0 | **71** |
-| `/home` | 1044 | 152 | 0 | 86 | 15 | 0 | 0 | 0 | **253** |
-| `/journal` | 78 | 8 | 7 | 2 | 0 | 0 | 0 | 0 | **17** |
-| `/oauth/authorize` | 172 | 16 | 9 | 2 | 2 | 1 | 0 | 0 | **30** |
-| `/settings` | 734 | 16 | 30 | 10 | 8 | 1 | 6 | 1 | **72** |
-| `/settings/claude` | 218 | 5 | 20 | 2 | 5 | 0 | 0 | 0 | **32** |
-| `/settings/export` | 442 | 0 | 0 | 0 | 0 | 1 | 9 | 0 | **10** |
-| `/settings/import` | 578 | 0 | 15 | 0 | 0 | 1 | 12 | 0 | **28** |
-| `/settings/notifications` | 521 | 6 | 5 | 1 | 1 | 2 | 5 | 3 | **23** |
-| `/spirit` | 500 | 60 | 30 | 14 | 14 | 0 | 0 | 4 | **122** |
-| `/spirit/bible` | 198 | 18 | 13 | 5 | 4 | 0 | 0 | 0 | **40** |
-| `/spirit/church` | 498 | 58 | 35 | 13 | 14 | 2 | 0 | 0 | **122** |
-| `/spirit/desk` | 1218 | 99 | 0 | 47 | 11 | 1 | 0 | 0 | **158** |
-| `/spirit/desk-settings` | 1016 | 136 | 0 | 76 | 17 | 3 | 0 | 0 | **232** |
-| `/spirit/hymns` | 904 | 115 | 0 | 70 | 20 | 6 | 0 | 0 | **211** |
-| `/spirit/library` | 180 | 20 | 16 | 5 | 3 | 0 | 0 | 0 | **44** |
-| `/spirit/memory` | 274 | 24 | 23 | 10 | 5 | 0 | 0 | 0 | **62** |
-| `/spirit/notebook` | 302 | 37 | 24 | 7 | 4 | 1 | 0 | 0 | **73** |
-| `/spirit/notebook/page/[id]` | 650 | 115 | 7 | 60 | 10 | 0 | 0 | 0 | **192** |
-| `/spirit/notebooks` | 1033 | 116 | 0 | 55 | 15 | 1 | 0 | 0 | **187** |
-| `/spirit/read` | 2261 | 90 | 102 | 150 | 45 | 5 | 0 | 4 | **396** |
-| `/spirit/recordings` | 1864 | 225 | 0 | 112 | 32 | 1 | 0 | 0 | **370** |
-| `/spirit/settings` | 341 | 29 | 20 | 9 | 7 | 0 | 0 | 1 | **66** |
-| `/spirit/study` | 739 | 83 | 57 | 21 | 13 | 0 | 0 | 0 | **174** |
-| `/spirit/term` | 322 | 40 | 33 | 9 | 3 | 0 | 0 | 2 | **87** |
-| `/spirit/term/start` | 275 | 35 | 31 | 4 | 2 | 0 | 0 | 0 | **72** |
-| `/spirit/track2` | 180 | 8 | 11 | 18 | 2 | 0 | 0 | 3 | **42** |
-| `/spirit/transcript` | 157 | 22 | 12 | 4 | 1 | 0 | 0 | 0 | **39** |
-| `/todos` | 519 | 0 | 8 | 0 | 7 | 0 | 8 | 2 | **25** |
-| `/trends` | 2042 | 24 | 65 | 18 | 3 | 0 | 20 | 6 | **136** |
-| `/trends/daily-log` | 226 | 0 | 9 | 0 | 1 | 0 | 6 | 1 | **17** |
+| Route | Lines | Hex | Palette | text-[px] | Inline style | Raw button | Raw field | lucide | Motion | Debt |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `/actions` | 26 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | **1** |
+| `/chat` | 3050 | 85 | 0 | 78 | 26 | 28 | 5 | 0 | 7 | **229** |
+| `/dashboard` | 1297 | 47 | 0 | 27 | 23 | 14 | 3 | 0 | 5 | **119** |
+| `/finances` | 1301 | 0 | 109 | 31 | 1 | 11 | 6 | 20 | 10 | **188** |
+| `/finances/budget` | 696 | 0 | 29 | 16 | 0 | 8 | 8 | 10 | 2 | **73** |
+| `/finances/goals` | 422 | 0 | 23 | 5 | 0 | 12 | 5 | 8 | 1 | **54** |
+| `/finances/import` | 289 | 0 | 20 | 6 | 0 | 3 | 4 | 7 | 0 | **40** |
+| `/finances/inbox` | 548 | 0 | 8 | 3 | 0 | 1 | 1 | 4 | 0 | **17** |
+| `/finances/merchants` | 90 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | **1** |
+| `/finances/obligations` | 294 | 0 | 4 | 0 | 0 | 1 | 8 | 5 | 0 | **18** |
+| `/finances/pockets` | 394 | 0 | 7 | 4 | 0 | 1 | 1 | 4 | 0 | **17** |
+| `/finances/reports` | 147 | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 0 | **4** |
+| `/finances/sources` | 643 | 0 | 8 | 3 | 0 | 2 | 4 | 7 | 0 | **24** |
+| `/finances/transactions` | 1012 | 0 | 37 | 20 | 0 | 14 | 13 | 13 | 1 | **98** |
+| `/health` | 9 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
+| `/health/activity` | 791 | 31 | 0 | 54 | 14 | 9 | 0 | 0 | 0 | **108** |
+| `/health/automations` | 379 | 0 | 0 | 8 | 0 | 0 | 0 | 5 | 0 | **13** |
+| `/health/body` | 2658 | 8 | 0 | 0 | 182 | 13 | 2 | 0 | 48 | **253** |
+| `/health/body/metric` | 617 | 29 | 0 | 16 | 23 | 2 | 0 | 0 | 2 | **72** |
+| `/health/coach` | 282 | 0 | 11 | 4 | 0 | 0 | 0 | 10 | 0 | **25** |
+| `/health/command-center` | 163 | 0 | 6 | 5 | 0 | 0 | 0 | 7 | 0 | **18** |
+| `/health/food` | 991 | 42 | 0 | 38 | 17 | 19 | 2 | 0 | 0 | **118** |
+| `/health/food/history` | 466 | 47 | 0 | 25 | 9 | 8 | 0 | 0 | 2 | **91** |
+| `/health/outcomes` | 213 | 0 | 3 | 8 | 0 | 0 | 0 | 2 | 0 | **13** |
+| `/health/progress` | 453 | 0 | 5 | 2 | 0 | 1 | 2 | 9 | 0 | **19** |
+| `/health/recovery` | 178 | 0 | 9 | 1 | 0 | 0 | 0 | 3 | 2 | **15** |
+| `/health/report` | 458 | 32 | 0 | 37 | 14 | 3 | 0 | 0 | 1 | **87** |
+| `/health/water` | 338 | 0 | 2 | 2 | 0 | 1 | 0 | 6 | 0 | **11** |
+| `/health/workouts` | 2155 | 114 | 0 | 111 | 40 | 31 | 0 | 0 | 3 | **299** |
+| `/health/workouts/activities` | 788 | 55 | 0 | 20 | 11 | 9 | 0 | 0 | 2 | **97** |
+| `/health/workouts/activities/[id]` | 1470 | 102 | 0 | 82 | 14 | 14 | 6 | 0 | 1 | **219** |
+| `/health/workouts/plan` | 2256 | 0 | 114 | 23 | 0 | 5 | 0 | 41 | 8 | **191** |
+| `/health/workouts/routines` | 530 | 19 | 0 | 22 | 11 | 11 | 8 | 0 | 0 | **71** |
+| `/home` | 1044 | 152 | 0 | 0 | 86 | 15 | 0 | 0 | 6 | **259** |
+| `/journal` | 78 | 8 | 0 | 7 | 2 | 0 | 0 | 0 | 0 | **17** |
+| `/oauth/authorize` | 172 | 16 | 0 | 9 | 2 | 2 | 1 | 0 | 0 | **30** |
+| `/page.tsx` | 6 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
+| `/settings` | 734 | 16 | 6 | 30 | 10 | 8 | 1 | 6 | 2 | **79** |
+| `/settings/claude` | 218 | 5 | 0 | 20 | 2 | 5 | 0 | 0 | 0 | **32** |
+| `/settings/export` | 442 | 0 | 9 | 0 | 0 | 0 | 1 | 9 | 0 | **19** |
+| `/settings/import` | 578 | 0 | 30 | 15 | 0 | 0 | 1 | 12 | 0 | **58** |
+| `/settings/notifications` | 521 | 6 | 0 | 5 | 1 | 1 | 2 | 5 | 3 | **23** |
+| `/spirit` | 500 | 60 | 0 | 30 | 14 | 14 | 0 | 0 | 4 | **122** |
+| `/spirit/bible` | 198 | 18 | 0 | 13 | 5 | 4 | 0 | 0 | 0 | **40** |
+| `/spirit/church` | 498 | 58 | 0 | 35 | 13 | 14 | 2 | 0 | 0 | **122** |
+| `/spirit/desk` | 1218 | 99 | 0 | 0 | 47 | 11 | 1 | 0 | 5 | **163** |
+| `/spirit/desk-settings` | 1016 | 136 | 0 | 0 | 76 | 17 | 3 | 0 | 7 | **239** |
+| `/spirit/hymns` | 904 | 115 | 0 | 0 | 70 | 20 | 6 | 0 | 7 | **218** |
+| `/spirit/library` | 180 | 20 | 0 | 16 | 5 | 3 | 0 | 0 | 0 | **44** |
+| `/spirit/memory` | 274 | 24 | 0 | 23 | 10 | 5 | 0 | 0 | 0 | **62** |
+| `/spirit/notebook` | 302 | 37 | 0 | 24 | 7 | 4 | 1 | 0 | 0 | **73** |
+| `/spirit/notebook/page/[id]` | 650 | 115 | 0 | 7 | 60 | 10 | 0 | 0 | 1 | **193** |
+| `/spirit/notebooks` | 1033 | 116 | 0 | 0 | 55 | 15 | 1 | 0 | 8 | **195** |
+| `/spirit/read` | 2261 | 90 | 0 | 102 | 150 | 45 | 5 | 0 | 4 | **396** |
+| `/spirit/recordings` | 1864 | 225 | 0 | 0 | 112 | 32 | 1 | 0 | 13 | **383** |
+| `/spirit/settings` | 341 | 29 | 0 | 20 | 9 | 7 | 0 | 0 | 1 | **66** |
+| `/spirit/study` | 739 | 83 | 0 | 57 | 21 | 13 | 0 | 0 | 0 | **174** |
+| `/spirit/term` | 322 | 40 | 0 | 33 | 9 | 3 | 0 | 0 | 2 | **87** |
+| `/spirit/term/start` | 275 | 35 | 0 | 31 | 4 | 2 | 0 | 0 | 0 | **72** |
+| `/spirit/track2` | 180 | 8 | 0 | 11 | 18 | 2 | 0 | 0 | 3 | **42** |
+| `/spirit/transcript` | 157 | 22 | 0 | 12 | 4 | 1 | 0 | 0 | 0 | **39** |
+| `/todos` | 519 | 0 | 12 | 8 | 0 | 7 | 0 | 8 | 2 | **37** |
+| `/trends` | 2042 | 24 | 108 | 65 | 18 | 3 | 0 | 20 | 6 | **244** |
+| `/trends/daily-log` | 226 | 0 | 8 | 9 | 0 | 1 | 0 | 6 | 1 | **25** |
 
-Totals across app + components (170 files): hex 2,581 · `text-[px]` 1,301
-· inline style 1,457 · raw button 595 · raw field 113 · lucide 278 ·
-motion 89.
+Totals across app + components + lib (509 files): hex 2669 · palette 683 · text-[px] 1301 · inline style 1457 · raw button 595 · raw field 113 · lucide 278 · motion 278
 
 ## Appendix B — vocabularies in use
 
@@ -571,12 +598,16 @@ motion 89.
 
 ## Appendix C — bugs seen while looking (not styling; filed in `docs/followups.md`)
 
-- September freestyle rows all read "33:26" in the Activities list (prod
-  copy) — a duration leak, not a rendering fault.
+- On the production copy, a run of freestyle sessions in one month all
+  show the same duration in the Activities list — a duration leak, not a
+  rendering fault.
 - A manual workout's full description renders as a paragraph inside its
-  Activities row.
+  Activities row (no clamp).
 - MapLibre throws `GPUInitializationError` where WebGL2 is unavailable;
   the page should degrade to the static polyline.
-- The Water page's "Total Fluids" tile keeps a dashed focus outline.
+- The Activity page's header says "CENTRAL TIME" while the app runs on
+  America/Bogota.
+- The church "this week" card crashes the page when a series week has no
+  `questions`.
 - Settings → Appearance says "Night — next build" while `lib/settings.ts`
   already carries a `theme` field defaulting to `"dark"` that nothing reads.

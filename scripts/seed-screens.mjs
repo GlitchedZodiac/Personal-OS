@@ -15,14 +15,24 @@
 //   DATABASE_URL="postgresql://…/pitaya_lane_c_demo?sslmode=disable" \
 //     node scripts/seed-screens.mjs
 //
-// SAFETY: refuses to run unless the database host is local AND the database
-// name ends in `_demo` (or PITAYA_SEED_ALLOW=1 is set). It TRUNCATES every
-// public table first — this is a wipe-and-fill for a disposable database,
-// never a migration. SEED_TODAY=YYYY-MM-DD pins "today" (default: today in
-// America/Bogota).
+// SAFETY: refuses to run unless the connection string — as pg itself parses
+// it, so `?host=` cannot redirect it — names a LOCAL host (localhost,
+// 127.0.0.1, ::1) AND a database whose name ends in `_demo`, with no query
+// parameter other than sslmode. It TRUNCATES every public table first — a
+// wipe-and-fill for a disposable database, never a migration. It writes a
+// marker (`user_settings.data.screenSeed`) that scripts/screenshot-screens.mjs
+// requires before it will write anything under docs/. SEED_TODAY=YYYY-MM-DD
+// pins "today" (default: today in America/Bogota).
+//
+// Every profile value here is INVENTED (birth year, height, reference
+// ranges, start weight, trails). The one real number that shows in captures
+// is the Body screen's start point, hard-coded in app logic
+// (lib/body-view.ts BODY_START) and already public in the repository.
 
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
+import { parse as parseConnection } from "pg-connection-string";
+import { seedRefusal } from "./screens-guards.mjs";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
@@ -33,15 +43,13 @@ if (!rawUrl) {
   console.error("DATABASE_URL is required (point it at a *_demo database).");
   process.exit(1);
 }
-const url = new URL(rawUrl);
-const dbName = url.pathname.replace(/^\//, "");
-const localHost = ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
-if (!localHost || (!dbName.endsWith("_demo") && process.env.PITAYA_SEED_ALLOW !== "1")) {
-  console.error(
-    `Refusing to seed ${url.hostname}/${dbName}: the seed wipes the database and only runs against a local *_demo database.`
-  );
+const refusal = seedRefusal(rawUrl);
+if (refusal) {
+  console.error(`Refusing to seed: ${refusal}. The seed wipes the database and only runs against a local *_demo database.`);
   process.exit(1);
 }
+const url = new URL(rawUrl);
+const dbName = parseConnection(rawUrl).database;
 const sslmode = url.searchParams.get("sslmode");
 for (const p of ["pgbouncer", "connection_limit", "pool_timeout", "sslmode"]) url.searchParams.delete(p);
 const prisma = new PrismaClient({
@@ -211,11 +219,14 @@ async function seedSettings() {
         units: "metric",
         theme: "light",
         gender: "male",
-        birthYear: 1992,
+        birthYear: 1985,
         aiLanguage: "english",
         timeZone: "America/Bogota",
-        bodyGoals: { goalWeightKg: 84, goalWaistCm: 84 },
-        healthGoals: { weightKg: 82, bodyFatPct: 14, byDate: `${TY + 1}-03-31` },
+        bodyGoals: { goalWeightKg: 84, goalWaistCm: 88 },
+        healthGoals: { weightKg: 84, bodyFatPct: 16, byDate: `${TY + 1}-04-30` },
+        // The marker scripts/screenshot-screens.mjs requires before writing
+        // under docs/ — a production database never carries it.
+        screenSeed: new Date().toISOString(),
         aiInstructions: { health: "", todos: "", social: "", finance: "" },
         workoutGoals: {
           goal: "build_muscle",
@@ -296,7 +307,9 @@ async function seedFood() {
     if (d > 2 && rand() < 0.14) continue;
     const meals = d % 5 === 0 ? ["breakfast", "lunch", "dinner"] : ["breakfast", "lunch", "snack", "dinner"];
     for (const meal of meals) {
-      if (d === 0 && meal === "dinner") continue; // today's dinner is still to come
+      // Today is early: breakfast only, nothing to drink logged yet — so the
+      // readiness screen shows its red, recovery-focus state.
+      if (d === 0 && meal !== "breakfast") continue;
       const [desc, kcal, p, c, f] = pick(MEALS[meal]);
       const [h, m] = MEAL_HOURS[meal];
       rows.push({
@@ -328,7 +341,7 @@ async function seedFood() {
   });
 
   const water = [];
-  for (let d = 0; d < 14; d++) {
+  for (let d = 1; d < 14; d++) {
     const glasses = rint(4, 9);
     for (let g = 0; g < glasses; g++) {
       water.push({ loggedAt: at(d, 7 + Math.floor((g * 13) / glasses), rint(0, 59)), amountMl: pick([250, 250, 330, 500]) });
@@ -351,33 +364,34 @@ async function seedFood() {
 
 // ─── body ───────────────────────────────────────────────────────────────────
 
+// Invented: a 1.76 m profile (BMI 18.5–25 = 57.3–77.4 kg).
 const REFERENCE = {
-  bmrKcal: { min: 1680, max: 2050, std: 1865 },
-  weightKg: { min: 65.1, max: 88.2, std: 76.6 },
-  fatMassKg: { min: 9.2, max: 18.5, std: 11.5 },
-  bodyFatPct: { min: 10, max: 20, std: 15 },
-  bodyWaterKg: { min: 41, max: 51 },
-  muscleMassKg: { min: 52.1, max: 65 },
-  skeletalMuscleKg: { min: 30.4, max: 37.2 },
+  bmrKcal: { min: 1540, max: 1880, std: 1710 },
+  weightKg: { min: 57.3, max: 77.4, std: 67.4 },
+  fatMassKg: { min: 7.9, max: 15.8, std: 10.1 },
+  bodyFatPct: { min: 11, max: 21, std: 16 },
+  bodyWaterKg: { min: 36.2, max: 44.8 },
+  muscleMassKg: { min: 46.3, max: 57.9 },
+  skeletalMuscleKg: { min: 27.1, max: 33.4 },
   visceralFat: { min: 1, max: 9 },
-  boneMassKg: { min: 3.5, max: 4.4 },
-  proteinKg: { min: 11.2, max: 14 },
-  bmi: { min: 18.5, max: 25, std: 22 },
+  boneMassKg: { min: 3.1, max: 3.9 },
+  proteinKg: { min: 9.9, max: 12.4 },
+  bmi: { min: 18.5, max: 25, std: 21.7 },
 };
 
 async function seedBody() {
-  const HEIGHT_M = 1.8;
-  const startDay = 306; // ~10 months ago
+  const HEIGHT_M = 1.76;
+  const startDay = 280; // ~9 months ago
   const rows = [];
-  let w = 116.8;
+  let w = 104.6;
   for (let d = startDay; d >= 0; d--) {
     // steady loss with noise and a two-week plateau in the middle
-    const slope = d > 160 && d < 175 ? 0.0 : 0.093;
+    const slope = d > 150 && d < 165 ? 0.0 : 0.047;
     w = w - slope + rnd(-0.45, 0.45) * 0.6;
     if (d % 7 === 3 && rand() < 0.3) continue; // missed weigh-in
     const weightKg = round(w, 2);
     const recent = d < 36; // the 8-electrode scale arrived five weeks ago
-    const fatPct = round(34 - (startDay - d) * 0.064 + rnd(-0.4, 0.4), 1);
+    const fatPct = round(31 - (startDay - d) * 0.043 + rnd(-0.4, 0.4), 1);
     const base = {
       id: uid(`weigh-${d}`),
       measuredAt: at(d, 6, 40 + rint(0, 15)),
@@ -449,8 +463,11 @@ async function seedBody() {
 
   await prisma.bodyMilestone.createMany({
     data: [
-      { day: dayStr(96), title: "32-inch jeans", note: "logged", weightKg: 92.1 },
-      { day: dayStr(140), title: "The climb — Tres Cruces", note: "logged", weightKg: 95.4 },
+      { day: dayStr(176), title: "First 5 kg gone", note: "automatic", weightKg: 99.6 },
+      { day: dayStr(118), title: "Under 97", note: "the scale said 96.9", weightKg: 96.9 },
+      { day: dayStr(96), title: "34-inch jeans", note: "logged", weightKg: 95.8 },
+      { day: dayStr(41), title: "The climb — Cerro del Viento", note: "logged", weightKg: 93.4 },
+      { day: dayStr(19), title: "BMI under 30", weightKg: 92.8 },
     ],
   });
 }
@@ -537,25 +554,25 @@ async function seedTrain() {
     id: uid("trail-a"),
     name: "Cerro del Viento loop",
     aliases: ["the loop"],
-    distanceMeters: 6400,
-    elevationGainM: 312,
+    distanceMeters: 5200,
+    elevationGainM: 248,
     startLat: 4.7331,
     startLng: -74.0212,
     endLat: 4.7331,
     endLng: -74.0212,
-    summaryPolyline: encodePolyline(loopRoute(4.7331, -74.0212, 6.4)),
+    summaryPolyline: encodePolyline(loopRoute(4.7331, -74.0212, 5.2)),
   };
   const trailB = {
     id: uid("trail-b"),
     name: "Quebrada ridge out-and-back",
     aliases: [],
-    distanceMeters: 9100,
-    elevationGainM: 540,
+    distanceMeters: 8300,
+    elevationGainM: 465,
     startLat: 4.7612,
     startLng: -74.0309,
     endLat: 4.7612,
     endLng: -74.0309,
-    summaryPolyline: encodePolyline(loopRoute(4.7612, -74.0309, 9.1, 80)),
+    summaryPolyline: encodePolyline(loopRoute(4.7612, -74.0309, 8.3, 80)),
   };
   await prisma.trail.createMany({ data: [trailA, trailB] });
 
@@ -709,30 +726,45 @@ async function seedTrain() {
         externalId: `demo-hike-${d}`,
         deviceType: "watch",
       });
-    } else if (dow === 6 && rand() < 0.6) {
-      // Saturday jump rope
+    } else if (dow === 6 && rand() < 0.75) {
+      // Saturday jump rope — 90/40 intervals most weeks, a 30/30 block lately
       const id = uid(`rope-${d}`);
       const started = at(d, 9, 20);
-      const rounds = 8;
-      const marks = Array.from({ length: rounds }, (_, i) => [i * 90, i * 90 + 60]);
-      const { hr, time } = hrStream(72, 110, 170);
+      const [work, rest] = d < 30 ? [30, 30] : [90, 40];
+      const rounds = d < 30 ? rint(14, 20) : rint(5, 8);
+      const marks = Array.from({ length: rounds }, (_, i) => [i * (work + rest), i * (work + rest) + work]);
+      const jumpSeconds = rounds * work;
+      const restTotal = (rounds - 1) * rest;
+      const minutes = Math.round((jumpSeconds + restTotal) / 60);
+      const { hr, time } = hrStream(minutes * 6, 110, 170);
       workouts.push({
         id,
         startedAt: started,
-        endedAt: new Date(started.getTime() + 12 * 60_000),
-        durationMinutes: 12,
+        endedAt: new Date(started.getTime() + minutes * 60_000),
+        durationMinutes: minutes,
         workoutType: "jump_rope",
-        caloriesBurned: 142,
+        caloriesBurned: Math.round(minutes * 11.5),
         avgHeartRateBpm: 149,
         maxHeartRateBpm: 171,
-        exercises: [{ name: "Jump rope", exercise: "jump-rope", sets: rounds, seconds: 480 }],
+        exercises: [{ name: "Jump rope", exercise: "jump-rope", sets: rounds, seconds: jumpSeconds }],
         metricsData: {
-          timeInZones: zones(720, "hard"),
+          timeInZones: zones(minutes * 60, "hard"),
           hrStream: hr,
           timeStream: time,
-          intervals: { roundsCompleted: rounds, jumpSeconds: 480, restSecondsTotal: 240, marks, jumps: { total: 960 + rint(-60, 90), source: "manual" } },
-          loadScore: 38,
-          relativeEffort: 38,
+          intervals: {
+            mode: "interval",
+            workSeconds: work,
+            restSeconds: rest,
+            plannedRounds: rounds,
+            roundsCompleted: rounds,
+            jumpSeconds,
+            restSecondsTotal: restTotal,
+            marks,
+            source: "measured",
+            jumps: { total: Math.round(jumpSeconds * 2.1) + rint(-40, 40), source: "manual" },
+          },
+          loadScore: rint(30, 48),
+          relativeEffort: rint(30, 48),
         },
         source: "mobile",
         externalSource: "app_watch",
@@ -774,6 +806,47 @@ async function seedTrain() {
   });
   for (const w of workouts) await prisma.workoutLog.create({ data: w });
 
+  // His wall has ~50 movements with a heaviest-ever; the sessions above make
+  // ~15, so the rest are standalone records spread over five months (four
+  // of them this week, so "moved this week" has something to show).
+  const MORE = [
+    ["kb-one-arm-swing", "One-Arm Swing", 20], ["kb-clean", "Kettlebell Clean", 20], ["kb-deadlift", "Kettlebell Deadlift", 32],
+    ["kb-lunge", "Kettlebell Lunge", 16], ["kb-halo", "Kettlebell Halo", 12], ["kb-windmill", "Kettlebell Windmill", 12],
+    ["kb-push-press", "Kettlebell Push Press", 20], ["kb-high-pull", "Kettlebell High Pull", 20], ["kb-thruster", "Kettlebell Thruster", 16],
+    ["kb-half-snatch", "Half Snatch", 16], ["bench-press", "Bench Press", 70], ["incline-press", "Incline Press", 55],
+    ["back-squat", "Back Squat", 90], ["front-squat", "Front Squat", 70], ["deadlift", "Deadlift", 120],
+    ["romanian-deadlift", "Romanian Deadlift", 80], ["overhead-press", "Overhead Press", 45], ["barbell-row", "Barbell Row", 65],
+    ["hip-thrust", "Hip Thrust", 100], ["bicep-curl", "Bicep Curl", 16], ["hammer-curl", "Hammer Curl", 16],
+    ["lateral-raise", "Lateral Raise", 10], ["tricep-extension", "Tricep Extension", 18], ["dumbbell-fly", "Dumbbell Fly", 14],
+    ["seated-row", "Seated Row", 60], ["leg-curl", "Leg Curl", 50], ["leg-extension", "Leg Extension", 60],
+    ["calf-raise", "Calf Raise", 80], ["cable-fly", "Cable Fly", 20], ["face-pull", "Face Pull", 25],
+    ["incline-dumbbell-bench-press", "Incline Dumbbell Bench Press", 24], ["machine-chest-press", "Machine Chest Press", 55],
+    ["pec-deck", "Pec Deck", 50], ["hack-squat", "Hack Squat", 100], ["hip-abduction", "Hip Abduction", 70],
+    ["hip-adduction", "Hip Adduction", 70],
+  ];
+  MORE.forEach(([exercise, exerciseName, value], i) => {
+    if (prs.has(`${exercise}:weight`)) return;
+    const daysAgo = i < 4 ? i + 1 : 8 + ((i * 37) % 140);
+    prs.set(`${exercise}:weight`, {
+      exercise,
+      exerciseName,
+      kind: "weight",
+      value,
+      unit: "kg",
+      previousValue: i % 3 === 0 ? null : Math.round(value * 0.88 * 2) / 2,
+      achievedAt: at(daysAgo, 18, 0),
+      workoutLogId: null,
+    });
+  });
+  // Rope bests (lib/jump-rope.ts record kinds)
+  for (const [kind, value, unit, daysAgo] of [
+    ["rounds", 20, "rounds", 3],
+    ["duration", 600, "s", 3],
+    ["jumps", 1310, "jumps", 10],
+    ["jumps_round", 196, "jumps", 24],
+  ]) {
+    prs.set(`jump-rope:${kind}`, { exercise: "jump-rope", exerciseName: "Jump rope", kind, value, unit, previousValue: null, achievedAt: at(daysAgo, 9, 40), workoutLogId: null });
+  }
   await prisma.personalRecord.createMany({ data: [...prs.values()] });
 
   await prisma.userExercise.createMany({
@@ -918,7 +991,7 @@ async function seedReports() {
         coach: `You trained ${rint(4, 6)} times for ${rint(190, 290)} active minutes and burned about ${rint(1400, 2100)} kcal. Intake averaged ${avgIn} kcal on ${logged.length} logged days against a 2,300 target. Protein reached 180 g on ${rint(3, 6)} of them. Next week: keep the Monday swings at 24 kg and add one set to the presses.`,
         energy: { days, avgInKcal: avgIn, avgBurnedKcal: avgBurn, weekDeficitKcal: (2300 - avgIn) * 7, dailyDeficitKcal: 2300 - avgIn },
         macros: { note: `Protein ≥ 180 g on ${rint(3, 6)} of ${logged.length} logged days.`, loggedDays: logged.length, adherencePct: { protein: rint(82, 98), carbs: rint(80, 105), fat: rint(85, 110) }, proteinDaysHit: rint(3, 6) },
-        weight: { startKg: round(90.4 + k * 0.65, 1), endKg: round(89.8 + k * 0.65, 1), deltaKg: -0.6, series: Array.from({ length: 7 }, (_, i) => round(90.4 + k * 0.65 - i * 0.09, 1)) },
+        weight: { startKg: round(92.9 + k * 0.33, 1), endKg: round(92.6 + k * 0.33, 1), deltaKg: -0.3, series: Array.from({ length: 7 }, (_, i) => round(92.9 + k * 0.33 - i * 0.05, 1)) },
         training: { sessions: rint(4, 6), volumeKg: rint(8200, 12400), zonesPct: [34, 38, 19, 8, 1], kcalBurned: rint(1400, 2100), activeMinutes: rint(190, 290), progression: [{ exercise: "Kettlebell Swing", from: 20, to: 24 }] },
       },
     });
@@ -980,6 +1053,29 @@ async function seedTodayExtras() {
 }
 
 // ─── chat ───────────────────────────────────────────────────────────────────
+
+async function seedNotifications() {
+  const rows = [];
+  const kinds = [
+    ["spiritHomework", "Carrying · sit with it", "Carry this question through the day: where did the cycle turn?", "/spirit"],
+    ["training", "Training day", "KB Block A is planned for this morning.", "/health/workouts"],
+    ["weighIn", "Weigh-in synced", "92.6 kg · −0.2 since Monday.", "/health/body"],
+    ["prCelebration", "PR · Kettlebell Swing", "28 kg — was 24.", "/health/workouts"],
+    ["weeklyReport", "Weekly report ready", "Strong week on the bells.", "/health/report"],
+    ["systemAlerts", "Apple Health hasn't synced", "Nothing has arrived for 2 days. Open Pitaya on your iPhone.", "/settings"],
+    ["reminders", "Order creatine", "You asked to be reminded tonight.", "/todos"],
+  ];
+  for (let d = 0; d < 32; d++) {
+    const [category, title, body, url] = kinds[(d * 3) % kinds.length];
+    const status = d % 6 === 0 ? "sent" : d % 9 === 4 ? "held" : "no_devices";
+    rows.push({ category, title, body, url, status, detail: status === "sent" ? { sent: 1, failed: 0, pruned: 0 } : undefined, createdAt: at(d, 19, 10), sentAt: status === "sent" ? at(d, 19, 10) : null, deliverAfter: status === "held" ? at(d - 1, 7, 0) : null });
+    if (d % 4 === 1) {
+      const [c2, t2, b2, u2] = kinds[(d + 2) % kinds.length];
+      rows.push({ category: c2, title: t2, body: b2, url: u2, status: "no_devices", createdAt: at(d, 8, 5) });
+    }
+  }
+  await prisma.notificationLog.createMany({ data: rows });
+}
 
 async function seedChat() {
   const convToday = uid("conv-today");
@@ -1145,9 +1241,9 @@ async function seedSpirit() {
       themes: "justification, adoption, freedom",
       currentWeek: 3,
       weeks: [
-        { index: 1, date: dayStr(20), passage: "Galatians 1", title: "No other gospel", notes: "Paul's autobiography as argument." },
-        { index: 2, date: dayStr(13), passage: "Galatians 2", title: "Table fellowship", notes: "Peter at Antioch." },
-        { index: 3, date: dayStr(6), passage: "Galatians 3", title: "Abraham believed", notes: "" },
+        { index: 1, passageRef: "Galatians 1", title: "No other gospel", status: "read", context: "Paul opens without thanks — the only letter that does. His argument is his own story: the gospel came to him from Christ, not from Jerusalem.", questions: ["What does Paul treat as the test of a true gospel?", "Why tell his own conversion story here?", "Where am I tempted to want a gospel with something added?"] },
+        { index: 2, passageRef: "Galatians 2", title: "Table fellowship", status: "read", context: "At Antioch, Peter stops eating with Gentile believers when men from James arrive. Paul confronts him publicly.", questions: ["What did Peter's withdrawal say without words?", "Why does Paul call it a gospel issue, not manners?", "Whose table do I quietly avoid?"] },
+        { index: 3, passageRef: "Galatians 3:1-14", title: "Abraham believed", status: "next", context: "Paul asks the Galatians how they received the Spirit — by works of the law or by hearing with faith — and reaches back to Abraham, counted righteous centuries before Sinai.", questions: ["What question does Paul put to their own experience?", "Why is Abraham the decisive example?", "What would 'hearing with faith' change in my week?"] },
       ],
     },
   });
@@ -1335,6 +1431,7 @@ async function main() {
   await seedReports();
   await seedTodayExtras();
   await seedChat();
+  await seedNotifications();
   await seedSpirit();
   await seedFinance();
   const counts = await prisma.$queryRawUnsafe(

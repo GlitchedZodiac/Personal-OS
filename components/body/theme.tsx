@@ -1,6 +1,7 @@
 "use client";
 
 import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
+import { useResolvedTheme } from "@/components/appearance-sync";
 
 // Shared pieces of the Pitaya Body surface: the light/dark switch, and the
 // handful of text styles every card repeats. Numbers come from the handoff
@@ -9,19 +10,13 @@ import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
 export type BodyTheme = "light" | "dark";
 
 /**
- * Follows the system. While dark is up, <html> carries data-body-theme so the
- * tab bar and dock take the dark roles too (see globals.css); the attribute
- * is removed on leave, and the rest of Pitaya stays light.
+ * Follows the app's appearance (Settings → Appearance: Day · Night · System,
+ * lib/appearance.ts) — the Body round's dark palette is now the app-wide
+ * one. While dark is up, <html> also carries data-body-theme, which the
+ * Body-specific chrome rules in globals.css read; it is removed on leave.
  */
 export function useBodyTheme(): BodyTheme {
-  const [theme, setTheme] = useState<BodyTheme>("light");
-  useEffect(() => {
-    const query = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => setTheme(query.matches ? "dark" : "light");
-    apply();
-    query.addEventListener("change", apply);
-    return () => query.removeEventListener("change", apply);
-  }, []);
+  const theme = useResolvedTheme();
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "dark") root.dataset.bodyTheme = "dark";

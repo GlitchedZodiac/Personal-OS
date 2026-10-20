@@ -6,27 +6,38 @@
 // desktop-dark with --modes) — one PNG per route per mode, plus a manifest
 // the audit table is generated from.
 //
-//   node scripts/screenshot-screens.mjs \
-//     --base http://localhost:3103 --pin 2468 --out docs/design/screen-audit
+//   APP_PIN=<the local PIN> node scripts/screenshot-screens.mjs \
+//     --base http://localhost:3103 --out docs/design/screen-audit
 //
 // Flags: --modes phone-light,phone-dark,desktop-light,desktop-dark
 //        --only slug,slug   (route slugs; see ROUTES)
 //        --dsf 1            (device scale factor; 1 keeps the set small)
 //        --max-height 4400  (tall pages are clipped to this many CSS px)
+//        --force-dark       (put `.dark` on <html> — for code older than
+//                            Appearance, e.g. the phase-1 "before" frames)
 //
-// Dark mode: the app defines `.dark` tokens in app/globals.css but, as of
-// this audit, nothing toggles the class (Settings → Appearance reads
-// "Night — next build"). The dark shots therefore FORCE `.dark` on <html>
-// and emulate prefers-color-scheme: dark (the Body screen follows the
-// system) — they show what the existing dark tokens produce, which is the
-// honest input for the dark-mode findings.
+// PRIVACY GUARDS (the repo is public):
+//  - the base URL must be localhost / 127.0.0.1 / [::1] — nothing else;
+//  - writing anywhere under docs/ requires the server to be running on the
+//    synthetic seed: GET /api/settings must carry `screenSeed`, which only
+//    scripts/seed-screens.mjs writes. Captures of a real database go to the
+//    untracked .screens-private/ (in .gitignore);
+//  - the PIN comes from --pin or the APP_PIN / SCREENS_PIN environment.
+//
+// Dark mode: since lane C phase 2 the app has Appearance (Day · Night ·
+// System, default System — lib/appearance.ts). The dark shots emulate
+// prefers-color-scheme: dark and let the app's own System appearance turn
+// Night on, exactly as the phone does. (The phase-1 "before" set forced
+// `.dark` on <html>, because nothing could switch it on then.)
 //
 // Reduced motion is emulated so every capture is the settled end state.
 // Never point this at production.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "@playwright/test";
+import { baseRefusal, writesUnderDocs } from "./screens-guards.mjs";
 
 // Captures over this size are re-encoded as a 256-colour palette PNG so the
 // committed set stays small (each ≤ ~300 KB). Text survives quantisation;
@@ -51,16 +62,21 @@ const args = Object.fromEntries(
   }, [])
 );
 const BASE = (args.base ?? "http://localhost:3103").replace(/\/$/, "");
-const PIN = args.pin ?? process.env.APP_PIN ?? "";
+const PIN = args.pin ?? process.env.SCREENS_PIN ?? process.env.APP_PIN ?? "";
 const OUT = args.out ?? "docs/design/screen-audit";
+const FORCE_DARK = args["force-dark"] === "true";
 const DSF = Number(args.dsf ?? 1);
 const MAX_H = Number(args["max-height"] ?? 4400);
 const MODES = (args.modes ?? "phone-light,phone-dark,desktop-light").split(",");
 const ONLY = args.only ? new Set(args.only.split(",")) : null;
 
-if (/vercel\.app|https:\/\//.test(BASE)) {
-  console.error("Refusing a non-local base URL — this script drives a local dev server only.");
-  process.exit(1);
+const isMain = process.argv[1] && /screenshot-screens\.mjs$/.test(process.argv[1]);
+if (isMain) {
+  const why = baseRefusal(BASE);
+  if (why) {
+    console.error(`Refusing ${BASE}: ${why}. This script drives a local dev server only.`);
+    process.exit(1);
+  }
 }
 
 // Every page route under app/ (listed from the filesystem, 2026-10-17),
@@ -104,6 +120,7 @@ export const ROUTES = [
   { slug: "settings-claude", path: "/settings/claude", group: "Settings" },
   { slug: "settings-export", path: "/settings/export", group: "Settings" },
   { slug: "settings-import", path: "/settings/import", group: "Settings" },
+  { slug: "settings-design", path: "/settings/design", group: "Settings" },
   // Spirit (phone)
   { slug: "spirit", path: "/spirit", group: "Spirit" },
   { slug: "spirit-study", path: "/spirit/study", group: "Spirit" },
@@ -211,7 +228,7 @@ async function settle(page) {
 }
 
 async function capture(context, route, mode, ids, outDir) {
-  const [device, scheme] = mode.split("-");
+  const [device] = mode.split("-");
   const url = urlFor(route, ids);
   const entry = { slug: route.slug, path: route.path, query: route.query ?? null, group: route.group, mode, url, file: null, bytes: 0, width: VIEWPORTS[device].width, height: 0, scrollHeight: 0, title: "", errors: [], note: route.redirect ? `redirects to ${route.redirect}` : null };
   if (!url) {
@@ -225,7 +242,7 @@ async function capture(context, route, mode, ids, outDir) {
   });
   try {
     await page.goto(url, { waitUntil: "load", timeout: 60_000 });
-    if (scheme === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
+    if (FORCE_DARK && mode.endsWith("-dark")) await page.evaluate(() => document.documentElement.classList.add("dark"));
     // Next's dev indicator / issue badge is not part of the app.
     await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" }).catch(() => {});
     await settle(page);
@@ -275,6 +292,34 @@ function writeManifest(manifest) {
   return total;
 }
 
+/** Byte-identical frames (desk routes with no Night, redirects) are stored
+ *  once: the later copy is deleted and its manifest entry points at the
+ *  kept file with `duplicateOf`. */
+function dedupe(outDir) {
+  const manifestPath = join(outDir, "manifest.json");
+  if (!existsSync(manifestPath)) return;
+  const doc = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const seen = new Map();
+  let dropped = 0;
+  for (const e of doc.entries) {
+    if (!e.file || e.duplicateOf) continue;
+    const abs = join(outDir, e.file);
+    if (!existsSync(abs)) continue;
+    const hash = createHash("sha1").update(readFileSync(abs)).digest("hex");
+    const kept = seen.get(hash);
+    if (kept && kept !== e.file) {
+      unlinkSync(abs);
+      e.duplicateOf = kept;
+      e.file = kept;
+      dropped++;
+    } else seen.set(hash, e.file);
+  }
+  if (dropped) {
+    writeFileSync(manifestPath, JSON.stringify(doc, null, 2));
+    console.log(`dedupe: ${dropped} byte-identical frame(s) stored once`);
+  }
+}
+
 async function main() {
   mkdirSync(OUT, { recursive: true });
   // SwiftShader gives headless Chromium a WebGL2 context, which MapLibre
@@ -302,9 +347,7 @@ async function main() {
             ? "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1 PitayaAudit"
             : undefined,
       });
-      if (scheme === "dark") {
-        // The init script can run before <html> exists; wait for it, and the
-        // capture re-applies the class after load as a belt-and-braces step.
+      if (scheme === "dark" && FORCE_DARK) {
         await context.addInitScript(() => {
           const apply = () => document.documentElement && document.documentElement.classList.add("dark");
           if (!apply()) new MutationObserver((_, o) => apply() && o.disconnect()).observe(document, { childList: true });
@@ -319,6 +362,16 @@ async function main() {
       const r = await context.request.post(`${BASE}/api/auth`, { data: { pin: PIN } });
       if (!r.ok()) {
         console.error(`login failed (${r.status()}) — check --pin / APP_PIN`);
+        process.exit(1);
+      }
+    }
+    if (writesUnderDocs(OUT)) {
+      const res = await context.request.get(`${BASE}/api/settings`);
+      const marker = res.ok() ? (await res.json())?.data?.screenSeed : null;
+      if (!marker) {
+        console.error(
+          `Refusing to write under docs/: ${BASE} is not running on the synthetic seed (no screenSeed marker in /api/settings). Seed a *_demo database with scripts/seed-screens.mjs and point the server at it, or write to .screens-private/.`
+        );
         process.exit(1);
       }
     }
@@ -343,10 +396,13 @@ async function main() {
   await browser.close();
 
   const total = writeManifest(manifest);
+  dedupe(OUT);
   console.log(`\n${manifest.filter((e) => e.file).length} captured this run · ${(total / 1024 / 1024).toFixed(1)} MB in the set → ${join(OUT, "manifest.json")}`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (isMain) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

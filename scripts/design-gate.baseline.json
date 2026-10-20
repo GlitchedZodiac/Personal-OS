@@ -1,0 +1,930 @@
+{
+  "note": "Design-gate ratchet baseline. Family totals may only fall. Lower with `npm run design-gate -- --update`; raise only by a reviewed hand edit. See scripts/design-gate.mjs.",
+  "metrics": [
+    "hex",
+    "palette",
+    "arbText",
+    "inlineStyle",
+    "rawButton",
+    "rawField",
+    "lucide",
+    "motion"
+  ],
+  "totals": {
+    "hex": 2666,
+    "palette": 683,
+    "arbText": 1301,
+    "inlineStyle": 1455,
+    "rawButton": 596,
+    "rawField": 113,
+    "lucide": 278,
+    "motion": 243
+  },
+  "files": {
+    "app/(desk)/home/page.tsx": {
+      "hex": 91,
+      "inlineStyle": 66,
+      "rawButton": 9,
+      "motion": 1
+    },
+    "app/(desk)/layout.tsx": {
+      "hex": 1,
+      "motion": 25
+    },
+    "app/(desk)/spirit/desk-settings/page.tsx": {
+      "hex": 64,
+      "inlineStyle": 48,
+      "rawButton": 9,
+      "rawField": 2,
+      "motion": 2
+    },
+    "app/(desk)/spirit/desk/page.tsx": {
+      "hex": 6,
+      "inlineStyle": 6,
+      "rawButton": 1
+    },
+    "app/(desk)/spirit/hymns/page.tsx": {
+      "hex": 71,
+      "inlineStyle": 46,
+      "rawButton": 12,
+      "rawField": 6
+    },
+    "app/(desk)/spirit/notebooks/page.tsx": {
+      "hex": 44,
+      "inlineStyle": 27,
+      "rawButton": 7,
+      "motion": 3
+    },
+    "app/(desk)/spirit/recordings/page.tsx": {
+      "hex": 67,
+      "inlineStyle": 41,
+      "rawButton": 9
+    },
+    "app/(tabs)/actions/page.tsx": {
+      "lucide": 1
+    },
+    "app/(tabs)/chat/page.tsx": {
+      "hex": 42,
+      "arbText": 52,
+      "inlineStyle": 17,
+      "rawButton": 15,
+      "rawField": 3,
+      "motion": 5
+    },
+    "app/(tabs)/dashboard/page.tsx": {
+      "hex": 30,
+      "arbText": 20,
+      "inlineStyle": 16,
+      "rawButton": 11,
+      "rawField": 2,
+      "motion": 5
+    },
+    "app/(tabs)/finances/budget/page.tsx": {
+      "palette": 29,
+      "arbText": 16,
+      "rawButton": 8,
+      "rawField": 8,
+      "lucide": 10,
+      "motion": 2
+    },
+    "app/(tabs)/finances/goals/page.tsx": {
+      "palette": 23,
+      "arbText": 5,
+      "rawButton": 12,
+      "rawField": 5,
+      "lucide": 8,
+      "motion": 1
+    },
+    "app/(tabs)/finances/import/page.tsx": {
+      "palette": 20,
+      "arbText": 6,
+      "rawButton": 3,
+      "rawField": 4,
+      "lucide": 7
+    },
+    "app/(tabs)/finances/inbox/page.tsx": {
+      "palette": 5,
+      "arbText": 2
+    },
+    "app/(tabs)/finances/merchants/page.tsx": {
+      "palette": 1
+    },
+    "app/(tabs)/finances/obligations/page.tsx": {
+      "palette": 4,
+      "rawButton": 1,
+      "rawField": 8,
+      "lucide": 5
+    },
+    "app/(tabs)/finances/page.tsx": {
+      "palette": 107,
+      "arbText": 30,
+      "inlineStyle": 1,
+      "rawButton": 11,
+      "rawField": 5,
+      "lucide": 17,
+      "motion": 10
+    },
+    "app/(tabs)/finances/pockets/page.tsx": {
+      "palette": 7,
+      "arbText": 4,
+      "rawButton": 1,
+      "rawField": 1,
+      "lucide": 4
+    },
+    "app/(tabs)/finances/reports/page.tsx": {
+      "palette": 4
+    },
+    "app/(tabs)/finances/sources/page.tsx": {
+      "palette": 7,
+      "arbText": 3,
+      "rawButton": 1,
+      "rawField": 4,
+      "lucide": 6
+    },
+    "app/(tabs)/finances/transactions/page.tsx": {
+      "palette": 35,
+      "arbText": 19,
+      "rawButton": 14,
+      "rawField": 12,
+      "lucide": 10,
+      "motion": 1
+    },
+    "app/(tabs)/health/activity/page.tsx": {
+      "hex": 19,
+      "arbText": 30,
+      "inlineStyle": 8,
+      "rawButton": 6
+    },
+    "app/(tabs)/health/automations/page.tsx": {
+      "arbText": 8,
+      "lucide": 5
+    },
+    "app/(tabs)/health/body/metric/page.tsx": {
+      "hex": 29,
+      "arbText": 16,
+      "inlineStyle": 5,
+      "rawButton": 2,
+      "motion": 1
+    },
+    "app/(tabs)/health/body/page.tsx": {
+      "hex": 2,
+      "inlineStyle": 100,
+      "rawButton": 3,
+      "rawField": 1,
+      "motion": 13
+    },
+    "app/(tabs)/health/coach/page.tsx": {
+      "palette": 11,
+      "arbText": 4,
+      "lucide": 10
+    },
+    "app/(tabs)/health/command-center/page.tsx": {
+      "palette": 6,
+      "arbText": 5,
+      "lucide": 7
+    },
+    "app/(tabs)/health/food/history/page.tsx": {
+      "hex": 25,
+      "arbText": 14,
+      "inlineStyle": 3,
+      "rawButton": 3,
+      "motion": 1
+    },
+    "app/(tabs)/health/food/page.tsx": {
+      "hex": 35,
+      "arbText": 32,
+      "inlineStyle": 12,
+      "rawButton": 17,
+      "rawField": 1
+    },
+    "app/(tabs)/health/outcomes/page.tsx": {
+      "palette": 3,
+      "arbText": 8,
+      "lucide": 2
+    },
+    "app/(tabs)/health/progress/page.tsx": {
+      "palette": 5,
+      "arbText": 2,
+      "rawButton": 1,
+      "rawField": 2,
+      "lucide": 9
+    },
+    "app/(tabs)/health/recovery/page.tsx": {
+      "palette": 9,
+      "arbText": 1,
+      "lucide": 3,
+      "motion": 2
+    },
+    "app/(tabs)/health/report/page.tsx": {
+      "hex": 32,
+      "arbText": 37,
+      "inlineStyle": 14,
+      "rawButton": 3,
+      "motion": 1
+    },
+    "app/(tabs)/health/water/page.tsx": {
+      "palette": 2,
+      "arbText": 2,
+      "lucide": 5
+    },
+    "app/(tabs)/health/workouts/activities/[id]/page.tsx": {
+      "hex": 3,
+      "arbText": 2,
+      "inlineStyle": 1,
+      "rawButton": 1
+    },
+    "app/(tabs)/health/workouts/activities/page.tsx": {
+      "hex": 24,
+      "arbText": 9,
+      "inlineStyle": 5,
+      "rawButton": 4,
+      "motion": 1
+    },
+    "app/(tabs)/health/workouts/page.tsx": {
+      "hex": 49,
+      "arbText": 56,
+      "inlineStyle": 21,
+      "rawButton": 16,
+      "motion": 2
+    },
+    "app/(tabs)/health/workouts/plan/page.tsx": {
+      "palette": 41,
+      "arbText": 13,
+      "rawButton": 3,
+      "lucide": 19,
+      "motion": 1
+    },
+    "app/(tabs)/health/workouts/routines/page.tsx": {
+      "hex": 19,
+      "arbText": 22,
+      "inlineStyle": 11,
+      "rawButton": 11,
+      "rawField": 8
+    },
+    "app/(tabs)/journal/page.tsx": {
+      "hex": 8,
+      "arbText": 7,
+      "inlineStyle": 2
+    },
+    "app/(tabs)/settings/claude/page.tsx": {
+      "hex": 5,
+      "arbText": 20,
+      "inlineStyle": 2,
+      "rawButton": 5
+    },
+    "app/(tabs)/settings/export/page.tsx": {
+      "lucide": 5
+    },
+    "app/(tabs)/settings/import/page.tsx": {
+      "palette": 30,
+      "arbText": 15,
+      "rawField": 1,
+      "lucide": 12
+    },
+    "app/(tabs)/settings/notifications/page.tsx": {
+      "hex": 6,
+      "arbText": 5,
+      "inlineStyle": 1,
+      "rawButton": 1,
+      "rawField": 2,
+      "lucide": 5,
+      "motion": 3
+    },
+    "app/(tabs)/settings/page.tsx": {
+      "hex": 12,
+      "arbText": 27,
+      "inlineStyle": 8,
+      "rawButton": 8,
+      "lucide": 2,
+      "motion": 1
+    },
+    "app/(tabs)/spirit/bible/page.tsx": {
+      "hex": 18,
+      "arbText": 13,
+      "inlineStyle": 5,
+      "rawButton": 4
+    },
+    "app/(tabs)/spirit/church/page.tsx": {
+      "hex": 58,
+      "arbText": 35,
+      "inlineStyle": 13,
+      "rawButton": 14,
+      "rawField": 2
+    },
+    "app/(tabs)/spirit/library/page.tsx": {
+      "hex": 9,
+      "arbText": 10,
+      "inlineStyle": 2,
+      "rawButton": 2
+    },
+    "app/(tabs)/spirit/memory/page.tsx": {
+      "hex": 24,
+      "arbText": 23,
+      "inlineStyle": 10,
+      "rawButton": 5
+    },
+    "app/(tabs)/spirit/notebook/page.tsx": {
+      "hex": 37,
+      "arbText": 24,
+      "inlineStyle": 7,
+      "rawButton": 4,
+      "rawField": 1
+    },
+    "app/(tabs)/spirit/notebook/page/[id]/page.tsx": {
+      "hex": 16,
+      "arbText": 7,
+      "inlineStyle": 2,
+      "rawButton": 2
+    },
+    "app/(tabs)/spirit/page.tsx": {
+      "hex": 60,
+      "arbText": 30,
+      "inlineStyle": 14,
+      "rawButton": 14,
+      "motion": 4
+    },
+    "app/(tabs)/spirit/settings/page.tsx": {
+      "hex": 23,
+      "arbText": 16,
+      "inlineStyle": 7,
+      "rawButton": 5,
+      "motion": 1
+    },
+    "app/(tabs)/spirit/study/page.tsx": {
+      "hex": 72,
+      "arbText": 51,
+      "inlineStyle": 18,
+      "rawButton": 12
+    },
+    "app/(tabs)/spirit/term/page.tsx": {
+      "hex": 40,
+      "arbText": 33,
+      "inlineStyle": 9,
+      "rawButton": 3,
+      "motion": 2
+    },
+    "app/(tabs)/spirit/term/start/page.tsx": {
+      "hex": 35,
+      "arbText": 31,
+      "inlineStyle": 4,
+      "rawButton": 2
+    },
+    "app/(tabs)/spirit/track2/page.tsx": {
+      "hex": 8,
+      "arbText": 11,
+      "inlineStyle": 18,
+      "rawButton": 2,
+      "motion": 3
+    },
+    "app/(tabs)/spirit/transcript/page.tsx": {
+      "hex": 22,
+      "arbText": 12,
+      "inlineStyle": 4,
+      "rawButton": 1
+    },
+    "app/(tabs)/todos/page.tsx": {
+      "palette": 12,
+      "arbText": 8,
+      "rawButton": 7,
+      "lucide": 8,
+      "motion": 2
+    },
+    "app/(tabs)/trends/daily-log/page.tsx": {
+      "palette": 8,
+      "arbText": 9,
+      "rawButton": 1,
+      "lucide": 6,
+      "motion": 1
+    },
+    "app/(tabs)/trends/page.tsx": {
+      "hex": 24,
+      "palette": 108,
+      "arbText": 65,
+      "inlineStyle": 18,
+      "rawButton": 3,
+      "lucide": 20,
+      "motion": 6
+    },
+    "app/api/finance/budgets/route.ts": {
+      "hex": 17
+    },
+    "app/api/spirit/notebooks/route.ts": {
+      "hex": 1
+    },
+    "app/globals.css": {
+      "motion": 17
+    },
+    "app/layout.tsx": {
+      "hex": 3
+    },
+    "app/oauth/authorize/page.tsx": {
+      "hex": 16,
+      "arbText": 9,
+      "inlineStyle": 2,
+      "rawButton": 2,
+      "rawField": 1
+    },
+    "components/active-workout.tsx": {
+      "palette": 24,
+      "arbText": 4,
+      "rawButton": 1,
+      "lucide": 12,
+      "motion": 5
+    },
+    "components/activity-detail.tsx": {
+      "hex": 99,
+      "arbText": 80,
+      "inlineStyle": 13,
+      "rawButton": 13,
+      "rawField": 6,
+      "motion": 1
+    },
+    "components/activity-history.tsx": {
+      "hex": 12,
+      "arbText": 24,
+      "inlineStyle": 6,
+      "rawButton": 3
+    },
+    "components/activity-row.tsx": {
+      "hex": 1,
+      "arbText": 1,
+      "inlineStyle": 2,
+      "rawButton": 1
+    },
+    "components/ai-meal-suggestion.tsx": {
+      "palette": 6,
+      "arbText": 2,
+      "lucide": 5
+    },
+    "components/ai-status-card.tsx": {
+      "palette": 6,
+      "arbText": 3,
+      "rawButton": 1,
+      "rawField": 1,
+      "lucide": 4
+    },
+    "components/app-sidebar.tsx": {
+      "inlineStyle": 1
+    },
+    "components/body/body-type-matrix.tsx": {
+      "motion": 4
+    },
+    "components/body/goal-sheet.tsx": {
+      "hex": 1,
+      "inlineStyle": 14,
+      "rawButton": 1,
+      "motion": 2
+    },
+    "components/body/metric-detail.tsx": {
+      "inlineStyle": 18,
+      "motion": 1
+    },
+    "components/body/pace-chart.tsx": {
+      "inlineStyle": 1
+    },
+    "components/body/range-bar.tsx": {
+      "inlineStyle": 6,
+      "motion": 1
+    },
+    "components/body/report-sheet.tsx": {
+      "hex": 1,
+      "inlineStyle": 23,
+      "rawButton": 3,
+      "rawField": 1,
+      "motion": 11
+    },
+    "components/body/tape-sheet.tsx": {
+      "hex": 2,
+      "inlineStyle": 33,
+      "rawButton": 6,
+      "motion": 15
+    },
+    "components/body/theme.tsx": {
+      "hex": 2,
+      "inlineStyle": 2,
+      "motion": 2
+    },
+    "components/body/trend-chart.tsx": {
+      "inlineStyle": 3
+    },
+    "components/bottom-nav.tsx": {
+      "arbText": 1,
+      "inlineStyle": 1,
+      "motion": 1
+    },
+    "components/capture-sheet.tsx": {
+      "hex": 9,
+      "arbText": 6,
+      "inlineStyle": 6,
+      "rawButton": 5,
+      "rawField": 1
+    },
+    "components/chat-history-drawer.tsx": {
+      "hex": 21,
+      "arbText": 16,
+      "inlineStyle": 5,
+      "rawButton": 7,
+      "rawField": 2
+    },
+    "components/confirm-delete.tsx": {
+      "rawButton": 1,
+      "lucide": 1
+    },
+    "components/demo-banner.tsx": {
+      "palette": 3,
+      "arbText": 1
+    },
+    "components/demo-walkthrough.tsx": {
+      "palette": 3,
+      "arbText": 2,
+      "lucide": 1,
+      "motion": 1
+    },
+    "components/emom-runner.tsx": {
+      "hex": 35,
+      "arbText": 29,
+      "inlineStyle": 13,
+      "rawButton": 8,
+      "motion": 1
+    },
+    "components/exercise-detail.tsx": {
+      "palette": 36,
+      "arbText": 5,
+      "rawButton": 1,
+      "lucide": 4
+    },
+    "components/finance-quick-capture.tsx": {
+      "palette": 2,
+      "arbText": 1,
+      "rawField": 1,
+      "lucide": 3
+    },
+    "components/finance-settings-card.tsx": {
+      "palette": 11,
+      "arbText": 3,
+      "rawField": 2,
+      "lucide": 5
+    },
+    "components/health-export-card.tsx": {
+      "palette": 9,
+      "rawField": 1,
+      "lucide": 4
+    },
+    "components/help-tooltip.tsx": {
+      "palette": 1,
+      "rawButton": 1,
+      "lucide": 1
+    },
+    "components/jump-rope-detail.tsx": {
+      "hex": 43,
+      "arbText": 35,
+      "inlineStyle": 3,
+      "rawButton": 3,
+      "rawField": 1
+    },
+    "components/jump-rope-train.tsx": {
+      "hex": 17,
+      "arbText": 15,
+      "inlineStyle": 4,
+      "rawButton": 2
+    },
+    "components/macro-slider.tsx": {
+      "palette": 22,
+      "arbText": 2,
+      "rawButton": 2,
+      "lucide": 2,
+      "motion": 3
+    },
+    "components/macro-targets-sheet.tsx": {
+      "hex": 7,
+      "arbText": 6,
+      "inlineStyle": 5,
+      "rawButton": 2,
+      "rawField": 1
+    },
+    "components/measurement-wizard.tsx": {
+      "palette": 26,
+      "arbText": 4,
+      "rawButton": 2,
+      "lucide": 10,
+      "motion": 4
+    },
+    "components/photo-tray.tsx": {
+      "hex": 10,
+      "arbText": 4,
+      "rawButton": 3
+    },
+    "components/pin-gate.tsx": {
+      "hex": 2,
+      "arbText": 2,
+      "inlineStyle": 2,
+      "rawButton": 2,
+      "rawField": 1,
+      "lucide": 1,
+      "motion": 6
+    },
+    "components/pitaya-icons.tsx": {
+      "hex": 9
+    },
+    "components/push-nudge.tsx": {
+      "hex": 3,
+      "arbText": 6,
+      "inlineStyle": 4,
+      "rawButton": 3,
+      "motion": 2
+    },
+    "components/quick-favorites.tsx": {
+      "palette": 1,
+      "arbText": 1,
+      "rawButton": 2,
+      "lucide": 4,
+      "motion": 2
+    },
+    "components/range-picker.tsx": {
+      "hex": 22,
+      "arbText": 11,
+      "inlineStyle": 6,
+      "rawButton": 5,
+      "motion": 1
+    },
+    "components/reminder-toggle.tsx": {
+      "hex": 6,
+      "arbText": 4,
+      "inlineStyle": 2,
+      "rawButton": 2
+    },
+    "components/route-map.tsx": {
+      "hex": 5
+    },
+    "components/spirit-source-sheet.tsx": {
+      "hex": 11,
+      "arbText": 6,
+      "inlineStyle": 3,
+      "rawButton": 1
+    },
+    "components/spirit/bible-nav.tsx": {
+      "hex": 14,
+      "inlineStyle": 17,
+      "rawButton": 11,
+      "rawField": 1
+    },
+    "components/spirit/desk/bible-pane.tsx": {
+      "hex": 69,
+      "inlineStyle": 35,
+      "rawButton": 15,
+      "motion": 1
+    },
+    "components/spirit/desk/closing-card.tsx": {
+      "hex": 47,
+      "inlineStyle": 28,
+      "rawButton": 7,
+      "motion": 2
+    },
+    "components/spirit/desk/comments.tsx": {
+      "hex": 42,
+      "inlineStyle": 20,
+      "rawButton": 8,
+      "rawField": 2,
+      "motion": 2
+    },
+    "components/spirit/desk/desk-icons.tsx": {
+      "hex": 25,
+      "inlineStyle": 3,
+      "motion": 2
+    },
+    "components/spirit/desk/desk-shell.tsx": {
+      "hex": 86,
+      "inlineStyle": 41,
+      "rawButton": 10,
+      "rawField": 1,
+      "motion": 5
+    },
+    "components/spirit/desk/desk-state.tsx": {
+      "hex": 7
+    },
+    "components/spirit/desk/dialog.tsx": {
+      "hex": 11,
+      "inlineStyle": 8,
+      "rawButton": 2,
+      "rawField": 1
+    },
+    "components/spirit/desk/find-verse.tsx": {
+      "hex": 28,
+      "inlineStyle": 15,
+      "rawButton": 4,
+      "motion": 1
+    },
+    "components/spirit/desk/hymn-pane.tsx": {
+      "hex": 32,
+      "inlineStyle": 19,
+      "rawButton": 6,
+      "rawField": 1
+    },
+    "components/spirit/desk/ink-canvas.tsx": {
+      "hex": 17
+    },
+    "components/spirit/desk/lasso-menu.tsx": {
+      "hex": 5,
+      "inlineStyle": 4,
+      "motion": 1
+    },
+    "components/spirit/desk/notebook-pane.tsx": {
+      "hex": 104,
+      "inlineStyle": 55,
+      "rawButton": 24,
+      "rawField": 2,
+      "motion": 4
+    },
+    "components/spirit/desk/page-objects.tsx": {
+      "hex": 51,
+      "inlineStyle": 33
+    },
+    "components/spirit/desk/patterns.tsx": {
+      "hex": 2,
+      "inlineStyle": 1,
+      "rawButton": 1,
+      "motion": 4
+    },
+    "components/spirit/desk/pen-debug.tsx": {
+      "hex": 10,
+      "inlineStyle": 9,
+      "rawButton": 3
+    },
+    "components/spirit/desk/pen-popovers.tsx": {
+      "hex": 51,
+      "inlineStyle": 35,
+      "rawButton": 9,
+      "rawField": 1
+    },
+    "components/spirit/desk/recording-control.tsx": {
+      "hex": 48,
+      "inlineStyle": 25,
+      "rawButton": 8,
+      "motion": 1
+    },
+    "components/spirit/desk/ref-card.tsx": {
+      "hex": 11,
+      "inlineStyle": 4
+    },
+    "components/spirit/desk/ref-popover.tsx": {
+      "hex": 14,
+      "inlineStyle": 8,
+      "rawButton": 2,
+      "motion": 1
+    },
+    "components/spirit/desk/seam-rail.tsx": {
+      "hex": 67,
+      "inlineStyle": 27,
+      "rawButton": 15,
+      "motion": 5
+    },
+    "components/spirit/desk/selection-surface.tsx": {
+      "hex": 23,
+      "inlineStyle": 11,
+      "rawButton": 11
+    },
+    "components/spirit/desk/source-pane.tsx": {
+      "hex": 15,
+      "inlineStyle": 12,
+      "rawButton": 3
+    },
+    "components/spirit/desk/sunday-pane.tsx": {
+      "hex": 16,
+      "inlineStyle": 12,
+      "rawButton": 2
+    },
+    "components/spirit/desk/teaching-pane.tsx": {
+      "hex": 112,
+      "inlineStyle": 75,
+      "rawButton": 14,
+      "motion": 7
+    },
+    "components/spirit/desk/tool-rail.tsx": {
+      "hex": 20,
+      "inlineStyle": 10,
+      "rawButton": 2
+    },
+    "components/spirit/desk/ui.tsx": {
+      "hex": 36,
+      "inlineStyle": 17,
+      "rawButton": 6,
+      "motion": 3
+    },
+    "components/spirit/hymn-reader.tsx": {
+      "hex": 6,
+      "inlineStyle": 6,
+      "rawButton": 1
+    },
+    "components/spirit/phone-overlay.tsx": {
+      "hex": 3,
+      "inlineStyle": 1,
+      "rawButton": 1
+    },
+    "components/spirit/reader.tsx": {
+      "hex": 87,
+      "arbText": 102,
+      "inlineStyle": 149,
+      "rawButton": 44,
+      "rawField": 5,
+      "motion": 4
+    },
+    "components/trail-map.tsx": {
+      "hex": 13,
+      "arbText": 1,
+      "inlineStyle": 1,
+      "rawButton": 1
+    },
+    "components/training-week.tsx": {
+      "hex": 13,
+      "arbText": 11,
+      "inlineStyle": 2,
+      "rawButton": 5
+    },
+    "components/ui/alert-dialog.tsx": {
+      "motion": 1
+    },
+    "components/ui/dialog.tsx": {
+      "lucide": 1,
+      "motion": 1
+    },
+    "components/ui/dropdown-menu.tsx": {
+      "lucide": 3
+    },
+    "components/ui/select.tsx": {
+      "lucide": 3
+    },
+    "components/ui/sheet.tsx": {
+      "lucide": 1
+    },
+    "components/ui/sonner.tsx": {
+      "lucide": 5
+    },
+    "components/ui/tabs.tsx": {
+      "motion": 1
+    },
+    "components/viewport-vars.tsx": {
+      "arbText": 1
+    },
+    "components/voice-input.tsx": {
+      "hex": 6,
+      "palette": 18,
+      "arbText": 7,
+      "rawButton": 5,
+      "rawField": 1,
+      "lucide": 10,
+      "motion": 9
+    },
+    "components/voice-log-review.tsx": {
+      "hex": 20,
+      "arbText": 21,
+      "inlineStyle": 2,
+      "rawButton": 4,
+      "rawField": 1
+    },
+    "components/water-tracker.tsx": {
+      "palette": 12,
+      "arbText": 4,
+      "lucide": 3,
+      "motion": 6
+    },
+    "components/whisper-button.tsx": {
+      "lucide": 3
+    },
+    "components/workout-voice-input.tsx": {
+      "palette": 13,
+      "arbText": 1,
+      "lucide": 6,
+      "motion": 2
+    },
+    "lib/body-fat.ts": {
+      "palette": 10
+    },
+    "lib/desk-prefs.ts": {
+      "hex": 24
+    },
+    "lib/esv-transform.ts": {
+      "hex": 3
+    },
+    "lib/finance/constants.ts": {
+      "hex": 5
+    },
+    "lib/ink.ts": {
+      "hex": 1
+    },
+    "lib/spirit-notebooks.ts": {
+      "hex": 4
+    },
+    "lib/spirit-theme.ts": {
+      "hex": 21
+    },
+    "lib/spirit-ui.ts": {
+      "hex": 7
+    },
+    "lib/todo-icons.ts": {
+      "palette": 3
+    },
+    "lib/zones.ts": {
+      "hex": 5
+    }
+  }
+}

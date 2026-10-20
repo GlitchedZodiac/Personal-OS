@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { AIStatusCard } from "@/components/ai-status-card";
 import { NEW_CHAT_GAP_CHOICES, normalizeGapHours } from "@/lib/chat-history";
+import { APPEARANCE_LABEL, nextAppearance, normalizeAppearance } from "@/lib/appearance";
 import {
   getSettings,
   saveSettingsToServer,
@@ -174,8 +175,9 @@ export default function SettingsPage() {
 
       {/* Watch pairing card */}
       <div
-        className="mt-[18px] flex items-center gap-3.5 rounded-[16px] border border-border p-4 transition-colors duration-300"
-        style={{ background: paired ? "#F0F7F1" : "#FAF9FA" }}
+        className={`mt-[18px] flex items-center gap-3.5 rounded-[16px] border border-border p-4 transition-colors duration-150 ${
+          paired ? "bg-success/10" : "bg-bg-raised"
+        }`}
       >
         <WatchGlyph paired={paired} />
         <div className="min-w-0 flex-1">
@@ -224,8 +226,7 @@ export default function SettingsPage() {
           >
             <span className="text-[12.5px] text-foreground/85">{label}</span>
             <span
-              className="text-[11px] font-semibold"
-              style={{ color: paired ? "#5E9B72" : "#96949B" }}
+              className={`text-[11px] font-semibold ${paired ? "text-success-ink" : "text-ink-2"}`}
             >
               {paired ? "ON" : "off"}
             </span>
@@ -439,15 +440,20 @@ export default function SettingsPage() {
             {settings.units === "metric" ? "kg · cm" : "lb · in"}
           </span>
         </button>
-        <div className="flex items-center justify-between bg-card px-3.5 py-3">
+        {/* Appearance (lane C): Day · Night · System, cycled like Units.
+            System follows the phone; the class is set before paint
+            (lib/appearance.ts). */}
+        <button
+          onClick={() =>
+            update({ appearance: nextAppearance(normalizeAppearance(settings.appearance)) })
+          }
+          className="flex items-center justify-between bg-card px-3.5 py-3 text-left"
+        >
           <span className="text-[12.5px] text-foreground/85">Appearance</span>
           <span className="text-xs font-semibold text-foreground">
-            Day{" "}
-            <span className="font-medium text-muted-foreground">
-              · Night — next build
-            </span>
+            {APPEARANCE_LABEL[normalizeAppearance(settings.appearance)]}
           </span>
-        </div>
+        </button>
         <button
           onClick={() =>
             update({
@@ -497,6 +503,13 @@ export default function SettingsPage() {
       {/* SYSTEM — AI connection + spend (kept after the prod outage) */}
       <p className="micro-label mb-2 mt-[18px]">System</p>
       <AIStatusCard />
+      <Link
+        href="/settings/design"
+        className="mt-3 flex items-center justify-between rounded-card border border-rule-2 bg-card px-4 py-3 text-ui font-medium text-ink"
+      >
+        Design system
+        <span aria-hidden className="text-title leading-none text-ink-3">›</span>
+      </Link>
     </div>
   );
 }

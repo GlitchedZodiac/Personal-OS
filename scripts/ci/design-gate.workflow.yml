@@ -1,0 +1,51 @@
+# STAGED, NOT INSTALLED (lane C, 2026-10-20). GitHub refuses to let this
+# lane's push token create workflow files (it lacks the `workflow` scope), so
+# the job waits here. To install it, from a session or account with that
+# scope:
+#   git mv scripts/ci/design-gate.workflow.yml .github/workflows/design-gate.yml
+# Until then the gate still runs on every deploy: it is the first step of
+# `npm run build`, which Vercel executes.
+#
+# The design gate on every pull request and every push to main (lane C,
+# 2026-10). A ratchet: per-file counts of raw hex colours, arbitrary text
+# sizes, inline colour/type styles, raw controls outside components/ui,
+# lucide icons and non-standard motion may fall, never rise
+# (scripts/design-gate.mjs, baseline scripts/design-gate.baseline.json).
+# `npm run build` runs the same check before `next build`; this job reports
+# it on the PR without waiting for a deploy. Pure Node — no install, no
+# secrets.
+
+name: Design gate
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "components/**"
+      - "scripts/design-*.mjs"
+      - "scripts/design-gate.baseline.json"
+      - ".github/workflows/design-gate.yml"
+      - "scripts/ci/design-gate.workflow.yml"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: design-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Design gate (ratchet)
+        run: node scripts/design-gate.mjs

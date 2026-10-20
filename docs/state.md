@@ -5,6 +5,10 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
+**IN FLIGHT — lane C, "the look" (branch `claude/design-system-converge`, 2026-10-17 → 20).** One token file, one component kit, a ratchet gate, every screen converged; web AND `ios/**` in one lane on Michael's parallel-lanes brief. **ios/ parity checked before any Swift edit (2026-10-20): `git log origin/main..origin/claude/watch-app -- ios/` is empty.** Phase 1 (audit: `docs/design/screen-audit.md`, plan: `docs/design/look-plan.md`) is committed; Phase 2 adds the tokens (`app/globals.css`), the kit (`components/ui/*`, kitchen sink at `/settings/design`), the gate (`npm run design-gate`, run by `npm run build`), Appearance (Day · Night · System, default System) and the watch/iPhone mirror in `ios/Shared/Theme.swift`. The full entry lands here when the lane's PR is drafted.
+
+---
+
 **The iPhone app syncs Health activity by itself, and TestFlight builds come from GitHub (2026-10-17, evening). Web AND `ios/**` in one session on his word ("go and do everything you possibly can"); parity checked first: `git log origin/main..origin/claude/watch-app -- ios/` is empty.**
 
 His question: "why do I need the shortcut? shouldn't it be able to auto sync". Yes, it should have, and there were three reasons it didn't:
