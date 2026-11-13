@@ -148,3 +148,30 @@ describe("one workout's streams (gap #15)", () => {
     expect(workoutDetail(null)).toBeNull();
   });
 });
+
+describe("what query_data actually returns survives its own clip (2026-11-12 self-smoke)", () => {
+  it("a workout's streams and a ledger day's workouts are not flattened", async () => {
+    const { clip } = await import("@/lib/ai/data-access");
+    const { buildDayRow } = await import("@/lib/day-ledger");
+    const { readTargets } = await import("@/lib/targets");
+    const t = Array.from({ length: 200 }, (_, i) => i * 10);
+    const workoutsResponse = {
+      workouts: [{ id: "w1", exercises: [] }],
+      detail: workoutDetail({ hrStream: t.map(() => 100), timeStream: t, routeAnalytics: { splits: [{ km: 1, paceSecPerKm: 700 }] } }),
+    };
+    const day = buildDayRow(
+      {
+        date: "2026-11-10",
+        isToday: false,
+        food: [],
+        workouts: [{ id: "w1", workoutType: "walk", caloriesBurned: 200, stepCount: 3000, source: "app_watch" }],
+        health: null,
+        bmr: null,
+      },
+      readTargets({})
+    );
+    for (const payload of [workoutsResponse, { days: [day] }]) {
+      expect(JSON.stringify(clip(payload))).not.toContain("[nested");
+    }
+  });
+});

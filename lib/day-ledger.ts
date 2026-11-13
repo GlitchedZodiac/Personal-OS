@@ -56,10 +56,14 @@ export interface DayRow {
   target: MacroTarget;
   eaten: { kcal: number; proteinG: number; carbsG: number; fatG: number; entries: number };
   remaining: { kcal: number; proteinG: number };
-  exercise: {
-    workoutKcal: number;
-    workouts: { id: string; type: string; kcal: number | null; source: string }[];
-  };
+  /** Total burn of the day's logged workouts. */
+  workoutKcal: number;
+  /**
+   * The workouts themselves, kept at the row's top level: query_data clips
+   * anything nested deeper than four levels, so days[i].exercise.workouts[j]
+   * would arrive as "[nested object]".
+   */
+  workouts: { id: string; type: string; kcal: number | null; source: string }[];
   activity: {
     steps: number | null;
     stepsInWorkouts: number;
@@ -129,15 +133,13 @@ export function buildDayRow(input: DayInputs, targets: Targets): DayRow {
     target,
     eaten: { kcal: r0(eaten.kcal), proteinG: r0(eaten.proteinG), carbsG: r0(eaten.carbsG), fatG: r0(eaten.fatG), entries: input.food.length },
     remaining: { kcal: r0(target.kcal - eaten.kcal), proteinG: r0(target.proteinG - eaten.proteinG) },
-    exercise: {
-      workoutKcal: r0(workoutKcal),
-      workouts: input.workouts.map((w) => ({
-        id: w.id,
-        type: w.workoutType,
-        kcal: w.caloriesBurned == null ? null : r0(w.caloriesBurned),
-        source: w.source,
-      })),
-    },
+    workoutKcal: r0(workoutKcal),
+    workouts: input.workouts.map((w) => ({
+      id: w.id,
+      type: w.workoutType,
+      kcal: w.caloriesBurned == null ? null : r0(w.caloriesBurned),
+      source: w.source,
+    })),
     activity: {
       steps,
       stepsInWorkouts,

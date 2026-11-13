@@ -14,6 +14,7 @@ import {
   applyTargetsPatch,
   legacyFromRest,
   readTargets,
+  restFromLegacy,
 } from "@/lib/targets";
 
 type Json = Record<string, unknown>;
@@ -192,16 +193,61 @@ export function applySettingsPatch(
   return { next, changes, warnings };
 }
 
-/**
- * The guard PUT /api/settings applies to a whole-blob save from the app:
- * `targets` is owned by the server (the app has no targets editor), and the
- * legacy macro keys are re-derived from it, so a stale client copy can never
- * move the daily goal back.
- */
+/** The legacy keys of a body, mirrored from its `targets.rest`. */
 export function mirrorLegacyFromTargets(body: Json): Json {
   if (!isObj(body.targets)) return body;
   const targets = readTargets(body);
   return { ...body, ...legacyFromRest(targets.rest) };
+}
+
+const LEGACY_KEYS = ["calorieTarget", "proteinPct", "carbsPct", "fatPct"] as const;
+
+/**
+ * What PUT /api/settings does with targets on a whole-blob save from the app.
+ *
+ * The app saves its entire local copy of the settings on every change, and
+ * it has its own targets editor (components/macro-targets-sheet.tsx: kcal +
+ * a macro split, written as the legacy keys). Two cases look alike — both
+ * send legacy values that differ from what's stored:
+ *   - an EDIT in that sheet. The sheet re-reads the server settings when it
+ *     opens, so its copy carries the current `targets.updatedAt`. The edit
+ *     wins: it becomes the new rest-day target (training target and rule
+ *     are kept), recorded as made in the app.
+ *   - a STALE copy (an open tab from before Claude changed the targets,
+ *     saving some other setting). Its `targets` is missing or older. The
+ *     stored targets win and the legacy keys are re-derived from them.
+ * With no stored targets the save passes through exactly as before.
+ */
+export function reconcileTargetsOnSave(
+  current: Json,
+  incoming: Json,
+  body: Json,
+  now = new Date()
+): { body: Json; appEdit: { field: string; before: unknown; after: unknown }[] | null } {
+  if (!isObj(current.targets)) return { body, appEdit: null };
+  const stored = current.targets as Json;
+  const theirs = isObj(incoming.targets) ? (incoming.targets as Json) : null;
+  const fresh = !!theirs && typeof stored.updatedAt === "string" && theirs.updatedAt === stored.updatedAt;
+  const edited = LEGACY_KEYS.some((k) => incoming[k] !== undefined && incoming[k] !== current[k]);
+  if (fresh && edited) {
+    const kcal = incoming.calorieTarget;
+    if (typeof kcal === "number" && kcal >= 800 && kcal <= 6000) {
+      const rest = restFromLegacy({ ...current, ...incoming });
+      const next = { ...readTargets(current), rest, updatedAt: now.toISOString(), updatedVia: "app" as const };
+      const legacy = legacyFromRest(rest);
+      // Every key that moved is recorded, so an undo restores all of them.
+      const appEdit = [
+        { field: "targets", before: stored, after: next as unknown },
+        ...LEGACY_KEYS.filter((k) => current[k] !== legacy[k]).map((k) => ({
+          field: k,
+          before: current[k] ?? null,
+          after: legacy[k] as unknown,
+        })),
+      ];
+      return { body: { ...body, targets: next, ...legacy }, appEdit };
+    }
+  }
+  return { body: mirrorLegacyFromTargets({ ...body, targets: stored }), appEdit: null };
 }
 
 // ── Undo (MCP v2 Phase A) ─────────────────────────────────────────────────

@@ -25,7 +25,7 @@ import {
   resolveDayTarget,
   restFromLegacy,
 } from "@/lib/targets";
-import { applySettingsPatch, mirrorLegacyFromTargets } from "@/lib/settings-patch";
+import { applySettingsPatch, mirrorLegacyFromTargets, reconcileTargetsOnSave } from "@/lib/settings-patch";
 import { buildDayRow, buildWeekly, ledgerRange, type DayInputs, type DayRow } from "@/lib/day-ledger";
 import { V2_TOOLS } from "@/lib/mcp/tools-v2";
 
@@ -110,10 +110,52 @@ describe("applySettingsPatch", () => {
     expect(applySettingsPatch({}, { workoutGoals: { daysPerWeek: 9 } })).toHaveProperty("error");
   });
 
-  it("a whole-blob app save cannot move the goal away from targets", () => {
+  it("mirrors the legacy keys from targets.rest", () => {
     const body = mirrorLegacyFromTargets({ calorieTarget: 2200, targets: { rest: REST } });
     expect(body.calorieTarget).toBe(2000);
     expect(mirrorLegacyFromTargets({ calorieTarget: 2200 }).calorieTarget).toBe(2200);
+  });
+});
+
+describe("a whole-blob save from the app (PUT /api/settings)", () => {
+  const stored = { ...readTargets({}), rest: REST, training: TRAINING, updatedAt: "2026-11-12T10:00:00.000Z", updatedVia: "mcp" as const };
+  const current = { targets: stored, ...legacyFromRest(REST), units: "metric" };
+  const now = new Date("2026-11-13T09:00:00Z");
+
+  it("an edit in the app's targets sheet becomes the rest target (training kept)", () => {
+    // The sheet re-reads the server on open, so its copy carries the current stamp.
+    const incoming = { ...current, calorieTarget: 1900, proteinPct: 35, carbsPct: 40, fatPct: 25 };
+    const { body, appEdit } = reconcileTargetsOnSave(current, incoming, { ...incoming, targets: stored }, now);
+    const t = body.targets as { rest: unknown; training: unknown; updatedVia: string };
+    expect(t.rest).toEqual({ kcal: 1900, proteinG: 166, carbsG: 190, fatG: 53 });
+    expect(t.training).toEqual(TRAINING);
+    expect(t.updatedVia).toBe("app");
+    expect(body.calorieTarget).toBe(1900);
+    expect(appEdit?.map((c) => c.field)).toEqual(["targets", "calorieTarget", "proteinPct", "carbsPct", "fatPct"]);
+  });
+
+  it("an older copy can't move the goal back", () => {
+    const stale = { calorieTarget: 2200, proteinPct: 30, carbsPct: 40, fatPct: 30, units: "imperial" };
+    const { body, appEdit } = reconcileTargetsOnSave(current, stale, { ...stale, targets: stored }, now);
+    expect(appEdit).toBeNull();
+    expect(body.calorieTarget).toBe(2000);
+    expect(body.targets).toEqual(stored);
+    expect(body.units).toBe("imperial"); // the setting it was actually saving
+    const olderStamp = { ...stale, targets: { ...stored, updatedAt: "2026-11-01T00:00:00.000Z" } };
+    expect(reconcileTargetsOnSave(current, olderStamp, { ...olderStamp, targets: stored }, now).appEdit).toBeNull();
+  });
+
+  it("a save that doesn't touch the goal changes nothing about targets", () => {
+    const same = { ...current, units: "imperial" };
+    const { body, appEdit } = reconcileTargetsOnSave(current, same, { ...same }, now);
+    expect(appEdit).toBeNull();
+    expect(body.targets).toEqual(stored);
+  });
+
+  it("with no stored targets the save passes through as before", () => {
+    const { body, appEdit } = reconcileTargetsOnSave({ calorieTarget: 2200 }, { calorieTarget: 1900 }, { calorieTarget: 1900 }, now);
+    expect(appEdit).toBeNull();
+    expect(body).toEqual({ calorieTarget: 1900 });
   });
 });
 

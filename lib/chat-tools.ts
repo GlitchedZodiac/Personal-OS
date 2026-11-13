@@ -232,9 +232,13 @@ export async function executeGetHealthData(
               : undefined,
             // entries he logged by voice on the wrist mid-workout
             voiceEntries: Array.isArray(m.setLog) ? m.setLog.length : undefined,
-            ...(byId ? { detail: workoutDetail(w.metricsData) ?? undefined } : {}),
           };
         }),
+        // The streams sit at the TOP of the response, not inside the row:
+        // data-access clip() flattens anything nested deeper than four
+        // levels, which turned the HR series into "[nested array]" (caught
+        // by the 2026-11-12 self-smoke).
+        ...(byId && rows[0] ? { detail: workoutDetail(rows[0].metricsData) ?? undefined } : {}),
         ...(byId && rows.length === 0 ? { error: `No workout with id ${byId}` } : {}),
       };
     }
