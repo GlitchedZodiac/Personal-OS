@@ -250,6 +250,7 @@ export async function buildHealthExport(
         fatG: true,
         notes: true,
         source: true,
+        extra: true, // custom fields (MCP v2 Phase B)
         createdAt: true,
         updatedAt: true,
       },
@@ -279,6 +280,7 @@ export async function buildHealthExport(
         syncStatus: true,
         stravaActivityId: true,
         source: true,
+        extra: true, // custom fields (MCP v2 Phase B)
         createdAt: true,
         updatedAt: true,
       },
@@ -315,6 +317,7 @@ export async function buildHealthExport(
         metabolicAge: true,
         heartRateBpm: true,
         source: true,
+        extra: true, // custom fields (MCP v2 Phase B)
         createdAt: true,
         updatedAt: true,
       },

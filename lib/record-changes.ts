@@ -105,6 +105,7 @@ async function loadHandlers() {
     import("@/lib/patch-record"),
     import("@/lib/exercise-library"),
     import("@/lib/settings-patch"),
+    import("@/lib/field-definitions"),
   ]);
 }
 

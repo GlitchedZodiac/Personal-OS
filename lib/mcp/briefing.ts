@@ -15,7 +15,13 @@ export const MAX_BRIEFING_RULES = 2000;
 
 type Section = () => Promise<string | null>;
 
-const sections: Section[] = [standingRules, movementGaps];
+const sections: Section[] = [standingRules, movementGaps, customFields];
+
+/** The custom fields that exist (MCP v2 Phase B), so a new session uses them. */
+async function customFields(): Promise<string | null> {
+  const { fieldsBriefing } = await import("@/lib/field-definitions");
+  return fieldsBriefing();
+}
 
 /** Movements nobody has explained yet (MCP v2 Phase C), so the library fills in as he trains. */
 async function movementGaps(): Promise<string | null> {

@@ -17,6 +17,9 @@ model FoodLog {
   fatG            Float    @default(0)
   notes           String?
   source          String   @default("manual") // manual, voice, ai
+  // MCP v2 Phase B (2026-11-12): values for fields Claude defined
+  // (field_definitions) — { key: value }. Validated on write; null = none.
+  extra           Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -40,6 +43,9 @@ model BodyMeasurement {
   calvesCm     Float?
   skinfoldData Json? // { chest, abdomen, thigh, triceps, suprailiac, subscapular, midaxillary } in mm
   notes        String?
+  // MCP v2 Phase B (2026-11-12): values for fields Claude defined
+  // (abdomenCm, armLeftCm, tapeMethod…) — { key: value }. Null = none.
+  extra        Json?
 
   // Smart scale fields (VeSync / body composition)
   bmi                Float?
@@ -160,6 +166,8 @@ model WorkoutLog {
   externalId       String?
   syncStatus       String    @default("synced") // synced, pending_upload, pending_phone, failed
   exercises        Json? // Array of { name, sets, reps, weight }
+  // MCP v2 Phase B (2026-11-12): values for fields Claude defined. Null = none.
+  extra            Json?
   stravaActivityId String?
   source           String    @default("manual") // manual, voice, strava
   // Named-trails spine (2026-08-28): links repeat runs of the same ground.
@@ -1311,6 +1319,31 @@ model McpAuditEvent {
 // records WHO called WHAT and deliberately stores no content; this records
 // the values. One tool call = one batchId. Never finance — finance is never
 // patched over MCP. Read back as query_data record_changes.
+// MCP v2 Phase B (2026-11-12): fields Claude can add without a code release.
+// One row per field: which kind of record it belongs to, its key, type, unit,
+// range and meaning. Values live in that record's `extra` JSON. Retired keys
+// keep their stored values but leave the tool descriptions. When the app ever
+// needs to chart one, it is promoted to a real column (docs/mcp-v2-spec.md §7.5).
+model FieldDefinition {
+  id          String   @id @default(uuid())
+  entity      String // food | measurement | workout
+  key         String // camelCase
+  label       String
+  type        String // number | integer | text | enum | boolean
+  unit        String?
+  min         Float?
+  max         Float?
+  options     Json? // enum values
+  description String
+  status      String   @default("active") // active | retired
+  createdVia  String   @default("mcp")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([entity, key])
+  @@map("field_definitions")
+}
+
 model RecordChange {
   id        String    @id @default(uuid())
   batchId   String

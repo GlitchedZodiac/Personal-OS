@@ -14,6 +14,7 @@ import { recordChanges, undoChanges, type ChangeInput } from "@/lib/record-chang
 import { PATCH_ENTITIES, patchRecord, writableSummary } from "@/lib/patch-record";
 import { mergeExercises, renormalizeHistory, upsertExercise } from "@/lib/exercise-library";
 import { EQUIPMENT, MUSCLES, PATTERNS } from "@/lib/exercise-profile";
+import { defineField, FIELD_ENTITIES, FIELD_TYPES, retireField } from "@/lib/field-definitions";
 
 type Json = Record<string, unknown>;
 
@@ -336,6 +337,59 @@ const renormalizeTool: V2Tool = {
   },
 };
 
+// ── Phase B: fields Claude can add ─────────────────────────────────────────
+
+const defineFieldTool: V2Tool = {
+  def: {
+    name: "define_field",
+    description:
+      "Start recording something new on food entries, body measurements or workouts — no release needed. Give the entity, a camelCase key (abdomenCm, armLeftCm, sleepQuality…), a label, the type (number | integer | text | enum | boolean), unit and range for numbers, options for an enum, and a description of what it means and how it's measured (that text is what every future Claude session reads). From then on the value goes in `extra` on log_food items / log_measurement / log_workout, or patch_record { set: { \"extra.<key>\": … } }, and comes back on every read. A key can't shadow a built-in column. Defining a retired key brings it back.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entity: { type: "string", enum: [...FIELD_ENTITIES] },
+        key: { type: "string" },
+        label: { type: "string" },
+        type: { type: "string", enum: [...FIELD_TYPES] },
+        unit: { type: "string" },
+        min: { type: "number" },
+        max: { type: "number" },
+        options: { type: "array", items: { type: "string" } },
+        description: { type: "string" },
+        reason: { type: "string" },
+      },
+      required: ["entity", "key", "label", "type", "description", "reason"],
+    },
+  },
+  handler: async (args) => {
+    const why = reasonOf(args);
+    if ("error" in why) return why;
+    return defineField(args, why.reason);
+  },
+};
+
+const retireFieldTool: V2Tool = {
+  def: {
+    name: "retire_field",
+    description:
+      "Stop offering a custom field. Every value already stored is kept (and still readable); the field just leaves the tool descriptions. define_field with the same key brings it back. Undo-able.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entity: { type: "string", enum: [...FIELD_ENTITIES] },
+        key: { type: "string" },
+        reason: { type: "string" },
+      },
+      required: ["entity", "key", "reason"],
+    },
+  },
+  handler: async (args) => {
+    const why = reasonOf(args);
+    if ("error" in why) return why;
+    return retireField(args, why.reason);
+  },
+};
+
 export const V2_TOOLS: V2Tool[] = [
   updateSettings,
   patchTool,
@@ -343,6 +397,8 @@ export const V2_TOOLS: V2Tool[] = [
   upsertExerciseTool,
   mergeExercisesTool,
   renormalizeTool,
+  defineFieldTool,
+  retireFieldTool,
 ];
 
 export const V2_ANNOTATIONS: Record<string, V2Annotations> = {
@@ -353,6 +409,9 @@ export const V2_ANNOTATIONS: Record<string, V2Annotations> = {
   upsert_exercise: { title: "Add or explain a movement", ...OVERWRITES },
   merge_exercises: { title: "Merge duplicate movements", ...OVERWRITES },
   renormalize_history: { title: "Re-match logged movement names", ...OVERWRITES },
+  // Adds a definition row; redefining a retired key reactivates it.
+  define_field: { title: "Define a custom field", ...ADDS },
+  retire_field: { title: "Retire a custom field", ...OVERWRITES },
 };
 
 // Kept for the phases that add rows rather than overwrite them.

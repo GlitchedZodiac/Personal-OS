@@ -145,7 +145,7 @@ export const REGISTRY: readonly DatasetSpec[] = [
     // to the schema cannot go missing here without failing the parity test.
     fields: [
       "id", "measuredAt", "notes", "source", "skinfoldData",
-      "fieldSources", "impedance",
+      "fieldSources", "impedance", "extra",
       ...MEASURED_FIELDS,
     ],
     // The scale's own reference ranges are context for one reading, not a
@@ -167,6 +167,18 @@ export const REGISTRY: readonly DatasetSpec[] = [
     orderBy: { createdAt: "desc" },
     search: ["entity", "recordId", "field", "reason", "batchId"],
     defaultLimit: 40,
+  },
+  {
+    // MCP v2 Phase B (2026-11-12): fields Claude defined, with their meaning.
+    key: "field_definitions",
+    kind: "table",
+    summary: "Custom fields Claude defined (abdomenCm, food confidence…): entity, key, type, unit, range, meaning, status.",
+    model: "fieldDefinition",
+    fields: ["id", "entity", "key", "label", "type", "unit", "min", "max", "options", "description", "status", "createdAt"],
+    dateField: "createdAt",
+    orderBy: { entity: "asc" },
+    search: ["entity", "key", "label", "description"],
+    defaultLimit: 100,
   },
   {
     key: "daily_health",

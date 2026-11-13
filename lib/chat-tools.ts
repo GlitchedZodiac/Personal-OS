@@ -99,6 +99,8 @@ export async function executeGetHealthData(
           proteinG: Math.round(f.proteinG),
           carbsG: Math.round(f.carbsG),
           fatG: Math.round(f.fatG),
+          // Custom fields (MCP v2 Phase B), e.g. confidence.
+          ...(f.extra != null ? { extra: f.extra } : {}),
         })),
       };
     }
@@ -174,6 +176,7 @@ export async function executeGetHealthData(
             stepCount: w.stepCount,
             packKg: w.packKg,
             trailId: w.trailId,
+            ...(w.extra != null ? { extra: w.extra } : {}),
             source: w.externalSource ?? w.source,
             createdAt: w.createdAt.toISOString(),
             // zone analytics when an HR stream existed (Strava/watch)

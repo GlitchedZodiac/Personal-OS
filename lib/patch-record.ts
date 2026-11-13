@@ -23,6 +23,7 @@ import { JUMP_ROPE_TYPE, jumpRopeExerciseRow, readIntervals } from "@/lib/jump-r
 import { rebuildPersonalRecords } from "@/lib/prs";
 import { recordChanges, registerUndoHandler, sameValue } from "@/lib/record-changes";
 import { stampCorrected, stampExercisesEdited } from "@/lib/workout-resync";
+import { activeFields, checkFieldValue, extraForDb, mergeExtra, type FieldEntity } from "@/lib/field-definitions";
 
 type Json = Record<string, unknown>;
 const isObj = (v: unknown): v is Json => !!v && typeof v === "object" && !Array.isArray(v);
@@ -169,6 +170,10 @@ export function currentValue(entity: PatchEntity, row: Json, field: string): unk
   if (entity === "workout" && field === "routineId") return metricsOf(row).sequenceId ?? null;
   if (entity === "workout" && field === "rope") return metricsOf(row).intervals ?? null;
   if (entity === "workout" && field === "exercises") return row.exercises ?? null;
+  if (field.startsWith("extra.")) {
+    const extra = isObj(row.extra) ? (row.extra as Json) : {};
+    return extra[field.slice(6)] ?? null;
+  }
   const v = row[field];
   return v instanceof Date ? v.toISOString() : v ?? null;
 }
@@ -263,7 +268,22 @@ export async function patchRecord(input: PatchInput): Promise<PatchResult | { er
   const changes: PatchResult["changes"] = [];
   const corrected: string[] = [];
 
+  const extraPatch: Json = {};
   for (const [field, raw] of Object.entries(set)) {
+    // A field Claude defined (Phase B): "extra.<key>", checked against its definition.
+    if (field.startsWith("extra.")) {
+      if (entity === "recipe") return { error: "Saved recipes have no custom fields" };
+      const key = field.slice(6);
+      const def = (await activeFields(entity as FieldEntity)).find((d) => d.key === key);
+      if (!def) return { error: `${field} is not a defined ${entity} field — query_data field_definitions lists them; define_field adds one` };
+      const checked = checkFieldValue(def, raw);
+      if ("error" in checked) return checked;
+      const before = currentValue(entity, row, field);
+      if (sameValue(before, checked.value)) continue;
+      changes.push({ field, before, after: checked.value });
+      extraPatch[key] = checked.value;
+      continue;
+    }
     const rule = spec.fields[field];
     if (!rule) {
       return {
@@ -332,6 +352,7 @@ export async function patchRecord(input: PatchInput): Promise<PatchResult | { er
   if (entity === "workout") {
     data.metricsData = (corrected.length ? stampCorrected(metrics, corrected) : metrics) as Prisma.InputJsonValue;
   }
+  if (Object.keys(extraPatch).length) data.extra = extraForDb(mergeExtra(row.extra, extraPatch));
   if (entity === "measurement") {
     const sources = isObj(row.fieldSources) ? { ...(row.fieldSources as Json) } : {};
     for (const c of changes) if ((MEASURED_FIELDS as readonly string[]).includes(c.field)) sources[c.field] = "corrected";
@@ -372,7 +393,12 @@ for (const entity of PATCH_ENTITIES) {
       const data: Json = {};
       let metrics: Json | null = entity === "workout" ? { ...metricsOf(row) } : null;
       let rebuild = false;
+      const extraPatch: Json = {};
       for (const [field, value] of Object.entries(values)) {
+        if (field.startsWith("extra.")) {
+          extraPatch[field.slice(6)] = value ?? null;
+          continue;
+        }
         if (entity === "workout" && field === "routineId") {
           if (value == null) {
             delete metrics!.sequenceId;
@@ -398,6 +424,7 @@ for (const entity of PATCH_ENTITIES) {
         const rule = spec.fields[field];
         data[field] = rule?.type === "datetime" && typeof value === "string" ? new Date(value) : value;
       }
+      if (Object.keys(extraPatch).length) data.extra = extraForDb(mergeExtra(row.extra, extraPatch));
       if (metrics) {
         // An undone correction hands the field back to the watch.
         const stamps = isObj(metrics.correctedFields) ? { ...(metrics.correctedFields as Json) } : null;
@@ -419,7 +446,9 @@ export function writableSummary(): string {
     const fields = Object.entries(WRITE_SPECS[e].fields)
       .filter(([f]) => e !== "measurement" || !(MEASURED_FIELDS as readonly string[]).includes(f))
       .map(([f, r]) => (r.note ? `${f} (${r.note})` : f));
-    const extra = e === "measurement" ? ", and every measured value (weightKg, waistCm, bodyFatPct, …)" : e === "workout" ? ", plus rope" : "";
+    const extra =
+      (e === "measurement" ? ", and every measured value (weightKg, waistCm, bodyFatPct, …)" : e === "workout" ? ", plus rope" : "") +
+      (e !== "recipe" ? ', and any custom field as "extra.<key>"' : "");
     return `${e}: ${fields.join(", ")}${extra}`;
   }).join("; ");
 }

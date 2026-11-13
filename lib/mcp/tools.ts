@@ -49,6 +49,11 @@ import { getDateStringInTimeZone } from "@/lib/timezone";
 import { mcpFinanceAllowed } from "@/lib/mcp-settings";
 import { recordMcpAudit, type McpCallContext } from "@/lib/mcp/audit";
 import { macroMismatchWarning } from "@/lib/macro-check";
+import { extraDescription, mergeExtra, validateExtra } from "@/lib/field-definitions";
+
+/** The `extra` property's description when the live list can't be read. */
+const EXTRA_STATIC_DESCRIPTION =
+  "Custom fields Claude defined with define_field ({ key: value }); query_data field_definitions lists them with meaning and unit. Send only what was measured.";
 import { V2_ANNOTATIONS, V2_TOOLS } from "@/lib/mcp/tools-v2";
 import { recordChanges } from "@/lib/record-changes";
 import { mapForLog, type MappedEntry } from "@/lib/exercise-library";
@@ -441,6 +446,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
                 fatG: { type: "number" },
                 notes: { type: "string" },
                 loggedAt: { type: "string", description: "ISO datetime; default now" },
+                extra: { type: "object", description: EXTRA_STATIC_DESCRIPTION },
               },
               required: ["mealType", "foodDescription", "calories", "proteinG", "carbsG", "fatG"],
             },
@@ -455,12 +461,16 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
         return { error: "1–20 items per call" };
       }
       // Check every item before writing any, so a refusal never leaves half a meal.
+      const extras: (Json | null)[] = [];
       for (const [i, it] of items.entries()) {
         const tooLong = overLimit(`items[${i}].foodDescription`, it.foodDescription, 500) ?? overLimit(`items[${i}].notes`, it.notes, 2_000);
         if (tooLong) return tooLong;
+        const extra = await validateExtra("food", it.extra);
+        if ("error" in extra) return { error: `items[${i}]: ${extra.error}` };
+        extras.push(mergeExtra(null, extra.extra));
       }
       const created = [];
-      for (const it of items) {
+      for (const [i, it] of items.entries()) {
         const desc = str(it.foodDescription);
         if (!desc) continue;
         created.push(
@@ -475,6 +485,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
               fatG: num(it.fatG) ?? 0,
               notes: str(it.notes) || null,
               source: "mcp",
+              ...(extras[i] ? { extra: extras[i] as Prisma.InputJsonValue } : {}),
             },
           })
         );
@@ -563,6 +574,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           maxHeartRateBpm: { type: "number" },
           elevationGainM: { type: "number" },
           packKg: { type: "number", description: "Carried load for hikes (0–60)" },
+          extra: { type: "object", description: EXTRA_STATIC_DESCRIPTION },
           exercises: {
             type: "array",
             items: {
@@ -589,6 +601,9 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     },
     handler: async (args) => {
       const workoutType = str(args.workoutType) || "other";
+      const extraChecked = await validateExtra("workout", args.extra);
+      if ("error" in extraChecked) return extraChecked;
+      const workoutExtra = mergeExtra(null, extraChecked.extra);
       const packKg = num(args.packKg);
       if (packKg != null && (packKg < 0 || packKg > 60)) {
         return { error: "packKg must be 0–60" };
@@ -683,6 +698,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           ...(ropeMetrics ? { metricsData: ropeMetrics as Prisma.InputJsonValue } : {}),
           source: "mcp",
           externalSource: "mcp",
+          ...(workoutExtra ? { extra: workoutExtra as Prisma.InputJsonValue } : {}),
         },
       });
       let newPRs: Awaited<ReturnType<typeof detectAndRecordPRs>> = [];
@@ -918,17 +934,21 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
               "Ohms per segment at each frequency: { z20: { rightArm, leftArm, trunk, rightLeg, leftLeg }, z100: { … } }",
           },
           notes: { type: "string" },
+          extra: { type: "object", description: EXTRA_STATIC_DESCRIPTION },
         },
       },
     },
     handler: async (args) => {
+      const extraChecked = await validateExtra("measurement", args.extra);
+      if ("error" in extraChecked) return extraChecked;
+      const extra = mergeExtra(null, extraChecked.extra);
       const fields: Record<string, number> = {};
       for (const f of MEASURED_FIELDS) {
         const v = posNum(args[f]);
         if (v != null) fields[f] = INT_FIELDS.has(f) ? Math.round(v) : v;
       }
-      if (Object.keys(fields).length === 0) {
-        return { error: "Provide at least one measurement (positive number)" };
+      if (Object.keys(fields).length === 0 && !extra) {
+        return { error: "Provide at least one measurement (a positive number, or a custom field in extra)" };
       }
       const impedance = cleanImpedance(args.impedance);
       const measuredAt = isoDate(args.measuredAt) ?? new Date();
@@ -962,12 +982,20 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
             if (stored[f] == null) patch[f] = v;
             else if (stored[f] !== v) notOverwritten[f] = { stored: stored[f] as number, given: v };
           }
+          // Custom fields fill blanks only, like every other value here.
+          const storedExtra = (twin.extra ?? {}) as Json;
+          const extraFill = extra
+            ? Object.fromEntries(Object.entries(extra).filter(([k]) => storedExtra[k] == null))
+            : {};
           const measurement = await prisma.bodyMeasurement.update({
             where: { id: twin.id },
             data: {
               ...patch,
               ...(impedance && twin.impedance == null ? { impedance } : {}),
               ...(notes && !twin.notes ? { notes } : {}),
+              ...(Object.keys(extraFill).length
+                ? { extra: mergeExtra(storedExtra, extraFill) as Prisma.InputJsonValue }
+                : {}),
               fieldSources: stampSources(patch, "mcp", fieldSourcesOf(twin)),
             },
           });
@@ -987,6 +1015,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
             source: "mcp",
             ...fields,
             ...(impedance ? { impedance } : {}),
+            ...(extra ? { extra: extra as Prisma.InputJsonValue } : {}),
             fieldSources: stampSources(fields, "mcp"),
           },
         }),
@@ -1633,6 +1662,52 @@ export const MCP_TOOL_DEFS: McpToolDef[] = ALL_TOOLS.map((t) => ({
   annotations: ALL_ANNOTATIONS[t.def.name] ?? fallbackAnnotations(t.def.name),
 }));
 const HANDLERS = new Map(ALL_TOOLS.map((t) => [t.def.name, t.handler]));
+
+// ── The tool list describes his custom fields (MCP v2 Phase B) ────────────
+// tools/list is read when Claude connects, so the `extra` property of each
+// write tool lists the fields that exist right now, with meaning and unit.
+// A failure (or no fields table) falls back to the static list.
+let toolListCache: { at: number; defs: McpToolDef[] } | null = null;
+const TOOL_LIST_TTL_MS = 60_000;
+
+export async function listMcpToolDefs(): Promise<McpToolDef[]> {
+  if (toolListCache && Date.now() - toolListCache.at < TOOL_LIST_TTL_MS) return toolListCache.defs;
+  try {
+    const [food, measurement, workout] = await Promise.all([
+      extraDescription("food"),
+      extraDescription("measurement"),
+      extraDescription("workout"),
+    ]);
+    const withExtra = (schema: Json, text: string): Json => {
+      const props = (schema.properties ?? {}) as Json;
+      return { ...schema, properties: { ...props, extra: { type: "object", description: text } } };
+    };
+    const defs = MCP_TOOL_DEFS.map((d) => {
+      const schema = d.inputSchema as Json;
+      if (d.name === "log_measurement") return { ...d, inputSchema: withExtra(schema, measurement) };
+      if (d.name === "log_workout") return { ...d, inputSchema: withExtra(schema, workout) };
+      if (d.name === "log_food") {
+        const items = ((schema.properties as Json).items ?? {}) as Json;
+        const item = (items.items ?? {}) as Json;
+        return {
+          ...d,
+          inputSchema: {
+            ...schema,
+            properties: { ...(schema.properties as Json), items: { ...items, items: withExtra(item, food) } },
+          },
+        };
+      }
+      if (d.name === "patch_record") {
+        return { ...d, description: `${d.description} Custom fields — food: ${food} | measurement: ${measurement} | workout: ${workout}` };
+      }
+      return d;
+    });
+    toolListCache = { at: Date.now(), defs };
+    return defs;
+  } catch {
+    return MCP_TOOL_DEFS;
+  }
+}
 
 const READ_TOOLS = new Set(
   MCP_TOOL_DEFS.filter((d) => d.annotations?.readOnlyHint === true).map((d) => d.name)

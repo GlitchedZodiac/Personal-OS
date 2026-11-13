@@ -8,7 +8,7 @@
 // App Router. If the server ever needs sampling/resources/subscriptions,
 // swap in the SDK then.
 
-import { callMcpTool, MCP_TOOL_DEFS } from "@/lib/mcp/tools";
+import { callMcpTool, listMcpToolDefs } from "@/lib/mcp/tools";
 import { connectorBriefing } from "@/lib/mcp/briefing";
 import type { McpCallContext } from "@/lib/mcp/audit";
 
@@ -78,7 +78,10 @@ const INSTRUCTIONS =
   "name matched (mapped) and creates unknown ones; explain every new " +
   "movement with upsert_exercise { profile } — what it is, pattern, muscles, " +
   "what it's a variant of, its source — and mark bodyweight moves load " +
-  "bodyweight so handle bells never count. update_settings changes his " +
+  "bodyweight so handle bells never count. Something new to record (a body " +
+  "measurement, how a food number was obtained) becomes a field with " +
+  "define_field, and its value rides `extra` on the log tools. " +
+  "update_settings changes his " +
   "targets and his standing rules for every Claude session.";
 
 export async function handleMcpMessage(raw: unknown, ctx?: McpCallContext): Promise<McpHttpResponse> {
@@ -119,7 +122,7 @@ export async function handleMcpMessage(raw: unknown, ctx?: McpCallContext): Prom
       return rpcResult(id, {});
 
     case "tools/list":
-      return rpcResult(id, { tools: MCP_TOOL_DEFS });
+      return rpcResult(id, { tools: await listMcpToolDefs() });
 
     case "tools/call": {
       const params = (msg.params ?? {}) as {
