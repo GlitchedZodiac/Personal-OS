@@ -5,6 +5,49 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
+**MCP v2 — Claude can change Pitaya without a code release (2026-11-12/13). Built on branch `claude/mcp-v2`, stacked on the unmerged `claude/security-audit-2026-10`; NOT merged, production unchanged.** From the 18-item gap review he wrote with Claude; spec and build notes in [`docs/mcp-v2-spec.md`](mcp-v2-spec.md). Built on this PC in a worktree (not the Mac lanes): `ios/**` untouched, so no TestFlight build is involved.
+
+**Shipped on the branch (one commit per phase):**
+- **Quick wins:**
+  - The movement matcher no longer maps a name onto a catalog movement when left-over words name other equipment, a variation or another movement ("Seated Dumbbell Shoulder Press" stayed out of barbell Overhead Press). The wrist voice parser keeps the loose reach for its review suggestions (`looseExerciseMatch`).
+  - Bodyweight movements count only a worn vest for PRs and tonnage.
+  - `log_recipe` scales meals by the share eaten.
+  - `save_recipe` warns when the macros and calories disagree.
+  - `recent_workouts` by id returns HR, speed and grade streams and splits.
+- **Phase D:**
+  - `settings.targets` holds rest and training targets plus the rule that picks between them.
+  - `update_settings` writes them, along with his standing rules, goals, HR zones, units and language.
+  - `day_ledger` (and `today_summary`) gives target, intake, workout kcal, steps (`daily_activity` first, snapshot fallback), net, an energy estimate with its parts shown, the deficit, and a weekly predicted-vs-actual weight check with outlier weigh-ins left out.
+  - His standing rules ride the connector briefing.
+- **Phase A:**
+  - `patch_record` corrects workouts, food, measurements and recipes, with a reason and a dry run. The rope protocol is fixable, and a routine link reuses `metricsData.sequenceId`.
+  - New `record_changes` table, plus `undo_change`. The v1 edit tools record there too.
+  - Corrected workout fields are stamped `metricsData.correctedFields`, and the watch re-send in `app/api/mobile/workouts/sync` leaves them alone.
+- **Phase C:**
+  - Every logged name reports what it matched (`mapped`). Unknown names are minted with `needsProfile`, and `rawName` is kept.
+  - `upsert_exercise` sets aliases, `load` and a **profile** (how it's done, pattern, muscles, equipment, variantOf, cues, source link).
+  - Built-in movements take overlays.
+  - `merge_exercises` (workouts and routine steps) and `renormalize_history` (dry run by default).
+  - Routines carry `description` and `sourceUrl`.
+  - The briefing lists movements not yet explained.
+- **Phase B:**
+  - `field_definitions` and `extra` JSON on food, measurements and workouts.
+  - `define_field` and `retire_field`.
+  - The log tools take `extra`, and `patch_record` takes `"extra.<key>"`.
+  - `tools/list` writes the live definitions into each tool.
+  - Starter fields are seeded (abdomen, left/right limbs, tape method and landmarks, food confidence).
+  - CSV export includes `extra`.
+- **Migrations (all additive):** `20261112100000_record_changes`, `20261112110000_exercise_profiles`, `20261112120000_field_definitions`.
+
+**Verified:**
+- 1,811 tests (+105), tsc, eslint on all 34 changed files, and the production build steps run by hand on Windows (`npm run build`'s `rm -rf` needs a POSIX shell).
+- Migrations applied in order to a local Postgres (`prisma dev`); `migrate diff` against the schema is empty.
+- **Self-smoke, 38/38**, through the real `/api/mcp` on `next start` with a seeded local database and a minted connector token. It included a real watch re-send through `/api/mobile/workouts/sync`: the corrected distance, steps and type survived and the HR updated; then undo restored the watch's values.
+- **Self-smoke caught and fixed two things:**
+  - `clip()` flattened the HR series and a ledger day's workouts (results are now flatter, with a regression test).
+  - The app's own targets sheet would have been silently overridden (now `reconcileTargetsOnSave`). Proven in the real sheet: 1900 kcal saved there was read back through the connector as the day's goal.
+- **NOT verified:** anything on production data, the claude.ai connector itself, and the security branch's secret rollout.
+
 **The iPhone app syncs Health activity by itself, and TestFlight builds come from GitHub (2026-10-17, evening). Web AND `ios/**` in one session on his word ("go and do everything you possibly can"); parity checked first: `git log origin/main..origin/claude/watch-app -- ios/` is empty.**
 
 His question: "why do I need the shortcut? shouldn't it be able to auto sync". Yes, it should have, and there were three reasons it didn't:
