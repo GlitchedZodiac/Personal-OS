@@ -132,6 +132,9 @@ vi.mock("@/lib/prisma", () => ({
 
 import { handleMcpMessage, SERVER_INFO } from "@/lib/mcp/server";
 import { MCP_TOOL_DEFS } from "@/lib/mcp/tools";
+import { REGISTRY } from "@/lib/ai/data-registry";
+
+const DATASET_KEYS = new Set(REGISTRY.map((d) => d.key));
 
 const rpc = (method: string, params?: object, id: number | null = 1) => ({
   jsonrpc: "2.0",
@@ -252,7 +255,10 @@ describe("the connector's own briefing", () => {
     const text = await instructions();
     expect(text).toContain("sermon workflow without opening the app.");
     // Pinned to the LAST sentence, so a dropped `+` anywhere above it fails.
-    expect(text.endsWith("says where each value came from.")).toBe(true);
+    // (MCP v2, 2026-11-12: the static text now ends with the day/targets
+    // paragraph; his standing rules, when set, follow it — none in this mock.)
+    expect(text).toContain("says where each value came from.");
+    expect(text.endsWith("standing rules for every Claude session.")).toBe(true);
     // The tell for the ASI bug: the briefing stopped at this exact phrase.
     expect(text).not.toMatch(/spirit_recordings\s*$/);
   });
@@ -280,9 +286,9 @@ describe("the connector's own briefing", () => {
     const text = await instructions();
     const names = new Set(MCP_TOOL_DEFS.map((t) => t.name));
     for (const word of text.match(/[a-z]+_[a-z_]+/g) ?? []) {
-      // Dataset keys (spirit_recordings) share the shape; only judge words
-      // that look like a tool by living in the tool table's namespace.
-      if (word.startsWith("spirit_")) continue;
+      // Dataset keys (spirit_recordings, today_summary, day_ledger) share the
+      // shape; only judge words that are not a registry dataset.
+      if (word.startsWith("spirit_") || DATASET_KEYS.has(word)) continue;
       expect(names.has(word), `instructions name an unknown tool: ${word}`).toBe(true);
     }
   });

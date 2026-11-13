@@ -50,6 +50,7 @@ import { getDateStringInTimeZone } from "@/lib/timezone";
 import { mcpFinanceAllowed } from "@/lib/mcp-settings";
 import { recordMcpAudit, type McpCallContext } from "@/lib/mcp/audit";
 import { macroMismatchWarning } from "@/lib/macro-check";
+import { V2_ANNOTATIONS, V2_TOOLS } from "@/lib/mcp/tools-v2";
 
 type Json = Record<string, unknown>;
 
@@ -138,6 +139,8 @@ export const MCP_SETTINGS_KEYS = [
   "calorieTarget", "proteinPct", "carbsPct", "fatPct", "units", "gender", "birthYear",
   "aiLanguage", "bodyGoals", "healthGoals", "workoutGoals", "timeZone", "hrZoneTops",
   "chatNewChatGapHours", "aiInstructions.health",
+  // MCP v2 (2026-11-12): the targets update_settings writes.
+  "targets",
 ] as const;
 const num = (v: unknown) => {
   const n = Number(v);
@@ -1496,11 +1499,16 @@ const fallbackAnnotations = (name: string): McpToolAnnotations => ({
   openWorldHint: false,
 });
 
-export const MCP_TOOL_DEFS: McpToolDef[] = MCP_TOOLS.map((t) => ({
+// MCP v2 (2026-11-12): the settings, correction, vocabulary and field tools
+// live in lib/mcp/tools-v2.ts and join the same table, hints and trail.
+const ALL_TOOLS: { def: McpToolDef; handler: Handler }[] = [...MCP_TOOLS, ...V2_TOOLS];
+const ALL_ANNOTATIONS: Record<string, McpToolAnnotations> = { ...TOOL_ANNOTATIONS, ...V2_ANNOTATIONS };
+
+export const MCP_TOOL_DEFS: McpToolDef[] = ALL_TOOLS.map((t) => ({
   ...t.def,
-  annotations: TOOL_ANNOTATIONS[t.def.name] ?? fallbackAnnotations(t.def.name),
+  annotations: ALL_ANNOTATIONS[t.def.name] ?? fallbackAnnotations(t.def.name),
 }));
-const HANDLERS = new Map(MCP_TOOLS.map((t) => [t.def.name, t.handler]));
+const HANDLERS = new Map(ALL_TOOLS.map((t) => [t.def.name, t.handler]));
 
 const READ_TOOLS = new Set(
   MCP_TOOL_DEFS.filter((d) => d.annotations?.readOnlyHint === true).map((d) => d.name)

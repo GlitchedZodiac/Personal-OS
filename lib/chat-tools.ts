@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg } from "@/lib/prs";
 import { listTrails } from "@/lib/trails";
 import { workoutDetail } from "@/lib/workout-detail";
+import { loadDayLedger } from "@/lib/day-ledger";
 import {
   addDaysToDateString,
   getDateStringInTimeZone,
@@ -512,7 +513,6 @@ export async function executeGetHealthData(
       ]);
 
       const settings = (settingsRow?.data ?? {}) as SettingsData;
-      const goal = settings.calorieTarget ?? 2000;
       let calories = 0, proteinG = 0, carbsG = 0, fatG = 0;
       for (const f of food) {
         calories += f.calories;
@@ -520,17 +520,34 @@ export async function executeGetHealthData(
         carbsG += f.carbsG;
         fatG += f.fatG;
       }
+      // The day's target and the full ledger (2026-11-12, MCP v2 Phase D):
+      // goals come from settings.targets — rest or training day — and the
+      // ledger adds steps, workout burn, net, deficit and the weekly check.
+      // The goal fields keep their names so every reader still works.
+      const ledger = await loadDayLedger({
+        range: { from: todayStr, to: todayStr },
+        timeZone,
+        todayStr,
+        settings: settings as Record<string, unknown>,
+        includeWeekly: true,
+      });
+      const today = ledger.days[0];
+      const target = today.target;
 
       return {
         date: todayStr,
+        dayType: today.dayType,
         caloriesEaten: Math.round(calories),
-        calorieGoal: goal,
+        calorieGoal: target.kcal,
         proteinG: Math.round(proteinG),
-        proteinGoalG: Math.round((goal * (settings.proteinPct ?? 30)) / 100 / 4),
+        proteinGoalG: target.proteinG,
         carbsG: Math.round(carbsG),
-        carbsGoalG: Math.round((goal * (settings.carbsPct ?? 40)) / 100 / 4),
+        carbsGoalG: target.carbsG,
         fatG: Math.round(fatG),
-        fatGoalG: Math.round((goal * (settings.fatPct ?? 30)) / 100 / 9),
+        fatGoalG: target.fatG,
+        steps: today.activity.steps,
+        ledger: today,
+        weekly: ledger.weekly,
         mealsToday: food.map((f) => `${f.mealType}: ${f.foodDescription}`),
         waterMlToday: water._sum.amountMl ?? 0,
         weekTrainingVolumeKg: workouts.reduce((s, w) => s + sessionVolumeKg(w.exercises), 0),

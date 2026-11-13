@@ -1,6 +1,7 @@
 import { compactMeasurement } from "@/lib/body-measurements";
 import { prisma } from "@/lib/prisma";
 import { executeGetHealthData } from "@/lib/chat-tools";
+import { ledgerRange, loadDayLedger } from "@/lib/day-ledger";
 import { getFinanceReportSummary } from "@/lib/finance/reports";
 import { parseReadingRef, readingSpan } from "@/lib/spirit-refs";
 import { getUtcDayBoundsForTimeZone } from "@/lib/timezone";
@@ -233,6 +234,30 @@ async function runCurated(
     }
     case "app_digest":
       return buildDigest(ctx.hideFinance === true);
+    case "day_ledger": {
+      const row = await prisma.userSettings.findUnique({ where: { id: "default" }, select: { data: true } });
+      const settings = (row?.data ?? {}) as Record<string, unknown>;
+      const range = ledgerRange({ from: args.from, to: args.to, days: args.days }, ctx.todayStr);
+      const ledger = await loadDayLedger({
+        range,
+        timeZone: ctx.timeZone,
+        todayStr: ctx.todayStr,
+        settings,
+        includeWeekly: true,
+      });
+      return {
+        range,
+        targets: {
+          rest: ledger.targets.rest,
+          training: ledger.targets.training,
+          trainingDayRule: ledger.targets.trainingDayRule,
+          tdee: ledger.targets.tdee,
+        },
+        days: ledger.days,
+        weekly: ledger.weekly,
+        note: "tdee = bmr + tef (digestion) + neat (steps outside workouts) + workout kcal. deficit = tdee − eaten. Apple active energy is shown, never used.",
+      };
+    }
     default:
       // The eight original health branches keep their exact behaviour.
       return executeGetHealthData(

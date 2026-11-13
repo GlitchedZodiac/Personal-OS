@@ -66,7 +66,13 @@ export const REGISTRY: readonly DatasetSpec[] = [
   {
     key: "today_summary",
     kind: "curated",
-    summary: "Calories/macros eaten today, goals, week training volume.",
+    summary: "Today: calories/macros eaten vs the day's target, steps, net, deficit, the weekly is-it-working check, week training volume.",
+  },
+  {
+    key: "day_ledger",
+    kind: "curated",
+    summary:
+      "Per day: eaten vs the day's target (rest/training), workout kcal, steps, net, energy estimate, deficit — plus the weekly is-it-working block. days/from/to, max 31.",
   },
   { key: "prs", kind: "curated", summary: "All personal records." },
   {

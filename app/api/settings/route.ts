@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { mirrorLegacyFromTargets } from "@/lib/settings-patch";
 
 // GET /api/settings — fetch stored settings
 export async function GET() {
@@ -25,7 +26,11 @@ export async function GET() {
 // silently turn switches back on or move quiet hours to a stale timezone.
 // (The Claude connector's finance switch is not in this blob at all — it has
 // its own row, lib/mcp-settings.ts.)
-const SERVER_OWNED_KEYS = ["notificationPrefs"] as const;
+// `targets` (2026-11-12, MCP v2): calorie/macro targets are set from the
+// Claude connector (update_settings); the app has no targets editor, so a
+// whole-blob save from an older local copy must not clobber them — and the
+// legacy calorieTarget/*Pct keys are re-derived from them on every save.
+const SERVER_OWNED_KEYS = ["notificationPrefs", "targets"] as const;
 
 // PUT /api/settings — save settings
 export async function PUT(request: NextRequest) {
@@ -36,11 +41,12 @@ export async function PUT(request: NextRequest) {
       select: { data: true },
     });
     const current = (existing?.data ?? {}) as Record<string, unknown>;
-    const body = { ...incoming };
+    let body: Record<string, unknown> = { ...incoming };
     for (const key of SERVER_OWNED_KEYS) {
       if (key in current) body[key] = current[key];
       else delete body[key];
     }
+    body = mirrorLegacyFromTargets(body);
     const row = await prisma.userSettings.upsert({
       where: { id: "default" },
       create: { id: "default", data: body as object },
