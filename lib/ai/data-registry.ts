@@ -66,7 +66,19 @@ export const REGISTRY: readonly DatasetSpec[] = [
   {
     key: "today_summary",
     kind: "curated",
-    summary: "Calories/macros eaten today, goals, week training volume.",
+    summary: "Today: calories/macros eaten vs the day's target, steps, net, deficit, the weekly is-it-working check, week training volume.",
+  },
+  {
+    key: "exercises",
+    kind: "curated",
+    summary:
+      "His movement library: id, name, category, load type, aliases, times logged, and what each movement is (profile) — q or id for full profiles; profileMissing = not explained yet.",
+  },
+  {
+    key: "day_ledger",
+    kind: "curated",
+    summary:
+      "Per day: eaten vs the day's target (rest/training), workout kcal, steps, net, energy estimate, deficit — plus the weekly is-it-working block. days/from/to, max 31.",
   },
   { key: "prs", kind: "curated", summary: "All personal records." },
   {
@@ -78,7 +90,7 @@ export const REGISTRY: readonly DatasetSpec[] = [
     key: "recent_workouts",
     kind: "curated",
     summary:
-      "Recent workouts: ids, exercises, distance/elevation/HR/kcal, pack, GPS analytics (moving, pace, grade-adjusted, climb/descent, altitude), effort, HRR, cadence, provenance.",
+      "Recent workouts: ids, exercises, distance/elevation/HR/kcal, pack, GPS analytics (moving, pace, grade-adjusted, climb/descent, altitude), effort, HRR, cadence, provenance. With id: one workout plus its HR-over-time, speed/grade series and splits.",
   },
   {
     key: "weight_trend",
@@ -133,7 +145,7 @@ export const REGISTRY: readonly DatasetSpec[] = [
     // to the schema cannot go missing here without failing the parity test.
     fields: [
       "id", "measuredAt", "notes", "source", "skinfoldData",
-      "fieldSources", "impedance",
+      "fieldSources", "impedance", "extra",
       ...MEASURED_FIELDS,
     ],
     // The scale's own reference ranges are context for one reading, not a
@@ -142,6 +154,31 @@ export const REGISTRY: readonly DatasetSpec[] = [
     dateField: "measuredAt",
     orderBy: { measuredAt: "desc" },
     search: ["notes"],
+  },
+  {
+    // MCP v2 Phase A (2026-11-12): every correction made through the
+    // connector, field by field, with the batch id undo_change takes.
+    key: "record_changes",
+    kind: "table",
+    summary: "Corrections made through Claude: field, before → after, reason, batchId for undo_change.",
+    model: "recordChange",
+    fields: ["id", "batchId", "entity", "recordId", "field", "before", "after", "reason", "via", "undoneAt", "createdAt"],
+    dateField: "createdAt",
+    orderBy: { createdAt: "desc" },
+    search: ["entity", "recordId", "field", "reason", "batchId"],
+    defaultLimit: 40,
+  },
+  {
+    // MCP v2 Phase B (2026-11-12): fields Claude defined, with their meaning.
+    key: "field_definitions",
+    kind: "table",
+    summary: "Custom fields Claude defined (abdomenCm, food confidence…): entity, key, type, unit, range, meaning, status.",
+    model: "fieldDefinition",
+    fields: ["id", "entity", "key", "label", "type", "unit", "min", "max", "options", "description", "status", "createdAt"],
+    dateField: "createdAt",
+    orderBy: { entity: "asc" },
+    search: ["entity", "key", "label", "description"],
+    defaultLimit: 100,
   },
   {
     key: "daily_health",

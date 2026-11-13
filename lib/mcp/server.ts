@@ -8,7 +8,8 @@
 // App Router. If the server ever needs sampling/resources/subscriptions,
 // swap in the SDK then.
 
-import { callMcpTool, MCP_TOOL_DEFS } from "@/lib/mcp/tools";
+import { callMcpTool, listMcpToolDefs } from "@/lib/mcp/tools";
+import { connectorBriefing } from "@/lib/mcp/briefing";
 import type { McpCallContext } from "@/lib/mcp/audit";
 
 /// Protocol revisions this server knows. We echo the client's requested
@@ -64,7 +65,24 @@ const INSTRUCTIONS =
   "(segmental muscle and fat per arm, trunk and leg; impedance) — pass the " +
   "report's time as measuredAt so it joins the weigh-in already stored. " +
   "Everything except weight is a bioimpedance estimate, and fieldSources " +
-  "on a row says where each value came from.";
+  "on a row says where each value came from. " +
+  // MCP v2 (2026-11-12)
+  "His day: query_data today_summary (or day_ledger for any days) gives " +
+  "eaten vs the day's target (rest or training day), workout burn, steps, " +
+  "net, the energy estimate, deficit, and a weekly check of what the " +
+  "deficit predicts vs what the scale did — quote it rather than working " +
+  "net/deficit out by hand. Anything logged wrong — a watch walk's steps or " +
+  "distance, a session's type or title, a jump-rope protocol — is fixed with " +
+  "patch_record (a reason, the old value kept, undo_change reverses it). " +
+  "His movement library grows by conversation: log_workout says what each " +
+  "name matched (mapped) and creates unknown ones; explain every new " +
+  "movement with upsert_exercise { profile } — what it is, pattern, muscles, " +
+  "what it's a variant of, its source — and mark bodyweight moves load " +
+  "bodyweight so handle bells never count. Something new to record (a body " +
+  "measurement, how a food number was obtained) becomes a field with " +
+  "define_field, and its value rides `extra` on the log tools. " +
+  "update_settings changes his " +
+  "targets and his standing rules for every Claude session.";
 
 export async function handleMcpMessage(raw: unknown, ctx?: McpCallContext): Promise<McpHttpResponse> {
   // The 2025-06-18 revision dropped JSON-RPC batching — reject arrays.
@@ -96,7 +114,7 @@ export async function handleMcpMessage(raw: unknown, ctx?: McpCallContext): Prom
         protocolVersion,
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER_INFO,
-        instructions: INSTRUCTIONS,
+        instructions: INSTRUCTIONS + (await connectorBriefing()),
       });
     }
 
@@ -104,7 +122,7 @@ export async function handleMcpMessage(raw: unknown, ctx?: McpCallContext): Prom
       return rpcResult(id, {});
 
     case "tools/list":
-      return rpcResult(id, { tools: MCP_TOOL_DEFS });
+      return rpcResult(id, { tools: await listMcpToolDefs() });
 
     case "tools/call": {
       const params = (msg.params ?? {}) as {

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { normalizeExerciseName } from "@/lib/exercises";
+import { isBodyweightLoad, normalizeExerciseName, type ExerciseDef } from "@/lib/exercises";
 import { ensureUserExercisesLoaded } from "@/lib/user-exercises";
 import { JUMP_ROPE_TYPE, jumpRopePRCandidates } from "@/lib/jump-rope";
 import { implementsOf } from "@/lib/set-log";
@@ -22,6 +22,28 @@ export interface RawExercise {
   reps?: number | string;
   weightKg?: number | string;
   weight?: number | string; // legacy rows pre-catalog
+  /** A worn vest (lib/mcp vestOf, the wrist's set log): { type: "vest", kg }. */
+  load?: { type?: string; kg?: number; assumed?: boolean };
+}
+
+/**
+ * What counts as the load on one movement row (2026-11-12, gap #4).
+ * On a bodyweight movement the body is the load: a pair of bells used as
+ * push-up handles is equipment, not weight — "Atomic Push-Up" with 2×24 kg
+ * bells set a 24 kg weight PR and a 480 kg-reps volume PR. Only a worn vest
+ * adds load there. Everything else counts its implement as before.
+ * Returns the kg and how many implements multiply it for tonnage.
+ */
+export function countedLoad(
+  raw: RawExercise,
+  def: ExerciseDef | null
+): { kg: number; implementsCount: number } | null {
+  if (def && isBodyweightLoad(def)) {
+    const vest = raw.load && raw.load.type === "vest" ? toNum(raw.load.kg) : null;
+    return vest != null ? { kg: vest, implementsCount: 1 } : null;
+  }
+  const kg = toNum(raw.weightKg) ?? toNum(raw.weight);
+  return kg != null ? { kg, implementsCount: implementsOf(raw) } : null;
 }
 
 export type PRKind = "weight" | "volume" | "rounds" | "duration" | "jumps" | "jumps_round";
@@ -58,15 +80,16 @@ export function extractPRCandidates(exercises: unknown): PRCandidate[] {
     const def = normalizeExerciseName(raw.name);
     if (!def) continue;
 
-    const weight = toNum(raw.weightKg);
-    if (weight == null) continue;
+    const load = countedLoad(raw, def);
+    if (load == null) continue;
+    const weight = load.kg;
 
     const sets = toNum(raw.sets);
     const reps = toNum(raw.reps);
     // Tonnage counts both bells of a pair; the weight record below does not
     // — two 16s are not a 32 (the false "32 kg snatch" record of 2026-10-08).
     const volume =
-      sets != null && reps != null ? sets * reps * weight * implementsOf(raw) : null;
+      sets != null && reps != null ? sets * reps * weight * load.implementsCount : null;
 
     const entry = best.get(def.id) ?? { name: def.name, weight: 0, volume: 0 };
     entry.weight = Math.max(entry.weight, weight);
@@ -105,10 +128,11 @@ export function sessionVolumeKg(exercises: unknown): number {
   let total = 0;
   for (const raw of exercises as RawExercise[]) {
     if (!raw || typeof raw !== "object") continue;
-    const weight = toNum(raw.weightKg) ?? toNum(raw.weight);
+    const def = typeof raw.name === "string" ? normalizeExerciseName(raw.name) : null;
+    const load = countedLoad(raw, def);
     const reps = toNum(raw.reps);
-    if (weight == null || reps == null) continue;
-    total += (toNum(raw.sets) ?? 1) * reps * weight * implementsOf(raw);
+    if (load == null || reps == null) continue;
+    total += (toNum(raw.sets) ?? 1) * reps * load.kg * load.implementsCount;
   }
   return Math.round(total);
 }

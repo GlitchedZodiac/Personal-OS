@@ -52,6 +52,14 @@ function hasSetLog(metricsData: unknown): boolean {
   );
 }
 
+/** A copy of `obj` without `keys` (a re-send leaves corrected columns alone). */
+function omitKeys<T extends Record<string, unknown>>(obj: T, keys: readonly string[]): T {
+  if (keys.length === 0) return obj;
+  const out = { ...obj };
+  for (const k of keys) delete out[k];
+  return out;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await requireMobileSession(request);
@@ -254,10 +262,13 @@ export async function POST(request: NextRequest) {
         const finalMetrics = merged
           ? ((merged.metricsData as Prisma.InputJsonValue | null) ?? Prisma.JsonNull)
           : data.metricsData;
+        // Columns he corrected through the connector are not the wrist's to
+        // overwrite any more (2026-11-12, lib/workout-resync correctedFields).
+        const resendData = merged ? omitKeys(data, merged.protectedColumns) : data;
         const entry = await prisma.workoutLog.update({
           where,
           data: merged
-            ? { ...data, description: merged.description, exercises: finalExercises, metricsData: finalMetrics }
+            ? { ...resendData, description: merged.description, exercises: finalExercises, metricsData: finalMetrics }
             : data,
         });
         return { id: entry.id, created: false, exercises: finalExercises, metricsData: finalMetrics };

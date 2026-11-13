@@ -24,7 +24,6 @@ import { REGISTRY } from "@/lib/ai/data-registry";
 import { routeDataAllowed } from "@/lib/activities";
 import { matchUsual } from "@/lib/food-match";
 import { findRecentDuplicate } from "@/lib/workout-dedupe";
-import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded, mintUnknownExercises } from "@/lib/user-exercises";
 import { validateSequence } from "@/lib/sequences";
 import { detectAndRecordPRs, rebuildPersonalRecords } from "@/lib/prs";
@@ -49,6 +48,16 @@ import { getUserTimeZone } from "@/lib/server-timezone";
 import { getDateStringInTimeZone } from "@/lib/timezone";
 import { mcpFinanceAllowed } from "@/lib/mcp-settings";
 import { recordMcpAudit, type McpCallContext } from "@/lib/mcp/audit";
+import { macroMismatchWarning } from "@/lib/macro-check";
+import { extraDescription, mergeExtra, validateExtra } from "@/lib/field-definitions";
+
+/** The `extra` property's description when the live list can't be read. */
+const EXTRA_STATIC_DESCRIPTION =
+  "Custom fields Claude defined with define_field ({ key: value }); query_data field_definitions lists them with meaning and unit. Send only what was measured.";
+import { V2_ANNOTATIONS, V2_TOOLS } from "@/lib/mcp/tools-v2";
+import { recordChanges } from "@/lib/record-changes";
+import { mapForLog, type MappedEntry } from "@/lib/exercise-library";
+import type { ExerciseDef } from "@/lib/exercises";
 
 type Json = Record<string, unknown>;
 
@@ -137,6 +146,8 @@ export const MCP_SETTINGS_KEYS = [
   "calorieTarget", "proteinPct", "carbsPct", "fatPct", "units", "gender", "birthYear",
   "aiLanguage", "bodyGoals", "healthGoals", "workoutGoals", "timeZone", "hrZoneTops",
   "chatNewChatGapHours", "aiInstructions.health",
+  // MCP v2 (2026-11-12): the targets update_settings writes.
+  "targets",
 ] as const;
 const num = (v: unknown) => {
   const n = Number(v);
@@ -268,7 +279,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     def: {
       name: "save_recipe",
       description:
-        "Create a recipe/usual (or update the one with the same name). Macros for kind 'meal' are as-eaten; for kind 'product' they are per serving (give servingLabel like '1 scoop (32 g)').",
+        "Create a recipe/usual (or update the one with the same name). Macros for kind 'meal' are as-eaten; for kind 'product' they are per serving (give servingLabel like '1 scoop (32 g)'). The result carries `warnings` when protein×4 + carbs×4 + fat×9 is more than 10% off the calories — tell him; it usually means a misread label.",
       inputSchema: {
         type: "object",
         properties: {
@@ -303,7 +314,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       const recipe = existing
         ? await prisma.favoriteFoods.update({ where: { id: existing.id }, data })
         : await prisma.favoriteFoods.create({ data });
-      return { recipe, created: !existing };
+      const warning = macroMismatchWarning(data);
+      return { recipe, created: !existing, ...(warning ? { warnings: [warning] } : {}) };
     },
   },
   {
@@ -336,20 +348,24 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
         where: { id: target.id },
         data: { foodDescription: newName },
       });
-      return { recipe, renamedFrom: target.foodDescription };
+      const batchId = await recordEditSafe("recipe", target.id, target, recipe, ["foodDescription"], "rename_recipe");
+      return { recipe, renamedFrom: target.foodDescription, ...(batchId ? { batchId } : {}) };
     },
   },
   {
     def: {
       name: "log_recipe",
       description:
-        "Log a saved recipe/usual as eaten — its exact stored macros, zero estimation. Find it by id, exact name, or fuzzy match. Products scale by servings.",
+        "Log a saved recipe/usual as eaten — its exact stored macros, zero estimation. Find it by id, exact name, or fuzzy match. servings scales any recipe: for a product it counts servings (2 = two scoops), for a meal it is the share of the saved meal he ate (0.5 = half, 0.75 = three quarters).",
       inputSchema: {
         type: "object",
         properties: {
           id: { type: "string" },
           name: { type: "string", description: "Recipe name — fuzzy matched" },
-          servings: { type: "number", description: "Products only; default 1" },
+          servings: {
+            type: "number",
+            description: "Default 1. Product: number of servings. Meal: share eaten (0.5 = half). 0.05–20.",
+          },
           mealType: { type: "string", enum: ["breakfast", "lunch", "dinner", "snack"] },
           loggedAt: { type: "string", description: "ISO datetime; default now" },
         },
@@ -358,16 +374,22 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     handler: async (args) => {
       const recipe = await findRecipe(args);
       if (!recipe) return { error: "Recipe not found — list_recipes shows what exists" };
-      const isProduct = recipe.kind === "product";
-      const multiplier = isProduct ? (posNum(args.servings) ?? 1) : 1;
+      // Servings scale meals too (2026-11-12, gap #9): half a saved pint is
+      // 0.5 of it. Before this only products scaled, so every partial pint
+      // had to be saved as a "product" of its own.
+      const servings = posNum(args.servings) ?? 1;
+      if (servings < 0.05 || servings > 20) {
+        return { error: "servings must be between 0.05 and 20" };
+      }
+      const multiplier = servings;
       const round = (n: number) => Math.round((n || 0) * multiplier * 10) / 10;
       const entry = await prisma.foodLog.create({
         data: {
           loggedAt: isoDate(args.loggedAt) ?? undefined,
           mealType: str(args.mealType) || recipe.mealType || "snack",
           foodDescription:
-            isProduct && multiplier !== 1
-              ? `${recipe.foodDescription} (${multiplier}×)`
+            multiplier !== 1
+              ? `${recipe.foodDescription} (${Math.round(multiplier * 100) / 100}×)`
               : recipe.foodDescription,
           calories: round(recipe.calories),
           proteinG: round(recipe.proteinG),
@@ -424,6 +446,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
                 fatG: { type: "number" },
                 notes: { type: "string" },
                 loggedAt: { type: "string", description: "ISO datetime; default now" },
+                extra: { type: "object", description: EXTRA_STATIC_DESCRIPTION },
               },
               required: ["mealType", "foodDescription", "calories", "proteinG", "carbsG", "fatG"],
             },
@@ -438,12 +461,16 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
         return { error: "1–20 items per call" };
       }
       // Check every item before writing any, so a refusal never leaves half a meal.
+      const extras: (Json | null)[] = [];
       for (const [i, it] of items.entries()) {
         const tooLong = overLimit(`items[${i}].foodDescription`, it.foodDescription, 500) ?? overLimit(`items[${i}].notes`, it.notes, 2_000);
         if (tooLong) return tooLong;
+        const extra = await validateExtra("food", it.extra);
+        if ("error" in extra) return { error: `items[${i}]: ${extra.error}` };
+        extras.push(mergeExtra(null, extra.extra));
       }
       const created = [];
-      for (const it of items) {
+      for (const [i, it] of items.entries()) {
         const desc = str(it.foodDescription);
         if (!desc) continue;
         created.push(
@@ -458,6 +485,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
               fatG: num(it.fatG) ?? 0,
               notes: str(it.notes) || null,
               source: "mcp",
+              ...(extras[i] ? { extra: extras[i] as Prisma.InputJsonValue } : {}),
             },
           })
         );
@@ -501,8 +529,11 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
         data.loggedAt = d;
       }
       if (Object.keys(data).length === 0) return { error: "Nothing to change" };
+      const before = await prisma.foodLog.findUnique({ where: { id } }).catch(() => null);
       try {
-        return { entry: await prisma.foodLog.update({ where: { id }, data }) };
+        const entry = await prisma.foodLog.update({ where: { id }, data });
+        const batchId = await recordEditSafe("food", id, before, entry, Object.keys(data), "edit_food");
+        return { entry, ...(batchId ? { batchId } : {}) };
       } catch {
         return { error: "Food log row not found" };
       }
@@ -543,6 +574,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           maxHeartRateBpm: { type: "number" },
           elevationGainM: { type: "number" },
           packKg: { type: "number", description: "Carried load for hikes (0–60)" },
+          extra: { type: "object", description: EXTRA_STATIC_DESCRIPTION },
           exercises: {
             type: "array",
             items: {
@@ -569,21 +601,32 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     },
     handler: async (args) => {
       const workoutType = str(args.workoutType) || "other";
+      const extraChecked = await validateExtra("workout", args.extra);
+      if ("error" in extraChecked) return extraChecked;
+      const workoutExtra = mergeExtra(null, extraChecked.extra);
       const packKg = num(args.packKg);
       if (packKg != null && (packKg < 0 || packKg > 60)) {
         return { error: "packKg must be 0–60" };
       }
       await ensureUserExercisesLoaded();
-      const exercises = Array.isArray(args.exercises)
+      // MCP v2 Phase C: every name says what it was matched to, unknown
+      // names become new movements (flagged needsProfile), and the name as
+      // logged is kept beside the canonical one.
+      const mapped: MappedEntry[] = [];
+      const resolved = Array.isArray(args.exercises)
+        ? await resolveLogged(args.exercises as Json[], mapped)
+        : null;
+      const exercises = resolved
         ? (args.exercises as Json[])
-            .map((e) => {
+            .map((e, i) => {
               const raw = str(e.name);
               if (!raw) return null;
-              const def = normalizeExerciseName(raw);
+              const def = resolved[i];
               const weight = num(e.weightKg);
               return {
                 name: def?.name ?? raw,
                 ...(def ? { exercise: def.id } : {}),
+                ...(def && def.name !== raw ? { rawName: raw } : {}),
                 ...(posNum(e.sets) != null ? { sets: posNum(e.sets) } : {}),
                 ...(posNum(e.reps) != null ? { reps: posNum(e.reps) } : {}),
                 ...(posNum(e.seconds) != null ? { seconds: posNum(e.seconds) } : {}),
@@ -655,6 +698,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           ...(ropeMetrics ? { metricsData: ropeMetrics as Prisma.InputJsonValue } : {}),
           source: "mcp",
           externalSource: "mcp",
+          ...(workoutExtra ? { extra: workoutExtra as Prisma.InputJsonValue } : {}),
         },
       });
       let newPRs: Awaited<ReturnType<typeof detectAndRecordPRs>> = [];
@@ -669,7 +713,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       } catch {
         // PR detection must never break logging (same policy as the route).
       }
-      return { workout: entry, newPRs };
+      return { workout: entry, newPRs, ...mappedReceipt(mapped) };
     },
   },
   {
@@ -751,16 +795,19 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       await ensureUserExercisesLoaded();
       let nextExercises: object[] | null = null;
       let changed: string[] = [];
+      const mapped: MappedEntry[] = [];
       if (Array.isArray(args.exercises) && args.exercises.length > 0) {
+        const resolved = await resolveLogged(args.exercises as Json[], mapped);
         const attached = (args.exercises as Json[])
-          .map((e) => {
+          .map((e, i) => {
             const raw = str(e.name);
             if (!raw) return null;
-            const def = normalizeExerciseName(raw);
+            const def = resolved[i];
             const weight = num(e.weightKg);
             return {
               name: def?.name ?? raw,
               ...(def ? { exercise: def.id } : {}),
+              ...(def && def.name !== raw ? { rawName: raw } : {}),
               ...(posNum(e.sets) != null ? { sets: posNum(e.sets) } : {}),
               ...(posNum(e.reps) != null ? { reps: posNum(e.reps) } : {}),
               ...(posNum(e.seconds) != null ? { seconds: posNum(e.seconds) } : {}),
@@ -813,9 +860,19 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           // Rebuild failure shouldn't lose the edit.
         }
       }
+      const batchId = await recordEditSafe(
+        "workout",
+        id,
+        workout,
+        updated,
+        [...(nextExercises != null ? ["exercises"] : []), ...(packPatch ? ["packKg"] : [])],
+        "edit_workout"
+      );
       return {
         workout: updated,
         changed: [...changed, ...(packPatch ? ["packKg"] : [])],
+        ...(batchId ? { batchId } : {}),
+        ...mappedReceipt(mapped),
       };
     },
   },
@@ -877,17 +934,21 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
               "Ohms per segment at each frequency: { z20: { rightArm, leftArm, trunk, rightLeg, leftLeg }, z100: { … } }",
           },
           notes: { type: "string" },
+          extra: { type: "object", description: EXTRA_STATIC_DESCRIPTION },
         },
       },
     },
     handler: async (args) => {
+      const extraChecked = await validateExtra("measurement", args.extra);
+      if ("error" in extraChecked) return extraChecked;
+      const extra = mergeExtra(null, extraChecked.extra);
       const fields: Record<string, number> = {};
       for (const f of MEASURED_FIELDS) {
         const v = posNum(args[f]);
         if (v != null) fields[f] = INT_FIELDS.has(f) ? Math.round(v) : v;
       }
-      if (Object.keys(fields).length === 0) {
-        return { error: "Provide at least one measurement (positive number)" };
+      if (Object.keys(fields).length === 0 && !extra) {
+        return { error: "Provide at least one measurement (a positive number, or a custom field in extra)" };
       }
       const impedance = cleanImpedance(args.impedance);
       const measuredAt = isoDate(args.measuredAt) ?? new Date();
@@ -921,12 +982,20 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
             if (stored[f] == null) patch[f] = v;
             else if (stored[f] !== v) notOverwritten[f] = { stored: stored[f] as number, given: v };
           }
+          // Custom fields fill blanks only, like every other value here.
+          const storedExtra = (twin.extra ?? {}) as Json;
+          const extraFill = extra
+            ? Object.fromEntries(Object.entries(extra).filter(([k]) => storedExtra[k] == null))
+            : {};
           const measurement = await prisma.bodyMeasurement.update({
             where: { id: twin.id },
             data: {
               ...patch,
               ...(impedance && twin.impedance == null ? { impedance } : {}),
               ...(notes && !twin.notes ? { notes } : {}),
+              ...(Object.keys(extraFill).length
+                ? { extra: mergeExtra(storedExtra, extraFill) as Prisma.InputJsonValue }
+                : {}),
               fieldSources: stampSources(patch, "mcp", fieldSourcesOf(twin)),
             },
           });
@@ -946,6 +1015,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
             source: "mcp",
             ...fields,
             ...(impedance ? { impedance } : {}),
+            ...(extra ? { extra: extra as Prisma.InputJsonValue } : {}),
             fieldSources: stampSources(fields, "mcp"),
           },
         }),
@@ -1045,6 +1115,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           durationMinutes: { type: "number" },
           rounds: { type: "number" },
           restSecondsDefault: { type: "number" },
+          description: { type: "string", description: "What this routine is, e.g. the follow-along video it comes from (≤ 600 chars)" },
+          sourceUrl: { type: "string", description: "https link to the video or page" },
           steps: {
             type: "array",
             items: {
@@ -1071,6 +1143,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       const { minted } = await mintUnknownExercises(args.steps as never);
       const parsed = validateSequence(args as never);
       if (!parsed.ok) return { error: parsed.error };
+      const routineMeta = routineMetaOf(args);
+      if ("error" in routineMeta) return routineMeta;
       const routine = await prisma.sequence.create({
         data: {
           name: parsed.name,
@@ -1079,9 +1153,16 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           durationMinutes: parsed.durationMinutes,
           rounds: parsed.rounds,
           steps: parsed.steps as object[],
+          ...routineMeta,
         },
       });
-      return { routine, mintedExercises: minted };
+      return {
+        routine,
+        mintedExercises: minted,
+        ...(minted.length
+          ? { needsProfile: minted, next: "Explain each new movement with upsert_exercise { id, profile } in this same turn." }
+          : {}),
+      };
     },
   },
   {
@@ -1098,6 +1179,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           durationMinutes: { type: "number" },
           rounds: { type: "number" },
           restSecondsDefault: { type: "number" },
+          description: { type: "string", description: "What this routine is, e.g. the follow-along video it comes from (≤ 600 chars)" },
+          sourceUrl: { type: "string", description: "https link to the video or page" },
           steps: {
             type: "array",
             items: {
@@ -1128,6 +1211,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       const { minted } = await mintUnknownExercises(args.steps as never);
       const parsed = validateSequence(args as never);
       if (!parsed.ok) return { error: parsed.error };
+      const routineMeta = routineMetaOf(args);
+      if ("error" in routineMeta) return routineMeta;
       const routine = await prisma.sequence.update({
         where: { id },
         data: {
@@ -1137,9 +1222,16 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           durationMinutes: parsed.durationMinutes,
           rounds: parsed.rounds,
           steps: parsed.steps as object[],
+          ...routineMeta,
         },
       });
-      return { routine, mintedExercises: minted };
+      return {
+        routine,
+        mintedExercises: minted,
+        ...(minted.length
+          ? { needsProfile: minted, next: "Explain each new movement with upsert_exercise { id, profile } in this same turn." }
+          : {}),
+      };
     },
   },
   {
@@ -1396,6 +1488,81 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
   },
 ];
 
+/** A routine's description and source link (MCP v2 Phase C), checked. */
+function routineMetaOf(args: Json): { description?: string | null; sourceUrl?: string | null } | { error: string } {
+  const out: { description?: string | null; sourceUrl?: string | null } = {};
+  if (args.description !== undefined) {
+    const d = typeof args.description === "string" ? args.description.trim() : "";
+    if (d.length > 600) return { error: "description is longer than 600 characters" };
+    out.description = d || null;
+  }
+  if (args.sourceUrl !== undefined) {
+    const u = typeof args.sourceUrl === "string" ? args.sourceUrl.trim() : "";
+    if (u && (!/^https:\/\/\S+$/.test(u) || u.length > 500)) return { error: "sourceUrl must be an https link" };
+    out.sourceUrl = u || null;
+  }
+  return out;
+}
+
+/** Resolve every logged name in order (MCP v2 Phase C), collecting the receipt. */
+async function resolveLogged(rows: Json[], mapped: MappedEntry[]): Promise<(ExerciseDef | null)[]> {
+  const out: (ExerciseDef | null)[] = [];
+  for (const e of rows) {
+    const raw = str(e?.name);
+    if (!raw) {
+      out.push(null);
+      continue;
+    }
+    const { def, mapped: m } = await mapForLog(raw);
+    mapped.push(m);
+    out.push(def);
+  }
+  return out;
+}
+
+/** The receipt's movement block, with the instruction that goes with it. */
+function mappedReceipt(mapped: MappedEntry[]) {
+  if (mapped.length === 0) return {};
+  const needs = mapped.filter((m) => m.needsProfile).map((m) => m.to?.name ?? m.input);
+  return {
+    mapped,
+    ...(needs.length
+      ? {
+          needsProfile: needs,
+          next: "Check mapped: if a name went to the wrong movement, fix it now (upsert_exercise / merge_exercises). For each movement in needsProfile, explain what it is with upsert_exercise { id, profile } in this same turn (your knowledge, a web search, or the video he named; ask him if unsure).",
+        }
+      : { next: "Check mapped: if a name went to the wrong movement, fix it now with upsert_exercise or merge_exercises." }),
+  };
+}
+
+/**
+ * The v1 edit tools write their changes to record_changes too (MCP v2,
+ * 2026-11-12), so "undo that" works for every edit, not only patch_record.
+ * Best-effort: history must never break the edit itself.
+ */
+async function recordEditSafe(
+  entity: "food" | "recipe" | "workout",
+  id: string,
+  before: unknown,
+  after: unknown,
+  fields: string[],
+  tool: string
+): Promise<string | null> {
+  try {
+    const b = (before ?? {}) as Json;
+    const a = (after ?? {}) as Json;
+    const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v ?? null);
+    return await recordChanges(
+      fields
+        .filter((f) => JSON.stringify(iso(b[f])) !== JSON.stringify(iso(a[f])))
+        .map((f) => ({ entity, recordId: id, field: f, before: iso(b[f]), after: iso(a[f]) })),
+      { reason: `${tool} via the Claude connector`, via: "mcp" }
+    );
+  } catch {
+    return null;
+  }
+}
+
 /// id wins; exact (case-insensitive) name next; fuzzy fold-match last.
 async function findRecipe(args: Json) {
   const id = str(args.id);
@@ -1485,11 +1652,62 @@ const fallbackAnnotations = (name: string): McpToolAnnotations => ({
   openWorldHint: false,
 });
 
-export const MCP_TOOL_DEFS: McpToolDef[] = MCP_TOOLS.map((t) => ({
+// MCP v2 (2026-11-12): the settings, correction, vocabulary and field tools
+// live in lib/mcp/tools-v2.ts and join the same table, hints and trail.
+const ALL_TOOLS: { def: McpToolDef; handler: Handler }[] = [...MCP_TOOLS, ...V2_TOOLS];
+const ALL_ANNOTATIONS: Record<string, McpToolAnnotations> = { ...TOOL_ANNOTATIONS, ...V2_ANNOTATIONS };
+
+export const MCP_TOOL_DEFS: McpToolDef[] = ALL_TOOLS.map((t) => ({
   ...t.def,
-  annotations: TOOL_ANNOTATIONS[t.def.name] ?? fallbackAnnotations(t.def.name),
+  annotations: ALL_ANNOTATIONS[t.def.name] ?? fallbackAnnotations(t.def.name),
 }));
-const HANDLERS = new Map(MCP_TOOLS.map((t) => [t.def.name, t.handler]));
+const HANDLERS = new Map(ALL_TOOLS.map((t) => [t.def.name, t.handler]));
+
+// ── The tool list describes his custom fields (MCP v2 Phase B) ────────────
+// tools/list is read when Claude connects, so the `extra` property of each
+// write tool lists the fields that exist right now, with meaning and unit.
+// A failure (or no fields table) falls back to the static list.
+let toolListCache: { at: number; defs: McpToolDef[] } | null = null;
+const TOOL_LIST_TTL_MS = 60_000;
+
+export async function listMcpToolDefs(): Promise<McpToolDef[]> {
+  if (toolListCache && Date.now() - toolListCache.at < TOOL_LIST_TTL_MS) return toolListCache.defs;
+  try {
+    const [food, measurement, workout] = await Promise.all([
+      extraDescription("food"),
+      extraDescription("measurement"),
+      extraDescription("workout"),
+    ]);
+    const withExtra = (schema: Json, text: string): Json => {
+      const props = (schema.properties ?? {}) as Json;
+      return { ...schema, properties: { ...props, extra: { type: "object", description: text } } };
+    };
+    const defs = MCP_TOOL_DEFS.map((d) => {
+      const schema = d.inputSchema as Json;
+      if (d.name === "log_measurement") return { ...d, inputSchema: withExtra(schema, measurement) };
+      if (d.name === "log_workout") return { ...d, inputSchema: withExtra(schema, workout) };
+      if (d.name === "log_food") {
+        const items = ((schema.properties as Json).items ?? {}) as Json;
+        const item = (items.items ?? {}) as Json;
+        return {
+          ...d,
+          inputSchema: {
+            ...schema,
+            properties: { ...(schema.properties as Json), items: { ...items, items: withExtra(item, food) } },
+          },
+        };
+      }
+      if (d.name === "patch_record") {
+        return { ...d, description: `${d.description} Custom fields — food: ${food} | measurement: ${measurement} | workout: ${workout}` };
+      }
+      return d;
+    });
+    toolListCache = { at: Date.now(), defs };
+    return defs;
+  } catch {
+    return MCP_TOOL_DEFS;
+  }
+}
 
 const READ_TOOLS = new Set(
   MCP_TOOL_DEFS.filter((d) => d.annotations?.readOnlyHint === true).map((d) => d.name)
