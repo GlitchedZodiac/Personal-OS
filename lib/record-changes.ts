@@ -95,12 +95,26 @@ export interface UndoResult {
   dryRun: boolean;
 }
 
+/**
+ * Every module that owns an entity registers its handler when it loads. Undo
+ * can run in a process where some of them never loaded (a test, a cold
+ * lambda that only served undo_change), so load them all first.
+ */
+async function loadHandlers() {
+  await Promise.all([
+    import("@/lib/patch-record"),
+    import("@/lib/exercise-library"),
+    import("@/lib/settings-patch"),
+  ]);
+}
+
 export async function undoChanges(input: {
   batchId?: string;
   changeId?: string;
   dryRun?: boolean;
 }): Promise<UndoResult | { error: string }> {
   if (!input.batchId && !input.changeId) return { error: "Give a batchId (one whole tool call) or a changeId (one field)" };
+  await loadHandlers();
   const rows = await prisma.recordChange.findMany({
     where: input.changeId ? { id: input.changeId } : { batchId: input.batchId },
     orderBy: { createdAt: "asc" },

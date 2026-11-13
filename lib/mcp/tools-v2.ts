@@ -10,8 +10,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { applySettingsPatch, WRITABLE_SETTINGS_KEYS } from "@/lib/settings-patch";
-import { recordChanges, registerUndoHandler, undoChanges, type ChangeInput } from "@/lib/record-changes";
+import { recordChanges, undoChanges, type ChangeInput } from "@/lib/record-changes";
 import { PATCH_ENTITIES, patchRecord, writableSummary } from "@/lib/patch-record";
+import { mergeExercises, renormalizeHistory, upsertExercise } from "@/lib/exercise-library";
+import { EQUIPMENT, MUSCLES, PATTERNS } from "@/lib/exercise-profile";
 
 type Json = Record<string, unknown>;
 
@@ -162,42 +164,6 @@ async function recordChangesSafe(changes: ChangeInput[], reason: string): Promis
   }
 }
 
-// Settings changes undo key by key ("aiInstructions.health" reaches one level in).
-registerUndoHandler("settings", {
-  async read(_recordId, fields) {
-    const row = await prisma.userSettings.findUnique({ where: { id: "default" }, select: { data: true } });
-    if (!row) return null;
-    const data = (row.data ?? {}) as Json;
-    return Object.fromEntries(fields.map((f) => [f, readDotted(data, f)]));
-  },
-  async write(_recordId, values) {
-    const row = await prisma.userSettings.findUnique({ where: { id: "default" }, select: { data: true } });
-    const data: Json = { ...((row?.data ?? {}) as Json) };
-    for (const [field, value] of Object.entries(values)) {
-      const [head, sub] = field.split(".");
-      if (sub) {
-        const inner = { ...((data[head] as Json) ?? {}) };
-        if (value == null) delete inner[sub];
-        else inner[sub] = value;
-        data[head] = inner;
-      } else if (value == null) delete data[head];
-      else data[head] = value;
-    }
-    await prisma.userSettings.upsert({
-      where: { id: "default" },
-      create: { id: "default", data: data as Prisma.InputJsonValue },
-      update: { data: data as Prisma.InputJsonValue },
-    });
-  },
-});
-
-function readDotted(data: Json, field: string): unknown {
-  const [head, sub] = field.split(".");
-  const v = data[head];
-  if (!sub) return v ?? null;
-  return v && typeof v === "object" ? ((v as Json)[sub] ?? null) : null;
-}
-
 // ── Phase A: one correction door, and undo ─────────────────────────────────
 
 const patchTool: V2Tool = {
@@ -269,13 +235,124 @@ const undoTool: V2Tool = {
     }),
 };
 
-export const V2_TOOLS: V2Tool[] = [updateSettings, patchTool, undoTool];
+// ── Phase C: the exercise library ──────────────────────────────────────────
+
+const profileSchema = {
+  type: "object",
+  description:
+    "What the movement IS, so the library has context and not just a name. Write it from what you know; search the web or use the video he named when unsure; ask him if you can't identify it. Fields: description (how it's done, 10–600 chars), pattern (" +
+    PATTERNS.join(" | ") +
+    "), primaryMuscles / secondaryMuscles (" +
+    MUSCLES.join(", ") +
+    "), equipment (" +
+    EQUIPMENT.join(", ") +
+    "), unilateral (true/false), variantOf (an exercise id — a thrust jerk is a variant of the jerk; groups them without merging history), cues (≤ 5 short coaching cues), sourceUrl (https), sourceNote.",
+  properties: {
+    description: { type: "string" },
+    pattern: { type: "string", enum: [...PATTERNS] },
+    primaryMuscles: { type: "array", items: { type: "string", enum: [...MUSCLES] } },
+    secondaryMuscles: { type: "array", items: { type: "string", enum: [...MUSCLES] } },
+    equipment: { type: "array", items: { type: "string", enum: [...EQUIPMENT] } },
+    unilateral: { type: "boolean" },
+    variantOf: { type: "string" },
+    cues: { type: "array", items: { type: "string" } },
+    sourceUrl: { type: "string" },
+    sourceNote: { type: "string" },
+  },
+};
+
+const upsertExerciseTool: V2Tool = {
+  def: {
+    name: "upsert_exercise",
+    description:
+      "Add, explain or correct a movement in his exercise library. Use it (1) whenever a log returns a movement with needsProfile — explain what it is in `profile`, in the same turn; (2) to mark a move as bodyweight (load: \"bodyweight\" — bells used as push-up handles then never count as weight or set PRs; a vest still does); (3) to add aliases so a spoken name resolves (aliases.add); (4) to rename a custom movement (its old name keeps resolving). Built-in movements keep their name and category but take aliases, load and a profile. Give id for an existing movement (query_data exercises), or name to create one. Recorded and undo-able; PRs rebuild when load or aliases change.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Existing movement id" },
+        name: { type: "string", description: "New movement's name, or a new name for a custom one (with id)" },
+        category: { type: "string", enum: ["kettlebell", "barbell", "dumbbell", "bodyweight", "machine", "cardio", "other"], description: "The equipment it uses (custom movements only)" },
+        load: { type: "string", enum: ["external", "bodyweight"], description: "What counts as load for PRs and tonnage" },
+        aliases: {
+          type: "object",
+          properties: { add: { type: "array", items: { type: "string" } }, remove: { type: "array", items: { type: "string" } } },
+        },
+        profile: profileSchema,
+        reason: { type: "string" },
+      },
+      required: ["reason"],
+    },
+  },
+  handler: async (args) => {
+    const why = reasonOf(args);
+    if ("error" in why) return why;
+    return upsertExercise({ ...args, reason: why.reason });
+  },
+};
+
+const mergeExercisesTool: V2Tool = {
+  def: {
+    name: "merge_exercises",
+    description:
+      "Fold a duplicate movement into another: every logged set and routine step that points at `from` moves to `into`, from's name and aliases become aliases of into, and from is removed. Built-in movements can't be merged away. Run with dryRun: true first and show him what moves. Undo-able as one batch.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from: { type: "string", description: "Custom movement id to fold away" },
+        into: { type: "string", description: "Movement id that remains" },
+        dryRun: { type: "boolean" },
+        reason: { type: "string" },
+      },
+      required: ["from", "into", "reason"],
+    },
+  },
+  handler: async (args) => {
+    const why = reasonOf(args);
+    if ("error" in why) return why;
+    return mergeExercises({ from: args.from, into: args.into, dryRun: args.dryRun === true, reason: why.reason });
+  },
+};
+
+const renormalizeTool: V2Tool = {
+  def: {
+    name: "renormalize_history",
+    description:
+      "Re-match logged movement names against today's library and rules (after adding aliases or movements). Dry run by default: lists every set whose movement would change and names that now match nothing. Movement lists he fixed by hand are left alone. Send dryRun: false to apply (undo-able; PRs rebuild).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from: { type: "string", description: "YYYY-MM-DD" },
+        to: { type: "string", description: "YYYY-MM-DD" },
+        dryRun: { type: "boolean", description: "Default true" },
+        reason: { type: "string" },
+      },
+      required: ["reason"],
+    },
+  },
+  handler: async (args) => {
+    const why = reasonOf(args);
+    if ("error" in why) return why;
+    return renormalizeHistory({ from: args.from, to: args.to, dryRun: args.dryRun !== false, reason: why.reason });
+  },
+};
+
+export const V2_TOOLS: V2Tool[] = [
+  updateSettings,
+  patchTool,
+  undoTool,
+  upsertExerciseTool,
+  mergeExercisesTool,
+  renormalizeTool,
+];
 
 export const V2_ANNOTATIONS: Record<string, V2Annotations> = {
   update_settings: { title: "Change settings and targets", ...OVERWRITES },
   patch_record: { title: "Correct a logged entry", ...OVERWRITES },
   // Restores old values — overwrites what is there now, so it is gated as such.
   undo_change: { title: "Undo a change", ...OVERWRITES },
+  upsert_exercise: { title: "Add or explain a movement", ...OVERWRITES },
+  merge_exercises: { title: "Merge duplicate movements", ...OVERWRITES },
+  renormalize_history: { title: "Re-match logged movement names", ...OVERWRITES },
 };
 
 // Kept for the phases that add rows rather than overwrite them.

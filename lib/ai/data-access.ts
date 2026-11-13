@@ -2,6 +2,7 @@ import { compactMeasurement } from "@/lib/body-measurements";
 import { prisma } from "@/lib/prisma";
 import { executeGetHealthData } from "@/lib/chat-tools";
 import { ledgerRange, loadDayLedger } from "@/lib/day-ledger";
+import { listExercises } from "@/lib/exercise-library";
 import { getFinanceReportSummary } from "@/lib/finance/reports";
 import { parseReadingRef, readingSpan } from "@/lib/spirit-refs";
 import { getUtcDayBoundsForTimeZone } from "@/lib/timezone";
@@ -234,6 +235,8 @@ async function runCurated(
     }
     case "app_digest":
       return buildDigest(ctx.hideFinance === true);
+    case "exercises":
+      return listExercises({ q: args.q, id: args.id, limit: args.limit });
     case "day_ledger": {
       const row = await prisma.userSettings.findUnique({ where: { id: "default" }, select: { data: true } });
       const settings = (row?.data ?? {}) as Record<string, unknown>;

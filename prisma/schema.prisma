@@ -1398,6 +1398,10 @@ model Sequence {
   rounds             Int? // circuit round count ("repeat 3 times"); watch falls back to 3 when null
   steps              Json // ordered [{ exercise, sets?, reps?, seconds?, weightKg?, restSeconds? }]
   progression        Json? // {lastRaiseAt} — post-raise hold state (pure-math progression)
+  // MCP v2 Phase C (2026-11-12): what the routine is and where it came from —
+  // a follow-along video keeps its link ("Lebe Stark 35-min").
+  description        String?
+  sourceUrl          String?
   isArchived         Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -1467,6 +1471,15 @@ model UserExercise {
   name      String
   category  String // kettlebell | barbell | dumbbell | bodyweight | machine | cardio | other
   aliases   Json // string[] — extra names that resolve to this movement
+  // MCP v2 Phase C (2026-11-12). What counts as load for PRs and tonnage:
+  // "bodyweight" = the body (plus a vest); bells used as handles don't count.
+  // Null = derived from category. A row whose slug is a BUILT-IN id is an
+  // overlay: it adds aliases, load and a profile to that catalog movement.
+  load      String? // external | bodyweight
+  // What the movement IS — how it's done, pattern, muscles, equipment, what
+  // it's a variant of, its source — written by Claude when it first meets a
+  // movement (lib/exercise-profile.ts). Null = not explained yet.
+  profile   Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

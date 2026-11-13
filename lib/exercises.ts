@@ -4,6 +4,8 @@
 // movements are first-class; aliases cover English + Spanish and common
 // phrasing variants heard through transcription.
 
+import type { ExerciseProfile } from "@/lib/exercise-profile";
+
 export type ExerciseCategory =
   | "kettlebell"
   | "barbell"
@@ -27,6 +29,8 @@ export interface ExerciseDef {
    * are equipment. Unset = derived from category (bodyweight → bodyweight).
    */
   load?: ExerciseLoad;
+  /** What the movement is — written by Claude (lib/exercise-profile.ts). */
+  profile?: ExerciseProfile;
 }
 
 export type ExerciseLoad = "external" | "bodyweight";
@@ -150,8 +154,24 @@ interface IndexEntry {
 // tests directly — this module stays client-safe (no Prisma import).
 let customExercises: ExerciseDef[] = [];
 
+// Overlays (2026-11-12, MCP v2 Phase C): a user_exercises row whose slug is a
+// BUILT-IN id doesn't make a second movement — it adds aliases, a load type
+// and a profile to the catalog entry (its name and category stay the
+// catalog's). That is how Claude teaches a built-in "single arm kb swing" or
+// explains what a Turkish get-up is without touching code.
+let overlays = new Map<string, ExerciseDef>();
+let effectiveCatalog: ExerciseDef[] | null = null;
+const BUILT_IN_IDS = new Set(EXERCISE_CATALOG.map((e) => e.id));
+
 export function setCustomExercises(defs: ExerciseDef[]) {
-  customExercises = defs.map((d) => ({ ...d, isCustom: true }));
+  overlays = new Map();
+  const customs: ExerciseDef[] = [];
+  for (const d of defs) {
+    if (BUILT_IN_IDS.has(d.id)) overlays.set(d.id, d);
+    else customs.push({ ...d, isCustom: true });
+  }
+  customExercises = customs;
+  effectiveCatalog = null;
   index = null; // rebuild lazily with the customs merged in
 }
 
@@ -159,13 +179,49 @@ export function getCustomExercises(): ExerciseDef[] {
   return customExercises;
 }
 
+/** True when `id` is a built-in catalog movement (overlaid or not). */
+export function isBuiltInExercise(id: string): boolean {
+  return BUILT_IN_IDS.has(id);
+}
+
+/** The catalog with any overlays applied — aliases, load and profile added. */
+export function catalogExercises(): ExerciseDef[] {
+  if (effectiveCatalog) return effectiveCatalog;
+  effectiveCatalog = EXERCISE_CATALOG.map((base) => {
+    const o = overlays.get(base.id);
+    if (!o) return base;
+    const known = new Set([fold(base.name), ...base.aliases.map(fold)]);
+    const extra = [o.name, ...o.aliases].filter((a) => {
+      const k = fold(a);
+      if (!k || known.has(k)) return false;
+      known.add(k);
+      return true;
+    });
+    return {
+      ...base,
+      aliases: [...base.aliases, ...extra],
+      ...(o.load ? { load: o.load } : {}),
+      ...(o.profile ? { profile: o.profile } : {}),
+    };
+  });
+  return effectiveCatalog;
+}
+
 /**
  * Full vocabulary — catalog plus user-minted movements (for pickers). A custom
  * the catalog has since taken over (same id) is listed once, as the catalog's.
  */
 export function allExercises(): ExerciseDef[] {
-  const builtIn = new Set(EXERCISE_CATALOG.map((e) => e.id));
-  return [...EXERCISE_CATALOG, ...customExercises.filter((e) => !builtIn.has(e.id))];
+  return [...catalogExercises(), ...customExercises];
+}
+
+/** Category from the equipment named in a movement's name ("Seated Dumbbell…" → dumbbell). */
+export function guessCategory(name: string): ExerciseCategory {
+  for (const word of fold(name).split(" ")) {
+    const c = EQUIPMENT_WORDS[word];
+    if (c) return c;
+  }
+  return "other";
 }
 
 let index: IndexEntry[] | null = null;
@@ -173,7 +229,7 @@ let index: IndexEntry[] | null = null;
 function buildIndex(): IndexEntry[] {
   if (index) return index;
   const entries: IndexEntry[] = [];
-  for (const def of [...EXERCISE_CATALOG, ...customExercises]) {
+  for (const def of [...catalogExercises(), ...customExercises]) {
     entries.push({ key: fold(def.name), def });
     entries.push({ key: def.id, def });
     entries.push({ key: fold(def.id), def });
@@ -315,7 +371,7 @@ export function looseExerciseMatch(raw: string): ExerciseDef | null {
 
 export function getExerciseById(id: string): ExerciseDef | null {
   return (
-    EXERCISE_CATALOG.find((e) => e.id === id) ??
+    catalogExercises().find((e) => e.id === id) ??
     customExercises.find((e) => e.id === id) ??
     null
   );

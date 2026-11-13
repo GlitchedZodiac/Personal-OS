@@ -15,7 +15,15 @@ export const MAX_BRIEFING_RULES = 2000;
 
 type Section = () => Promise<string | null>;
 
-const sections: Section[] = [standingRules];
+const sections: Section[] = [standingRules, movementGaps];
+
+/** Movements nobody has explained yet (MCP v2 Phase C), so the library fills in as he trains. */
+async function movementGaps(): Promise<string | null> {
+  const { profileGaps } = await import("@/lib/exercise-library");
+  const gaps = await profileGaps(8);
+  if (gaps.count === 0) return null;
+  return `${gaps.count} of his movements have no explanation yet (${gaps.names.join(", ")}${gaps.count > gaps.names.length ? ", …" : ""}). When one comes up in a conversation, explain it with upsert_exercise { id, profile }.`;
+}
 
 /** Register a section (Phases B and C add theirs). */
 export function addBriefingSection(section: Section) {

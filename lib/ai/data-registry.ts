@@ -69,6 +69,12 @@ export const REGISTRY: readonly DatasetSpec[] = [
     summary: "Today: calories/macros eaten vs the day's target, steps, net, deficit, the weekly is-it-working check, week training volume.",
   },
   {
+    key: "exercises",
+    kind: "curated",
+    summary:
+      "His movement library: id, name, category, load type, aliases, times logged, and what each movement is (profile) — q or id for full profiles; profileMissing = not explained yet.",
+  },
+  {
     key: "day_ledger",
     kind: "curated",
     summary:

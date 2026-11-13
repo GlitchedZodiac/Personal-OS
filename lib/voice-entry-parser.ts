@@ -23,7 +23,7 @@
 // score.
 
 import {
-  EXERCISE_CATALOG,
+  catalogExercises,
   findExerciseByExactName,
   foldExerciseName,
   getCustomExercises,
@@ -488,7 +488,8 @@ function vocabulary(): VocabKey[] {
   const keys: VocabKey[] = [];
   const seen = new Set<string>();
   // Catalog first, like the catalog's own index, so ties resolve the same way.
-  for (const def of [...EXERCISE_CATALOG, ...customs]) {
+  // (With overlays applied — aliases Claude added to a built-in count here too.)
+  for (const def of [...catalogExercises(), ...customs]) {
     for (const raw of [def.name, ...def.aliases, def.id]) {
       const key = foldExerciseName(raw);
       if (!key || seen.has(`${def.id}|${key}`)) continue;

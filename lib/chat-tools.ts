@@ -368,6 +368,9 @@ export async function executeGetHealthData(
         routines: rows.map((s) => ({
           id: s.id,
           name: s.name,
+          // MCP v2 Phase C: what it is and where it came from.
+          description: s.description,
+          sourceUrl: s.sourceUrl,
           kind: s.kind,
           durationMinutes: s.durationMinutes,
           rounds: s.rounds,

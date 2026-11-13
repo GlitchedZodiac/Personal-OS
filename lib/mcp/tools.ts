@@ -24,7 +24,6 @@ import { REGISTRY } from "@/lib/ai/data-registry";
 import { routeDataAllowed } from "@/lib/activities";
 import { matchUsual } from "@/lib/food-match";
 import { findRecentDuplicate } from "@/lib/workout-dedupe";
-import { normalizeExerciseName } from "@/lib/exercises";
 import { ensureUserExercisesLoaded, mintUnknownExercises } from "@/lib/user-exercises";
 import { validateSequence } from "@/lib/sequences";
 import { detectAndRecordPRs, rebuildPersonalRecords } from "@/lib/prs";
@@ -52,6 +51,8 @@ import { recordMcpAudit, type McpCallContext } from "@/lib/mcp/audit";
 import { macroMismatchWarning } from "@/lib/macro-check";
 import { V2_ANNOTATIONS, V2_TOOLS } from "@/lib/mcp/tools-v2";
 import { recordChanges } from "@/lib/record-changes";
+import { mapForLog, type MappedEntry } from "@/lib/exercise-library";
+import type { ExerciseDef } from "@/lib/exercises";
 
 type Json = Record<string, unknown>;
 
@@ -593,16 +594,24 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
         return { error: "packKg must be 0–60" };
       }
       await ensureUserExercisesLoaded();
-      const exercises = Array.isArray(args.exercises)
+      // MCP v2 Phase C: every name says what it was matched to, unknown
+      // names become new movements (flagged needsProfile), and the name as
+      // logged is kept beside the canonical one.
+      const mapped: MappedEntry[] = [];
+      const resolved = Array.isArray(args.exercises)
+        ? await resolveLogged(args.exercises as Json[], mapped)
+        : null;
+      const exercises = resolved
         ? (args.exercises as Json[])
-            .map((e) => {
+            .map((e, i) => {
               const raw = str(e.name);
               if (!raw) return null;
-              const def = normalizeExerciseName(raw);
+              const def = resolved[i];
               const weight = num(e.weightKg);
               return {
                 name: def?.name ?? raw,
                 ...(def ? { exercise: def.id } : {}),
+                ...(def && def.name !== raw ? { rawName: raw } : {}),
                 ...(posNum(e.sets) != null ? { sets: posNum(e.sets) } : {}),
                 ...(posNum(e.reps) != null ? { reps: posNum(e.reps) } : {}),
                 ...(posNum(e.seconds) != null ? { seconds: posNum(e.seconds) } : {}),
@@ -688,7 +697,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       } catch {
         // PR detection must never break logging (same policy as the route).
       }
-      return { workout: entry, newPRs };
+      return { workout: entry, newPRs, ...mappedReceipt(mapped) };
     },
   },
   {
@@ -770,16 +779,19 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       await ensureUserExercisesLoaded();
       let nextExercises: object[] | null = null;
       let changed: string[] = [];
+      const mapped: MappedEntry[] = [];
       if (Array.isArray(args.exercises) && args.exercises.length > 0) {
+        const resolved = await resolveLogged(args.exercises as Json[], mapped);
         const attached = (args.exercises as Json[])
-          .map((e) => {
+          .map((e, i) => {
             const raw = str(e.name);
             if (!raw) return null;
-            const def = normalizeExerciseName(raw);
+            const def = resolved[i];
             const weight = num(e.weightKg);
             return {
               name: def?.name ?? raw,
               ...(def ? { exercise: def.id } : {}),
+              ...(def && def.name !== raw ? { rawName: raw } : {}),
               ...(posNum(e.sets) != null ? { sets: posNum(e.sets) } : {}),
               ...(posNum(e.reps) != null ? { reps: posNum(e.reps) } : {}),
               ...(posNum(e.seconds) != null ? { seconds: posNum(e.seconds) } : {}),
@@ -844,6 +856,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
         workout: updated,
         changed: [...changed, ...(packPatch ? ["packKg"] : [])],
         ...(batchId ? { batchId } : {}),
+        ...mappedReceipt(mapped),
       };
     },
   },
@@ -1073,6 +1086,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           durationMinutes: { type: "number" },
           rounds: { type: "number" },
           restSecondsDefault: { type: "number" },
+          description: { type: "string", description: "What this routine is, e.g. the follow-along video it comes from (≤ 600 chars)" },
+          sourceUrl: { type: "string", description: "https link to the video or page" },
           steps: {
             type: "array",
             items: {
@@ -1099,6 +1114,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       const { minted } = await mintUnknownExercises(args.steps as never);
       const parsed = validateSequence(args as never);
       if (!parsed.ok) return { error: parsed.error };
+      const routineMeta = routineMetaOf(args);
+      if ("error" in routineMeta) return routineMeta;
       const routine = await prisma.sequence.create({
         data: {
           name: parsed.name,
@@ -1107,9 +1124,16 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           durationMinutes: parsed.durationMinutes,
           rounds: parsed.rounds,
           steps: parsed.steps as object[],
+          ...routineMeta,
         },
       });
-      return { routine, mintedExercises: minted };
+      return {
+        routine,
+        mintedExercises: minted,
+        ...(minted.length
+          ? { needsProfile: minted, next: "Explain each new movement with upsert_exercise { id, profile } in this same turn." }
+          : {}),
+      };
     },
   },
   {
@@ -1126,6 +1150,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           durationMinutes: { type: "number" },
           rounds: { type: "number" },
           restSecondsDefault: { type: "number" },
+          description: { type: "string", description: "What this routine is, e.g. the follow-along video it comes from (≤ 600 chars)" },
+          sourceUrl: { type: "string", description: "https link to the video or page" },
           steps: {
             type: "array",
             items: {
@@ -1156,6 +1182,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       const { minted } = await mintUnknownExercises(args.steps as never);
       const parsed = validateSequence(args as never);
       if (!parsed.ok) return { error: parsed.error };
+      const routineMeta = routineMetaOf(args);
+      if ("error" in routineMeta) return routineMeta;
       const routine = await prisma.sequence.update({
         where: { id },
         data: {
@@ -1165,9 +1193,16 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           durationMinutes: parsed.durationMinutes,
           rounds: parsed.rounds,
           steps: parsed.steps as object[],
+          ...routineMeta,
         },
       });
-      return { routine, mintedExercises: minted };
+      return {
+        routine,
+        mintedExercises: minted,
+        ...(minted.length
+          ? { needsProfile: minted, next: "Explain each new movement with upsert_exercise { id, profile } in this same turn." }
+          : {}),
+      };
     },
   },
   {
@@ -1423,6 +1458,53 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     },
   },
 ];
+
+/** A routine's description and source link (MCP v2 Phase C), checked. */
+function routineMetaOf(args: Json): { description?: string | null; sourceUrl?: string | null } | { error: string } {
+  const out: { description?: string | null; sourceUrl?: string | null } = {};
+  if (args.description !== undefined) {
+    const d = typeof args.description === "string" ? args.description.trim() : "";
+    if (d.length > 600) return { error: "description is longer than 600 characters" };
+    out.description = d || null;
+  }
+  if (args.sourceUrl !== undefined) {
+    const u = typeof args.sourceUrl === "string" ? args.sourceUrl.trim() : "";
+    if (u && (!/^https:\/\/\S+$/.test(u) || u.length > 500)) return { error: "sourceUrl must be an https link" };
+    out.sourceUrl = u || null;
+  }
+  return out;
+}
+
+/** Resolve every logged name in order (MCP v2 Phase C), collecting the receipt. */
+async function resolveLogged(rows: Json[], mapped: MappedEntry[]): Promise<(ExerciseDef | null)[]> {
+  const out: (ExerciseDef | null)[] = [];
+  for (const e of rows) {
+    const raw = str(e?.name);
+    if (!raw) {
+      out.push(null);
+      continue;
+    }
+    const { def, mapped: m } = await mapForLog(raw);
+    mapped.push(m);
+    out.push(def);
+  }
+  return out;
+}
+
+/** The receipt's movement block, with the instruction that goes with it. */
+function mappedReceipt(mapped: MappedEntry[]) {
+  if (mapped.length === 0) return {};
+  const needs = mapped.filter((m) => m.needsProfile).map((m) => m.to?.name ?? m.input);
+  return {
+    mapped,
+    ...(needs.length
+      ? {
+          needsProfile: needs,
+          next: "Check mapped: if a name went to the wrong movement, fix it now (upsert_exercise / merge_exercises). For each movement in needsProfile, explain what it is with upsert_exercise { id, profile } in this same turn (your knowledge, a web search, or the video he named; ask him if unsure).",
+        }
+      : { next: "Check mapped: if a name went to the wrong movement, fix it now with upsert_exercise or merge_exercises." }),
+  };
+}
 
 /**
  * The v1 edit tools write their changes to record_changes too (MCP v2,

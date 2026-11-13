@@ -7,6 +7,9 @@
 // strict subset of what the connector may READ (MCP_SETTINGS_KEYS); finance,
 // notifications and the time zone are never writable here.
 
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { registerUndoHandler } from "@/lib/record-changes";
 import {
   applyTargetsPatch,
   legacyFromRest,
@@ -200,3 +203,43 @@ export function mirrorLegacyFromTargets(body: Json): Json {
   const targets = readTargets(body);
   return { ...body, ...legacyFromRest(targets.rest) };
 }
+
+// ── Undo (MCP v2 Phase A) ─────────────────────────────────────────────────
+// Settings changes undo key by key ("aiInstructions.health" reaches one level
+// in). Each changed key — targets AND the mirrored legacy keys — was recorded
+// on its own, so restoring them all restores the whole previous state.
+
+function readDotted(data: Json, field: string): unknown {
+  const [head, sub] = field.split(".");
+  const v = data[head];
+  if (!sub) return v ?? null;
+  return isObj(v) ? (v[sub] ?? null) : null;
+}
+
+registerUndoHandler("settings", {
+  async read(_recordId, fields) {
+    const row = await prisma.userSettings.findUnique({ where: { id: "default" }, select: { data: true } });
+    if (!row) return null;
+    const data = (row.data ?? {}) as Json;
+    return Object.fromEntries(fields.map((f) => [f, readDotted(data, f)]));
+  },
+  async write(_recordId, values) {
+    const row = await prisma.userSettings.findUnique({ where: { id: "default" }, select: { data: true } });
+    const data: Json = { ...((row?.data ?? {}) as Json) };
+    for (const [field, value] of Object.entries(values)) {
+      const [head, sub] = field.split(".");
+      if (sub) {
+        const inner = { ...(isObj(data[head]) ? (data[head] as Json) : {}) };
+        if (value == null) delete inner[sub];
+        else inner[sub] = value;
+        data[head] = inner;
+      } else if (value == null) delete data[head];
+      else data[head] = value;
+    }
+    await prisma.userSettings.upsert({
+      where: { id: "default" },
+      create: { id: "default", data: data as Prisma.InputJsonValue },
+      update: { data: data as Prisma.InputJsonValue },
+    });
+  },
+});

@@ -71,8 +71,15 @@ const INSTRUCTIONS =
   "eaten vs the day's target (rest or training day), workout burn, steps, " +
   "net, the energy estimate, deficit, and a weekly check of what the " +
   "deficit predicts vs what the scale did — quote it rather than working " +
-  "net/deficit out by hand. update_settings changes his targets and his " +
-  "standing rules for every Claude session.";
+  "net/deficit out by hand. Anything logged wrong — a watch walk's steps or " +
+  "distance, a session's type or title, a jump-rope protocol — is fixed with " +
+  "patch_record (a reason, the old value kept, undo_change reverses it). " +
+  "His movement library grows by conversation: log_workout says what each " +
+  "name matched (mapped) and creates unknown ones; explain every new " +
+  "movement with upsert_exercise { profile } — what it is, pattern, muscles, " +
+  "what it's a variant of, its source — and mark bodyweight moves load " +
+  "bodyweight so handle bells never count. update_settings changes his " +
+  "targets and his standing rules for every Claude session.";
 
 export async function handleMcpMessage(raw: unknown, ctx?: McpCallContext): Promise<McpHttpResponse> {
   // The 2025-06-18 revision dropped JSON-RPC batching — reject arrays.
