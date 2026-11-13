@@ -10,6 +10,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { applySettingsPatch, WRITABLE_SETTINGS_KEYS } from "@/lib/settings-patch";
+import { recordChanges, registerUndoHandler, undoChanges, type ChangeInput } from "@/lib/record-changes";
+import { PATCH_ENTITIES, patchRecord, writableSummary } from "@/lib/patch-record";
 
 type Json = Record<string, unknown>;
 
@@ -131,7 +133,7 @@ const updateSettings: V2Tool = {
       create: { id: "default", data: applied.next as Prisma.InputJsonValue },
       update: { data: applied.next as Prisma.InputJsonValue },
     });
-    await recordChangesSafe(
+    const batchId = await recordChangesSafe(
       applied.changes.map((c) => ({
         entity: "settings",
         recordId: "default",
@@ -143,25 +145,137 @@ const updateSettings: V2Tool = {
     );
     return {
       changes: applied.changes,
+      ...(batchId ? { batchId } : {}),
       ...(applied.warnings.length ? { warnings: applied.warnings } : {}),
       ...(applied.next.targets ? { targets: applied.next.targets } : {}),
     };
   },
 };
 
-// Filled in by Phase A (record_changes). Until then a no-op, so Phase D's
-// receipts and mcp_audit_events are the record.
-async function recordChangesSafe(
-  _changes: { entity: string; recordId: string; field: string; before: unknown; after: unknown }[],
-  _reason: string
-): Promise<string | null> {
-  return null;
+/** History is best-effort: it must never block the change it describes. */
+async function recordChangesSafe(changes: ChangeInput[], reason: string): Promise<string | null> {
+  try {
+    return await recordChanges(changes, { reason, via: "mcp" });
+  } catch (error) {
+    console.error("record_changes write failed:", error);
+    return null;
+  }
 }
 
-export const V2_TOOLS: V2Tool[] = [updateSettings];
+// Settings changes undo key by key ("aiInstructions.health" reaches one level in).
+registerUndoHandler("settings", {
+  async read(_recordId, fields) {
+    const row = await prisma.userSettings.findUnique({ where: { id: "default" }, select: { data: true } });
+    if (!row) return null;
+    const data = (row.data ?? {}) as Json;
+    return Object.fromEntries(fields.map((f) => [f, readDotted(data, f)]));
+  },
+  async write(_recordId, values) {
+    const row = await prisma.userSettings.findUnique({ where: { id: "default" }, select: { data: true } });
+    const data: Json = { ...((row?.data ?? {}) as Json) };
+    for (const [field, value] of Object.entries(values)) {
+      const [head, sub] = field.split(".");
+      if (sub) {
+        const inner = { ...((data[head] as Json) ?? {}) };
+        if (value == null) delete inner[sub];
+        else inner[sub] = value;
+        data[head] = inner;
+      } else if (value == null) delete data[head];
+      else data[head] = value;
+    }
+    await prisma.userSettings.upsert({
+      where: { id: "default" },
+      create: { id: "default", data: data as Prisma.InputJsonValue },
+      update: { data: data as Prisma.InputJsonValue },
+    });
+  },
+});
+
+function readDotted(data: Json, field: string): unknown {
+  const [head, sub] = field.split(".");
+  const v = data[head];
+  if (!sub) return v ?? null;
+  return v && typeof v === "object" ? ((v as Json)[sub] ?? null) : null;
+}
+
+// ── Phase A: one correction door, and undo ─────────────────────────────────
+
+const patchTool: V2Tool = {
+  def: {
+    name: "patch_record",
+    description:
+      "Correct fields on a logged workout, food entry, body measurement or saved recipe — anything the watch, a voice log or an earlier chat got wrong. Give the entity, its id (query_data recent_workouts / recent_food / body_measurements / list_recipes), `set` with only the fields that change, and a reason. The old values are kept and the change can be undone with undo_change. A corrected workout field is never overwritten by a later re-send from the watch. Jump rope: send `rope` ({ workSeconds, restSeconds, rounds } for intervals, or { jumpSeconds }) to fix the protocol; the movement row follows. Movements themselves still go through edit_workout. dryRun: true shows the before/after without saving. Writable — " +
+      writableSummary(),
+    inputSchema: {
+      type: "object",
+      properties: {
+        entity: { type: "string", enum: PATCH_ENTITIES },
+        id: { type: "string" },
+        set: {
+          type: "object",
+          description:
+            'Field → new value, e.g. { "distanceMeters": 3600, "stepCount": 4200 } or { "workoutType": "strength", "description": "Lebe Stark 35-min" }. null clears a field that may be empty.',
+        },
+        rope: {
+          type: "object",
+          description: "Workouts with workoutType jump_rope only",
+          properties: {
+            workSeconds: { type: "number" },
+            restSeconds: { type: "number" },
+            rounds: { type: "number" },
+            jumpSeconds: { type: "number" },
+            jumps: { type: "number", description: "His own total count, if he gave one" },
+          },
+        },
+        reason: { type: "string", description: "Why, in a few words (≤ 300 chars)" },
+        dryRun: { type: "boolean" },
+      },
+      required: ["entity", "id", "reason"],
+    },
+  },
+  handler: async (args) => {
+    const why = reasonOf(args);
+    if ("error" in why) return why;
+    return patchRecord({
+      entity: args.entity,
+      id: args.id,
+      set: args.set,
+      rope: args.rope,
+      reason: why.reason,
+      dryRun: args.dryRun === true,
+    });
+  },
+};
+
+const undoTool: V2Tool = {
+  def: {
+    name: "undo_change",
+    description:
+      "Undo a change made through the connector — a whole tool call (batchId, returned by patch_record, update_settings, edit_workout, edit_food, rename_recipe and the exercise and field tools) or one field (changeId from query_data record_changes). A field is restored only if it still holds the value the change wrote; anything changed again since is left alone and listed. dryRun: true shows what would be restored.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        batchId: { type: "string" },
+        changeId: { type: "string" },
+        dryRun: { type: "boolean" },
+      },
+    },
+  },
+  handler: async (args) =>
+    undoChanges({
+      batchId: str(args.batchId) || undefined,
+      changeId: str(args.changeId) || undefined,
+      dryRun: args.dryRun === true,
+    }),
+};
+
+export const V2_TOOLS: V2Tool[] = [updateSettings, patchTool, undoTool];
 
 export const V2_ANNOTATIONS: Record<string, V2Annotations> = {
   update_settings: { title: "Change settings and targets", ...OVERWRITES },
+  patch_record: { title: "Correct a logged entry", ...OVERWRITES },
+  // Restores old values — overwrites what is there now, so it is gated as such.
+  undo_change: { title: "Undo a change", ...OVERWRITES },
 };
 
 // Kept for the phases that add rows rather than overwrite them.

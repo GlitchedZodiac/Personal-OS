@@ -51,6 +51,7 @@ import { mcpFinanceAllowed } from "@/lib/mcp-settings";
 import { recordMcpAudit, type McpCallContext } from "@/lib/mcp/audit";
 import { macroMismatchWarning } from "@/lib/macro-check";
 import { V2_ANNOTATIONS, V2_TOOLS } from "@/lib/mcp/tools-v2";
+import { recordChanges } from "@/lib/record-changes";
 
 type Json = Record<string, unknown>;
 
@@ -341,7 +342,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
         where: { id: target.id },
         data: { foodDescription: newName },
       });
-      return { recipe, renamedFrom: target.foodDescription };
+      const batchId = await recordEditSafe("recipe", target.id, target, recipe, ["foodDescription"], "rename_recipe");
+      return { recipe, renamedFrom: target.foodDescription, ...(batchId ? { batchId } : {}) };
     },
   },
   {
@@ -515,8 +517,11 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
         data.loggedAt = d;
       }
       if (Object.keys(data).length === 0) return { error: "Nothing to change" };
+      const before = await prisma.foodLog.findUnique({ where: { id } }).catch(() => null);
       try {
-        return { entry: await prisma.foodLog.update({ where: { id }, data }) };
+        const entry = await prisma.foodLog.update({ where: { id }, data });
+        const batchId = await recordEditSafe("food", id, before, entry, Object.keys(data), "edit_food");
+        return { entry, ...(batchId ? { batchId } : {}) };
       } catch {
         return { error: "Food log row not found" };
       }
@@ -827,9 +832,18 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
           // Rebuild failure shouldn't lose the edit.
         }
       }
+      const batchId = await recordEditSafe(
+        "workout",
+        id,
+        workout,
+        updated,
+        [...(nextExercises != null ? ["exercises"] : []), ...(packPatch ? ["packKg"] : [])],
+        "edit_workout"
+      );
       return {
         workout: updated,
         changed: [...changed, ...(packPatch ? ["packKg"] : [])],
+        ...(batchId ? { batchId } : {}),
       };
     },
   },
@@ -1409,6 +1423,34 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     },
   },
 ];
+
+/**
+ * The v1 edit tools write their changes to record_changes too (MCP v2,
+ * 2026-11-12), so "undo that" works for every edit, not only patch_record.
+ * Best-effort: history must never break the edit itself.
+ */
+async function recordEditSafe(
+  entity: "food" | "recipe" | "workout",
+  id: string,
+  before: unknown,
+  after: unknown,
+  fields: string[],
+  tool: string
+): Promise<string | null> {
+  try {
+    const b = (before ?? {}) as Json;
+    const a = (after ?? {}) as Json;
+    const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v ?? null);
+    return await recordChanges(
+      fields
+        .filter((f) => JSON.stringify(iso(b[f])) !== JSON.stringify(iso(a[f])))
+        .map((f) => ({ entity, recordId: id, field: f, before: iso(b[f]), after: iso(a[f]) })),
+      { reason: `${tool} via the Claude connector`, via: "mcp" }
+    );
+  } catch {
+    return null;
+  }
+}
 
 /// id wins; exact (case-insensitive) name next; fuzzy fold-match last.
 async function findRecipe(args: Json) {

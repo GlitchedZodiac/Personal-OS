@@ -150,6 +150,19 @@ export const REGISTRY: readonly DatasetSpec[] = [
     search: ["notes"],
   },
   {
+    // MCP v2 Phase A (2026-11-12): every correction made through the
+    // connector, field by field, with the batch id undo_change takes.
+    key: "record_changes",
+    kind: "table",
+    summary: "Corrections made through Claude: field, before → after, reason, batchId for undo_change.",
+    model: "recordChange",
+    fields: ["id", "batchId", "entity", "recordId", "field", "before", "after", "reason", "via", "undoneAt", "createdAt"],
+    dateField: "createdAt",
+    orderBy: { createdAt: "desc" },
+    search: ["entity", "recordId", "field", "reason", "batchId"],
+    defaultLimit: 40,
+  },
+  {
     key: "daily_health",
     kind: "table",
     summary:

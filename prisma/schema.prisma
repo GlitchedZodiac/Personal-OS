@@ -1306,6 +1306,30 @@ model McpAuditEvent {
   @@map("mcp_audit_events")
 }
 
+// MCP v2 (2026-11-12): what changed, field by field, so any correction made
+// through the Claude connector can be shown and undone. mcp_audit_events
+// records WHO called WHAT and deliberately stores no content; this records
+// the values. One tool call = one batchId. Never finance — finance is never
+// patched over MCP. Read back as query_data record_changes.
+model RecordChange {
+  id        String    @id @default(uuid())
+  batchId   String
+  entity    String // workout | food | measurement | recipe | settings | exercise | field
+  recordId  String
+  field     String // e.g. "distanceMeters", "targets", "extra.abdomenCm"
+  before    Json?
+  after     Json?
+  reason    String?
+  via       String // mcp | app | undo
+  undoneAt  DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([entity, recordId])
+  @@index([batchId])
+  @@index([createdAt])
+  @@map("record_changes")
+}
+
 model OAuthCode {
   id            String    @id @default(uuid())
   codeHash      String    @unique
