@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireMobileSession } from "@/lib/mobile-session";
+import { capString } from "@/lib/request-body";
 import { createOrLinkTrail, listTrails, TrailInputError } from "@/lib/trails";
 
 export async function GET(request: NextRequest) {
@@ -44,13 +45,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+    // Bounded (audit 2026-10, SEC-025): a trail name is a few words.
     const result = await createOrLinkTrail({
-      name: typeof body.name === "string" ? body.name : undefined,
-      trailId: typeof body.trailId === "string" ? body.trailId : undefined,
-      workoutExternalId:
-        typeof body.workoutExternalId === "string"
-          ? body.workoutExternalId
-          : undefined,
+      name: capString(body.name, 120) ?? undefined,
+      trailId: capString(body.trailId, 64) ?? undefined,
+      workoutExternalId: capString(body.workoutExternalId, 200) ?? undefined,
     });
     return NextResponse.json(result);
   } catch (error) {

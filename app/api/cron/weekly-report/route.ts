@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireCronSecret } from "@/lib/cron-auth";
 import { getUserTimeZone } from "@/lib/server-timezone";
 import { generateWeeklyReport } from "@/lib/weekly-report";
 import { getDateStringInTimeZone } from "@/lib/timezone";
@@ -9,10 +10,8 @@ export const maxDuration = 60;
 // generates the week that just ended. Self-authenticating per proxy.ts.
 
 export async function GET(request: NextRequest) {
-  const auth = request.headers.get("authorization");
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   try {
     const timeZone = await getUserTimeZone(null);

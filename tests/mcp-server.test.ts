@@ -35,6 +35,10 @@ let seq = 0;
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    // The connector's paper trail (SEC-013): every write tool records a row.
+    mcpAuditEvent: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => data) },
+    // The connector reads its finance switch (its own settings row) on every query.
+    userSettings: { findUnique: vi.fn(async () => null) },
     bodyMeasurement: {
       findMany: vi.fn(
         async ({ where }: { where: { measuredAt: { gte: Date; lte: Date } } }) =>
@@ -128,6 +132,9 @@ vi.mock("@/lib/prisma", () => ({
 
 import { handleMcpMessage, SERVER_INFO } from "@/lib/mcp/server";
 import { MCP_TOOL_DEFS } from "@/lib/mcp/tools";
+import { REGISTRY } from "@/lib/ai/data-registry";
+
+const DATASET_KEYS = new Set(REGISTRY.map((d) => d.key));
 
 const rpc = (method: string, params?: object, id: number | null = 1) => ({
   jsonrpc: "2.0",
@@ -248,7 +255,10 @@ describe("the connector's own briefing", () => {
     const text = await instructions();
     expect(text).toContain("sermon workflow without opening the app.");
     // Pinned to the LAST sentence, so a dropped `+` anywhere above it fails.
-    expect(text.endsWith("says where each value came from.")).toBe(true);
+    // (MCP v2, 2026-11-12: the static text now ends with the day/targets
+    // paragraph; his standing rules, when set, follow it — none in this mock.)
+    expect(text).toContain("says where each value came from.");
+    expect(text.endsWith("standing rules for every Claude session.")).toBe(true);
     // The tell for the ASI bug: the briefing stopped at this exact phrase.
     expect(text).not.toMatch(/spirit_recordings\s*$/);
   });
@@ -276,9 +286,9 @@ describe("the connector's own briefing", () => {
     const text = await instructions();
     const names = new Set(MCP_TOOL_DEFS.map((t) => t.name));
     for (const word of text.match(/[a-z]+_[a-z_]+/g) ?? []) {
-      // Dataset keys (spirit_recordings) share the shape; only judge words
-      // that look like a tool by living in the tool table's namespace.
-      if (word.startsWith("spirit_")) continue;
+      // Dataset keys (spirit_recordings, today_summary, day_ledger) share the
+      // shape; only judge words that are not a registry dataset.
+      if (word.startsWith("spirit_") || DATASET_KEYS.has(word)) continue;
       expect(names.has(word), `instructions name an unknown tool: ${word}`).toBe(true);
     }
   });
@@ -377,6 +387,50 @@ describe("MCP tool handlers", () => {
     const two = await callTool("log_recipe", { name: "Whey scoop", servings: 2 });
     expect(two.parsed.logged.calories).toBe(240);
     expect(two.parsed.logged.foodDescription).toContain("(2×)");
+  });
+
+  it("meals scale by the share eaten (gap #9: half a saved pint)", async () => {
+    await callTool("save_recipe", {
+      name: "Chocolate Creami pint",
+      calories: 400,
+      proteinG: 40,
+      carbsG: 36,
+      fatG: 10,
+    });
+    const half = await callTool("log_recipe", { name: "Chocolate Creami pint", servings: 0.5 });
+    expect(half.isError).toBe(false);
+    expect(half.parsed.logged.calories).toBe(200);
+    expect(half.parsed.logged.proteinG).toBe(20);
+    expect(half.parsed.logged.foodDescription).toBe("Chocolate Creami pint (0.5×)");
+    const whole = await callTool("log_recipe", { name: "Chocolate Creami pint" });
+    expect(whole.parsed.logged.calories).toBe(400);
+    expect(whole.parsed.logged.foodDescription).toBe("Chocolate Creami pint");
+    const silly = await callTool("log_recipe", { name: "Chocolate Creami pint", servings: 50 });
+    expect(silly.isError).toBe(true);
+  });
+
+  it("save_recipe warns when the label's macros and calories disagree (gap #13)", async () => {
+    // Macros add to ~138 kcal; the label says 176.
+    const odd = await callTool("save_recipe", {
+      name: "Chocolate protein powder",
+      calories: 176,
+      proteinG: 25,
+      carbsG: 5,
+      fatG: 2,
+      kind: "product",
+      servingLabel: "1 scoop (40 g)",
+    });
+    expect(odd.isError).toBe(false);
+    expect(odd.parsed.warnings?.[0]).toContain("add up to 138 kcal");
+    const fine = await callTool("save_recipe", {
+      name: "Whey isolate",
+      calories: 120,
+      proteinG: 25,
+      carbsG: 2,
+      fatG: 1,
+      kind: "product",
+    });
+    expect(fine.parsed.warnings).toBeUndefined();
   });
 
   it("log_food stamps mcp provenance and bounds the batch", async () => {

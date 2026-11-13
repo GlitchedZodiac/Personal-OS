@@ -17,6 +17,10 @@ export async function GET(request: NextRequest) {
       },
       orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }],
       take: limit,
+      // A list does not carry each email's full text or the parser's raw
+      // output — the columns the AI registry keeps from the model too
+      // (audit 2026-10, SEC-034).
+      omit: { contentText: true, extractedData: true },
       include: {
         sourceRef: {
           select: {

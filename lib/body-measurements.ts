@@ -206,6 +206,8 @@ export function compactMeasurement(row: MeasurementRow): Record<string, unknown>
   }
   if (row.skinfoldData != null) out.skinfoldData = row.skinfoldData;
   if (row.impedance != null) out.impedance = row.impedance;
+  // Custom fields Claude defined (MCP v2 Phase B).
+  if ((row as { extra?: unknown }).extra != null) out.extra = (row as { extra?: unknown }).extra;
   // Present only on a single-row fetch (the registry's detailFields).
   if (row.referenceRanges != null) out.referenceRanges = row.referenceRanges;
   if (row.externalId != null) out.externalId = row.externalId;

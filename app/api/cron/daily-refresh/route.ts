@@ -1,9 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { requireCronSecret } from "@/lib/cron-auth";
 import { prisma } from "@/lib/prisma";
 import { getDateStringInTimeZone, getZonedDateParts } from "@/lib/timezone";
 import { getUserTimeZone } from "@/lib/server-timezone";
 import { pruneVoiceAudio } from "@/lib/voice-audit";
+import { pruneMcpAudit } from "@/lib/mcp/audit";
+import { pruneRateLimitBuckets } from "@/lib/rate-limit-store";
 
 const RUN_HOUR = 2;
 const RUN_WINDOW_MINUTES = 15;
@@ -27,13 +30,8 @@ function extractRequestedTimeZone(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   try {
     const requestedTimeZone = extractRequestedTimeZone(request);
@@ -110,6 +108,10 @@ export async function GET(request: NextRequest) {
 
     // Wrist voice recordings past their keep window (the text audit stays).
     const voiceAudioPruned = await pruneVoiceAudio(now).catch(() => 0);
+    // The connector's trail is kept 180 days (lib/mcp/audit.ts).
+    const mcpAuditPruned = await pruneMcpAudit(now).catch(() => 0);
+    // Wrong-PIN windows that ended over a day ago (lib/rate-limit-store.ts).
+    const rateLimitPruned = await pruneRateLimitBuckets(now).catch(() => 0);
 
     const settingsData =
       (settingsRow?.data as Record<string, unknown> | null) ?? {};
@@ -151,6 +153,8 @@ export async function GET(request: NextRequest) {
         cacheDeleted: staleCacheDelete.count,
         remindersDeleted: staleReminderDelete.count,
         voiceRecordingsPruned: voiceAudioPruned,
+        mcpAuditPruned,
+        rateLimitPruned,
       },
     });
   } catch (error) {

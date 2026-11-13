@@ -69,6 +69,8 @@ export const MEASUREMENT_CSV_HEADERS = [
   // JSON cells, verbatim — a spreadsheet cannot chart them, but an export
   // that dropped them would not be a full export.
   "impedance", "referenceRanges", "fieldSources", "rawPayload",
+  // Custom fields Claude defined (MCP v2 Phase B, 2026-11-12), verbatim.
+  "extra",
   "source", "externalId", "notes", "createdAtUtc", "updatedAtUtc",
 ] as const;
 
@@ -86,7 +88,7 @@ function measurementRows(payload: HealthExportPayload): CsvValue[][] {
       ...SKINFOLD_KEYS.map((k) => num(skinfold?.[k])),
       // Raw passthrough so a future skinfold key is never silently dropped.
       skinfold ? JSON.stringify(skinfold) : null,
-      ...(["impedance", "referenceRanges", "fieldSources", "rawPayload"] as const).map(
+      ...(["impedance", "referenceRanges", "fieldSources", "rawPayload", "extra"] as const).map(
         (f) => (row[f] != null ? JSON.stringify(row[f]) : null)
       ),
       str(row.source), str(row.externalId), str(row.notes),
@@ -153,6 +155,7 @@ function dailyRows(payload: HealthExportPayload): CsvValue[][] {
 const FOOD_HEADERS = [
   "id", "date", "time", "loggedAtUtc", "mealType", "foodDescription",
   "calories", "proteinG", "carbsG", "fatG", "source", "notes",
+  "extra", // custom fields (MCP v2 Phase B), JSON
 ] as const;
 
 function foodRows(payload: HealthExportPayload): CsvValue[][] {
@@ -163,6 +166,7 @@ function foodRows(payload: HealthExportPayload): CsvValue[][] {
       str(row.id), date, time, str(row.loggedAt), str(row.mealType),
       str(row.foodDescription), num(row.calories), num(row.proteinG),
       num(row.carbsG), num(row.fatG), str(row.source), str(row.notes),
+      row.extra != null ? JSON.stringify(row.extra) : null,
     ];
   });
 }
@@ -172,6 +176,7 @@ const WORKOUT_HEADERS = [
   "workoutType", "description", "caloriesBurned", "distanceMeters", "stepCount",
   "avgHeartRateBpm", "maxHeartRateBpm", "elevationGainM", "exerciseCount",
   "deviceType", "externalSource", "syncStatus", "stravaActivityId", "source",
+  "extra", // custom fields (MCP v2 Phase B), JSON
 ] as const;
 
 function workoutRows(payload: HealthExportPayload): CsvValue[][] {
@@ -188,6 +193,7 @@ function workoutRows(payload: HealthExportPayload): CsvValue[][] {
       num(row.avgHeartRateBpm), num(row.maxHeartRateBpm), num(row.elevationGainM),
       exercises, str(row.deviceType), str(row.externalSource),
       str(row.syncStatus), str(row.stravaActivityId), str(row.source),
+      row.extra != null ? JSON.stringify(row.extra) : null,
     ];
   });
 }

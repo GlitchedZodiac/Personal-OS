@@ -1,6 +1,8 @@
 import { compactMeasurement } from "@/lib/body-measurements";
 import { prisma } from "@/lib/prisma";
 import { executeGetHealthData } from "@/lib/chat-tools";
+import { ledgerRange, loadDayLedger } from "@/lib/day-ledger";
+import { listExercises } from "@/lib/exercise-library";
 import { getFinanceReportSummary } from "@/lib/finance/reports";
 import { parseReadingRef, readingSpan } from "@/lib/spirit-refs";
 import { getUtcDayBoundsForTimeZone } from "@/lib/timezone";
@@ -34,6 +36,10 @@ export interface AppDataArgs {
 export interface AppDataContext {
   timeZone: string;
   todayStr: string;
+  /** When set, the `settings` dataset returns only these keys ("a.b" = one sub-key). */
+  settingsKeys?: readonly string[];
+  /** The caller may not see finance data — not even counts (app_digest). */
+  hideFinance?: boolean;
 }
 
 function clampInt(value: unknown, fallback: number, min: number, max: number) {
@@ -168,6 +174,8 @@ function buildWhere(
     }
   }
 
+  // A search is a few words; 200 characters bounds the ILIKE scan (SEC-055).
+  if (typeof args.q === "string" && args.q.length > 200) args = { ...args, q: args.q.slice(0, 200) };
   if (args.q && spec.search?.length) {
     and.push({
       OR: spec.search.map((field) => ({
@@ -203,7 +211,21 @@ async function runCurated(
         where: { id: "default" },
         select: { data: true },
       });
-      return { settings: row?.data ?? {} };
+      const data = (row?.data ?? {}) as Record<string, unknown>;
+      // A caller may narrow the blob to named keys ("a.b" reaches one level
+      // in) — the Claude connector does (lib/mcp/tools MCP_SETTINGS_KEYS).
+      if (!ctx.settingsKeys) return { settings: data };
+      const narrowed: Record<string, unknown> = {};
+      for (const key of ctx.settingsKeys) {
+        const [head, sub] = key.split(".");
+        const value = data[head];
+        if (value === undefined) continue;
+        if (!sub) narrowed[head] = value;
+        else if (value && typeof value === "object" && sub in (value as object)) {
+          narrowed[head] = { ...((narrowed[head] as object) ?? {}), [sub]: (value as Record<string, unknown>)[sub] };
+        }
+      }
+      return { settings: narrowed };
     }
     case "finance_summary": {
       // Reuses the exact function the Finances screen calls, so the AI's
@@ -212,11 +234,37 @@ async function runCurated(
       return { currency: "COP", note: "Negative amounts are expenses.", summary };
     }
     case "app_digest":
-      return buildDigest();
+      return buildDigest(ctx.hideFinance === true);
+    case "exercises":
+      return listExercises({ q: args.q, id: args.id, limit: args.limit });
+    case "day_ledger": {
+      const row = await prisma.userSettings.findUnique({ where: { id: "default" }, select: { data: true } });
+      const settings = (row?.data ?? {}) as Record<string, unknown>;
+      const range = ledgerRange({ from: args.from, to: args.to, days: args.days }, ctx.todayStr);
+      const ledger = await loadDayLedger({
+        range,
+        timeZone: ctx.timeZone,
+        todayStr: ctx.todayStr,
+        settings,
+        includeWeekly: true,
+      });
+      return {
+        range,
+        targets: {
+          rest: ledger.targets.rest,
+          training: ledger.targets.training,
+          trainingDayRule: ledger.targets.trainingDayRule,
+          tdee: ledger.targets.tdee,
+        },
+        days: ledger.days,
+        weekly: ledger.weekly,
+        note: "tdee = bmr + tef (digestion) + neat (steps outside workouts) + workout kcal. deficit = tdee − eaten. Apple active energy is shown, never used.",
+      };
+    }
     default:
       // The eight original health branches keep their exact behaviour.
       return executeGetHealthData(
-        { query: key, days: args.days, from: args.from, to: args.to },
+        { query: key, days: args.days, from: args.from, to: args.to, id: args.id },
         ctx.timeZone,
         ctx.todayStr
       );
@@ -228,8 +276,8 @@ async function runCurated(
  * started all this is the model concluding "you have no measurements" without
  * looking — one call tells it what exists before it decides nothing does.
  */
-async function buildDigest() {
-  const pairs: [string, string][] = [
+async function buildDigest(hideFinance: boolean) {
+  const all: [string, string][] = [
     ["bodyMeasurement", "body_measurements"],
     ["foodLog", "recent_food"],
     ["workoutLog", "recent_workouts"],
@@ -248,6 +296,9 @@ async function buildDigest() {
     ["scheduledObligation", "finance_obligations"],
     ["savingsGoal", "finance_goals"],
   ];
+  // With finance off for the caller (the connector without its switch), even
+  // the COUNTS of finance rows stay out (review, 2026-10-20).
+  const pairs = hideFinance ? all.filter(([, dataset]) => !dataset.startsWith("finance_")) : all;
   const counts = await Promise.all(
     pairs.map(async ([model, dataset]) => {
       const d = delegateFor(model);

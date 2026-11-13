@@ -227,6 +227,25 @@ self.addEventListener("notificationclick", (event) => {
 // ─── Background Sync for Reminder Checks ─────────────────────────────
 
 self.addEventListener("message", (event) => {
+  // When the server says this device is no longer signed in, the page asks
+  // for the cached copies of his own data to go (audit 2026-10, SEC-066).
+  // Only /api/ responses in the app cache are removed: the scripture cache is
+  // public text, and unsent ink lives in IndexedDB (lib/ink-outbox.ts), which
+  // must survive a sign-out.
+  if (event.data && event.data.type === "CLEAR_PRIVATE_CACHE") {
+    event.waitUntil(
+      caches.open(CACHE_NAME).then((cache) =>
+        cache.keys().then((requests) =>
+          Promise.all(
+            requests
+              .filter((req) => new URL(req.url).pathname.startsWith("/api/"))
+              .map((req) => cache.delete(req))
+          )
+        )
+      )
+    );
+    return;
+  }
   if (event.data && event.data.type === "SHOW_NOTIFICATION") {
     const { title, body, url, tag } = event.data;
     self.registration.showNotification(title || "Personal OS", {

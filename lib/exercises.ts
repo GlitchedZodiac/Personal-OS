@@ -4,6 +4,8 @@
 // movements are first-class; aliases cover English + Spanish and common
 // phrasing variants heard through transcription.
 
+import type { ExerciseProfile } from "@/lib/exercise-profile";
+
 export type ExerciseCategory =
   | "kettlebell"
   | "barbell"
@@ -21,12 +23,27 @@ export interface ExerciseDef {
   aliases: string[];
   /** True for user-minted movements (user_exercises rows). */
   isCustom?: boolean;
+  /**
+   * What counts as load for PRs and tonnage (2026-11-12). "bodyweight": the
+   * body is the load and only a worn vest adds to it — bells used as handles
+   * are equipment. Unset = derived from category (bodyweight → bodyweight).
+   */
+  load?: ExerciseLoad;
+  /** What the movement is — written by Claude (lib/exercise-profile.ts). */
+  profile?: ExerciseProfile;
+}
+
+export type ExerciseLoad = "external" | "bodyweight";
+
+/** True when a movement's load is the body (plus any vest), not its implement. */
+export function isBodyweightLoad(def: Pick<ExerciseDef, "category" | "load">): boolean {
+  return def.load ? def.load === "bodyweight" : def.category === "bodyweight";
 }
 
 export const EXERCISE_CATALOG: ExerciseDef[] = [
   // ── Kettlebell ────────────────────────────────────────────────────────
   { id: "kb-swing", name: "Kettlebell Swing", category: "kettlebell", aliases: ["swing", "swings", "two hand swing", "russian swing", "american swing", "columpio", "balanceo", "kettlebell swings"] },
-  { id: "kb-one-arm-swing", name: "One-Arm Kettlebell Swing", category: "kettlebell", aliases: ["one arm swing", "single arm swing", "one hand swing"] },
+  { id: "kb-one-arm-swing", name: "One-Arm Kettlebell Swing", category: "kettlebell", aliases: ["one arm swing", "single arm swing", "one hand swing", "one arm kettlebell swing", "single arm kettlebell swing", "one arm kb swing", "single arm kb swing"] },
   { id: "kb-goblet-squat", name: "Goblet Squat", category: "kettlebell", aliases: ["goblet squats", "sentadilla goblet", "sentadilla copa"] },
   { id: "kb-turkish-get-up", name: "Turkish Get-Up", category: "kettlebell", aliases: ["tgu", "get up", "get ups", "turkish get ups", "levantamiento turco"] },
   { id: "kb-clean", name: "Kettlebell Clean", category: "kettlebell", aliases: ["clean", "cleans", "cargada"] },
@@ -137,8 +154,24 @@ interface IndexEntry {
 // tests directly — this module stays client-safe (no Prisma import).
 let customExercises: ExerciseDef[] = [];
 
+// Overlays (2026-11-12, MCP v2 Phase C): a user_exercises row whose slug is a
+// BUILT-IN id doesn't make a second movement — it adds aliases, a load type
+// and a profile to the catalog entry (its name and category stay the
+// catalog's). That is how Claude teaches a built-in "single arm kb swing" or
+// explains what a Turkish get-up is without touching code.
+let overlays = new Map<string, ExerciseDef>();
+let effectiveCatalog: ExerciseDef[] | null = null;
+const BUILT_IN_IDS = new Set(EXERCISE_CATALOG.map((e) => e.id));
+
 export function setCustomExercises(defs: ExerciseDef[]) {
-  customExercises = defs.map((d) => ({ ...d, isCustom: true }));
+  overlays = new Map();
+  const customs: ExerciseDef[] = [];
+  for (const d of defs) {
+    if (BUILT_IN_IDS.has(d.id)) overlays.set(d.id, d);
+    else customs.push({ ...d, isCustom: true });
+  }
+  customExercises = customs;
+  effectiveCatalog = null;
   index = null; // rebuild lazily with the customs merged in
 }
 
@@ -146,13 +179,49 @@ export function getCustomExercises(): ExerciseDef[] {
   return customExercises;
 }
 
+/** True when `id` is a built-in catalog movement (overlaid or not). */
+export function isBuiltInExercise(id: string): boolean {
+  return BUILT_IN_IDS.has(id);
+}
+
+/** The catalog with any overlays applied — aliases, load and profile added. */
+export function catalogExercises(): ExerciseDef[] {
+  if (effectiveCatalog) return effectiveCatalog;
+  effectiveCatalog = EXERCISE_CATALOG.map((base) => {
+    const o = overlays.get(base.id);
+    if (!o) return base;
+    const known = new Set([fold(base.name), ...base.aliases.map(fold)]);
+    const extra = [o.name, ...o.aliases].filter((a) => {
+      const k = fold(a);
+      if (!k || known.has(k)) return false;
+      known.add(k);
+      return true;
+    });
+    return {
+      ...base,
+      aliases: [...base.aliases, ...extra],
+      ...(o.load ? { load: o.load } : {}),
+      ...(o.profile ? { profile: o.profile } : {}),
+    };
+  });
+  return effectiveCatalog;
+}
+
 /**
  * Full vocabulary — catalog plus user-minted movements (for pickers). A custom
  * the catalog has since taken over (same id) is listed once, as the catalog's.
  */
 export function allExercises(): ExerciseDef[] {
-  const builtIn = new Set(EXERCISE_CATALOG.map((e) => e.id));
-  return [...EXERCISE_CATALOG, ...customExercises.filter((e) => !builtIn.has(e.id))];
+  return [...catalogExercises(), ...customExercises];
+}
+
+/** Category from the equipment named in a movement's name ("Seated Dumbbell…" → dumbbell). */
+export function guessCategory(name: string): ExerciseCategory {
+  for (const word of fold(name).split(" ")) {
+    const c = EQUIPMENT_WORDS[word];
+    if (c) return c;
+  }
+  return "other";
 }
 
 let index: IndexEntry[] | null = null;
@@ -160,7 +229,7 @@ let index: IndexEntry[] | null = null;
 function buildIndex(): IndexEntry[] {
   if (index) return index;
   const entries: IndexEntry[] = [];
-  for (const def of [...EXERCISE_CATALOG, ...customExercises]) {
+  for (const def of [...catalogExercises(), ...customExercises]) {
     entries.push({ key: fold(def.name), def });
     entries.push({ key: def.id, def });
     entries.push({ key: fold(def.id), def });
@@ -189,15 +258,106 @@ export function findExerciseByExactName(raw: string): ExerciseDef | null {
   return null;
 }
 
+// ── The containment guard (2026-11-12, gap #1) ─────────────────────────────
+// The second pass used to accept ANY catalog name found inside the logged
+// name, so "Seated Dumbbell Shoulder Press" became the barbell Overhead Press
+// (its alias "shoulder press") and set a fake PR against barbell history;
+// "Bodyweight Squat" became the barbell Squat; "Thrust Jerk" became Jerk.
+// Descriptive filler ("5 rounds of kettlebell swings", "heavy goblet squat
+// work") must still match. The rule: the words LEFT OVER after the match may
+// describe the set, but must not change the movement. A leftover word that
+// names different equipment, a variation, or another movement → no match,
+// and the caller treats the name as new (a visible "new movement" beats a
+// silent wrong one — a wrong match poisons PRs where nobody looks).
+
+const EQUIPMENT_WORDS: Record<string, ExerciseCategory> = {
+  kettlebell: "kettlebell", kettlebells: "kettlebell", kb: "kettlebell", kbs: "kettlebell",
+  dumbbell: "dumbbell", dumbbells: "dumbbell", db: "dumbbell", dbs: "dumbbell",
+  mancuerna: "dumbbell", mancuernas: "dumbbell",
+  barbell: "barbell", bb: "barbell", barra: "barbell",
+  bodyweight: "bodyweight", bw: "bodyweight", air: "bodyweight",
+  machine: "machine", maquina: "machine", cable: "machine", smith: "machine",
+};
+
+/** Words that make it a different variation of the movement. */
+const VARIATION_WORDS = new Set([
+  "seated", "sentado", "sentada", "kneeling", "single", "one", "alternating", "alt",
+  "unilateral", "half", "pump", "pumps", "pistol", "sumo", "romanian", "deficit",
+  "paused", "incline", "decline", "landmine", "bottoms", "thrust", "thrusts", "atomic",
+]);
+
+/** Words that name a movement of their own — a leftover one means a complex or a different lift. */
+const MOVEMENT_WORDS = new Set([
+  "thruster", "thrusters", "clean", "cleans", "snatch", "snatches", "jerk", "jerks",
+  "press", "presses", "row", "rows", "squat", "squats", "lunge", "lunges", "curl", "curls",
+  "raise", "raises", "pull", "pulls", "pullup", "pullups", "push", "pushup", "pushups",
+  "swing", "swings", "deadlift", "deadlifts", "burpee", "burpees", "crunch", "crunches",
+  "plank", "planks", "dip", "dips", "carry", "carries", "extension", "extensions",
+  "fly", "flies", "flyes", "getup", "getups", "windmill", "windmills",
+]);
+
+/** The words of `folded` that remain after removing one occurrence of each word of `key`. */
+function leftoverWords(folded: string, key: string): string[] {
+  const left = folded.split(" ");
+  for (const word of key.split(" ")) {
+    const i = left.indexOf(word);
+    if (i >= 0) left.splice(i, 1);
+  }
+  return left.filter(Boolean);
+}
+
+/** True when a leftover word changes which movement this is. */
+export function leftoverChangesMovement(leftover: string[], def: ExerciseDef): boolean {
+  for (const word of leftover) {
+    const equipment = EQUIPMENT_WORDS[word];
+    if (equipment && equipment !== def.category) return true;
+    if (VARIATION_WORDS.has(word)) return true;
+    if (MOVEMENT_WORDS.has(word)) return true;
+  }
+  return false;
+}
+
+export type MatchHow = "exact" | "contains";
+
 /**
  * Map a free-text exercise name (typed, spoken EN/ES, or AI-generated) to a
- * catalog entry. Exact fold-match first, then whole-word containment.
- * Returns null for unknown movements — callers keep the raw name.
+ * catalog entry, and say HOW it matched. Exact fold-match first, then
+ * guarded whole-word containment. Null for unknown movements.
  */
-export function normalizeExerciseName(raw: string): ExerciseDef | null {
+export function matchExerciseName(raw: string): { def: ExerciseDef; how: MatchHow } | null {
   const folded = fold(raw);
   if (!folded) return null;
 
+  const entries = buildIndex();
+  for (const entry of entries) {
+    if (entry.key === folded) return { def: entry.def, how: "exact" };
+  }
+  for (const entry of entries) {
+    if (entry.key.length < 4) continue;
+    if (!new RegExp(`(^|\\s)${entry.key}($|\\s)`).test(folded)) continue;
+    if (leftoverChangesMovement(leftoverWords(folded, entry.key), entry.def)) continue;
+    return { def: entry.def, how: "contains" };
+  }
+  return null;
+}
+
+/**
+ * Map a free-text exercise name to a catalog entry. Returns null for unknown
+ * movements — callers keep the raw name.
+ */
+export function normalizeExerciseName(raw: string): ExerciseDef | null {
+  return matchExerciseName(raw)?.def ?? null;
+}
+
+/**
+ * The pre-guard reading: the longest contained key, no questions asked.
+ * ONLY for a caller that puts the result in front of him as a suggestion to
+ * confirm — the wrist voice parser offers "10 pistol squats" as a Squat to
+ * review. Never for storage, PRs or anything that decides silently.
+ */
+export function looseExerciseMatch(raw: string): ExerciseDef | null {
+  const folded = fold(raw);
+  if (!folded) return null;
   const entries = buildIndex();
   for (const entry of entries) {
     if (entry.key === folded) return entry.def;
@@ -211,7 +371,7 @@ export function normalizeExerciseName(raw: string): ExerciseDef | null {
 
 export function getExerciseById(id: string): ExerciseDef | null {
   return (
-    EXERCISE_CATALOG.find((e) => e.id === id) ??
+    catalogExercises().find((e) => e.id === id) ??
     customExercises.find((e) => e.id === id) ??
     null
   );

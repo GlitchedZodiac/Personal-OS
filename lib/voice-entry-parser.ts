@@ -23,12 +23,12 @@
 // score.
 
 import {
-  EXERCISE_CATALOG,
+  catalogExercises,
   findExerciseByExactName,
   foldExerciseName,
   getCustomExercises,
   getExerciseById,
-  normalizeExerciseName,
+  looseExerciseMatch,
   type ExerciseCategory,
   type ExerciseDef,
 } from "@/lib/exercises";
@@ -488,7 +488,8 @@ function vocabulary(): VocabKey[] {
   const keys: VocabKey[] = [];
   const seen = new Set<string>();
   // Catalog first, like the catalog's own index, so ties resolve the same way.
-  for (const def of [...EXERCISE_CATALOG, ...customs]) {
+  // (With overlays applied — aliases Claude added to a built-in count here too.)
+  for (const def of [...catalogExercises(), ...customs]) {
     for (const raw of [def.name, ...def.aliases, def.id]) {
       const key = foldExerciseName(raw);
       if (!key || seen.has(`${def.id}|${key}`)) continue;
@@ -1869,7 +1870,10 @@ function indexOfWords(words: string[], phrase: string[]): number {
  * catalog's own pick stand, as a loose match.
  */
 function containment(folded: string): { def: ExerciseDef; clean: boolean } | null {
-  const fallback = normalizeExerciseName(folded);
+  // The loose catalog pick, on purpose: an unclean match here is only ever
+  // offered for review on the wrist, never stored silently (2026-11-12 — the
+  // shared normalizer became guarded; this suggestion path keeps its reach).
+  const fallback = looseExerciseMatch(folded);
   if (!fallback) return null;
   const words = folded.split(" ");
   let best: VocabKey | null = null;

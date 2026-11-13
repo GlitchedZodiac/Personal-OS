@@ -11,12 +11,12 @@
     "motion"
   ],
   "totals": {
-    "hex": 2666,
+    "hex": 2667,
     "palette": 683,
-    "arbText": 1301,
+    "arbText": 1309,
     "inlineStyle": 1455,
-    "rawButton": 596,
-    "rawField": 113,
+    "rawButton": 599,
+    "rawField": 114,
     "lucide": 278,
     "motion": 243
   },
@@ -588,6 +588,14 @@
       "inlineStyle": 4,
       "rawButton": 2
     },
+    "components/known-devices-reset.tsx": {
+      "arbText": 1,
+      "rawButton": 1
+    },
+    "components/legacy-key-notice.tsx": {
+      "arbText": 2,
+      "rawButton": 1
+    },
     "components/macro-slider.tsx": {
       "palette": 22,
       "arbText": 2,
@@ -602,12 +610,21 @@
       "rawButton": 2,
       "rawField": 1
     },
+    "components/mcp-finance-toggle.tsx": {
+      "hex": 1,
+      "arbText": 3,
+      "rawField": 1
+    },
     "components/measurement-wizard.tsx": {
       "palette": 26,
       "arbText": 4,
       "rawButton": 2,
       "lucide": 10,
       "motion": 4
+    },
+    "components/pairing-unlock.tsx": {
+      "arbText": 2,
+      "rawButton": 1
     },
     "components/photo-tray.tsx": {
       "hex": 10,

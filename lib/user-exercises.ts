@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import { readProfile } from "@/lib/exercise-profile";
 import {
   type ExerciseCategory,
   type ExerciseDef,
+  type ExerciseLoad,
   findExerciseByExactName,
   foldExerciseName,
   setCustomExercises,
@@ -33,14 +35,20 @@ export async function ensureUserExercisesLoaded(force = false): Promise<void> {
   if (!force && Date.now() - loadedAt < TTL_MS) return;
   const rows = await prisma.userExercise.findMany({ orderBy: { createdAt: "asc" } });
   setCustomExercises(
-    rows.map((r) => ({
-      id: r.slug,
-      name: r.name,
-      category: (CATEGORY_SET.has(r.category as ExerciseCategory)
-        ? r.category
-        : "other") as ExerciseCategory,
-      aliases: Array.isArray(r.aliases) ? (r.aliases as string[]) : [],
-    }))
+    rows.map((r) => {
+      const profile = readProfile(r.profile);
+      return {
+        id: r.slug,
+        name: r.name,
+        category: (CATEGORY_SET.has(r.category as ExerciseCategory)
+          ? r.category
+          : "other") as ExerciseCategory,
+        aliases: Array.isArray(r.aliases) ? (r.aliases as string[]) : [],
+        // MCP v2 Phase C: load type and explanation ride the same index.
+        ...(r.load === "bodyweight" || r.load === "external" ? { load: r.load as ExerciseLoad } : {}),
+        ...(profile ? { profile } : {}),
+      };
+    })
   );
   loadedAt = Date.now();
 }

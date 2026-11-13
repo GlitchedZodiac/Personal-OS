@@ -15,6 +15,8 @@ import { getTrainingWeek } from "@/lib/planner";
 import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg } from "@/lib/prs";
 import { listTrails } from "@/lib/trails";
+import { workoutDetail } from "@/lib/workout-detail";
+import { loadDayLedger } from "@/lib/day-ledger";
 import {
   addDaysToDateString,
   getDateStringInTimeZone,
@@ -47,7 +49,7 @@ function parseIsoDay(value: unknown): string | null {
 }
 
 export async function executeGetHealthData(
-  args: { query?: string; days?: number; from?: string; to?: string },
+  args: { query?: string; days?: number; from?: string; to?: string; id?: string },
   timeZone: string,
   todayStr: string
 ): Promise<object> {
@@ -97,15 +99,20 @@ export async function executeGetHealthData(
           proteinG: Math.round(f.proteinG),
           carbsG: Math.round(f.carbsG),
           fatG: Math.round(f.fatG),
+          // Custom fields (MCP v2 Phase B), e.g. confidence.
+          ...(f.extra != null ? { extra: f.extra } : {}),
         })),
       };
     }
 
     case "recent_workouts": {
+      // One workout by id (2026-11-12, gap #15) adds its streams — HR over
+      // time, route speed/grade, splits — bounded by lib/workout-detail.
+      const byId = typeof args.id === "string" && args.id.trim() ? args.id.trim() : null;
       const rows = await prisma.workoutLog.findMany({
-        where: { startedAt: { gte: since, lte: until } },
+        where: byId ? { id: byId } : { startedAt: { gte: since, lte: until } },
         orderBy: { startedAt: "desc" },
-        take: 30,
+        take: byId ? 1 : 30,
       });
       return {
         workouts: rows.map((w) => {
@@ -169,6 +176,7 @@ export async function executeGetHealthData(
             stepCount: w.stepCount,
             packKg: w.packKg,
             trailId: w.trailId,
+            ...(w.extra != null ? { extra: w.extra } : {}),
             source: w.externalSource ?? w.source,
             createdAt: w.createdAt.toISOString(),
             // zone analytics when an HR stream existed (Strava/watch)
@@ -226,6 +234,12 @@ export async function executeGetHealthData(
             voiceEntries: Array.isArray(m.setLog) ? m.setLog.length : undefined,
           };
         }),
+        // The streams sit at the TOP of the response, not inside the row:
+        // data-access clip() flattens anything nested deeper than four
+        // levels, which turned the HR series into "[nested array]" (caught
+        // by the 2026-11-12 self-smoke).
+        ...(byId && rows[0] ? { detail: workoutDetail(rows[0].metricsData) ?? undefined } : {}),
+        ...(byId && rows.length === 0 ? { error: `No workout with id ${byId}` } : {}),
       };
     }
 
@@ -361,6 +375,9 @@ export async function executeGetHealthData(
         routines: rows.map((s) => ({
           id: s.id,
           name: s.name,
+          // MCP v2 Phase C: what it is and where it came from.
+          description: s.description,
+          sourceUrl: s.sourceUrl,
           kind: s.kind,
           durationMinutes: s.durationMinutes,
           rounds: s.rounds,
@@ -506,7 +523,6 @@ export async function executeGetHealthData(
       ]);
 
       const settings = (settingsRow?.data ?? {}) as SettingsData;
-      const goal = settings.calorieTarget ?? 2000;
       let calories = 0, proteinG = 0, carbsG = 0, fatG = 0;
       for (const f of food) {
         calories += f.calories;
@@ -514,17 +530,34 @@ export async function executeGetHealthData(
         carbsG += f.carbsG;
         fatG += f.fatG;
       }
+      // The day's target and the full ledger (2026-11-12, MCP v2 Phase D):
+      // goals come from settings.targets — rest or training day — and the
+      // ledger adds steps, workout burn, net, deficit and the weekly check.
+      // The goal fields keep their names so every reader still works.
+      const ledger = await loadDayLedger({
+        range: { from: todayStr, to: todayStr },
+        timeZone,
+        todayStr,
+        settings: settings as Record<string, unknown>,
+        includeWeekly: true,
+      });
+      const today = ledger.days[0];
+      const target = today.target;
 
       return {
         date: todayStr,
+        dayType: today.dayType,
         caloriesEaten: Math.round(calories),
-        calorieGoal: goal,
+        calorieGoal: target.kcal,
         proteinG: Math.round(proteinG),
-        proteinGoalG: Math.round((goal * (settings.proteinPct ?? 30)) / 100 / 4),
+        proteinGoalG: target.proteinG,
         carbsG: Math.round(carbsG),
-        carbsGoalG: Math.round((goal * (settings.carbsPct ?? 40)) / 100 / 4),
+        carbsGoalG: target.carbsG,
         fatG: Math.round(fatG),
-        fatGoalG: Math.round((goal * (settings.fatPct ?? 30)) / 100 / 9),
+        fatGoalG: target.fatG,
+        steps: today.activity.steps,
+        ledger: today,
+        weekly: ledger.weekly,
         mealsToday: food.map((f) => `${f.mealType}: ${f.foodDescription}`),
         waterMlToday: water._sum.amountMl ?? 0,
         weekTrainingVolumeKg: workouts.reduce((s, w) => s + sessionVolumeKg(w.exercises), 0),

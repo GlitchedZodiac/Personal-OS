@@ -26,6 +26,50 @@ export function exercisesWereEdited(metricsData: unknown): boolean {
   return typeof asObject(metricsData)?.exercisesEditedAt === "string";
 }
 
+// ── Corrected fields (2026-11-12, MCP v2 Phase A) ──────────────────────────
+// The movement-list rule above, generalised: any field corrected off the
+// wrist (patch_record) is named in metricsData.correctedFields with the time
+// of the fix, and a later re-send of the same session leaves it alone. The
+// watch still owns everything nobody corrected — HR, streams, recovery.
+
+/** Top-level workout columns a correction can protect from a re-send. */
+export const CORRECTABLE_COLUMNS = [
+  "startedAt",
+  "durationMinutes",
+  "workoutType",
+  "description",
+  "caloriesBurned",
+  "distanceMeters",
+  "stepCount",
+  "avgHeartRateBpm",
+  "maxHeartRateBpm",
+  "elevationGainM",
+] as const;
+
+/** Fields kept inside metricsData that a correction can protect. */
+export const CORRECTABLE_METRICS = ["routineId", "rope"] as const;
+
+export function correctedFieldsOf(metricsData: unknown): Record<string, string> {
+  const c = asObject(asObject(metricsData)?.correctedFields);
+  const out: Record<string, string> = {};
+  if (c) for (const [k, v] of Object.entries(c)) if (typeof v === "string") out[k] = v;
+  return out;
+}
+
+/** Stamp metricsData with the fields just corrected. */
+export function stampCorrected(metricsData: unknown, fields: string[], at: Date = new Date()): Json {
+  const base = asObject(metricsData) ?? {};
+  const corrected = { ...correctedFieldsOf(base) };
+  for (const f of fields) corrected[f] = at.toISOString();
+  return { ...base, correctedFields: corrected };
+}
+
+/** The columns a re-send must not overwrite on this row. */
+export function protectedColumns(metricsData: unknown): string[] {
+  const corrected = correctedFieldsOf(metricsData);
+  return CORRECTABLE_COLUMNS.filter((c) => c in corrected);
+}
+
 function logIds(log: unknown): Set<string> {
   const ids = new Set<string>();
   if (Array.isArray(log)) {
@@ -45,6 +89,8 @@ export interface ResyncMerge {
   keptEditedExercises: boolean;
   /** Set-log ids that arrived after his edit and are NOT in the movement list. */
   lateEntryIds: string[];
+  /** Columns he corrected off the wrist; the re-send update must leave them alone. */
+  protectedColumns: string[];
 }
 
 /**
@@ -91,13 +137,27 @@ export function mergeResync(
     next.intervals = { ...nextIntervals, jumps: prevIntervals.jumps };
   }
 
+  // Corrections made through the connector outlive the re-send (Phase A).
+  const corrected = correctedFieldsOf(before);
+  if (Object.keys(corrected).length) {
+    next.correctedFields = corrected;
+    if ("routineId" in corrected) {
+      next.sequenceId = before?.sequenceId;
+      next.sequenceName = before?.sequenceName;
+    }
+    if ("rope" in corrected && before?.intervals !== undefined) next.intervals = before.intervals;
+  }
+
   return {
     exercises: edited ? existing.exercises : incoming.exercises,
     metricsData: Object.keys(next).length ? next : incoming.metricsData,
-    // The wrist never writes prose; a description added on the phone stays.
-    description: incoming.description ?? existing.description,
+    // The wrist never writes prose; a description added on the phone stays —
+    // and a corrected one stays even if the wrist sends text.
+    description:
+      "description" in corrected ? existing.description : incoming.description ?? existing.description,
     keptEditedExercises: edited,
     lateEntryIds,
+    protectedColumns: protectedColumns(before),
   };
 }
 

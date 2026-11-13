@@ -16,8 +16,9 @@ export async function POST(request: NextRequest) {
       typeof body.code_challenge === "string" ? body.code_challenge : "";
     const method =
       typeof body.code_challenge_method === "string" ? body.code_challenge_method : "S256";
-    const state = typeof body.state === "string" ? body.state : null;
-    const scope = typeof body.scope === "string" ? body.scope : null;
+    // Both are passthrough strings stored or echoed verbatim — bounded (SEC-017).
+    const state = typeof body.state === "string" ? body.state.slice(0, 512) : null;
+    const scope = typeof body.scope === "string" ? body.scope.slice(0, 200) : null;
 
     if (!clientId || !redirectUri) {
       return NextResponse.json(

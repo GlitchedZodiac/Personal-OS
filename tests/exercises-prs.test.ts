@@ -102,9 +102,10 @@ describe("user-minted exercises in the shared index", () => {
   };
 
   it("customs win over catalog substring matches", () => {
-    // Without the custom, the fuzzy pass swallows the flow into a catalog
-    // movement (longest substring wins — "thruster").
-    expect(normalizeExerciseName("one-arm clean squat thruster")?.id).toBe("kb-thruster");
+    // Without the custom, the guarded pass no longer swallows the flow into
+    // "thruster" (2026-11-12): "one", "clean" and "squat" change the movement,
+    // so it stays unknown and gets minted instead of polluting thruster PRs.
+    expect(normalizeExerciseName("one-arm clean squat thruster")).toBeNull();
     setCustomExercises([thruster]);
     expect(normalizeExerciseName("one-arm clean squat thruster")?.id).toBe(
       "one-arm-clean-squat-thruster"
