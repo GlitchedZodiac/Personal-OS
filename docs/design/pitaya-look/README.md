@@ -1,91 +1,104 @@
 # Pitaya Look — the design round, slice 1: Train
 
-**Status: first pass, waiting for Michael's reaction. Nothing is built from it yet.**
+**Status: second pass, waiting for Michael's reaction. Nothing is built from it yet.**
 
-The round is being designed in the session, on a Design canvas, instead of
-being pasted into a separate tool. The brief is
+The round is designed in the session, on a Design canvas. The brief is
 [`../pitaya-look-design-prompt.md`](../pitaya-look-design-prompt.md).
 
 - **Canvas (private to Michael):** https://claude.ai/artifact/5i5E5Fd3d8hb3W9EdGaXJq
-- **Drawn from:** the original Train screen in `pitaya-app.dc.html` (its
-  header, buttons, cards, record banner, session rows, volume bars and
-  sheets), on the tokens and type scale in `pitaya-tokens.md` → "The
-  standard". Icons are the app's own, copied from
-  `components/pitaya-icons.tsx`. Every number on the canvas is invented.
+- **Drawn from:** the original Train screen in `pitaya-app.dc.html`, on the
+  tokens and type scale in `pitaya-tokens.md` → "The standard". Icons are
+  the app's own, from `components/pitaya-icons.tsx`. Every number on the
+  canvas is invented.
 
-## What is on the canvas
+## Second pass — five highlights (2026-11-13)
 
-| Board | What it shows |
-|---|---|
-| Train · Day | The whole screen. About two phone screens tall; today's is about five. |
-| Train · Night | The same screen in Night. |
-| Train · states | A planned row opened (Mark done · Skip · Remove) with the hint showing; the volume card switched to movements; a week with no new records. |
-| Train · empty week | No sessions, no records, no rope, no trails. |
-| All records | New page. Sort by Recent, A–Z or Heaviest; this week's on top. |
-| Jump rope | New page. Everything the Train section shows today. |
-| Routines sheet | One sheet for both "Start live workout" and "Routines". |
-| Live session | The set counter, rest timer, previous and next, end and save. |
-| A · quiet / B · pop | Three moments drawn two ways. Press Play, then Replay. |
+Michael's reaction to the first pass: too many sections he never looks at,
+too much text, too many tables. He asked for highlights with drill-downs,
+and for the five things Train must show, chosen from how he actually uses it.
 
-## Where everything on today's Train went
+What his logs show (read through the connector, no numbers kept here):
+
+- Most sessions arrive from the watch as Freestyle, or from Claude. The
+  phone's own "Start live workout" is rarely the way in.
+- Every session carries calories and heart rate. Tonnage is missing on
+  about half, so it cannot be the headline number.
+- Records have recently moved together, a whole bell size up.
+- No week is planned in the app. Rope is mostly rounds inside circuits.
+  Named trails are occasional.
+
+**Train is now one phone screen with five tiles.** Each tile is a tap into
+detail:
+
+| Tile | Shows | Tap opens |
+|---|---|---|
+| This week | Calories burned, sessions and active time, a seven-day strip of hard and easy training | The week: its sessions and its plan (**not drawn yet**), then all activities |
+| Last session | What it was, minutes, calories, a zone bar, average heart rate | That session's page (exists today) |
+| Your bell | The weight he is on now, how many lifts moved up | All records (drawn) |
+| Walking | Distance and steps this week | Steps & calories history (exists today) |
+| 8 weeks | Weekly burn as eight bars, one line of verdict | Trends (**not drawn yet**): volume, by movement, jump rope, trails, effort |
+
+One small **Start** button in the header replaces the two large buttons and
+opens the Routines sheet.
+
+## Where everything on today's Train went (second pass)
 
 Read from the code (`app/(tabs)/health/workouts/page.tsx` and the components
-it mounts). Nothing is dropped without a ruling.
+it mounts). Nothing is dropped without a ruling; most things moved one tap
+down.
 
 | Today | In the design |
 |---|---|
-| Header: "Week N · Kettlebell block", title | Kept. |
-| Header pill: tonnage lifted (or time jumped) | **Moved** to the big number in the This-week card. |
-| Start live workout | Kept. |
-| Start picker sheet (pick the routine) | **Merged** into the Routines sheet. Both lists already start a session on tap. *Needs a ruling.* |
-| Routines sheet: list, "→ Watch", build new, the sync note, Close | Kept. The tag reads "On watch"; guided EMOMs are tagged "Guided clock". |
-| Live session: clock, set X of Y, − and +, rest timer (tap to skip), Prev, Next, End session & save | Kept, redrawn. |
-| Live session: "Saving…" state; the guided EMOM clock | Kept. **Not drawn yet.** |
-| This week · planned: rows, state, change state, remove, the count | Kept. Tapping a row shows its actions, as today. |
-| This week · planned: the "plan it in Chat" sentence | **Moved** behind the "?" beside the title. |
-| Overview: sessions, active time, kcal, outdoor km | Kept, in the This-week card. |
-| Overview: rope time | **Moved** to the Jump rope row and page. |
-| View activities → · Steps & calories history → | Kept, side by side. |
-| Record banner (heaviest ever / best session) | Kept. |
-| Today's session: time, duration, routine, rounds, rows, work time, PR tag, check | Kept. |
-| Volume · 8 weeks: bars, this week's tonnage | Kept. |
-| Volume: change against last week | **Moved** up to the This-week card. |
-| By movement · 8 weeks | **Moved** into the Volume card, behind its "Movements" switch: five bars, then "Show more". |
-| Jump rope: chart, bests, per-protocol tables, the explainer | **Moved** to its own page. Train keeps one row. The explainer sits behind "What these numbers mean". |
-| PR wall: every record; a tile opens its session | Six on Train (this week's first), all of them on the new page. A row or tile still opens its session. |
-| Trails: name, distance, day, climb, a small elevation line | Kept, as one row that opens the activity. |
-| Trails: average heart rate, minutes, the full elevation line | **Moved** to the activity page the row opens. |
-| Trails: "● Record" (only shows a message today) | **Proposed drop.** *Needs a ruling.* |
-| Effort · time in zones: session, average heart rate, effort score, zone bar | Kept, as one row with a small zone bar. The audit proposed moving it to the Sunday Report; it stays here. |
-| Effort: the Z1–Z5 percentages as text | **Moved** to the activity page the row opens. |
-| Empty states | Drawn: no sessions, no records, no rope, no trails. |
+| Header kicker and title | Kept. The kicker is trimmed to "Week N". |
+| Header pill: tonnage lifted | **Moved** to Trends. The week's headline is calories burned. |
+| Start live workout · Routines (two buttons) | **Merged** into one Start button → Routines sheet. *Needs a ruling.* |
+| Start picker sheet | **Merged** into the Routines sheet. |
+| Live session, "Saving…", the guided EMOM clock | Kept, behind Start. The last two are not drawn yet. |
+| This week · planned | **Moved**: planned days appear as outlines in the week strip only when a plan exists; rows and their actions live on the week page. |
+| Overview: sessions, active time, kcal | Kept, in the This-week tile. |
+| Overview: outdoor km, rope time | **Moved**: distance to the Walking tile, rope time to Trends → Jump rope. |
+| View activities → | **Moved**: the This-week tile opens it. |
+| Steps & calories history → | **Moved**: the Walking tile opens it. |
+| Record banner | **Replaced** by the Your-bell tile. The banner itself returns as the moment a record is set (see A / B). |
+| Today's session card | **Replaced** by the Last-session tile; the movement rows are on the session's page. |
+| Volume · 8 weeks, By movement · 8 weeks | **Moved** to Trends. Train keeps eight bars. |
+| Jump rope section | **Moved** to its own page, reached from Trends. |
+| PR wall | **Moved** to All records. |
+| Trails card | **Moved** to Trends. |
+| Trails: "● Record" (only shows a message) | **Proposed drop.** *Needs a ruling.* |
+| Effort · time in zones | The latest session's zones are on the Last-session tile; the rest moved to Trends. |
+| Empty states | To be redrawn for the five tiles. |
 
 ## For Michael to rule on
 
-1. **Quiet or pop?** Boards A and B.
-2. **One Routines sheet** for both buttons, instead of two near-identical sheets.
+1. **Are these the right five?**
+2. **Quiet or pop?** Boards A and B.
 3. **Drop "● Record"** on Trails. It does nothing but say recording lives on the watch.
 
-## Departures from the original Train design (all already in the look plan)
+## Also on the canvas
 
-- Type sits on the seven-step scale with the 12 px floor (look-plan D12): the
-  design's 9.5–13.5 px labels become 11, 12 or 13; the 30 px title is 26.
-- Labels use the darker grey, not the faint one (D14).
-- Cards are a hairline plus a 1 px shadow, not the soft 12 px shadow.
-- The record banner's looping shimmer is gone (the standard removed loops
-  that carry no meaning). Option B brings back one sweep, once.
+- **Where the taps lead:** All records, Jump rope, the Routines sheet, the
+  live session.
+- **A · quiet / B · pop:** three moments drawn two ways. Press Play, then Replay.
+- **First version:** the long Train page in Night, its states and its empty
+  week, kept at the bottom for comparison.
+
+## Departures from the original Train design
+
+- The first pass kept the original's structure. The second pass does not: it
+  keeps the original's language (cards, the raspberry accent, the bar ramp,
+  the pill button) and changes what the screen is for.
+- Type sits on the seven-step scale with the 12 px floor (look-plan D12);
+  labels use the darker grey (D14); cards are a hairline plus a 1 px shadow.
 
 ## New glyphs drawn for this round
 
-The design files never had them, and the app borrows them from an icon
-library today: check, chevron (right, down, left), info "?", plus, minus,
-and the three trend marks (rising, steady, falling). Same grammar as the
-app's icons: 24 × 24, one stroke weight, round caps.
+Check, chevron (right, down, left), info "?", plus, minus, and the trend
+marks (rising, steady, falling). Same grammar as the app's icons.
 
 ## Not drawn yet
 
-Night for the two new pages and the sheets; the guided EMOM clock; the
-"Saving…" state; loading skeletons; an error state; the wide desktop column;
-and the handoff spec with every number. They follow once the direction is
-approved. Motion was checked for rendering, not for feel: that part is
-Michael's eye.
+The week page and the Trends page; Night and the empty state for the new
+Train; Night for the other pages and sheets; the guided EMOM clock; the
+"Saving…" state; loading and error states; the wide desktop column; the
+handoff spec. Motion was checked for rendering, not for feel.
