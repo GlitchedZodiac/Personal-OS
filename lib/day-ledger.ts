@@ -329,7 +329,7 @@ export async function loadDayLedger(input: {
   const start = getUtcDayBoundsForTimeZone(loadFrom, timeZone).dayStart;
   const end = getUtcDayBoundsForTimeZone(loadTo, timeZone).dayEnd;
 
-  const [food, workouts, health, bmrRows, weights] = await Promise.all([
+  const [food, workouts, health, activity, bmrRows, weights] = await Promise.all([
     prisma.foodLog.findMany({
       where: { loggedAt: { gte: start, lte: end } },
       select: { loggedAt: true, calories: true, proteinG: true, carbsG: true, fatG: true },
@@ -342,6 +342,13 @@ export async function loadDayLedger(input: {
     prisma.dailyHealthSnapshot.findMany({
       where: { localDate: { gte: loadFrom, lte: loadTo } },
       select: { localDate: true, steps: true, activeEnergyKcal: true, restingHeartRateBpm: true, hrvMs: true, updatedAt: true },
+    }),
+    // The iPhone app's own per-day totals (2026-10-17): the designated steps
+    // table going forward. Preferred when a day has it; the Apple Health
+    // snapshot fills the days it doesn't (docs/deferred-items "two step tables").
+    prisma.dailyActivity.findMany({
+      where: { date: { gte: loadFrom, lte: loadTo } },
+      select: { date: true, steps: true, activeEnergyKcal: true },
     }),
     prisma.bodyMeasurement.findMany({
       where: { bmrKcal: { not: null }, measuredAt: { lte: end } },
@@ -378,8 +385,19 @@ export async function loadDayLedger(input: {
     return row ? { kcal: row.bmrKcal as number, source: `scale ${localDay(row.measuredAt)}` } : null;
   };
 
+  const activityByDay = new Map(activity.filter((a) => a.steps != null).map((a) => [a.date, a]));
+
   const build = (day: string) => {
-    const h = healthByDay.get(day);
+    const snap = healthByDay.get(day);
+    const act = activityByDay.get(day);
+    const h = act
+      ? {
+          steps: act.steps,
+          activeEnergyKcal: act.activeEnergyKcal ?? snap?.activeEnergyKcal ?? null,
+          restingHeartRateBpm: snap?.restingHeartRateBpm ?? null,
+          hrvMs: snap?.hrvMs ?? null,
+        }
+      : snap;
     return buildDayRow(
       {
         date: day,

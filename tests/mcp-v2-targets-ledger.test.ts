@@ -15,6 +15,19 @@ vi.mock("@/lib/prisma", () => ({
       }),
     },
     recordChange: { createMany: vi.fn(async () => ({ count: 0 })) },
+    // For loadDayLedger: two days, one with the iPhone app's own totals.
+    foodLog: { findMany: vi.fn(async () => []) },
+    workoutLog: { findMany: vi.fn(async () => []) },
+    dailyHealthSnapshot: {
+      findMany: vi.fn(async () => [
+        { localDate: "2026-11-11", steps: 4385, activeEnergyKcal: 1.3, restingHeartRateBpm: 53, hrvMs: 109, updatedAt: new Date() },
+        { localDate: "2026-11-12", steps: 2454, activeEnergyKcal: 319, restingHeartRateBpm: 55, hrvMs: 90, updatedAt: new Date() },
+      ]),
+    },
+    dailyActivity: {
+      findMany: vi.fn(async () => [{ date: "2026-11-12", steps: 3100, activeEnergyKcal: 340 }]),
+    },
+    bodyMeasurement: { findMany: vi.fn(async () => []) },
   },
 }));
 
@@ -311,5 +324,22 @@ describe("ledgerRange", () => {
     expect(ledgerRange({ days: 400 }, "2026-11-12").from).toBe("2026-10-13");
     expect(ledgerRange({ from: "2026-01-01", to: "2026-11-12" }, "2026-11-12").from).toBe("2026-10-13");
     expect(ledgerRange({ from: "2026-11-20", to: "2026-11-12" }, "2026-11-12").from).toBe("2026-11-12");
+  });
+});
+
+describe("loadDayLedger steps", () => {
+  it("prefers the iPhone app's daily_activity and falls back to the Apple Health snapshot", async () => {
+    const { loadDayLedger } = await import("@/lib/day-ledger");
+    const { days } = await loadDayLedger({
+      range: { from: "2026-11-11", to: "2026-11-12" },
+      timeZone: "America/Bogota",
+      todayStr: "2026-11-13",
+      settings: {},
+      includeWeekly: false,
+    });
+    expect(days.map((d) => d.activity.steps)).toEqual([4385, 3100]);
+    // The app's day keeps the snapshot's heart numbers.
+    expect(days[1].activity).toMatchObject({ activeEnergyKcal: 340, restingHrBpm: 55, hrvMs: 90 });
+    expect(days[0].activity.activeEnergyTrusted).toBe(false);
   });
 });
