@@ -15,7 +15,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return new NextResponse(body, {
       status: 200,
       headers: {
-        "Content-Type": seg.mimeType || "audio/mp4",
+        // Only audio types are stored since 2026-10 (SEC-030); an older row
+        // with anything else is served as audio, never as what it claims.
+        "Content-Type": /^audio\//i.test(seg.mimeType || "") ? seg.mimeType : "audio/mp4",
+        "X-Content-Type-Options": "nosniff",
         "Content-Length": String(body.byteLength),
         "Cache-Control": "private, max-age=86400",
         "Accept-Ranges": "none",

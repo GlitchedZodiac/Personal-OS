@@ -47,6 +47,8 @@ import { createOrLinkTrail, TrailInputError } from "@/lib/trails";
 import { getTrainingWeek, planWeek, type PlannedDayInput } from "@/lib/planner";
 import { getUserTimeZone } from "@/lib/server-timezone";
 import { getDateStringInTimeZone } from "@/lib/timezone";
+import { mcpFinanceAllowed } from "@/lib/mcp-settings";
+import { recordMcpAudit, type McpCallContext } from "@/lib/mcp/audit";
 
 type Json = Record<string, unknown>;
 
@@ -80,6 +82,62 @@ export interface McpToolDef {
 type Handler = (args: Json) => Promise<unknown>;
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
+// ── Input bounds (SEC-014, 2026-10; review of 3b) ─────────────────────────
+// Arguments over a limit are REFUSED with a tool error that names the field
+// and the limit — never cut silently (a silent cut of a hymn reported
+// success and stored half of it). The limits sit far above real use.
+const MAX_ARG_STRING = 100_000;
+const MAX_ARG_ARRAY = 500;
+const MAX_ARG_DEPTH = 6;
+
+/** The first argument over a limit, as a tool-error message, or null. */
+export function argsProblem(value: unknown, path = "arguments", depth = 0): string | null {
+  if (typeof value === "string") {
+    return value.length > MAX_ARG_STRING ? `${path} is longer than ${MAX_ARG_STRING.toLocaleString("en-US")} characters` : null;
+  }
+  if (value === null || typeof value !== "object") return null;
+  if (depth >= MAX_ARG_DEPTH) return `${path} is nested deeper than ${MAX_ARG_DEPTH} levels`;
+  if (Array.isArray(value)) {
+    if (value.length > MAX_ARG_ARRAY) return `${path} has more than ${MAX_ARG_ARRAY} items`;
+    for (let i = 0; i < value.length; i++) {
+      const problem = argsProblem(value[i], `${path}[${i}]`, depth + 1);
+      if (problem) return problem;
+    }
+    return null;
+  }
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    const problem = argsProblem(v, `${path}.${k}`, depth + 1);
+    if (problem) return problem;
+  }
+  return null;
+}
+
+/** A tool error when a text field is over its own limit; null when it fits. */
+function overLimit(field: string, value: unknown, max: number): { error: string } | null {
+  return typeof value === "string" && value.trim().length > max
+    ? { error: `${field} is longer than ${max.toLocaleString("en-US")} characters — shorten it and try again` }
+    : null;
+}
+
+// ── Finance over MCP (SEC-011, PLAN D3) ───────────────────────────────────
+// Off unless Settings → Claude connector says otherwise. The refusal is a
+// tool error that names the switch — never an empty result that would make
+// his own Claude look broken.
+export const FINANCE_DENIED_MESSAGE =
+  'Finance data is off for the Claude connector. Turn it on in Settings → Claude connector → "Allow finance over MCP", then ask again.';
+export const isFinanceDataset = (dataset: string) => dataset.startsWith("finance_");
+
+/**
+ * Over MCP the `settings` dataset shows only health and presentation keys:
+ * the settings blob also carries the Gmail finance queue, finance settings
+ * and the finance AI instructions (review of 3b).
+ */
+export const MCP_SETTINGS_KEYS = [
+  "calorieTarget", "proteinPct", "carbsPct", "fatPct", "units", "gender", "birthYear",
+  "aiLanguage", "bodyGoals", "healthGoals", "workoutGoals", "timeZone", "hrZoneTops",
+  "chatNewChatGapHours", "aiInstructions.health",
+] as const;
 const num = (v: unknown) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -133,7 +191,12 @@ const datasetKeys = REGISTRY.map((s) => s.key);
 
 async function appDataCtx() {
   const timeZone = await getUserTimeZone(null);
-  return { timeZone, todayStr: getDateStringInTimeZone(new Date(), timeZone) };
+  return {
+    timeZone,
+    todayStr: getDateStringInTimeZone(new Date(), timeZone),
+    settingsKeys: MCP_SETTINGS_KEYS,
+    hideFinance: !(await mcpFinanceAllowed()),
+  };
 }
 
 // ── The tool table ───────────────────────────────────────────────────────
@@ -143,7 +206,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     def: {
       name: "query_data",
       description:
-        "Read any Pitaya dataset — workouts, food, body measurements, trails, routines, spirit, journal, todos, finance summaries and more. Filter by days/from/to, search with q, fetch one row by id. Datasets:\n" +
+        "Read any Pitaya dataset — workouts, food, body measurements, trails, routines, spirit, journal, todos, finance summaries and more. Filter by days/from/to, search with q, fetch one row by id. finance_* datasets answer only when Settings → Claude connector → \"Allow finance over MCP\" is on. Datasets:\n" +
         datasetCatalog,
       inputSchema: {
         type: "object",
@@ -160,7 +223,19 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
         required: ["dataset"],
       },
     },
-    handler: async (args) => executeAppData(args as AppDataArgs, await appDataCtx()),
+    handler: async (args) => {
+      // Normalised ONCE, and the same value is gated and executed — an array
+      // like ["finance_accounts"] used to slip past a typeof check and then
+      // be stringified into the finance dataset (review of 3b).
+      if (typeof args.dataset !== "string" || !args.dataset.trim()) {
+        return { error: "dataset must be one dataset name, as a string", availableDatasets: datasetKeys };
+      }
+      const dataset = args.dataset.trim();
+      if (isFinanceDataset(dataset) && !(await mcpFinanceAllowed())) {
+        return { error: FINANCE_DENIED_MESSAGE, setting: "mcpAllowFinance" };
+      }
+      return executeAppData({ ...(args as AppDataArgs), dataset }, await appDataCtx());
+    },
   },
 
   // ── Recipes (his word for saved usuals/products) ──────────────────────
@@ -323,7 +398,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       const target = await findRecipe(args);
       if (!target) return { error: "Recipe not found" };
       await prisma.favoriteFoods.delete({ where: { id: target.id } });
-      return { deleted: target.foodDescription };
+      return { deleted: target.foodDescription, id: target.id };
     },
   },
 
@@ -361,6 +436,11 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       const items = Array.isArray(args.items) ? (args.items as Json[]) : [];
       if (items.length === 0 || items.length > 20) {
         return { error: "1–20 items per call" };
+      }
+      // Check every item before writing any, so a refusal never leaves half a meal.
+      for (const [i, it] of items.entries()) {
+        const tooLong = overLimit(`items[${i}].foodDescription`, it.foodDescription, 500) ?? overLimit(`items[${i}].notes`, it.notes, 2_000);
+        if (tooLong) return tooLong;
       }
       const created = [];
       for (const it of items) {
@@ -1300,6 +1380,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     handler: async (args) => {
       const title = str(args.title);
       if (!title) return { error: "title is required" };
+      const tooLong = overLimit("title", args.title, 190) ?? overLimit("detail", args.detail, 5_000);
+      if (tooLong) return tooLong;
       const todo = await prisma.todo.create({
         data: {
           title: `[Pitaya gap] ${title}`.slice(0, 200),
@@ -1409,8 +1491,35 @@ export const MCP_TOOL_DEFS: McpToolDef[] = MCP_TOOLS.map((t) => ({
 }));
 const HANDLERS = new Map(MCP_TOOLS.map((t) => [t.def.name, t.handler]));
 
-export async function callMcpTool(name: string, args: Json): Promise<unknown> {
+const READ_TOOLS = new Set(
+  MCP_TOOL_DEFS.filter((d) => d.annotations?.readOnlyHint === true).map((d) => d.name)
+);
+
+export async function callMcpTool(name: string, args: Json, ctx?: McpCallContext): Promise<unknown> {
   const handler = HANDLERS.get(name);
   if (!handler) return { error: `Unknown tool "${name}"` };
-  return handler(args ?? {});
+  const input = (args ?? {}) as Json;
+  // Every call leaves a line in the trail (SEC-013) — writes with their
+  // outcome, reads as a light row (dataset and count, no content), and a
+  // call that THROWS as "error" (it may have half-written: log_food mid-way,
+  // plan_training after replaceWeek cleared the week). Written in finally,
+  // so not even a throw skips it.
+  let result: unknown = undefined;
+  let threw: unknown = null;
+  try {
+    const problem = argsProblem(input);
+    result = problem ? { error: problem } : await handler(input);
+    return result;
+  } catch (error) {
+    threw = error;
+    throw error;
+  } finally {
+    await recordMcpAudit({
+      tool: name,
+      kind: READ_TOOLS.has(name) ? "read" : "write",
+      args: input,
+      result: threw ? { error: `threw: ${threw instanceof Error ? threw.name : "error"}` } : result,
+      ctx,
+    });
+  }
 }

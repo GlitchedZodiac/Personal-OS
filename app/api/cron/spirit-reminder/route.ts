@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireCronSecret } from "@/lib/cron-auth";
 import { carriedHomework } from "@/lib/spirit-homework";
 import { notify } from "@/lib/notify";
 import { pushConfigured } from "@/lib/push";
@@ -11,10 +12,8 @@ import { pushConfigured } from "@/lib/push";
 // it during the day, the evening is quiet.
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   if (!pushConfigured()) {
     return NextResponse.json({ sent: 0, skipped: "push not configured" });

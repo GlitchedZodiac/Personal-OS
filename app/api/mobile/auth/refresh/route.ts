@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { secretErrorResponse } from "@/lib/secret-errors";
 import { refreshDeviceSession } from "@/lib/mobile-session";
 
 export async function POST(request: NextRequest) {
@@ -7,7 +8,8 @@ export async function POST(request: NextRequest) {
     const refreshToken =
       typeof body.refreshToken === "string" ? body.refreshToken : "";
 
-    const refreshed = await refreshDeviceSession(refreshToken);
+    // Device sessions only — a connector's refresh token is refused here.
+    const refreshed = await refreshDeviceSession(refreshToken, "device");
     if (!refreshed) {
       return NextResponse.json(
         { error: "Refresh token is invalid or expired" },
@@ -28,6 +30,8 @@ export async function POST(request: NextRequest) {
       refreshToken: refreshed.refreshToken,
     });
   } catch (error) {
+    const named = secretErrorResponse(error);
+    if (named) return named;
     console.error("Mobile session refresh error:", error);
     return NextResponse.json(
       { error: "Failed to refresh session" },

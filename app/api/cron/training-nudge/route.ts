@@ -3,6 +3,7 @@
 // nothing is planned. His plan, his words; never an AI summons.
 
 import { NextRequest, NextResponse } from "next/server";
+import { requireCronSecret } from "@/lib/cron-auth";
 import { getNotificationPrefs } from "@/lib/notification-prefs";
 import { notify } from "@/lib/notify";
 import { getTrainingWeek } from "@/lib/planner";
@@ -16,10 +17,8 @@ import {
 } from "@/lib/timezone";
 
 export async function GET(request: NextRequest) {
-  const auth = request.headers.get("authorization");
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   if (!pushConfigured()) {
     return NextResponse.json({ sent: 0, skipped: "push not configured" });

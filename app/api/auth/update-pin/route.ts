@@ -1,74 +1,66 @@
-import { readFile, writeFile } from "fs/promises";
-import { join } from "path";
 import { NextRequest, NextResponse } from "next/server";
-import {
-  checkRateLimit,
-  getConfiguredPin,
-  isPinConfigured,
-  setAuthCookie,
-} from "@/lib/auth";
+import { secretErrorResponse } from "@/lib/secret-errors";
+import { authSecretProblems, setAuthCookie, setKnownDeviceCookie } from "@/lib/auth";
+import { ensurePinCredential, pinConfigured } from "@/lib/pin-auth";
+import { attemptPin, lockedResponseInit } from "@/lib/pin-attempt";
+import { getMarkerGeneration } from "@/lib/security-settings";
+
+// Change the PIN. Cookie-gated by proxy.ts (this path is no longer under an
+// allowlisted prefix — SEC-009) AND the current PIN is required. The new PIN
+// is written to `auth_credentials`, the single source for the web login and
+// device pairing, so the change is durable and complete (SEC-004). The old
+// handler rewrote `.env.local` — a no-op on Vercel's read-only filesystem —
+// and one instance's process.env; both are gone.
 
 export async function POST(request: NextRequest) {
   try {
-    if (!isPinConfigured()) {
+    if (!(await pinConfigured())) {
       return NextResponse.json(
         { error: "APP_PIN is not configured. Set APP_PIN before updating it." },
         { status: 503 }
       );
     }
-
-    const rateLimit = checkRateLimit(request, "auth-update-pin");
-    if (!rateLimit.allowed) {
+    const problems = authSecretProblems();
+    if (problems.length > 0) {
       return NextResponse.json(
-        { error: "Too many attempts. Try again in a few minutes." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
-        }
+        { error: `Server is not configured: ${problems.map((p) => `${p.variable} is ${p.reason}`).join("; ")}` },
+        { status: 503 }
       );
     }
 
-    const { currentPin, newPin } = await request.json();
-    const correctPin = getConfiguredPin();
+    const body = (await request.json().catch(() => ({}))) as { currentPin?: unknown; newPin?: unknown };
+    const currentPin = typeof body.currentPin === "string" ? body.currentPin : "";
+    const newPin = typeof body.newPin === "string" ? body.newPin : "";
 
-    if (currentPin !== correctPin) {
-      rateLimit.registerFailure();
+    // A NEW PIN is 6–8 digits (PLAN D12, 2026-10). The door-wide lock still
+    // lets a patient attacker try ~50 PINs an hour at each public door; that
+    // is about two days for 4 digits and over a year for 6. Existing 4-digit
+    // PINs keep working until he changes them. Every pad (web, iPhone, watch)
+    // takes up to 8 digits.
+    if (!/^\d{6,8}$/.test(newPin)) {
+      return NextResponse.json({ error: "New PIN must be 6 to 8 digits" }, { status: 400 });
+    }
+
+    const attempt = await attemptPin(request, "auth-update-pin", currentPin);
+    if (attempt.status === "locked") {
+      return NextResponse.json(
+        { error: "Too many attempts. Try again in a few minutes." },
+        lockedResponseInit(attempt.retryAfterSeconds)
+      );
+    }
+    if (attempt.status === "wrong") {
       return NextResponse.json({ error: "Current PIN is incorrect" }, { status: 401 });
     }
 
-    if (!newPin || !/^\d{4,8}$/.test(newPin)) {
-      return NextResponse.json({ error: "New PIN must be 4 to 8 digits" }, { status: 400 });
-    }
-
-    try {
-      const envPath = join(process.cwd(), ".env.local");
-      let envContent = "";
-
-      try {
-        envContent = await readFile(envPath, "utf-8");
-      } catch {
-        envContent = "";
-      }
-
-      if (envContent.includes("APP_PIN=")) {
-        envContent = envContent.replace(/APP_PIN=.*/, `APP_PIN=${newPin}`);
-      } else {
-        envContent += `${envContent.endsWith("\n") || envContent.length === 0 ? "" : "\n"}APP_PIN=${newPin}\n`;
-      }
-
-      await writeFile(envPath, envContent, "utf-8");
-      process.env.APP_PIN = newPin;
-    } catch (writeError) {
-      console.error("Failed to write .env.local:", writeError);
-      process.env.APP_PIN = newPin;
-    }
-
+    await ensurePinCredential(newPin);
     const response = NextResponse.json({ success: true });
     setAuthCookie(response);
-    rateLimit.reset();
+    setKnownDeviceCookie(response, await getMarkerGeneration());
     return response;
   } catch (error) {
-    console.error("Update PIN error:", error);
+    const named = secretErrorResponse(error);
+    if (named) return named;
+    console.error("Update PIN error:", error instanceof Error ? error.message : error);
     return NextResponse.json({ error: "Failed to update PIN" }, { status: 500 });
   }
 }

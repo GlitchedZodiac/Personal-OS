@@ -23,6 +23,8 @@ export async function GET() {
 // /api/push/prefs; the device's timezone is written by the heartbeat). A
 // blind replace would let any unrelated settings save — units, language —
 // silently turn switches back on or move quiet hours to a stale timezone.
+// (The Claude connector's finance switch is not in this blob at all — it has
+// its own row, lib/mcp-settings.ts.)
 const SERVER_OWNED_KEYS = ["notificationPrefs"] as const;
 
 // PUT /api/settings — save settings

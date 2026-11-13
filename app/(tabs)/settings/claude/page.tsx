@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { McpFinanceToggle } from "@/components/mcp-finance-toggle";
 
 interface ConnectorSession {
   id: string;
@@ -117,6 +118,8 @@ export default function ClaudeConnectorPage() {
           <li>Claude opens Pitaya’s approve screen — unlock with your PIN, tap Approve, done</li>
         </ol>
       </div>
+
+      <McpFinanceToggle />
 
       <p className="mt-6 text-[10.5px] font-semibold tracking-[0.16em] text-muted-foreground">
         FALLBACK — MANUAL TOKEN (NO SIGN-IN)

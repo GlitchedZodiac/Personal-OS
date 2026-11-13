@@ -1,6 +1,30 @@
 import type { NextConfig } from "next";
 
+// Security headers (audit 2026-10, SEC-059). Production carried only Vercel's
+// HSTS. This is the SAFE set — none of it limits what scripts may load, so it
+// cannot blank a screen:
+//  - frame-ancestors 'self' / SAMEORIGIN, NOT 'none': the iPad desk home
+//    embeds the app's own pages in an iframe (app/(desk)/home/page.tsx, the
+//    compact pane). Every other site is still refused.
+//  - nosniff: served blobs (recording segments, photos) are never re-read as
+//    HTML or script.
+//  - camera, microphone, geolocation for this origin only — what the app
+//    uses (dictation, sermon recording, label and meal photos, trails), and
+//    exactly what the TestFlight shell grants (ios/iOSApp/WebShellView.swift).
+// A full Content-Security-Policy (scripts, workers, tiles) is a followup: it
+// needs testing on the iPad desk and the TestFlight shell (PLAN D5).
+const SECURITY_HEADERS = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(self), payment=(), usb=()" },
+];
+
 const nextConfig: NextConfig = {
+  async headers() {
+    return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+  },
   turbopack: {
     root: process.cwd(),
   },

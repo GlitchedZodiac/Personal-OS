@@ -9,6 +9,7 @@
 // swap in the SDK then.
 
 import { callMcpTool, MCP_TOOL_DEFS } from "@/lib/mcp/tools";
+import type { McpCallContext } from "@/lib/mcp/audit";
 
 /// Protocol revisions this server knows. We echo the client's requested
 /// version when we support it, else offer our newest.
@@ -65,7 +66,7 @@ const INSTRUCTIONS =
   "Everything except weight is a bioimpedance estimate, and fieldSources " +
   "on a row says where each value came from.";
 
-export async function handleMcpMessage(raw: unknown): Promise<McpHttpResponse> {
+export async function handleMcpMessage(raw: unknown, ctx?: McpCallContext): Promise<McpHttpResponse> {
   // The 2025-06-18 revision dropped JSON-RPC batching — reject arrays.
   if (Array.isArray(raw)) {
     return rpcError(null, -32600, "Batching is not supported");
@@ -117,7 +118,7 @@ export async function handleMcpMessage(raw: unknown): Promise<McpHttpResponse> {
           : {};
       let result: unknown;
       try {
-        result = await callMcpTool(name, args);
+        result = await callMcpTool(name, args, ctx);
       } catch (error) {
         // A thrown handler is a bug, but the client still deserves a
         // structured tool error rather than a dead connection.

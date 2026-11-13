@@ -373,6 +373,12 @@ model PushSubscription {
 model AuthCredential {
   id        String   @id @default("default")
   pinHash   String
+  /// Hash generation (audit 2026-10): 1 = the pre-audit HMAC form, 2 = scrypt
+  /// under the derived key. Settings shows how much is still on 1.
+  keyVersion Int     @default(1)
+  /// HMAC (under the derived PIN key) of the APP_PIN value an APP_PIN_RESET
+  /// last consumed — a reset works once per value, never as a standing PIN.
+  resetConsumedFor String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -390,6 +396,11 @@ model DeviceSession {
   refreshExpiresAt DateTime
   lastSeenAt       DateTime  @default(now())
   revokedAt        DateTime?
+  /// Hash generation of tokenHash / refreshTokenHash (audit 2026-10):
+  /// 1 = hashed under the pre-audit key (which depends on APP_PIN staying
+  /// as it is), 2 = the derived key. Settings → Devices counts the 1s.
+  keyVersion        Int      @default(1)
+  refreshKeyVersion Int      @default(1)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -1263,6 +1274,38 @@ model PersonalRecord {
 // One-time OAuth authorization codes (2026-08-29, the Claude connector's
 // sign-in flow). Short-lived, single-use; the real credential they exchange
 // into is a DeviceSession.
+// Wrong-PIN counters shared by every serverless instance (audit 2026-10,
+// SEC-005 / PLAN D2). key = "<door>:<client bucket>" or "<door>:*" for the
+// door-wide count. Written atomically by lib/rate-limit-store.ts; pruned daily.
+model RateLimitBucket {
+  key          String    @id
+  attempts     Int
+  resetAt      DateTime
+  blockedUntil DateTime?
+  updatedAt    DateTime
+
+  @@index([resetAt])
+  @@map("rate_limit_buckets")
+}
+
+// The Claude connector's paper trail (2026-10, SEC-013): one row per MCP
+// tool call that can add, change or remove data. Summary is redacted and
+// bounded (lib/mcp/audit.ts); readable via query_data `mcp_audit`.
+model McpAuditEvent {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  tool        String
+  ok          Boolean
+  summary     String
+  error       String?
+  refId       String?
+  sessionId   String?
+  deviceLabel String?
+
+  @@index([createdAt])
+  @@map("mcp_audit_events")
+}
+
 model OAuthCode {
   id            String    @id @default(uuid())
   codeHash      String    @unique

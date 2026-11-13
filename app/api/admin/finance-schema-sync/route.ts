@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { secretEquals } from "@/lib/cron-auth";
 import { withRequestPrisma } from "@/lib/prisma-request";
 
 const STATEMENT_GROUPS: Record<string, string[]> = {
@@ -277,8 +278,9 @@ const STATEMENT_GROUPS: Record<string, string[]> = {
 
 export async function POST(request: NextRequest) {
   try {
-    const secret = request.headers.get("x-admin-secret");
-    if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    // Cookie-gated by proxy.ts AND the admin secret, compared in constant time;
+    // an unset CRON_SECRET refuses (lib/cron-auth).
+    if (!secretEquals(request.headers.get("x-admin-secret"), process.env.CRON_SECRET?.trim() || null)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

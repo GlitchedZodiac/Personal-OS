@@ -3,6 +3,11 @@ import crypto from "crypto";
 
 const codes: Array<Record<string, unknown> & { codeHash: string; usedAt: Date | null }> = [];
 
+// CIMD resolves the host before fetching (review of 3b); answer publicly here.
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(async () => [{ address: "160.79.104.10", family: 4 }]),
+}));
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     oAuthCode: {

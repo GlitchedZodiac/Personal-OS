@@ -9,9 +9,9 @@ import { isStale, normalizeGapHours } from "@/lib/chat-history";
 import { prisma } from "@/lib/prisma";
 
 // One chat's messages. GET loads them; PATCH resolves a proposal card
-// (saved/rejected after the user acts). DELETE predates conversations and
-// wipes EVERY message in EVERY chat — no screen calls it; left as found and
-// filed in docs/deferred-items.md rather than changed in passing.
+// (saved/rejected after the user acts). There is deliberately no DELETE: the
+// old one predated conversations and wiped EVERY message in EVERY chat, with
+// no caller anywhere (audit 2026-10, SEC-061 / PLAN D8 — removed).
 //
 //   GET ?conversationId=<id>   that chat
 //   GET ?gap=<hours>           the CURRENT chat: the most recent one, unless
@@ -74,15 +74,5 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     console.error("Chat message update error:", error);
     return NextResponse.json({ error: "Failed to update" }, { status: 500 });
-  }
-}
-
-export async function DELETE() {
-  try {
-    await prisma.chatMessage.deleteMany({});
-    return NextResponse.json({ cleared: true });
-  } catch (error) {
-    console.error("Chat clear error:", error);
-    return NextResponse.json({ error: "Failed to clear chat" }, { status: 500 });
   }
 }
