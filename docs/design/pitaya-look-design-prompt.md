@@ -1,5 +1,10 @@
 # Pitaya · the phone app, one system — design prompt (round "Look")
 
+> **2026-11-13, later the same day:** this round is being designed in the
+> session on a Design canvas, so nothing needs pasting. This file is the
+> brief the canvas is drawn from. Progress and the canvas link are in
+> [`pitaya-look/README.md`](pitaya-look/README.md).
+
 **How to use this:** paste everything below the line into Claude on the design
 surface. It stands alone. Attach these files from the repo so Claude designs
 against the real thing:
