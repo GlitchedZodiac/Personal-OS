@@ -383,6 +383,50 @@ describe("MCP tool handlers", () => {
     expect(two.parsed.logged.foodDescription).toContain("(2×)");
   });
 
+  it("meals scale by the share eaten (gap #9: half a saved pint)", async () => {
+    await callTool("save_recipe", {
+      name: "Chocolate Creami pint",
+      calories: 400,
+      proteinG: 40,
+      carbsG: 36,
+      fatG: 10,
+    });
+    const half = await callTool("log_recipe", { name: "Chocolate Creami pint", servings: 0.5 });
+    expect(half.isError).toBe(false);
+    expect(half.parsed.logged.calories).toBe(200);
+    expect(half.parsed.logged.proteinG).toBe(20);
+    expect(half.parsed.logged.foodDescription).toBe("Chocolate Creami pint (0.5×)");
+    const whole = await callTool("log_recipe", { name: "Chocolate Creami pint" });
+    expect(whole.parsed.logged.calories).toBe(400);
+    expect(whole.parsed.logged.foodDescription).toBe("Chocolate Creami pint");
+    const silly = await callTool("log_recipe", { name: "Chocolate Creami pint", servings: 50 });
+    expect(silly.isError).toBe(true);
+  });
+
+  it("save_recipe warns when the label's macros and calories disagree (gap #13)", async () => {
+    // Macros add to ~138 kcal; the label says 176.
+    const odd = await callTool("save_recipe", {
+      name: "Chocolate protein powder",
+      calories: 176,
+      proteinG: 25,
+      carbsG: 5,
+      fatG: 2,
+      kind: "product",
+      servingLabel: "1 scoop (40 g)",
+    });
+    expect(odd.isError).toBe(false);
+    expect(odd.parsed.warnings?.[0]).toContain("add up to 138 kcal");
+    const fine = await callTool("save_recipe", {
+      name: "Whey isolate",
+      calories: 120,
+      proteinG: 25,
+      carbsG: 2,
+      fatG: 1,
+      kind: "product",
+    });
+    expect(fine.parsed.warnings).toBeUndefined();
+  });
+
   it("log_food stamps mcp provenance and bounds the batch", async () => {
     const ok = await callTool("log_food", {
       items: [

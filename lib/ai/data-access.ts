@@ -236,7 +236,7 @@ async function runCurated(
     default:
       // The eight original health branches keep their exact behaviour.
       return executeGetHealthData(
-        { query: key, days: args.days, from: args.from, to: args.to },
+        { query: key, days: args.days, from: args.from, to: args.to, id: args.id },
         ctx.timeZone,
         ctx.todayStr
       );

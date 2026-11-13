@@ -28,7 +28,7 @@ import {
   foldExerciseName,
   getCustomExercises,
   getExerciseById,
-  normalizeExerciseName,
+  looseExerciseMatch,
   type ExerciseCategory,
   type ExerciseDef,
 } from "@/lib/exercises";
@@ -1869,7 +1869,10 @@ function indexOfWords(words: string[], phrase: string[]): number {
  * catalog's own pick stand, as a loose match.
  */
 function containment(folded: string): { def: ExerciseDef; clean: boolean } | null {
-  const fallback = normalizeExerciseName(folded);
+  // The loose catalog pick, on purpose: an unclean match here is only ever
+  // offered for review on the wrist, never stored silently (2026-11-12 — the
+  // shared normalizer became guarded; this suggestion path keeps its reach).
+  const fallback = looseExerciseMatch(folded);
   if (!fallback) return null;
   const words = folded.split(" ");
   let best: VocabKey | null = null;

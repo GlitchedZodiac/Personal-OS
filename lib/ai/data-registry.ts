@@ -78,7 +78,7 @@ export const REGISTRY: readonly DatasetSpec[] = [
     key: "recent_workouts",
     kind: "curated",
     summary:
-      "Recent workouts: ids, exercises, distance/elevation/HR/kcal, pack, GPS analytics (moving, pace, grade-adjusted, climb/descent, altitude), effort, HRR, cadence, provenance.",
+      "Recent workouts: ids, exercises, distance/elevation/HR/kcal, pack, GPS analytics (moving, pace, grade-adjusted, climb/descent, altitude), effort, HRR, cadence, provenance. With id: one workout plus its HR-over-time, speed/grade series and splits.",
   },
   {
     key: "weight_trend",

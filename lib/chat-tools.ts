@@ -15,6 +15,7 @@ import { getTrainingWeek } from "@/lib/planner";
 import { prisma } from "@/lib/prisma";
 import { sessionVolumeKg } from "@/lib/prs";
 import { listTrails } from "@/lib/trails";
+import { workoutDetail } from "@/lib/workout-detail";
 import {
   addDaysToDateString,
   getDateStringInTimeZone,
@@ -47,7 +48,7 @@ function parseIsoDay(value: unknown): string | null {
 }
 
 export async function executeGetHealthData(
-  args: { query?: string; days?: number; from?: string; to?: string },
+  args: { query?: string; days?: number; from?: string; to?: string; id?: string },
   timeZone: string,
   todayStr: string
 ): Promise<object> {
@@ -102,10 +103,13 @@ export async function executeGetHealthData(
     }
 
     case "recent_workouts": {
+      // One workout by id (2026-11-12, gap #15) adds its streams — HR over
+      // time, route speed/grade, splits — bounded by lib/workout-detail.
+      const byId = typeof args.id === "string" && args.id.trim() ? args.id.trim() : null;
       const rows = await prisma.workoutLog.findMany({
-        where: { startedAt: { gte: since, lte: until } },
+        where: byId ? { id: byId } : { startedAt: { gte: since, lte: until } },
         orderBy: { startedAt: "desc" },
-        take: 30,
+        take: byId ? 1 : 30,
       });
       return {
         workouts: rows.map((w) => {
@@ -224,8 +228,10 @@ export async function executeGetHealthData(
               : undefined,
             // entries he logged by voice on the wrist mid-workout
             voiceEntries: Array.isArray(m.setLog) ? m.setLog.length : undefined,
+            ...(byId ? { detail: workoutDetail(w.metricsData) ?? undefined } : {}),
           };
         }),
+        ...(byId && rows.length === 0 ? { error: `No workout with id ${byId}` } : {}),
       };
     }
 

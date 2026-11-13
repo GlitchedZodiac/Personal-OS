@@ -49,6 +49,7 @@ import { getUserTimeZone } from "@/lib/server-timezone";
 import { getDateStringInTimeZone } from "@/lib/timezone";
 import { mcpFinanceAllowed } from "@/lib/mcp-settings";
 import { recordMcpAudit, type McpCallContext } from "@/lib/mcp/audit";
+import { macroMismatchWarning } from "@/lib/macro-check";
 
 type Json = Record<string, unknown>;
 
@@ -268,7 +269,7 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     def: {
       name: "save_recipe",
       description:
-        "Create a recipe/usual (or update the one with the same name). Macros for kind 'meal' are as-eaten; for kind 'product' they are per serving (give servingLabel like '1 scoop (32 g)').",
+        "Create a recipe/usual (or update the one with the same name). Macros for kind 'meal' are as-eaten; for kind 'product' they are per serving (give servingLabel like '1 scoop (32 g)'). The result carries `warnings` when protein×4 + carbs×4 + fat×9 is more than 10% off the calories — tell him; it usually means a misread label.",
       inputSchema: {
         type: "object",
         properties: {
@@ -303,7 +304,8 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
       const recipe = existing
         ? await prisma.favoriteFoods.update({ where: { id: existing.id }, data })
         : await prisma.favoriteFoods.create({ data });
-      return { recipe, created: !existing };
+      const warning = macroMismatchWarning(data);
+      return { recipe, created: !existing, ...(warning ? { warnings: [warning] } : {}) };
     },
   },
   {
@@ -343,13 +345,16 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     def: {
       name: "log_recipe",
       description:
-        "Log a saved recipe/usual as eaten — its exact stored macros, zero estimation. Find it by id, exact name, or fuzzy match. Products scale by servings.",
+        "Log a saved recipe/usual as eaten — its exact stored macros, zero estimation. Find it by id, exact name, or fuzzy match. servings scales any recipe: for a product it counts servings (2 = two scoops), for a meal it is the share of the saved meal he ate (0.5 = half, 0.75 = three quarters).",
       inputSchema: {
         type: "object",
         properties: {
           id: { type: "string" },
           name: { type: "string", description: "Recipe name — fuzzy matched" },
-          servings: { type: "number", description: "Products only; default 1" },
+          servings: {
+            type: "number",
+            description: "Default 1. Product: number of servings. Meal: share eaten (0.5 = half). 0.05–20.",
+          },
           mealType: { type: "string", enum: ["breakfast", "lunch", "dinner", "snack"] },
           loggedAt: { type: "string", description: "ISO datetime; default now" },
         },
@@ -358,16 +363,22 @@ export const MCP_TOOLS: { def: McpToolDef; handler: Handler }[] = [
     handler: async (args) => {
       const recipe = await findRecipe(args);
       if (!recipe) return { error: "Recipe not found — list_recipes shows what exists" };
-      const isProduct = recipe.kind === "product";
-      const multiplier = isProduct ? (posNum(args.servings) ?? 1) : 1;
+      // Servings scale meals too (2026-11-12, gap #9): half a saved pint is
+      // 0.5 of it. Before this only products scaled, so every partial pint
+      // had to be saved as a "product" of its own.
+      const servings = posNum(args.servings) ?? 1;
+      if (servings < 0.05 || servings > 20) {
+        return { error: "servings must be between 0.05 and 20" };
+      }
+      const multiplier = servings;
       const round = (n: number) => Math.round((n || 0) * multiplier * 10) / 10;
       const entry = await prisma.foodLog.create({
         data: {
           loggedAt: isoDate(args.loggedAt) ?? undefined,
           mealType: str(args.mealType) || recipe.mealType || "snack",
           foodDescription:
-            isProduct && multiplier !== 1
-              ? `${recipe.foodDescription} (${multiplier}×)`
+            multiplier !== 1
+              ? `${recipe.foodDescription} (${Math.round(multiplier * 100) / 100}×)`
               : recipe.foodDescription,
           calories: round(recipe.calories),
           proteinG: round(recipe.proteinG),
