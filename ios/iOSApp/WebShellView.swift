@@ -101,7 +101,14 @@ final class ShellViewController: UIViewController {
         webView.scrollView.canCancelContentTouches = false
 
         webView.isOpaque = false
-        webView.backgroundColor = UIColor(red: 0.949, green: 0.945, blue: 0.949, alpha: 1)
+        // The page ground behind the web view — the web's --bg in Day
+        // (#F2F1F2) and Night (#131217), so a cold start or an overscroll
+        // never flashes the wrong colour now the web follows the phone.
+        webView.backgroundColor = UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.075, green: 0.071, blue: 0.090, alpha: 1)
+                : UIColor(red: 0.949, green: 0.945, blue: 0.949, alpha: 1)
+        }
         view.backgroundColor = webView.backgroundColor
 
         // 3. Screen-edge back/forward swipes arm on any contact within ~44pt of a screen edge

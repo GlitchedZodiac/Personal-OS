@@ -1,6 +1,19 @@
 import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { extendTailwindMerge } from "tailwind-merge"
 import { parse } from "date-fns"
+
+// tailwind-merge must know the token names (app/globals.css), or it reads
+// `text-ui`/`text-body` as text COLOURS and drops whichever of a size and a
+// colour comes first — the kit's button lost its label colour that way.
+const twMerge = extendTailwindMerge({
+  extend: {
+    theme: {
+      text: ["hero", "display", "title", "body", "ui", "caption", "micro"],
+      radius: ["pill", "card", "card-lg", "control", "sheet"],
+      shadow: ["card", "float"],
+    },
+  },
+})
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

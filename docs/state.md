@@ -5,6 +5,25 @@ first. Update the top of this file whenever a session ships.
 
 ---
 
+**IN FLIGHT — lane C, "the look" (branch `claude/design-system-converge`, 2026-10-17 → 20).** One token file, one component kit, a ratchet gate, every screen converged; web AND `ios/**` in one lane on Michael's parallel-lanes brief. **ios/ parity checked before any Swift edit (2026-10-20): `git log origin/main..origin/claude/watch-app -- ios/` is empty.** Phase 1 (audit: `docs/design/screen-audit.md`, plan: `docs/design/look-plan.md`) is committed; Phase 2 adds the tokens (`app/globals.css`), the kit (`components/ui/*`, kitchen sink at `/settings/design`), the gate (`npm run design-gate`, run by `npm run build`), Appearance (Day · Night · System, default System) and the watch/iPhone mirror in `ios/Shared/Theme.swift`. The full entry lands here when the lane's PR is drafted.
+
+**Picked up 2026-11-13 (Windows PC, worktree `pitaya-design`); `main` merged in, draft PR opened, nothing new built.**
+- **Merge:** `main` now carries the security fixes (#43) and MCP v2 (#42). Three files clashed and both sides are kept: `package.json` runs the security preflight, then the design gate, then the build; `docs/followups.md` and this file carry both lanes' entries.
+- **Gate baseline re-taken on the merged tree (look-plan D11).** It rose only by the four Settings components the security lane added (`known-devices-reset`, `legacy-key-notice`, `pairing-unlock`, `mcp-finance-toggle`: +1 hex, +8 sizes, +3 raw buttons, +1 raw field). They convert with Settings in Phase 4.
+- **`.gitattributes` (new):** `scripts/*.mjs` stay LF on every OS. On a Windows checkout Vite does not recognise a CRLF `#!` line, hoists imports above it, and `tests/design-gate.test.ts` cannot load.
+- **Verified:** tsc; 1,913 tests; eslint on the lane's 39 code files; the gate; the build steps by hand (preflight → gate → `prisma migrate deploy` of all 44 migrations to a local `prisma dev` database → generate → `next build`). **Self-smoke** on `next start` with the synthetic seed: Settings shows the security lane's device controls beside Appearance; Appearance cycles System → Day → Night; `/settings/design` renders in Night; the targets sheet saves through the merged `/api/settings`.
+- **Design prompt written (same day, on Michael's "write the prompt"):** `docs/design/pitaya-look-design-prompt.md`. One Claude Design round for the phone screens with no design — Train simplified with its two new pages, Settings regrouped, and the MCP v2 screens (day ledger and targets, corrections and undo, the exercise library, added fields) — plus the D1 question (quiet, or pop) to be settled in pictures. It carries a capability list for Train and Settings, read from the code, so the design cannot subtract. Docs only; no app code. The handoff lands in `docs/design/pitaya-look/`.
+- **The design round moved into the session (same day, Michael's call).** Claude Design now lives in Claude, so the prompt became the brief and slice 1, Train, was drawn on a Design canvas: Train in Day and Night, its states and empty week, the new All records and Jump rope pages, the Routines and live-session sheets, and "quiet or pop" (D1) as two playable boards. Extrapolated from the original Train screen in `pitaya-app.dc.html`; every number invented. `docs/design/pitaya-look/README.md` has the canvas link, the table of where every existing Train feature went, and the three rulings waiting on him. **Nothing is built from it until he approves.** Not drawn yet: Night for the pages and sheets, the EMOM clock, loading and error states, the handoff spec.
+- **Where the lane stands:** Phases 1–2 are done (audit, plan, tokens, kit, gate, Appearance). **Phases 3–6 are not started — no screen has been converged yet.**
+- **Open before any merge to `main`:**
+  1. Decisions D1–D17 in `look-plan.md` were taken on recommended defaults; Michael has not ruled on them.
+  2. Night cannot ship as the default yet (D17). Unconverted screens are unreadable in places — Food's kcal pill and History button, Train's "View activities" — and System is the default, so a phone in dark mode would open Night.
+  3. Lanes B (`claude/coach-weekly-review`) and D (`claude/intake-reliability`) are still unmerged; D11 has this lane merging after them.
+  4. Phase 3's Workouts fold adds two routes that have no design (`/health/workouts/records`, `/health/workouts/jump-rope`), Phase 4 regroups Settings with no design, and the MCP v2 data (day ledger, corrections and undo, movement profiles, added fields) has no screens at all. All of these wait for a design round: an undesigned screen is not invented.
+  5. `ios/Shared/Theme.swift` changed in Phase 2 (motion tokens), so merging this lane needs a TestFlight upload from the Mac.
+
+---
+
 **MCP v2 — Claude can change Pitaya without a code release (2026-11-12/13). Built on branch `claude/mcp-v2`, stacked on the unmerged `claude/security-audit-2026-10`; NOT merged, production unchanged.** From the 18-item gap review he wrote with Claude; spec and build notes in [`docs/mcp-v2-spec.md`](mcp-v2-spec.md). Built on this PC in a worktree (not the Mac lanes): `ios/**` untouched, so no TestFlight build is involved.
 
 **Shipped on the branch (one commit per phase):**
@@ -47,6 +66,8 @@ first. Update the top of this file whenever a session ships.
   - `clip()` flattened the HR series and a ledger day's workouts (results are now flatter, with a regression test).
   - The app's own targets sheet would have been silently overridden (now `reconcileTargetsOnSave`). Proven in the real sheet: 1900 kcal saved there was read back through the connector as the day's goal.
 - **NOT verified:** anything on production data, the claude.ai connector itself, and the security branch's secret rollout.
+
+---
 
 **The iPhone app syncs Health activity by itself, and TestFlight builds come from GitHub (2026-10-17, evening). Web AND `ios/**` in one session on his word ("go and do everything you possibly can"); parity checked first: `git log origin/main..origin/claude/watch-app -- ios/` is empty.**
 

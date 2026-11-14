@@ -1,0 +1,5 @@
+# Scripts with a #! first line must keep LF on every OS. On a Windows
+# checkout (CRLF) Vite does not recognise the hashbang line, hoists imports
+# above it, and any test that imports the script fails to parse
+# (tests/design-gate.test.ts, found 2026-11-13).
+scripts/*.mjs text eol=lf

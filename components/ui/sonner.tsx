@@ -7,15 +7,19 @@ import {
   OctagonXIcon,
   TriangleAlertIcon,
 } from "lucide-react"
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
+import { useResolvedTheme } from "@/components/appearance-sync"
+
+// The kit's toast: Pitaya surfaces and status roles (app/globals.css), the
+// theme the app is actually showing. `richColors` maps onto the status
+// tokens below instead of sonner's own green/red.
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  const theme = useResolvedTheme()
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={theme}
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,
@@ -26,10 +30,22 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          "--normal-bg": "var(--card)",
+          "--normal-text": "var(--ink)",
+          "--normal-border": "var(--rule-2)",
+          "--success-bg": "color-mix(in srgb, var(--success) 12%, var(--card))",
+          "--success-text": "var(--success-ink)",
+          "--success-border": "color-mix(in srgb, var(--success) 30%, var(--card))",
+          "--warning-bg": "color-mix(in srgb, var(--warning) 14%, var(--card))",
+          "--warning-text": "var(--warning-ink)",
+          "--warning-border": "color-mix(in srgb, var(--warning) 32%, var(--card))",
+          "--error-bg": "color-mix(in srgb, var(--danger) 12%, var(--card))",
+          "--error-text": "var(--danger-ink)",
+          "--error-border": "color-mix(in srgb, var(--danger) 30%, var(--card))",
+          "--info-bg": "var(--card)",
+          "--info-text": "var(--ink)",
+          "--info-border": "var(--rule-2)",
+          "--border-radius": "var(--radius-card)",
         } as React.CSSProperties
       }
       {...props}

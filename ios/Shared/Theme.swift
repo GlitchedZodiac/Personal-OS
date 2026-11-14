@@ -217,6 +217,20 @@ public enum Theme {
         public static let exit = Animation.easeIn(duration: 0.26)
         /// hold ceiling — nothing full-screen lives past 2 s; blooms ≤ 900 ms.
         public static let holdMax: TimeInterval = 0.9
+
+        // ── The app-wide standard (lane C, 2026-10; app/globals.css block 6,
+        // docs/design/pitaya-tokens.md). UI STATE changes use these; the
+        // Round-3 rungs above stay for the moments that design scripted
+        // (zone bloom, PR, km split, HRR) — haptic-paired events, not UI
+        // state. Always guarded by Reduce Motion at the call site.
+        /// press, colour swap — 90 ms ease-out (same as `attack`)
+        public static let instant = Animation.easeOut(duration: 0.09)
+        /// every state change, entrances, a number that changed — 150 ms
+        public static let fast = Animation.timingCurve(0.3, 0.9, 0.3, 1, duration: 0.15)
+        /// sheets and page pushes — the only UI motion over 150 ms
+        public static let base = Animation.timingCurve(0.3, 0.9, 0.3, 1, duration: 0.22)
+        /// anything leaving — never slower than it arrived
+        public static let leave = Animation.timingCurve(0.5, 0, 0.8, 0.4, duration: 0.15)
     }
 }
 
