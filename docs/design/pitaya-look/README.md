@@ -182,6 +182,48 @@ nothing starts on the phone. The workout cards on Train open the session.
 | "+ Build new routine" | "New routine": say it, chat, or send a video. The by-hand form is **not drawn**. *Needs a ruling.* |
 | "Tap one to start it live here", the "Guided clock" pill, the Live session board | **Not carried over.** *Needs a ruling:* the board is kept on the canvas, labelled, until he says. |
 
+### Now on your watch — the live mirror (2026-11-14)
+
+His question: "can it sync to the watch activity live or do I choose one or
+the other?" Read from the code: today it is one or the other. The phone's
+live sheet is its own stopwatch and set counter with no heart rate; the
+watch records and sends the workout when it ends; nothing mirrors between
+them, and the iPhone app is a shell around the web UI. Running both would
+save two workouts. He was offered a mirror instead of a choice and said
+"Draw it".
+
+**Drawn, two boards:**
+
+- **Train · while a workout runs on the watch.** The bold card's button
+  becomes "On your watch now · 12:40" with a live dot. Nothing else moves.
+- **Live from the watch.** The clock inside the ring (round done, round
+  under way), the move he is on as the poster line with reps and load, a
+  five-step marker and the next move, live heart rate, zone and calories,
+  the last minutes of heart rate, and the three rounds as tiles. One plain
+  line says the phone only shows it. The clock ticks in Play (checked).
+
+**Where the old phone live sheet went:**
+
+| Old phone live sheet | In the mirror |
+|---|---|
+| Running clock | Kept, from the watch, inside the ring. |
+| Routine name, "movement 1 of 4" | Kept: name, round, move, the five-step marker, the next move. |
+| Current move, load, reps | Kept, as the poster line. |
+| Log a set / take one back | **Not on the phone.** The watch records. *Needs his ruling.* |
+| Rest timer, tap to skip | The rest state is **not drawn yet**. Skipping is not on the phone. |
+| Previous / next movement | **Not on the phone.** |
+| End and save, "Saving…" | **Not on the phone.** It ends on the watch. |
+| Guided EMOM clock with beeps | **Not drawn yet** as a mirror state (the minute counting down). |
+| — | New: live heart rate, zone, calories and the recent heart-rate line. |
+
+Not drawn yet: the rest state, the EMOM state, a Freestyle with no routine,
+the connection dropping, Night.
+
+For the build (queued in `docs/deferred-items.md`): Apple lets a watch
+workout mirror to its iPhone app while it runs. That is stated from Apple's
+platform, not tested in this app. Because the iPhone app is a web shell, the
+live data has to be bridged into the web UI or shown natively.
+
 ## Third pass — the chart language (2026-11-14)
 
 Michael's reaction to the five tiles: right content, but the bars "look
@@ -259,10 +301,10 @@ Changed by the fifth pass:
 ## For Michael to rule on
 
 1. **Is the fifth pass closer, or still too plain?**
-2. **Does the phone keep its own live workout screen** (start a routine, the
-   guided EMOM clock, "Saving…"), or does it go now that workouts run on the
-   watch? Asked 2026-11-14. This replaces the older "one Start button"
-   question.
+2. **Confirm: the phone's own live workout goes** (logging sets by hand, its
+   EMOM clock, end and save), replaced by the mirror of the watch. He said
+   "Draw it" to the mirror on 2026-11-14; the removal itself is asked, not
+   yet answered. This replaces the older "one Start button" question.
 3. **Does the phone keep a form to build a routine by hand**, or is it
    Claude, voice and video only?
 4. **Drop "● Record"** on Trails. It does nothing but say recording lives on the watch.
