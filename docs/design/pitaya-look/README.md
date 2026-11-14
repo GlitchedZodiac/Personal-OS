@@ -1,6 +1,6 @@
 # Pitaya Look — the design round, slice 1: Train
 
-**Status: second pass, waiting for Michael's reaction. Nothing is built from it yet.**
+**Status: fifth pass (Train led by workouts, in the round 3 identity), waiting for Michael's reaction. Nothing is built from it yet.**
 
 The round is designed in the session, on a Design canvas. The brief is
 [`../pitaya-look-design-prompt.md`](../pitaya-look-design-prompt.md).
@@ -67,16 +67,64 @@ its neighbours on the colour wheel; green marks on track and coral off
 track; the old blue is retired. Icons are **solid**, and the kettlebell is
 redrawn with a round bell and a wide handle.
 
-**Round 3 is open: identity and feel.** Michael asked for it, pointing at how
-the Process Lounge design system got its character: not from fonts and
-colour but from choices like big or small numbers, highlights or detail,
-words or pictures, and how things move and respond. The choices page now
-asks 25 of these in eight groups: scale, how much and how it is said, shape
-and surface, motion, touch, sound and feel, getting around, and states.
+**Round 3 (same day): identity and feel, decided.** Michael asked for it,
+pointing at how the Process Lounge design system got its character: not from
+fonts and colour but from choices like big or small numbers, highlights or
+detail, words or pictures, and how things move and respond. He answered all
+25 questions. The brand kit lists them; in short:
 
-**Deliberately not done yet:** the full icon set and Train's recolour wait
-for round 3, because its answers (size, density, card style, where the dock
-lives) change those drawings anyway.
+| Group | His picks |
+|---|---|
+| Scale | Poster numbers (54 px or more) · big full-width buttons (48 px) · large solid icons that lead |
+| How much, how it is said | Highlights over detail · pictures before words · exact numbers · an icon as the label |
+| Shape and surface | Crisp corners (about 6 px) · floating shadow cards, no outline · one bold dragonfruit card per screen · the two-tone ring with the number inside as the signature |
+| Motion | A press shrinks · numbers count up · lines draw themselves · a tapped tile opens into its screen |
+| Touch | Detail opens in a bottom sheet · swipes for time, refresh and back · press and hold to peek |
+| Sound and feel | A soft tick on saves, a chime for the three moments · light haptics |
+| Getting around | Icons-only tab bar · the mic becomes the bar's centre button (the floating dock goes) |
+| States | On / off track colours the number itself · loading shimmers · an empty screen says one plain line |
+
+What this changes at port time, beyond the table above: the radius and
+shadow tokens (soft 12–24 px corners and hairline cards become crisp
+floating cards), the bottom nav (labels go, the voice dock moves into it),
+and three things that do not exist in the app yet: sound, haptics and the
+tile-to-screen transition. Each needs its own ticket; none is started.
+
+## Fourth and fifth pass — round 3 applied to Train (2026-11-14)
+
+**Fourth pass (rejected).** Train was redrawn taking the picks literally:
+icons with no words, one number per tile, the week's calories as the poster
+number. Michael's reaction: "why does train have calories? or is this the
+home page? train should have workouts so far - calories burned", "it did
+get TOO Simplistic", "less modern than I thought it would", "looks offset",
+and "remove the journaling we're not doing that".
+
+**Fifth pass (on the canvas now).**
+
+| Part | Shows | Tap opens |
+|---|---|---|
+| The bold card | A ring with the number of workouts this week inside it, split strength / easy. Beside it: calories burned and active time. Under it: the draggable line of calories by day, and a full-width Start button | Start → the Routines sheet |
+| Workouts so far | One card per workout this week, newest first: kind, day, minutes, calories, its heart-rate line. Swipes sideways | That session (exists today) · "All" → all activities |
+| Your bell | The bell he is on, a small ring of lifts moved up | All records (drawn) |
+| Walking | Distance this week, thin bars by day | Steps & calories history (exists today) |
+| 8 weeks | The trend, coloured green when on track | Trends (**not drawn yet**) |
+
+Lessons taken from the rejection:
+
+- A screen leads with what it is about. Train's poster number is workouts;
+  calories burned is the second line.
+- "An icon as the label" does not mean no words. Each tile keeps a name of
+  one or two words and a second number, or it cannot be read.
+- "Modern" is depth and glow, not emptiness: the bold card deepens from
+  dragonfruit to plum, charts run edge to edge in their cards.
+
+**Journal is cut.** Michael, 2026-11-14: "we're not doing that." The tab bar
+is Spirit, Food, the mic, Today, Settings. Read as the Journal tab leaving
+the app, not only this screen; he was told so and has not objected. The app
+is untouched: see `docs/deferred-items.md`.
+
+Checked in a browser, Day and Night, at rest. Not checked: dragging the line
+on the new board, and the swipe on the workouts row.
 
 ## Third pass — the chart language (2026-11-14)
 
@@ -141,11 +189,25 @@ down.
 | Effort · time in zones | The latest session's zones are on the Last-session tile; the rest moved to Trends. |
 | Empty states | To be redrawn for the five tiles. |
 
+Changed by the fifth pass:
+
+| Today | In the design |
+|---|---|
+| Today's session card | Now the "Workouts so far" row: every workout of the week, not only the last. |
+| Start live workout · Routines | One full-width **Start a workout** button in the bold card → Routines sheet. *Still needs a ruling.* |
+| The voice dock (floating mic) | **Moved** into the tab bar as its centre button (round 3). |
+| Tab labels | **Removed** (round 3: icons only). Each tab keeps its accessible name. |
+| Journal tab | **Ruled out by Michael** 2026-11-14. |
+| Week picker | **New**: a "Week N" control with back / forward in the header (round 3: swipe through time). No week page is drawn yet. |
+
 ## For Michael to rule on
 
-1. **Are these the right five?**
-2. **Quiet or pop?** Boards A and B.
+1. **Is the fifth pass closer, or still too plain?**
+2. **One Start button** for both of today's buttons.
 3. **Drop "● Record"** on Trails. It does nothing but say recording lives on the watch.
+
+Settled since the first list: the five highlights stand; quiet motion with
+pop for three moments (brand kit).
 
 ## Also on the canvas
 
