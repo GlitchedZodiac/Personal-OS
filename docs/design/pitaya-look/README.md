@@ -41,6 +41,41 @@ detail:
 One small **Start** button in the header replaces the two large buttons and
 opens the Routines sheet.
 
+## Third pass — the chart language (2026-11-14)
+
+Michael's reaction to the five tiles: right content, but the bars "look
+old". He asked for modern, tappable or draggable line graphs and sent two
+reference screenshots (dark analytics dashboards: rings with a number in the
+middle, smooth glowing lines with a marker and value tag, thin rounded bars,
+a pink-and-blue pair).
+
+The reference set the chart forms, not the brand. Pitaya's colours stay.
+
+| Tile | Chart now |
+|---|---|
+| This week | A two-tone ring (hard / easy) with the week's calories inside, and a smooth line of the week's days with a marker and a value tag. **Draggable.** |
+| Last session | A smooth heart-rate line. |
+| Your bell | A small progress ring: lifts moved up, of all lifts. |
+| Walking | Seven thin rounded bars. |
+| 8 weeks | A smooth line with a marker and a value tag. **Draggable.** |
+
+Train · highlights is drawn in Day and Night from one file (a `night`
+switch), so the two cannot drift apart.
+
+**Three choices that depart from the original brief, for his ruling:**
+
+1. A soft glow under lines and rings. The brief said no glow; his references
+   show it. Kept restrained.
+2. A second colour, the palette's slate blue, for easy days and walking. The
+   brief said one accent.
+3. No colour fades: the fill under a line is a flat tint. The brief said no
+   gradients, and this keeps to it.
+
+For the port: the draggable lines need a pure function from a pointer
+position to the nearest point, with unit tests, and a keyboard path (the
+canvas uses a native range input for both). The pages the taps open still
+use the old bar charts and follow once this style is approved.
+
 ## Where everything on today's Train went (second pass)
 
 Read from the code (`app/(tabs)/health/workouts/page.tsx` and the components
