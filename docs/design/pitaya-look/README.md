@@ -139,6 +139,49 @@ on the new board, and the swipe on the workouts row.
 - Still in the old look: All records, the Routines sheet, the live session,
   the two moments boards.
 
+## Routines and the session — his direction (2026-11-14)
+
+Michael, in the session: routines must become "ultra flexible", built from
+parts that "mix and mingle", made "via claude" and repeatable. His examples:
+a 20-minute EMOM that cycles four moves followed by a 20-minute walk, as one
+routine; three rounds of several kettlebell moves that get progressively
+harder; a video he gives Claude to follow. "None of this will actually
+happen on the phone": workouts run on the watch, "the phone is a repository".
+He wants to point a Freestyle back at a routine afterwards, or set one up by
+speaking to the watch. And: "I look at a whole session and I can click into
+it to view the list of workouts I did in that session + all that data back
+on my phone and one small thing telling me my improvement over last week."
+
+**Drawn from that, two boards:**
+
+| Board | Shows |
+|---|---|
+| Routines · the library | A ring of how many of the week's workouts followed a routine, the Freestyles still unmatched, and one button to match them. Then each routine as a card: its length, how often and when it was last done, how it was made (spoken, told to Claude, from a video), and a **strip of its parts** in proportion (EMOM then walk · three rounds getting heavier · twelve moves from a video). A "New routine" row offers the three ways in. |
+| The session | What it was and when, the routine it followed (with Change, which is also where a Freestyle gets matched). A bold card: minutes inside the ring split hard / easy, calories, average heart rate, **one line of improvement over last week**, and the heart-rate line across the session with its rounds marked under it (draggable, tested). Then "What you did": each move with its load round by round. Then six body tiles: top heart rate, minutes in hard zones, recovery, weight lifted, oxygen, temperature. |
+
+Train's big button now reads **Routines** and opens the library, because
+nothing starts on the phone. The workout cards on Train open the session.
+
+**What the app cannot do yet** (queued as a feature in
+`docs/deferred-items.md`; none of it is design work):
+
+- A routine is one kind with one flat list of steps. It cannot hold two
+  parts, or a weight that changes by round.
+- A saved workout has no link to the routine it followed, so there is
+  nothing to match a Freestyle to.
+- Oxygen and wrist temperature are stored per day, not per workout. The
+  board says so: "Oxygen, today" and "Outside" (the weather's temperature).
+
+**Where the old Routines sheet went:**
+
+| Old sheet | Now |
+|---|---|
+| A sheet over Train | A page of its own, the library. |
+| A row per routine: name and a line of moves | A card per routine with the strip of its parts. The full list of moves is one tap in (**not drawn yet**). |
+| "On watch" pill on every row | One "3 on your watch" marker in the header. |
+| "+ Build new routine" | "New routine": say it, chat, or send a video. The by-hand form is **not drawn**. *Needs a ruling.* |
+| "Tap one to start it live here", the "Guided clock" pill, the Live session board | **Not carried over.** *Needs a ruling:* the board is kept on the canvas, labelled, until he says. |
+
 ## Third pass — the chart language (2026-11-14)
 
 Michael's reaction to the five tiles: right content, but the bars "look
@@ -216,8 +259,13 @@ Changed by the fifth pass:
 ## For Michael to rule on
 
 1. **Is the fifth pass closer, or still too plain?**
-2. **One Start button** for both of today's buttons.
-3. **Drop "● Record"** on Trails. It does nothing but say recording lives on the watch.
+2. **Does the phone keep its own live workout screen** (start a routine, the
+   guided EMOM clock, "Saving…"), or does it go now that workouts run on the
+   watch? Asked 2026-11-14. This replaces the older "one Start button"
+   question.
+3. **Does the phone keep a form to build a routine by hand**, or is it
+   Claude, voice and video only?
+4. **Drop "● Record"** on Trails. It does nothing but say recording lives on the watch.
 
 Settled since the first list: the five highlights stand; quiet motion with
 pop for three moments (brand kit).
