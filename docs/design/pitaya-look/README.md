@@ -177,7 +177,7 @@ nothing starts on the phone. The workout cards on Train open the session.
 | Old sheet | Now |
 |---|---|
 | A sheet over Train | A page of its own, the library. |
-| A row per routine: name and a line of moves | A card per routine with the strip of its parts. The full list of moves is one tap in (**not drawn yet**). |
+| A row per routine: name and a line of moves | A card per routine with the strip of its parts. The full list of moves is one tap in, on the routine's own page (drawn). |
 | "On watch" pill on every row | One "3 on your watch" marker in the header. |
 | "+ Build new routine" | "New routine": say it, chat, or send a video. The by-hand form is **ruled out by Michael**, 2026-11-14 ("No, Claude and voice"). |
 | "Tap one to start it live here", the "Guided clock" pill, the Live session board | **Not carried over.** *Needs a ruling:* the board is kept on the canvas, labelled, until he says. |
@@ -190,8 +190,23 @@ from the code before his ruling was recorded):
 | List the saved routines | Kept: the library. |
 | Build a routine by hand: name, kind, minutes, rounds, rest, and steps picked from the movement list | **Ruled out by Michael**, 2026-11-14 ("No, Claude and voice"). A routine is made by saying it, telling Claude, or sending a video. |
 | Edit a routine by hand | **Ruled out** with the form. Claude edits it. |
-| Archive a routine | **Kept, moved** to the routine's own page, one tap in from the library (**not drawn yet**). Claude has no way to archive a routine today, so without this the ability would vanish. |
-| "Raise" and "deload" suggestions with a one-tap Apply | **Kept, moved**: a routine that is ready shows "Raise ready" on its card in the library; Apply is on the routine's own page (**not drawn yet**). |
+| Archive a routine | **Kept, moved** to the routine's own page, one tap in from the library (drawn). Claude has no way to archive a routine today, so without this the ability would vanish. |
+| "Raise" and "deload" suggestions with a one-tap Apply | **Kept, moved**: a routine that is ready shows "Raise ready" on its card in the library; Apply is on the routine's own page (drawn; pressing it in Play shows the raised state). |
+
+**The routine's own page (drawn 2026-11-14, on his "Draw it").** One tap in
+from the library:
+
+- a ring of its length, split into its parts;
+- how often it was done, when last, and the calories it burns each time;
+- the raise suggestion: what changes, why, and an Apply button;
+- the parts in order, each move with its load round by round;
+- a draggable line of the weight lifted each time he did it (tested);
+- "Change it with Claude", which is how a routine is edited now;
+- "Archive this routine".
+
+Not drawn: the confirm step for Archive, a routine with no runs yet, a
+routine made of two different parts (EMOM then a walk), a deload
+suggestion, Night.
 
 ### Now on your watch — the live mirror (2026-11-14)
 
