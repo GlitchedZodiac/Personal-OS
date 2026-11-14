@@ -179,8 +179,19 @@ nothing starts on the phone. The workout cards on Train open the session.
 | A sheet over Train | A page of its own, the library. |
 | A row per routine: name and a line of moves | A card per routine with the strip of its parts. The full list of moves is one tap in (**not drawn yet**). |
 | "On watch" pill on every row | One "3 on your watch" marker in the header. |
-| "+ Build new routine" | "New routine": say it, chat, or send a video. The by-hand form is **not drawn**. *Needs a ruling.* |
+| "+ Build new routine" | "New routine": say it, chat, or send a video. The by-hand form is **ruled out by Michael**, 2026-11-14 ("No, Claude and voice"). |
 | "Tap one to start it live here", the "Guided clock" pill, the Live session board | **Not carried over.** *Needs a ruling:* the board is kept on the canvas, labelled, until he says. |
+
+**Where the by-hand builder page went** (`/health/workouts/routines`, read
+from the code before his ruling was recorded):
+
+| The page can | Now |
+|---|---|
+| List the saved routines | Kept: the library. |
+| Build a routine by hand: name, kind, minutes, rounds, rest, and steps picked from the movement list | **Ruled out by Michael**, 2026-11-14 ("No, Claude and voice"). A routine is made by saying it, telling Claude, or sending a video. |
+| Edit a routine by hand | **Ruled out** with the form. Claude edits it. |
+| Archive a routine | **Kept, moved** to the routine's own page, one tap in from the library (**not drawn yet**). Claude has no way to archive a routine today, so without this the ability would vanish. |
+| "Raise" and "deload" suggestions with a one-tap Apply | **Kept, moved**: a routine that is ready shows "Raise ready" on its card in the library; Apply is on the routine's own page (**not drawn yet**). |
 
 ### Now on your watch — the live mirror (2026-11-14)
 
@@ -311,13 +322,13 @@ Changed by the fifth pass:
 ## For Michael to rule on
 
 1. **Is the fifth pass closer, or still too plain?**
-2. **Does the phone keep a form to build a routine by hand**, or is it
-   Claude, voice and video only?
-3. **Drop "● Record"** on Trails. It does nothing but say recording lives on the watch.
+2. **Drop "● Record"** on Trails. It does nothing but say recording lives on the watch.
 
 Settled since the first list: the five highlights stand; quiet motion with
 pop for three moments (brand kit); the phone's own live workout is removed
-in favour of the mirror of the watch (2026-11-14).
+in favour of the mirror of the watch (2026-11-14); the by-hand routine
+builder is removed, routines are made through Claude, voice or a video
+(2026-11-14).
 
 ## Also on the canvas
 
