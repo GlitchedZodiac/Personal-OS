@@ -41,6 +41,32 @@ detail:
 One small **Start** button in the header replaces the two large buttons and
 opens the Routines sheet.
 
+## Brand kit — Michael's decisions (2026-11-14)
+
+The round turned into a brand kit, built together. Michael asked where the
+blue came from; the honest answer was "nobody decided it", so the brand got
+written down. He picks on a choices page; the kit records what he picked.
+
+- **Brand kit (private to Michael):** https://claude.ai/artifact/6e2pxDUCNvMPtT581Hc2ic
+- **Choices page (private to Michael):** https://claude.ai/artifact/DkwFYyWeMBJvwVVwgVo2eV
+
+| Part | Decision | What it changes in the app when ported |
+|---|---|---|
+| Fonts | Space Grotesk for titles and numbers, Inter for the rest | Replaces Familjen Grotesk and Instrument Sans everywhere, the watch included |
+| Default look | Day first | Appearance defaults to Day, not System; this also settles look-plan D17 |
+| Logo | The dragonfruit, alone | The diamond bullet goes (record banner, kickers, the tokens doc's "mark") |
+| Glow | Strong, under lines and rings | Reverses the brief's "no glow" for charts |
+| Under a line | A fade | Reverses the brief's "no gradients" for charts only |
+| Motion | Quiet, with pop for a record, a save, a target reached | Settles look-plan D1 |
+| Tagline | Serving God's Kingdom With Mind, Body & Spirit | Replaces "It's just you. Prove it." |
+| Voice | No slogans, alerts or cheerleading on screens; numbers and trends | "Yesterday's you lifted less.", "Best week yet" and clever empty states are cut |
+| On track / off track | Coloured | Reverses the Body round's "never red, never HIGH"; `lib/delta.ts` and the Body screen need a pass |
+
+**Still open:** the palette (five colour-wheel options built on the
+dragonfruit colour) and the icon style (three redraws; the kettlebell gets a
+round bell and a wide handle). Train on the canvas already uses the decided
+fonts, glow and fade; its colours wait for the palette.
+
 ## Third pass — the chart language (2026-11-14)
 
 Michael's reaction to the five tiles: right content, but the bars "look
