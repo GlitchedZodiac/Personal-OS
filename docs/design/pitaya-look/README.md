@@ -62,10 +62,21 @@ written down. He picks on a choices page; the kit records what he picked.
 | Voice | No slogans, alerts or cheerleading on screens; numbers and trends | "Yesterday's you lifted less.", "Best week yet" and clever empty states are cut |
 | On track / off track | Coloured | Reverses the Body round's "never red, never HIGH"; `lib/delta.ts` and the Body screen need a pass |
 
-**Still open:** the palette (five colour-wheel options built on the
-dragonfruit colour) and the icon style (three redraws; the kettlebell gets a
-round bell and a wide handle). Train on the canvas already uses the decided
-fonts, glow and fade; its colours wait for the palette.
+**Round 2 (same day):** the palette is dragonfruit with **plum and coral**,
+its neighbours on the colour wheel; green marks on track and coral off
+track; the old blue is retired. Icons are **solid**, and the kettlebell is
+redrawn with a round bell and a wide handle.
+
+**Round 3 is open: identity and feel.** Michael asked for it, pointing at how
+the Process Lounge design system got its character: not from fonts and
+colour but from choices like big or small numbers, highlights or detail,
+words or pictures, and how things move and respond. The choices page now
+asks 25 of these in eight groups: scale, how much and how it is said, shape
+and surface, motion, touch, sound and feel, getting around, and states.
+
+**Deliberately not done yet:** the full icon set and Train's recolour wait
+for round 3, because its answers (size, density, card style, where the dock
+lives) change those drawings anyway.
 
 ## Third pass — the chart language (2026-11-14)
 
