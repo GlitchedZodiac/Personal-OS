@@ -126,6 +126,19 @@ is untouched: see `docs/deferred-items.md`.
 Checked in a browser, Day and Night, at rest. Not checked: dragging the line
 on the new board, and the swipe on the workouts row.
 
+**Later the same day, from his comments on the canvas:**
+
+- **Quiet or pop is closed.** "pop definitely wins here", on board B (pop,
+  three moments only). Board B is marked chosen, A not chosen. Both boards
+  still carry the old look, the retired diamond and the cut line
+  "Yesterday's you lifted less."; they are redrawn with the other boards.
+- **Jump rope: "again line graphs".** The eight-week bars are now a smooth,
+  draggable line (tested), and the page moved to the new fonts, floating
+  crisp cards and the four-tab bar. Its two session tables remain; whether
+  he wants those as lines is asked, not answered.
+- Still in the old look: All records, the Routines sheet, the live session,
+  the two moments boards.
+
 ## Third pass — the chart language (2026-11-14)
 
 Michael's reaction to the five tiles: right content, but the bars "look
