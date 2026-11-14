@@ -136,8 +136,40 @@ on the new board, and the swipe on the workouts row.
   draggable line (tested), and the page moved to the new fonts, floating
   crisp cards and the four-tab bar. Its two session tables remain; whether
   he wants those as lines is asked, not answered.
-- Still in the old look: All records, the Routines sheet, the live session,
-  the two moments boards.
+- All records and the three moments followed the same day (below). Every
+  board in the "Where the taps lead" row is now in the new look. Night is
+  drawn for Train only.
+
+### All records and the three moments, in the new look (2026-11-14)
+
+On his "Yes, do those".
+
+**All records.** Where the old board's parts went:
+
+| Old board | Now |
+|---|---|
+| Kicker "52 movements · heaviest ever" | A "52 lifts" marker in the header. |
+| Sort: Recent · A–Z · Heaviest | Kept, as one crisp control. Not live on the canvas. |
+| "This week · 2 moved", two rows | Two tiles: the new weight, the gain, the lift and the day. Each opens its session. |
+| "Earlier" rows: name, "was 16 kg · Nov 4", the weight | Rows: name, date, and the weight **before → now** as two pills. "First record" is kept. Each opens its session. |
+| "11 of 52 shown. The list keeps going." | Kept. |
+| — | **New**, the bold card: a ring of how many main lifts have moved up a bell, his top bell, how many moved this week, and a draggable line of the average bell across his lifts over eight weeks (tested). |
+
+Two questions the new card raises for the port, neither answered: which
+lifts count as the "main" twelve, and whether an average bell is the right
+single line (it needs each record's date, which the records already carry).
+
+**The three moments.** Redrawn from the chosen board: the diamond is gone,
+"Yesterday's you lifted less." is gone, the target ring carries its number
+inside it, and each caption says what is heard. My reading of his sound
+pick, for him to correct: a chime for a record and for a target reached, a
+soft tick for a save. Replay works (checked).
+
+**Housekeeping worth knowing.** Taking a board out of the canvas index does
+not remove it: the canvas shows any board file it finds. The old phone live
+board and the not-chosen quiet moments board were still visible in a corner
+until their files were deleted from the canvas. Both remain in the canvas's
+version history.
 
 ## Routines and the session — his direction (2026-11-14)
 
