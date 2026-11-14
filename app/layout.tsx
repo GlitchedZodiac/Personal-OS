@@ -5,8 +5,10 @@ import {
   Instrument_Sans,
   Literata,
 } from "next/font/google";
+import { AppearanceSync } from "@/components/appearance-sync";
 import { ServiceWorkerRegister } from "@/components/sw-register";
 import { Toaster } from "@/components/ui/sonner";
+import { APPEARANCE_SCRIPT } from "@/lib/appearance";
 import "./globals.css";
 
 const displayFont = Familjen_Grotesk({
@@ -50,7 +52,11 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#F2F1F2",
+  // The status-bar tint follows the phone's scheme (block 1/2 --bg).
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F2F1F2" },
+    { media: "(prefers-color-scheme: dark)", color: "#131217" },
+  ],
   viewportFit: "cover",
 };
 
@@ -60,8 +66,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning: the <head> script sets class="dark" before
+    // React hydrates, so the server's class-less <html> differs on purpose.
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Before first paint: Day / Night / System from the local settings
+            copy (lib/appearance.ts) — no flash of the wrong theme. */}
+        <script dangerouslySetInnerHTML={{ __html: APPEARANCE_SCRIPT }} />
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
         <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
@@ -76,6 +87,7 @@ export default function RootLayout({
         className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} ${serifFont.variable} app-shell`}
         suppressHydrationWarning
       >
+        <AppearanceSync />
         {children}
         {/* Bottom placement: top toasts hide under the Dynamic Island on
             iPhone; the offset floats them above the dock + tab bar. */}

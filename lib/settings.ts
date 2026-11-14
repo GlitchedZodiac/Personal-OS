@@ -1,6 +1,13 @@
 import { DEFAULT_NEW_CHAT_GAP_HOURS } from "@/lib/chat-history";
 import { DEFAULT_TIME_ZONE } from "@/lib/timezone";
 import { demoSpanishEnabled } from "@/lib/demo-client";
+import {
+  DEFAULT_APPEARANCE,
+  SETTINGS_STORAGE_KEY,
+  announceAppearance,
+  normalizeAppearance,
+  type Appearance,
+} from "@/lib/appearance";
 
 export interface AIInstructions {
   health: string;
@@ -55,7 +62,12 @@ export interface AppSettings {
   carbsPct: number;
   fatPct: number;
   units: "metric" | "imperial";
+  /** LEGACY — never read. It defaulted to "dark" and was saved back by
+   *  every settings write, so a stored value is not a choice. Appearance
+   *  is `appearance` (lib/appearance.ts). */
   theme: "dark" | "light" | "system";
+  /** Day · Night · follow the phone. Default: follow the phone. */
+  appearance: Appearance;
   gender: "male" | "female" | "";
   birthYear: number | null;
   aiLanguage: AILanguage;
@@ -82,6 +94,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   fatPct: 30,
   units: "metric",
   theme: "dark",
+  appearance: DEFAULT_APPEARANCE,
   gender: "",
   birthYear: null,
   aiLanguage: demoSpanishEnabled ? "spanish" : "english",
@@ -118,7 +131,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
 };
 
-const STORAGE_KEY = "personal-os-settings";
+const STORAGE_KEY = SETTINGS_STORAGE_KEY;
 
 export function getSettings(): AppSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
@@ -163,6 +176,7 @@ export function saveSettings(settings: Partial<AppSettings>): AppSettings {
   const updated = { ...current, ...settings };
   if (typeof window !== "undefined") {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    if ("appearance" in settings) announceAppearance(normalizeAppearance(updated.appearance));
   }
   return updated;
 }
@@ -189,6 +203,7 @@ export async function fetchServerSettings(): Promise<AppSettings> {
       const merged = { ...DEFAULT_SETTINGS, ...normalizedData } as AppSettings;
       if (typeof window !== "undefined") {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        announceAppearance(normalizeAppearance(merged.appearance));
       }
       return merged;
     } else {

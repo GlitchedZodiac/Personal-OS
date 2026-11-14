@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/security-preflight.mjs && rm -rf .next/cache/turbopack && prisma migrate deploy && prisma generate && next build",
+    "build": "node scripts/security-preflight.mjs && npm run design-gate && rm -rf .next/cache/turbopack && prisma migrate deploy && prisma generate && next build",
+    "design-gate": "node scripts/design-gate.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
