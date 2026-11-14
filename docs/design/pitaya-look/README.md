@@ -209,12 +209,22 @@ save two workouts. He was offered a mirror instead of a choice and said
 | Running clock | Kept, from the watch, inside the ring. |
 | Routine name, "movement 1 of 4" | Kept: name, round, move, the five-step marker, the next move. |
 | Current move, load, reps | Kept, as the poster line. |
-| Log a set / take one back | **Not on the phone.** The watch records. *Needs his ruling.* |
-| Rest timer, tap to skip | The rest state is **not drawn yet**. Skipping is not on the phone. |
-| Previous / next movement | **Not on the phone.** |
-| End and save, "Saving…" | **Not on the phone.** It ends on the watch. |
-| Guided EMOM clock with beeps | **Not drawn yet** as a mirror state (the minute counting down). |
+| Log a set / take one back | **Ruled out on the phone** by Michael, 2026-11-14. The watch records. |
+| Rest timer, tap to skip | Skipping is **ruled out on the phone**. The mirror's rest state is **not drawn yet**. |
+| Previous / next movement | **Ruled out on the phone.** |
+| End and save, "Saving…" | **Ruled out on the phone.** It ends on the watch. |
+| Guided EMOM clock with beeps | The phone's own clock and beeps are **ruled out**. The mirror's EMOM state (the minute counting down) is **not drawn yet**. |
 | — | New: live heart rate, zone, calories and the recent heart-rate line. |
+
+**Ruling, 2026-11-14.** Asked "Remove the phone's own live workout in favour
+of this mirror?", with the four things it can do that the mirror cannot
+listed first, Michael answered **"Yes, remove it"**. The old board is off
+the canvas.
+
+Order for the port: the live sheet leaves with the reface; the mirror comes
+later, as a feature. In between the phone shows no live workout at all.
+That fits "none of this will actually happen on the phone", but the port's
+report must say it. Workouts already saved from the phone's live sheet stay.
 
 Not drawn yet: the rest state, the EMOM state, a Freestyle with no routine,
 the connection dropping, Night.
@@ -292,7 +302,7 @@ Changed by the fifth pass:
 | Today | In the design |
 |---|---|
 | Today's session card | Now the "Workouts so far" row: every workout of the week, not only the last. |
-| Start live workout · Routines | One full-width **Start a workout** button in the bold card → Routines sheet. *Still needs a ruling.* |
+| Start live workout · Routines | **Start live workout is ruled out** by Michael, 2026-11-14, with the phone's live session, its "Saving…" state and its EMOM clock. The bold card's button is **Routines** → the library. While a workout runs on the watch it reads "On your watch now" → the mirror. |
 | The voice dock (floating mic) | **Moved** into the tab bar as its centre button (round 3). |
 | Tab labels | **Removed** (round 3: icons only). Each tab keeps its accessible name. |
 | Journal tab | **Ruled out by Michael** 2026-11-14. |
@@ -301,16 +311,13 @@ Changed by the fifth pass:
 ## For Michael to rule on
 
 1. **Is the fifth pass closer, or still too plain?**
-2. **Confirm: the phone's own live workout goes** (logging sets by hand, its
-   EMOM clock, end and save), replaced by the mirror of the watch. He said
-   "Draw it" to the mirror on 2026-11-14; the removal itself is asked, not
-   yet answered. This replaces the older "one Start button" question.
-3. **Does the phone keep a form to build a routine by hand**, or is it
+2. **Does the phone keep a form to build a routine by hand**, or is it
    Claude, voice and video only?
-4. **Drop "● Record"** on Trails. It does nothing but say recording lives on the watch.
+3. **Drop "● Record"** on Trails. It does nothing but say recording lives on the watch.
 
 Settled since the first list: the five highlights stand; quiet motion with
-pop for three moments (brand kit).
+pop for three moments (brand kit); the phone's own live workout is removed
+in favour of the mirror of the watch (2026-11-14).
 
 ## Also on the canvas
 
