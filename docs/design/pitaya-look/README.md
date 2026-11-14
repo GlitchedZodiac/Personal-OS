@@ -198,7 +198,7 @@ Changed by the fifth pass:
 | The voice dock (floating mic) | **Moved** into the tab bar as its centre button (round 3). |
 | Tab labels | **Removed** (round 3: icons only). Each tab keeps its accessible name. |
 | Journal tab | **Ruled out by Michael** 2026-11-14. |
-| Week picker | **New**: a "Week N" control with back / forward in the header (round 3: swipe through time). No week page is drawn yet. |
+| Week picker | **New**: a "Week N" control with back / forward in the header (round 3: swipe through time). Tapping it opens a calendar sheet: a month, a dot on each day trained, tap a week to pick it (Michael, 2026-11-14: "clicking should let me do a calendar sorting no?"). Whether it should also switch the page to a month or a custom range is asked, not answered. No week page is drawn yet. |
 
 ## For Michael to rule on
 
