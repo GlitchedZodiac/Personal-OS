@@ -292,6 +292,56 @@ workout mirror to its iPhone app while it runs. That is stated from Apple's
 platform, not tested in this app. Because the iPhone app is a web shell, the
 live data has to be bridged into the web UI or shown natively.
 
+## The look is approved; the icon library comes first (2026-11-14)
+
+Asked "Is this look approved as the pattern for the rest of the app?",
+Michael answered **"Yes"**, with a condition: "create a small library of
+icons for the app first to decide". He did not like the walk icon (the
+footprints). He asked for treadmill, hike, jumping rope, dumbbells,
+machines, barbells and tendon rehab ("a band maybe?"), "and others". And
+he wants flexibility: "a way for the MCP to create an icon if a new thing
+doesn't exist yet", within limits set by "a library of 30-40 icons that
+the app can use and claude matches to". He floated downloading one.
+
+**Drawn: the Icon library board**, at the top of the canvas. 47 drawings in
+one solid style on the 24-point grid:
+
+- **Lettered, for him to pick:** Walk (A figure · B shoe · C footprints),
+  Hike (A mountains · B pack and pole), Treadmill (A the machine · B someone
+  on it), Jump rope (A the rope · B someone jumping), Machines (A weight
+  stack · B cable and seat), Tendon rehab (A loop band · B band with
+  handles · C care).
+- **One drawing each:** dumbbell, barbell, kettlebell, bodyweight, pull-up
+  bar, run, bike, swim, stairs, stretch, yoga, breathing, rest day; how a
+  routine is built (timed, rounds, from a video, spoken, told to Claude, on
+  the watch); the numbers (calories, heart rate, zones, time, oxygen,
+  temperature, body weight, place, calendar, moved up, done); the four tabs;
+  and "any activity", the one used when nothing fits.
+
+My own read: the two machine drawings are the weakest.
+
+**How it would work in the app** (a feature, queued in
+`docs/deferred-items.md`):
+
+- Every icon has a name. A movement, a routine or a kind of workout stores
+  one name.
+- When Claude creates something it picks the closest name from the list.
+- When nothing fits it uses "any activity" and notes what was missing, so a
+  proper icon gets drawn.
+- Claude drawing a brand-new icon itself is possible later, inside rules
+  (same grid, solid, one colour, a size limit, cleaned before it is stored,
+  and shown to him before it appears). It is the riskier half: quality
+  varies, and the repo is public, so stored drawings must be cleaned.
+
+**A rule this touches, for his ruling.** `CLAUDE.md` says designed screens
+use only Pitaya's own icons, never a library's. That rule was written after
+generic library icons shipped by mistake. Downloading a set would change
+it. Recommended: keep our own set and add to it on request; it keeps one
+look and no licence to track. His call.
+
+Once he has picked: the chosen icons and the crisp corner and shadow values
+go into the brand kit, then Settings is drawn.
+
 ## Third pass — the chart language (2026-11-14)
 
 Michael's reaction to the five tiles: right content, but the bars "look
@@ -368,10 +418,13 @@ Changed by the fifth pass:
 
 ## For Michael to rule on
 
-1. **Is the fifth pass closer, or still too plain?**
-2. **Drop "● Record"** on Trails. It does nothing but say recording lives on the watch.
+1. **Icons:** which letter for Walk, Hike, Treadmill, Jump rope, Machines and
+   Tendon rehab, and any drawing he wants redone.
+2. **Icons: our own set, or a downloaded library** as the base?
+3. **Drop "● Record"** on Trails. It does nothing but say recording lives on the watch.
 
-Settled since the first list: the five highlights stand; quiet motion with
+Settled since the first list: the look is approved as the pattern for the
+rest of the app (2026-11-14, icons first); the five highlights stand; quiet motion with
 pop for three moments (brand kit); the phone's own live workout is removed
 in favour of the mirror of the watch (2026-11-14); the by-hand routine
 builder is removed, routines are made through Claude, voice or a video
